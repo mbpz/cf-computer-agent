@@ -129,6 +129,7 @@
     "frontend/lib/calendar-data.ts",
     "frontend/lib/calendar-query.ts",
     "frontend/lib/command-palette.ts",
+    "frontend/lib/discussion-draft.ts",
     "frontend/lib/discussion-intent.ts",
     "frontend/lib/discussions-data.ts",
     "frontend/lib/focus-create-intent.ts",
@@ -2510,9 +2511,9 @@
         "frontend/pages/messages/messages-page.tsx:33:49",
         "frontend/pages/messages/messages-page.tsx:33:284",
         "frontend/pages/messages/messages-page.tsx:37:5",
-        "frontend/pages/messages/thread-page.tsx:146:349",
-        "frontend/pages/messages/thread-page.tsx:146:615",
-        "frontend/pages/messages/thread-page.tsx:146:773"
+        "frontend/pages/messages/thread-page.tsx:165:349",
+        "frontend/pages/messages/thread-page.tsx:165:615",
+        "frontend/pages/messages/thread-page.tsx:165:773"
       ],
       "unresolvedSymbols": []
     },
@@ -2654,21 +2655,24 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/messages/thread-page.tsx:94:138",
-        "frontend/pages/messages/thread-page.tsx:98:76",
-        "frontend/pages/messages/thread-page.tsx:98:296",
-        "frontend/pages/messages/thread-page.tsx:98:484",
-        "frontend/pages/messages/thread-page.tsx:100:900",
-        "frontend/pages/messages/thread-page.tsx:102:5",
-        "frontend/pages/messages/thread-page.tsx:103:5",
-        "frontend/pages/messages/thread-page.tsx:119:10",
-        "frontend/pages/messages/thread-page.tsx:120:202",
-        "frontend/pages/messages/thread-page.tsx:122:197",
-        "frontend/pages/messages/thread-page.tsx:124:5",
-        "frontend/pages/messages/thread-page.tsx:125:158",
-        "frontend/pages/messages/thread-page.tsx:146:349",
-        "frontend/pages/messages/thread-page.tsx:146:615",
-        "frontend/pages/messages/thread-page.tsx:146:773"
+        "frontend/pages/messages/thread-page.tsx:63:40",
+        "frontend/pages/messages/thread-page.tsx:63:150",
+        "frontend/pages/messages/thread-page.tsx:64:22",
+        "frontend/pages/messages/thread-page.tsx:112:152",
+        "frontend/pages/messages/thread-page.tsx:117:76",
+        "frontend/pages/messages/thread-page.tsx:117:296",
+        "frontend/pages/messages/thread-page.tsx:117:484",
+        "frontend/pages/messages/thread-page.tsx:119:900",
+        "frontend/pages/messages/thread-page.tsx:121:5",
+        "frontend/pages/messages/thread-page.tsx:122:5",
+        "frontend/pages/messages/thread-page.tsx:138:10",
+        "frontend/pages/messages/thread-page.tsx:139:202",
+        "frontend/pages/messages/thread-page.tsx:141:197",
+        "frontend/pages/messages/thread-page.tsx:143:5",
+        "frontend/pages/messages/thread-page.tsx:144:158",
+        "frontend/pages/messages/thread-page.tsx:165:349",
+        "frontend/pages/messages/thread-page.tsx:165:615",
+        "frontend/pages/messages/thread-page.tsx:165:773"
       ],
       "unresolvedSymbols": [],
       "routePattern": "/^\\/messages\\/[A-Za-z0-9_-]{1,128}$/u"
@@ -33195,11 +33199,93 @@
       ]
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:94:138",
+      "id": "frontend/pages/messages/thread-page.tsx:63:40",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "ThreadPage",
-      "line": 94,
-      "column": 138,
+      "line": 63,
+      "column": 40,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "data-discussion-draft-blocked": "true",
+        "role": "\"alert\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "recordBlocked",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/messages/thread-page.tsx:63:150",
+      "path": "frontend/pages/messages/thread-page.tsx",
+      "owner": "ThreadPage",
+      "line": 63,
+      "column": 150,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "onClick": "discardRecord"
+      },
+      "handlers": {
+        "onClick": "discardRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"MESSAGES_DRAFT_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "recordBlocked",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/messages/thread-page.tsx:64:22",
+      "path": "frontend/pages/messages/thread-page.tsx",
+      "owner": "ThreadPage",
+      "line": 64,
+      "column": 22,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "recordNotice"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "recordBlocked",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "recordNotice",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/messages/thread-page.tsx:112:152",
+      "path": "frontend/pages/messages/thread-page.tsx",
+      "owner": "ThreadPage",
+      "line": 112,
+      "column": 152,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -33224,15 +33310,15 @@
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
-          "source": "if (state.kind === \"loading\") return <div>{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
+          "source": "if (state.kind === \"loading\") return <div>{recordBanner}{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
         }
       ]
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:98:76",
+      "id": "frontend/pages/messages/thread-page.tsx:117:76",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "ThreadPage",
-      "line": 98,
+      "line": 117,
       "column": 76,
       "kind": "jsx",
       "tag": "a",
@@ -33249,23 +33335,23 @@
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
-          "source": "if (state.kind === \"loading\") return <div>{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
+          "source": "if (state.kind === \"loading\") return <div>{recordBanner}{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
         },
         {
           "condition": "state.kind === \"error\"",
-          "source": "if (state.kind === \"error\") return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
+          "source": "if (state.kind === \"error\") return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
         },
         {
           "condition": "recoveryBlocked",
-          "source": "if (recoveryBlocked) return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
+          "source": "if (recoveryBlocked) return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
         }
       ]
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:98:296",
+      "id": "frontend/pages/messages/thread-page.tsx:117:296",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "ThreadPage",
-      "line": 98,
+      "line": 117,
       "column": 296,
       "kind": "jsx",
       "tag": "a",
@@ -33282,23 +33368,23 @@
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
-          "source": "if (state.kind === \"loading\") return <div>{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
+          "source": "if (state.kind === \"loading\") return <div>{recordBanner}{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
         },
         {
           "condition": "state.kind === \"error\"",
-          "source": "if (state.kind === \"error\") return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
+          "source": "if (state.kind === \"error\") return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
         },
         {
           "condition": "recoveryBlocked",
-          "source": "if (recoveryBlocked) return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
+          "source": "if (recoveryBlocked) return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
         }
       ]
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:98:484",
+      "id": "frontend/pages/messages/thread-page.tsx:117:484",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "ThreadPage",
-      "line": 98,
+      "line": 117,
       "column": 484,
       "kind": "jsx",
       "tag": "Button",
@@ -33318,23 +33404,23 @@
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
-          "source": "if (state.kind === \"loading\") return <div>{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
+          "source": "if (state.kind === \"loading\") return <div>{recordBanner}{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
         },
         {
           "condition": "state.kind === \"error\"",
-          "source": "if (state.kind === \"error\") return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
+          "source": "if (state.kind === \"error\") return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
         },
         {
           "condition": "recoveryBlocked",
-          "source": "if (recoveryBlocked) return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
+          "source": "if (recoveryBlocked) return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
         }
       ]
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:100:900",
+      "id": "frontend/pages/messages/thread-page.tsx:119:900",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "ThreadPage",
-      "line": 100,
+      "line": 119,
       "column": 900,
       "kind": "jsx",
       "tag": "Button",
@@ -33372,23 +33458,23 @@
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
-          "source": "if (state.kind === \"loading\") return <div>{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
+          "source": "if (state.kind === \"loading\") return <div>{recordBanner}{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
         },
         {
           "condition": "state.kind === \"error\"",
-          "source": "if (state.kind === \"error\") return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
+          "source": "if (state.kind === \"error\") return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
         },
         {
           "condition": "recoveryBlocked",
-          "source": "if (recoveryBlocked) return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
+          "source": "if (recoveryBlocked) return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
         }
       ]
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:102:5",
+      "id": "frontend/pages/messages/thread-page.tsx:121:5",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "ThreadPage",
-      "line": 102,
+      "line": 121,
       "column": 5,
       "kind": "jsx",
       "tag": "DiscussionCursorPagination",
@@ -33413,23 +33499,23 @@
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
-          "source": "if (state.kind === \"loading\") return <div>{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
+          "source": "if (state.kind === \"loading\") return <div>{recordBanner}{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
         },
         {
           "condition": "state.kind === \"error\"",
-          "source": "if (state.kind === \"error\") return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
+          "source": "if (state.kind === \"error\") return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
         },
         {
           "condition": "recoveryBlocked",
-          "source": "if (recoveryBlocked) return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
+          "source": "if (recoveryBlocked) return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
         }
       ]
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:103:5",
+      "id": "frontend/pages/messages/thread-page.tsx:122:5",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "ThreadPage",
-      "line": 103,
+      "line": 122,
       "column": 5,
       "kind": "jsx",
       "tag": "DiscussionComposer",
@@ -33457,23 +33543,23 @@
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
-          "source": "if (state.kind === \"loading\") return <div>{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
+          "source": "if (state.kind === \"loading\") return <div>{recordBanner}{draft.confirmation}<span className=\"sr-only\">{frontendText(locale, \"MESSAGES_THREAD_LOADING\")}</span><PageState kind=\"loading\" title={frontendText(locale, \"MESSAGES_THREAD_LOADING\")} /></div>;"
         },
         {
           "condition": "state.kind === \"error\"",
-          "source": "if (state.kind === \"error\") return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
+          "source": "if (state.kind === \"error\") return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_THREAD_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"MESSAGES_RETRY\")}</Button></PageState></>;"
         },
         {
           "condition": "recoveryBlocked",
-          "source": "if (recoveryBlocked) return <>{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
+          "source": "if (recoveryBlocked) return <>{recordBanner}{draft.confirmation}<PageState kind=\"error\" title={frontendText(locale, \"MESSAGES_RECOVERY_BLOCKED\")} /></>;"
         }
       ]
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:119:10",
+      "id": "frontend/pages/messages/thread-page.tsx:138:10",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "DiscussionComposer",
-      "line": 119,
+      "line": 138,
       "column": 10,
       "kind": "jsx",
       "tag": "form",
@@ -33490,10 +33576,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:120:202",
+      "id": "frontend/pages/messages/thread-page.tsx:139:202",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "DiscussionComposer",
-      "line": 120,
+      "line": 139,
       "column": 202,
       "kind": "jsx",
       "tag": "button",
@@ -33525,10 +33611,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:122:197",
+      "id": "frontend/pages/messages/thread-page.tsx:141:197",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "DiscussionComposer",
-      "line": 122,
+      "line": 141,
       "column": 197,
       "kind": "jsx",
       "tag": "Button",
@@ -33565,10 +33651,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:124:5",
+      "id": "frontend/pages/messages/thread-page.tsx:143:5",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "DiscussionComposer",
-      "line": 124,
+      "line": 143,
       "column": 5,
       "kind": "jsx",
       "tag": "textarea",
@@ -33596,10 +33682,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:125:158",
+      "id": "frontend/pages/messages/thread-page.tsx:144:158",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "DiscussionComposer",
-      "line": 125,
+      "line": 144,
       "column": 158,
       "kind": "jsx",
       "tag": "Button",
@@ -33622,10 +33708,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:146:349",
+      "id": "frontend/pages/messages/thread-page.tsx:165:349",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "DiscussionCursorPagination",
-      "line": 146,
+      "line": 165,
       "column": 349,
       "kind": "jsx",
       "tag": "Select",
@@ -33644,10 +33730,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:146:615",
+      "id": "frontend/pages/messages/thread-page.tsx:165:615",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "DiscussionCursorPagination",
-      "line": 146,
+      "line": 165,
       "column": 615,
       "kind": "jsx",
       "tag": "Button",
@@ -33669,10 +33755,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/messages/thread-page.tsx:146:773",
+      "id": "frontend/pages/messages/thread-page.tsx:165:773",
       "path": "frontend/pages/messages/thread-page.tsx",
       "owner": "DiscussionCursorPagination",
-      "line": 146,
+      "line": 165,
       "column": 773,
       "kind": "jsx",
       "tag": "Button",

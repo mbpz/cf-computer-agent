@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：254；操作/转发候选：1096。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：255；操作/转发候选：1099。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -138,6 +138,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/lib/calendar-data.ts | 0 |
 | frontend/lib/calendar-query.ts | 0 |
 | frontend/lib/command-palette.ts | 0 |
+| frontend/lib/discussion-draft.ts | 0 |
 | frontend/lib/discussion-intent.ts | 0 |
 | frontend/lib/discussions-data.ts | 0 |
 | frontend/lib/focus-create-intent.ts | 0 |
@@ -239,7 +240,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/login-page.tsx | 2 |
 | frontend/pages/messages/discussion-model.ts | 0 |
 | frontend/pages/messages/messages-page.tsx | 4 |
-| frontend/pages/messages/thread-page.tsx | 15 |
+| frontend/pages/messages/thread-page.tsx | 18 |
 | frontend/pages/my-submissions-page.tsx | 6 |
 | frontend/pages/notifications/notification-model.ts | 0 |
 | frontend/pages/notifications/notifications-page.tsx | 11 |
@@ -304,7 +305,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /notifications | frontend/app.tsx#NotificationsRoute; frontend/lib/notifications-data.ts#* | 43 | 无（不代表动态边界已核对） |
 | /messages | frontend/app.tsx#MessagesRoute | 22 | 无（不代表动态边界已核对） |
 | /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 70 | 无（不代表动态边界已核对） |
-| /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 42 | 无（不代表动态边界已核对） |
+| /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 45 | 无（不代表动态边界已核对） |
 | /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 66 | 无（不代表动态边界已核对） |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 94 | 无（不代表动态边界已核对） |
 | &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 38 | 无（不代表动态边界已核对） |
@@ -1717,21 +1718,24 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 94:138 ThreadPage | Button frontendText(locale, "MESSAGES_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
-| 98:76 ThreadPage | a frontendText(locale, "MESSAGES_BACK") | href="/messages" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
-| 98:296 ThreadPage | a state.thread.contextId | href=discussionContextHref({ kind: state.thread.contextKind, id: state.thread.contextId }) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
-| 98:484 ThreadPage | Button frontendText(locale, "MESSAGES_REFRESH") | onClick=onRefresh | disabled=pending; earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
-| 100:900 ThreadPage | Button frontendText(locale, "MESSAGES_REPLY") | onClick=() =&gt; selectReply(message) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.messages.… |
-| 102:5 ThreadPage | DiscussionCursorPagination  | onPrevious=onPrevious; onNext=() =&gt; state.nextCursor && onNext(state.nextCursor); onLimitChange=onLimitChange | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
-| 103:5 ThreadPage | DiscussionComposer  | onLookup=onLookup ? checkResult : undefined; onBodyChange=(value) =&gt; draft.edit("body", value); onCancelReply=() =&gt; selectReply(null); onSubmit=submit | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
-| 119:10 DiscussionComposer | form  | onSubmit=(event) =&gt; void onSubmit(event) |  |
-| 120:202 DiscussionComposer | button frontendText(locale, "MESSAGES_CANCEL_REPLY") | onClick=onCancelReply; type="button" | disabled=locked; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"replyTo","operator":"&&"} |
-| 122:197 DiscussionComposer | Button frontendText(locale, status === "checking" ? "MESSAGES_CHECKING_RESULT" : "MESSAGES_CHECK_RESULT") | onClick=() =&gt; void onLookup(); type="button" | disabled=status === "pending" &#124;&#124; status === "checking"; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"operatio… |
-| 124:5 DiscussionComposer | textarea  | onChange=(event) =&gt; onBodyChange(event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"form","attributes":{}} |
-| 125:158 DiscussionComposer | Button status === "pending" ? frontendText(locale, "MESSAGES_SENDING") : frontendText(locale, status === "error" ? "MESSAGES_RETRY_SEND" : "MESSAGES_SEND") | type="submit" | disabled=status === "pending" &#124;&#124; status === "checking" &#124;&#124; !body.trim(); {"kind":"container","tag":"form","attributes":{}} |
-| 146:349 DiscussionCursorPagination | Select  | onChange=(event) =&gt; onLimitChange(Number(event.currentTarget.value) as 20 &#124; 50) | disabled=pending |
-| 146:615 DiscussionCursorPagination | Button labels.previousLabel | onClick=onPrevious; type="button" | disabled=pending &#124;&#124; page &lt;= 1 |
-| 146:773 DiscussionCursorPagination | Button labels.nextLabel | onClick=onNext; type="button" | disabled=pending &#124;&#124; !hasNext |
+| 63:40 ThreadPage | div  |  | {"kind":"branch","expression":"recordBlocked","branch":"true"} |
+| 63:150 ThreadPage | button frontendText(locale, "MESSAGES_DRAFT_RECORD_DISCARD") | onClick=discardRecord; type="button" | {"kind":"branch","expression":"recordBlocked","branch":"true"} |
+| 64:22 ThreadPage | p recordNotice |  | {"kind":"branch","expression":"recordBlocked","branch":"false"}; {"kind":"branch","expression":"recordNotice","branch":"true"} |
+| 112:152 ThreadPage | Button frontendText(locale, "MESSAGES_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 117:76 ThreadPage | a frontendText(locale, "MESSAGES_BACK") | href="/messages" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
+| 117:296 ThreadPage | a state.thread.contextId | href=discussionContextHref({ kind: state.thread.contextKind, id: state.thread.contextId }) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
+| 117:484 ThreadPage | Button frontendText(locale, "MESSAGES_REFRESH") | onClick=onRefresh | disabled=pending; earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
+| 119:900 ThreadPage | Button frontendText(locale, "MESSAGES_REPLY") | onClick=() =&gt; selectReply(message) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.messages.… |
+| 121:5 ThreadPage | DiscussionCursorPagination  | onPrevious=onPrevious; onNext=() =&gt; state.nextCursor && onNext(state.nextCursor); onLimitChange=onLimitChange | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
+| 122:5 ThreadPage | DiscussionComposer  | onLookup=onLookup ? checkResult : undefined; onBodyChange=(value) =&gt; draft.edit("body", value); onCancelReply=() =&gt; selectReply(null); onSubmit=submit | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: recoveryBlocked |
+| 138:10 DiscussionComposer | form  | onSubmit=(event) =&gt; void onSubmit(event) |  |
+| 139:202 DiscussionComposer | button frontendText(locale, "MESSAGES_CANCEL_REPLY") | onClick=onCancelReply; type="button" | disabled=locked; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"replyTo","operator":"&&"} |
+| 141:197 DiscussionComposer | Button frontendText(locale, status === "checking" ? "MESSAGES_CHECKING_RESULT" : "MESSAGES_CHECK_RESULT") | onClick=() =&gt; void onLookup(); type="button" | disabled=status === "pending" &#124;&#124; status === "checking"; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"operatio… |
+| 143:5 DiscussionComposer | textarea  | onChange=(event) =&gt; onBodyChange(event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"form","attributes":{}} |
+| 144:158 DiscussionComposer | Button status === "pending" ? frontendText(locale, "MESSAGES_SENDING") : frontendText(locale, status === "error" ? "MESSAGES_RETRY_SEND" : "MESSAGES_SEND") | type="submit" | disabled=status === "pending" &#124;&#124; status === "checking" &#124;&#124; !body.trim(); {"kind":"container","tag":"form","attributes":{}} |
+| 165:349 DiscussionCursorPagination | Select  | onChange=(event) =&gt; onLimitChange(Number(event.currentTarget.value) as 20 &#124; 50) | disabled=pending |
+| 165:615 DiscussionCursorPagination | Button labels.previousLabel | onClick=onPrevious; type="button" | disabled=pending &#124;&#124; page &lt;= 1 |
+| 165:773 DiscussionCursorPagination | Button labels.nextLabel | onClick=onNext; type="button" | disabled=pending &#124;&#124; !hasNext |
 
 ## frontend/pages/my-submissions-page.tsx
 

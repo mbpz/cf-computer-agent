@@ -1,3 +1,4 @@
+import { discardBlockedDiscussionDraft, loadDiscussionDraft, persistDiscussionDraft } from "../../lib/discussion-draft";
 import { createDiscussionOperationJournal } from "../../lib/discussion-intent";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Alert, AlertTitle } from "../../components/ui/alert";
@@ -36,14 +37,31 @@ export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending,
   if (!submitControllerRef.current) submitControllerRef.current = createDiscussionSubmitController(undefined,
     recoveryOwner ? createDiscussionOperationJournal(recoveryOwner.memberId, recoveryOwner.threadId) : undefined);
   const restored = useRef(submitControllerRef.current.snapshot()).current;
+  const [draftStored] = useState(() => !restored && recoveryOwner ? loadDiscussionDraft(recoveryOwner.memberId, recoveryOwner.threadId) : { kind: "empty" as const });
+  const [recordBlocked, setRecordBlocked] = useState(draftStored.kind === "blocked");
+  const [recordNotice, setRecordNotice] = useState<string>();
   const [status, setStatus] = useState<"idle" | "pending" | "checking" | "error">(restored ? "error" : "idle");
   const submitPendingRef = useRef(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const blank = { body: "", replyId: "", replyAuthor: "" };
-  const draft = useCreateDraft(restored ? { body: restored.body, replyId: restored.replyToMessageId ?? "", replyAuthor: "" } : blank, blank,
+  const savedDraft = draftStored.kind === "ready" ? draftStored.draft : null;
+  const draft = useCreateDraft(restored
+    ? { body: restored.body, replyId: restored.replyToMessageId ?? "", replyAuthor: "" }
+    : savedDraft ? { body: savedDraft.body, replyId: savedDraft.replyId, replyAuthor: savedDraft.replyAuthor } : blank, blank,
     () => submitPendingRef.current || submitControllerRef.current!.hasUnresolved(), locale,
     () => state.kind !== "ready");
+  useEffect(() => {
+    if (!recoveryOwner || recordBlocked || submitControllerRef.current?.recoveryBlocked()) return;
+    const saved = persistDiscussionDraft(recoveryOwner.memberId, recoveryOwner.threadId, draft.fields);
+    setRecordNotice(saved ? undefined : frontendText(locale, "MESSAGES_DRAFT_NOT_RECORDED"));
+  }, [draft.fields.body, draft.fields.replyId, draft.fields.replyAuthor, locale, recordBlocked, recoveryOwner]);
+  const discardRecord = () => {
+    if (!recoveryOwner || !discardBlockedDiscussionDraft(recoveryOwner.memberId, recoveryOwner.threadId)) return;
+    setRecordBlocked(false);
+  };
+  const recordBanner = recordBlocked ? <div data-discussion-draft-blocked role="alert"><p>{frontendText(locale, "MESSAGES_DRAFT_RECORD_BLOCKED")}</p><button type="button" onClick={discardRecord}>{frontendText(locale, "MESSAGES_DRAFT_RECORD_DISCARD")}</button></div>
+    : recordNotice ? <p role="alert">{recordNotice}</p> : null;
   const { body, replyId, replyAuthor } = draft.fields;
   const frozen = submitControllerRef.current.snapshot();
   const recoveryBlocked = submitControllerRef.current.recoveryBlocked() || (frozen !== null && state.kind === "ready"
@@ -90,10 +108,11 @@ export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending,
     } catch { if (alive.current) setStatus("error"); }
     finally { submitPendingRef.current = false; }
   };
-  if (state.kind === "loading") return <div>{draft.confirmation}<span className="sr-only">{frontendText(locale, "MESSAGES_THREAD_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "MESSAGES_THREAD_LOADING")} /></div>;
-  if (state.kind === "error") return <>{draft.confirmation}<PageState kind="error" title={frontendText(locale, "MESSAGES_THREAD_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button></PageState></>;
-  if (recoveryBlocked) return <>{draft.confirmation}<PageState kind="error" title={frontendText(locale, "MESSAGES_RECOVERY_BLOCKED")} /></>;
+  if (state.kind === "loading") return <div>{recordBanner}{draft.confirmation}<span className="sr-only">{frontendText(locale, "MESSAGES_THREAD_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "MESSAGES_THREAD_LOADING")} /></div>;
+  if (state.kind === "error") return <>{recordBanner}{draft.confirmation}<PageState kind="error" title={frontendText(locale, "MESSAGES_THREAD_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button></PageState></>;
+  if (recoveryBlocked) return <>{recordBanner}{draft.confirmation}<PageState kind="error" title={frontendText(locale, "MESSAGES_RECOVERY_BLOCKED")} /></>;
   return <section className="flex min-h-0 flex-col gap-4">
+    {recordBanner}
     {draft.confirmation}
     <div className="flex flex-wrap items-start justify-between gap-3"><div><a href="/messages" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "MESSAGES_BACK")}</a><h1 className="mt-1 text-2xl font-semibold">{frontendText(locale, "MESSAGES_THREAD_TITLE")}</h1><a className="text-sm text-muted-foreground hover:underline" href={discussionContextHref({ kind: state.thread.contextKind, id: state.thread.contextId })}>{state.thread.contextId}</a></div><Button variant="outline" disabled={pending} onClick={onRefresh}>{frontendText(locale, "MESSAGES_REFRESH")}</Button></div>
     <div data-thread-scroll="true" className="min-h-48 max-h-[calc(100vh-25rem)] flex-1 space-y-3 overflow-y-auto pr-1" aria-busy={pending || undefined}>

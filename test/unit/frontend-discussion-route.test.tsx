@@ -992,6 +992,82 @@ describe("discussion routes", () => {
     await waitFor(() => container.textContent?.includes("task-default") ?? false);
     expect(container.textContent).not.toContain("task-stale");
   });
+
+  it("restores an unsent discussion draft after the thread owner is recreated", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") posts++;
+      return Response.json(String(input) === "/api/discussions/thread-1" ? thread() : { items: [message()] });
+    });
+    const render = () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />);
+    await act(async () => { render(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await act(async () => { (container.querySelector("[data-message-id] button") as HTMLButtonElement).click(); });
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Keep this reply");
+    expect(browser.sessionStorage.getItem("memory-garden:discussion-draft:v1:member-1:thread-1")).toContain("Keep this reply");
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => { render(); });
+    await waitFor(() => (container.querySelector("#discussion-composer") as HTMLTextAreaElement | null)?.value === "Keep this reply");
+    expect(container.textContent).toContain("Replying to member-1");
+    expect(posts).toBe(0);
+    const unload = new browser.Event("beforeunload", { cancelable: true });
+    browser.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+  });
+
+  it("clears an unsent discussion draft when leaving is confirmed", async () => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => Response.json(String(input) === "/api/discussions/thread-1" ? thread() : { items: [message()] }));
+    browser.history.replaceState({}, "", "/messages/thread-1");
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Keep this reply");
+    expect(browser.sessionStorage.getItem("memory-garden:discussion-draft:v1:member-1:thread-1")).toContain("Keep this reply");
+    await act(async () => { writeWorkspaceHistory("push", "/home"); });
+    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Discard changes")!.click(); });
+    expect(browser.location.pathname).toBe("/home");
+    expect(browser.sessionStorage.getItem("memory-garden:discussion-draft:v1:member-1:thread-1")).toBeNull();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    browser.history.replaceState({}, "", "/messages/thread-1");
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("keeps a typed discussion on screen when the tab cannot record it", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") posts++;
+      return Response.json(String(input) === "/api/discussions/thread-1" ? thread() : { items: [message()] });
+    });
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Unrecorded reply");
+    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("Unrecorded reply");
+    expect(container.textContent).toContain("could not record");
+    expect(posts).toBe(0);
+  });
+
+  it("allows leaving when a saved discussion draft cannot be read until it is discarded", async () => {
+    browser.sessionStorage.setItem("memory-garden:discussion-draft:v1:member-1:thread-1", "{");
+    let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") posts++;
+      return Response.json(String(input) === "/api/discussions/thread-1" ? thread() : { items: [message()] });
+    });
+    browser.history.replaceState({}, "", "/messages/thread-1");
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await waitFor(() => container.textContent?.includes("can't be read") ?? false);
+    expect(writeWorkspaceHistory("push", "/home")).toBe("committed");
+    browser.history.replaceState({}, "", "/messages/thread-1");
+    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Discard record")!.click(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "After discard");
+    expect(browser.sessionStorage.getItem("memory-garden:discussion-draft:v1:member-1:thread-1")).toContain("After discard");
+    expect(posts).toBe(0);
+  });
 });
 
 function thread(overrides: Record<string, unknown> = {}) {
