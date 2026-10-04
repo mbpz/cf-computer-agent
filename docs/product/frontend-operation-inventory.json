@@ -2689,8 +2689,8 @@
         "frontend/pages/knowledge-reader-page.tsx:84:4128",
         "frontend/pages/knowledge-reader-page.tsx:84:4315",
         "frontend/pages/knowledge-reader-page.tsx:84:4391",
-        "frontend/pages/knowledge-reader-page.tsx:84:4997",
-        "frontend/pages/knowledge-reader-page.tsx:84:5228",
+        "frontend/pages/knowledge-reader-page.tsx:84:5107",
+        "frontend/pages/knowledge-reader-page.tsx:84:5338",
         "frontend/pages/knowledge-reader-page.tsx:92:448",
         "frontend/pages/knowledge-reader-page.tsx:98:362",
         "frontend/pages/knowledge-reader-page.tsx:104:358",
@@ -34526,11 +34526,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:84:4997",
+      "id": "frontend/pages/knowledge-reader-page.tsx:84:5107",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
       "line": 84,
-      "column": 4997,
+      "column": 5107,
       "kind": "jsx",
       "tag": "button",
       "attributes": {
@@ -34554,6 +34554,11 @@
         },
         {
           "kind": "branch",
+          "expression": "(sharing.phase === \"loading\" || sharing.phase === \"load-error\" || sharing.phase === \"storage-error\")",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
           "expression": "shares.length === 0",
           "branch": "false"
         },
@@ -34565,11 +34570,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:84:5228",
+      "id": "frontend/pages/knowledge-reader-page.tsx:84:5338",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
       "line": 84,
-      "column": 5228,
+      "column": 5338,
       "kind": "jsx",
       "tag": "p",
       "attributes": {

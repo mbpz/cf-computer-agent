@@ -147,9 +147,9 @@ export async function listPrivateKnowledgeNoteShares(knowledgeItemId: string, re
 }
 
 export async function loadActiveWorkspaceMembers(requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeWorkspaceMember[]> {
-  const data = await apiFetch<{ items?: unknown }>("/api/members/active", { requester, signal });
-  if (!Array.isArray(data.items)) return [];
-  return data.items.flatMap((value) => {
+  const data = await apiFetch<unknown>("/api/members/active", { requester, signal });
+  if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray((data as { items?: unknown }).items)) throw new Error("KNOWLEDGE_MEMBERS_INVALID");
+  return (data as { items: unknown[] }).items.flatMap((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
     const record = value as Record<string, unknown>;
     if (typeof record.id !== "string" || !ID_PATTERN.test(record.id) || typeof record.email !== "string"
