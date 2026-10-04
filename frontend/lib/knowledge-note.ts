@@ -115,9 +115,9 @@ export async function loadRemotePrivateKnowledgeNote(knowledgeItemId: string, re
 }
 
 export async function loadPrivateKnowledgeNotes(requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNoteListItem[]> {
-  const data = await apiFetch<{ items?: unknown[] }>("/api/knowledge/notes?limit=8", { requester, signal });
-  if (!Array.isArray(data.items)) return [];
-  return data.items.flatMap((value) => {
+  const data = await apiFetch<unknown>("/api/knowledge/notes?limit=8", { requester, signal });
+  if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray((data as { items?: unknown }).items)) throw new Error("KNOWLEDGE_NOTES_INVALID");
+  return (data as { items: unknown[] }).items.flatMap((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
     const record = value as Record<string, unknown>;
     if (typeof record.id !== "string" || !ID_PATTERN.test(record.id) || typeof record.knowledgeItemId !== "string" || !ID_PATTERN.test(record.knowledgeItemId)

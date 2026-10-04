@@ -752,6 +752,12 @@ export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRun
   const [recentResearch, setRecentResearch] = useState<RecentResearchItem[]>([]);
   const [notes, setNotes] = useState<PrivateKnowledgeNoteListItem[]>([]);
   const [activity, setActivity] = useState<WorkspaceActivityItem[]>([]);
+  const [recentError, setRecentError] = useState(false);
+  const [favoritesError, setFavoritesError] = useState(false);
+  const [researchError, setResearchError] = useState(false);
+  const [notesError, setNotesError] = useState(false);
+  const [activityError, setActivityError] = useState(false);
+  const [sectionRetry, setSectionRetry] = useState(0);
   const [activityNextCursor, setActivityNextCursor] = useState<string | null>(null);
   const [storedPeriod] = useState(() => memberId ? loadReviewPeriod(memberId, "knowledge") : { kind: "empty" as const });
   const [periodBlocked, setPeriodBlocked] = useState(storedPeriod.kind === "blocked");
@@ -762,13 +768,13 @@ export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRun
   const queryRef = useRef({ page, pageSize });
   useEffect(() => {
     let active = true;
-    void loadRecentKnowledge().then((items) => { if (active) setRecent(items); }).catch(() => { if (active) setRecent([]); });
-    void loadFavoriteKnowledge().then((items) => { if (active) setFavorites(items); }).catch(() => { if (active) setFavorites([]); });
-    void loadRecentResearch().then((items) => { if (active) setRecentResearch(items); }).catch(() => { if (active) setRecentResearch([]); });
-    void loadPrivateKnowledgeNotes().then((items) => { if (active) setNotes(items); }).catch(() => { if (active) setNotes([]); });
-    void loadWorkspaceActivity().then((page) => { if (active) { setActivity(page.items); setActivityNextCursor(page.nextCursor); } }).catch(() => { if (active) { setActivity([]); setActivityNextCursor(null); } });
+    void loadRecentKnowledge().then((items) => { if (active) { setRecent(items); setRecentError(false); } }).catch(() => { if (active) { setRecent([]); setRecentError(true); } });
+    void loadFavoriteKnowledge().then((items) => { if (active) { setFavorites(items); setFavoritesError(false); } }).catch(() => { if (active) { setFavorites([]); setFavoritesError(true); } });
+    void loadRecentResearch().then((items) => { if (active) { setRecentResearch(items); setResearchError(false); } }).catch(() => { if (active) { setRecentResearch([]); setResearchError(true); } });
+    void loadPrivateKnowledgeNotes().then((items) => { if (active) { setNotes(items); setNotesError(false); } }).catch(() => { if (active) { setNotes([]); setNotesError(true); } });
+    void loadWorkspaceActivity().then((page) => { if (active) { setActivity(page.items); setActivityNextCursor(page.nextCursor); setActivityError(false); } }).catch(() => { if (active) { setActivity([]); setActivityNextCursor(null); setActivityError(true); } });
     return () => { active = false; };
-  }, []);
+  }, [sectionRetry]);
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
@@ -803,7 +809,7 @@ export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRun
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
   }, [locale, page, pageSize, retryVersion, urlVersion]);
   const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
-  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
+  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} recentError={recentError} favoritesError={favoritesError} researchError={researchError} notesError={notesError} activityError={activityError} onRetrySections={() => setSectionRetry((value) => value + 1)} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
 }
 
 export function SearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {

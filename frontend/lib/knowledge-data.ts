@@ -68,6 +68,10 @@ export async function loadKnowledgePage({ page, pageSize, requester = fetch, sig
   return normalizeNumberedPage(await apiFetch(`/api/knowledge?${params.toString()}`, { requester, signal }), normalizeItem);
 }
 
+function recordItems(value: unknown): value is { items: unknown[] } {
+  return !!value && typeof value === "object" && !Array.isArray(value) && Array.isArray((value as { items?: unknown }).items);
+}
+
 export async function loadRecentKnowledge(requester: Fetcher = fetch, signal?: AbortSignal): Promise<RecentKnowledgeItem[]> {
   const data = await apiFetch<{ items?: unknown[] }>("/api/knowledge/recent?limit=8", { requester, signal });
   if (!Array.isArray(data?.items)) throw new Error("RECENT_KNOWLEDGE_INVALID");
@@ -86,8 +90,8 @@ export async function loadRecentKnowledge(requester: Fetcher = fetch, signal?: A
 }
 
 export async function loadFavoriteKnowledge(requester: Fetcher = fetch, signal?: AbortSignal): Promise<FavoriteKnowledgeItem[]> {
-  const data = await apiFetch<{ items?: unknown[] }>("/api/knowledge/favorites?limit=20", { requester, signal });
-  if (!Array.isArray(data.items)) return [];
+  const data = await apiFetch<unknown>("/api/knowledge/favorites?limit=20", { requester, signal });
+  if (!recordItems(data)) throw new Error("FAVORITE_KNOWLEDGE_INVALID");
   return data.items.flatMap((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
     const item = value as Record<string, unknown>;
@@ -99,8 +103,8 @@ export async function loadFavoriteKnowledge(requester: Fetcher = fetch, signal?:
 }
 
 export async function loadRecentResearch(requester: Fetcher = fetch, signal?: AbortSignal): Promise<RecentResearchItem[]> {
-  const data = await apiFetch<{ items?: unknown[] }>("/api/knowledge/research-runs?limit=8", { requester, signal });
-  if (!Array.isArray(data.items)) return [];
+  const data = await apiFetch<unknown>("/api/knowledge/research-runs?limit=8", { requester, signal });
+  if (!recordItems(data)) throw new Error("RESEARCH_RUNS_INVALID");
   return data.items.flatMap((value) => {
     const item = normalizeRecentResearchItem(value);
     return item ? [item] : [];
