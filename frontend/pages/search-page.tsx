@@ -13,7 +13,7 @@ export type SearchState =
   | { kind: "ready"; query?: string; degraded: boolean; results: readonly SearchResultItem[]; pagination: { page: number; pageSize: 20 | 50 | 100; total: number; totalPages: number } }
   | { kind: "error"; message: string };
 
-export function SearchPage({ state, locale, query, queryLocked = false, pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView }: {
+export function SearchPage({ state, locale, query, queryLocked = false, pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView, savedViewRecordBlocked = false, onDiscardSavedViewRecord }: {
   state: SearchState;
   locale: LocaleRuntime;
   query?: string; queryLocked?: boolean;
@@ -28,6 +28,7 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
   savedViewPending?: boolean;
   savedViewError?: string;
   savedViewUnknown?: boolean; onCheckSavedView?: () => void;
+  savedViewRecordBlocked?: boolean; onDiscardSavedViewRecord?: () => void;
   savedViewName?: string; onSavedViewNameChange?: (value: string) => void; savedViewConfirmation?: ReactNode;
 }) {
   const [localName, setLocalName] = useState("");
@@ -42,7 +43,8 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
       <Button type="submit" disabled={!onSubmit || queryLocked}>{frontendText(locale, "SEARCH_SUBMIT")}</Button>
     </form>
     {(savedViews || onSaveView) && <div className="rounded-lg border bg-card p-4" data-saved-view-controls>
-      {savedViewError && <p role="alert" className="mb-3 text-sm text-destructive">{savedViewError}</p>}
+      {savedViewError && !savedViewRecordBlocked && <p role="alert" className="mb-3 text-sm text-destructive">{savedViewError}</p>}
+      {savedViewRecordBlocked && <div role="alert" data-saved-view-record-blocked className="mb-3 space-y-2 text-sm text-destructive"><p>{savedViewError}</p><Button type="button" variant="outline" data-saved-view-record-discard onClick={onDiscardSavedViewRecord}>{frontendText(locale, "SEARCH_SAVED_VIEW_RECORD_DISCARD")}</Button></div>}
       {savedViewUnknown && <Button data-saved-view-check type="button" variant="outline" onClick={onCheckSavedView}>{frontendText(locale, "SEARCH_SAVED_VIEW_CHECK")}</Button>}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div><h2 className="text-sm font-semibold">{frontendText(locale, "SEARCH_SAVED_VIEWS")}</h2><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, "SEARCH_SAVED_VIEWS_DESCRIPTION")}</p></div>

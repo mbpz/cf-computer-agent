@@ -175,6 +175,54 @@ describe("saved view route ownership", () => {
     await act(async () => writeWorkspaceHistory("push", "/knowledge")); await click("[data-confirm-action]");
     expect(browser.location.pathname).toBe("/knowledge"); expect(input().value).toBe("");
   });
+  it("keeps an unknown saved view after refresh and does not send it again", async () => {
+    let writes = 0; let present = false;
+    await mount(async (_url, init) => {
+      if (init?.method === "POST") { writes++; throw new Error("lost response"); }
+      return Response.json({ items: present ? [view()] : [] });
+    });
+    await act(async () => { edit("Docs"); submit(); await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(browser.sessionStorage.getItem("memory-garden:saved-view:v1:member-a")).toContain("Docs");
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<SearchRoute memberId="member-a" locale={createLocaleRuntime({ navigatorLanguage: "en" })} search={browser.location.search} />));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(writes).toBe(1);
+    expect(container.textContent).toContain("unconfirmed");
+    await act(async () => expect(writeWorkspaceHistory("push", "/knowledge")).toBe("blocked"));
+    present = true; await click("[data-saved-view-check]");
+    expect(browser.sessionStorage.getItem("memory-garden:saved-view:v1:member-a")).toBeNull();
+    expect(writes).toBe(1);
+    await act(async () => expect(writeWorkspaceHistory("push", "/knowledge")).toBe("committed"));
+  });
+  it("does not save a view when the tab cannot record it", async () => {
+    let writes = 0;
+    await mount(async (_url, init) => {
+      if (init?.method === "POST") writes++;
+      return Response.json({ items: [] });
+    });
+    const storage = browser.sessionStorage;
+    vi.spyOn(storage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await act(async () => { edit("Docs"); submit(); await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(writes).toBe(0);
+    expect(container.textContent).toContain("could not record");
+  });
+  it("blocks a saved view when its record cannot be read, and allows leave until it is discarded", async () => {
+    let writes = 0;
+    browser.sessionStorage.setItem("memory-garden:saved-view:v1:member-a", "{");
+    await mount(async (_url, init) => {
+      if (init?.method === "POST") writes++;
+      return Response.json({ items: [] });
+    });
+    expect(container.textContent).toContain("can't be read");
+    await act(async () => expect(writeWorkspaceHistory("push", "/knowledge")).toBe("committed"));
+    browser.history.replaceState({}, "", "/search?q=docs");
+    await act(async () => { edit("Docs"); submit(); await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(writes).toBe(0);
+    await click("[data-saved-view-record-discard]");
+    await act(async () => { edit("Docs"); submit(); await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(writes).toBe(1);
+  });
 });
 function props<T>(element: HTMLElement): T { return (element as unknown as Record<string, T>)[Object.keys(element).find(key => key.startsWith("__reactProps$"))!]!; }
 

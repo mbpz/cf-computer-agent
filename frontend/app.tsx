@@ -736,10 +736,10 @@ export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; sear
 }
 
 export function SearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
-  return <MemberSearchRoute key={memberId ?? "preview"} locale={locale} search={search} />;
+  return <MemberSearchRoute key={memberId ?? "preview"} locale={locale} search={search} memberId={memberId} />;
 }
 
-function MemberSearchRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+function MemberSearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const initialPage = useMemo(() => parsePageSearch(search), [search]);
   const [initialQuery] = useState(() => new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "");
   const [activeQuery, setActiveQuery] = useState(initialQuery);
@@ -765,7 +765,7 @@ function MemberSearchRoute({ locale, search }: { locale: LocaleRuntime; search: 
     const params = new URLSearchParams(readWorkspaceLocation().search);
     return { q: params.get("q") ?? "", spaceId: params.get("spaceId"), collectionId: params.get("collectionId"),
       tagIds: params.getAll("tagId"), tagMode: params.get("tagMode") === "and" ? "and" : "or" };
-  }, (): boolean => queryDraft.isConfirming());
+  }, (): boolean => queryDraft.isConfirming(), memberId);
   const queryDraft = useCreateDraft({ query: initialQuery }, { query: initialQuery },
     saved.isBlocking, locale, (): boolean => saved.draft.isConfirming());
   useEffect(() => {
@@ -828,7 +828,7 @@ function MemberSearchRoute({ locale, search }: { locale: LocaleRuntime; search: 
       setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
     });
   };
-  return <SearchPage locale={locale} query={queryDraft.fields.query} queryLocked={saved.locked || queryDraft.confirming || queryDraft.applicationPending} state={state} pending={pending} localError={localError} onQueryChange={(value) => queryDraft.edit("query", value)} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={<>{saved.confirmation}{queryDraft.confirmation}</>} savedViews={saved.items} savedViewPending={saved.locked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} />;
+  return <SearchPage locale={locale} query={queryDraft.fields.query} queryLocked={saved.locked || queryDraft.confirming || queryDraft.applicationPending} state={state} pending={pending} localError={localError} onQueryChange={(value) => queryDraft.edit("query", value)} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={<>{saved.confirmation}{queryDraft.confirmation}</>} savedViews={saved.items} savedViewPending={saved.locked || saved.recordBlocked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} savedViewRecordBlocked={saved.recordBlocked} onDiscardSavedViewRecord={saved.discardRecord} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} />;
 }
 
 export function AgentRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {

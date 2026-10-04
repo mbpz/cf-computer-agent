@@ -162,6 +162,7 @@
     "frontend/lib/review-data.ts",
     "frontend/lib/route-access.ts",
     "frontend/lib/router.ts",
+    "frontend/lib/saved-view-intent.ts",
     "frontend/lib/saved-views-data.ts",
     "frontend/lib/search-data.ts",
     "frontend/lib/session-state.ts",
@@ -1249,25 +1250,27 @@
         "frontend/lib/use-create-draft.tsx:55:5",
         "frontend/lib/use-create-draft.tsx:56:5",
         "frontend/lib/use-create-draft.tsx:84:19",
-        "frontend/lib/use-saved-views.tsx:96:41",
+        "frontend/lib/use-saved-views.tsx:121:41",
         "frontend/lib/workspace-browser-history.ts:122:3",
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/search-page.tsx:40:5",
-        "frontend/pages/search-page.tsx:41:135",
-        "frontend/pages/search-page.tsx:42:7",
-        "frontend/pages/search-page.tsx:45:26",
-        "frontend/pages/search-page.tsx:46:28",
-        "frontend/pages/search-page.tsx:49:24",
-        "frontend/pages/search-page.tsx:50:11",
-        "frontend/pages/search-page.tsx:51:11",
-        "frontend/pages/search-page.tsx:54:213",
-        "frontend/pages/search-page.tsx:54:391",
-        "frontend/pages/search-page.tsx:57:133",
-        "frontend/pages/search-page.tsx:59:24",
-        "frontend/pages/search-page.tsx:59:128",
-        "frontend/pages/search-page.tsx:62:9"
+        "frontend/pages/search-page.tsx:41:5",
+        "frontend/pages/search-page.tsx:42:135",
+        "frontend/pages/search-page.tsx:43:7",
+        "frontend/pages/search-page.tsx:46:53",
+        "frontend/pages/search-page.tsx:47:34",
+        "frontend/pages/search-page.tsx:47:158",
+        "frontend/pages/search-page.tsx:48:28",
+        "frontend/pages/search-page.tsx:51:24",
+        "frontend/pages/search-page.tsx:52:11",
+        "frontend/pages/search-page.tsx:53:11",
+        "frontend/pages/search-page.tsx:56:213",
+        "frontend/pages/search-page.tsx:56:391",
+        "frontend/pages/search-page.tsx:59:133",
+        "frontend/pages/search-page.tsx:61:24",
+        "frontend/pages/search-page.tsx:61:128",
+        "frontend/pages/search-page.tsx:64:9"
       ],
       "unresolvedSymbols": []
     },
@@ -3356,10 +3359,12 @@
         "onSavedViewNameChange": "(value) => saved.draft.edit(\"name\", value)",
         "savedViewConfirmation": "<>{saved.confirmation}{queryDraft.confirmation}</>",
         "savedViews": "saved.items",
-        "savedViewPending": "saved.locked",
+        "savedViewPending": "saved.locked || saved.recordBlocked",
         "savedViewError": "saved.error",
         "savedViewUnknown": "saved.phase === \"unknown\"",
         "onCheckSavedView": "() => { void saved.check(); }",
+        "savedViewRecordBlocked": "saved.recordBlocked",
+        "onDiscardSavedViewRecord": "saved.discardRecord",
         "onSaveView": "() => { void saved.save(); }",
         "onApplyView": "applyView",
         "onDeleteView": "saved.requestDelete"
@@ -3372,6 +3377,7 @@
         "onRetry": "() => setRetryVersion((value) => value + 1)",
         "onSavedViewNameChange": "(value) => saved.draft.edit(\"name\", value)",
         "onCheckSavedView": "() => { void saved.check(); }",
+        "onDiscardSavedViewRecord": "saved.discardRecord",
         "onSaveView": "() => { void saved.save(); }",
         "onApplyView": "applyView",
         "onDeleteView": "saved.requestDelete"
@@ -20358,10 +20364,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/lib/use-saved-views.tsx:96:41",
+      "id": "frontend/lib/use-saved-views.tsx:121:41",
       "path": "frontend/lib/use-saved-views.tsx",
       "owner": "useSavedViews",
-      "line": 96,
+      "line": 121,
       "column": 41,
       "kind": "jsx",
       "tag": "ConfirmAction",
@@ -34206,10 +34212,10 @@
       ]
     },
     {
-      "id": "frontend/pages/search-page.tsx:40:5",
+      "id": "frontend/pages/search-page.tsx:41:5",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 40,
+      "line": 41,
       "column": 5,
       "kind": "jsx",
       "tag": "form",
@@ -34226,10 +34232,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:41:135",
+      "id": "frontend/pages/search-page.tsx:42:135",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 41,
+      "line": 42,
       "column": 135,
       "kind": "jsx",
       "tag": "Input",
@@ -34257,10 +34263,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:42:7",
+      "id": "frontend/pages/search-page.tsx:43:7",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 42,
+      "line": 43,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -34283,11 +34289,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:45:26",
+      "id": "frontend/pages/search-page.tsx:46:53",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 45,
-      "column": 26,
+      "line": 46,
+      "column": 53,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -34307,17 +34313,82 @@
         },
         {
           "kind": "logical",
-          "expression": "savedViewError",
+          "expression": "savedViewError && !savedViewRecordBlocked",
           "operator": "&&"
         }
       ],
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:46:28",
+      "id": "frontend/pages/search-page.tsx:47:34",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 46,
+      "line": 47,
+      "column": 34,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "role": "\"alert\"",
+        "data-saved-view-record-blocked": "true",
+        "className": "\"mb-3 space-y-2 text-sm text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "(savedViews || onSaveView)",
+          "operator": "&&"
+        },
+        {
+          "kind": "logical",
+          "expression": "savedViewRecordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/search-page.tsx:47:158",
+      "path": "frontend/pages/search-page.tsx",
+      "owner": "SearchPage",
+      "line": 47,
+      "column": 158,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "data-saved-view-record-discard": "true",
+        "onClick": "onDiscardSavedViewRecord"
+      },
+      "handlers": {
+        "onClick": "onDiscardSavedViewRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"SEARCH_SAVED_VIEW_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "(savedViews || onSaveView)",
+          "operator": "&&"
+        },
+        {
+          "kind": "logical",
+          "expression": "savedViewRecordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/search-page.tsx:48:28",
+      "path": "frontend/pages/search-page.tsx",
+      "owner": "SearchPage",
+      "line": 48,
       "column": 28,
       "kind": "jsx",
       "tag": "Button",
@@ -34349,10 +34420,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:49:24",
+      "id": "frontend/pages/search-page.tsx:51:24",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 49,
+      "line": 51,
       "column": 24,
       "kind": "jsx",
       "tag": "form",
@@ -34380,10 +34451,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:50:11",
+      "id": "frontend/pages/search-page.tsx:52:11",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 50,
+      "line": 52,
       "column": 11,
       "kind": "jsx",
       "tag": "Input",
@@ -34420,10 +34491,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:51:11",
+      "id": "frontend/pages/search-page.tsx:53:11",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 51,
+      "line": 53,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -34456,10 +34527,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:54:213",
+      "id": "frontend/pages/search-page.tsx:56:213",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 54,
+      "line": 56,
       "column": 213,
       "kind": "jsx",
       "tag": "button",
@@ -34496,10 +34567,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:54:391",
+      "id": "frontend/pages/search-page.tsx:56:391",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 54,
+      "line": 56,
       "column": 391,
       "kind": "jsx",
       "tag": "button",
@@ -34536,10 +34607,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:57:133",
+      "id": "frontend/pages/search-page.tsx:59:133",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 57,
+      "line": 59,
       "column": 133,
       "kind": "jsx",
       "tag": "Button",
@@ -34570,10 +34641,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:59:24",
+      "id": "frontend/pages/search-page.tsx:61:24",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 59,
+      "line": 61,
       "column": 24,
       "kind": "jsx",
       "tag": "div",
@@ -34604,10 +34675,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:59:128",
+      "id": "frontend/pages/search-page.tsx:61:128",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 59,
+      "line": 61,
       "column": 128,
       "kind": "jsx",
       "tag": "Button",
@@ -34644,10 +34715,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:62:9",
+      "id": "frontend/pages/search-page.tsx:64:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 62,
+      "line": 64,
       "column": 9,
       "kind": "jsx",
       "tag": "DataPagination",

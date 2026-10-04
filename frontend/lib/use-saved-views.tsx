@@ -1,20 +1,33 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiRequestError, type Fetcher } from "./api";
-import { createSavedView, deleteSavedView, loadSavedViews, findSavedView, savedViewIsAbsent, type SavedViewFilters, type SavedViewItem } from "./saved-views-data";
+import { canonicalSavedViewFilters, createSavedView, deleteSavedView, loadSavedViews, findSavedView, savedViewIsAbsent, type SavedViewFilters, type SavedViewItem } from "./saved-views-data";
 import { frontendText, type LocaleRuntime } from "./i18n";
 import { ConfirmAction } from "../components/ui/confirm-action";
 import { useCreateDraft } from "./use-create-draft";
+import { clearSavedViewWrite, discardBlockedSavedViewWrite, loadSavedViewWrite, saveSavedViewWrite, type SavedViewWriteIntent } from "./saved-view-intent";
 
 type Intent = { kind: "create"; name: string; filters: Partial<SavedViewFilters> } | { kind: "delete"; view: SavedViewItem };
 
+function storedFrom(operation: Intent): SavedViewWriteIntent {
+  return operation.kind === "create"
+    ? { kind: "create", name: operation.name.trim(), filters: canonicalSavedViewFilters(operation.filters) }
+    : { kind: "delete", id: operation.view.id };
+}
+function memoryFrom(intent: SavedViewWriteIntent): Intent {
+  if (intent.kind === "create") return { kind: "create", name: intent.name, filters: intent.filters };
+  return { kind: "delete", view: { id: intent.id, name: intent.id, filters: canonicalSavedViewFilters({}), updatedAt: "1970-01-01T00:00:00.000Z" } };
+}
+
 /** One member-keyed owner. A transport error is not evidence that a write failed. */
-export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<SavedViewFilters>, actionBlocked: () => boolean = () => false) {
+export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<SavedViewFilters>, actionBlocked: () => boolean = () => false, memberId?: string) {
+  const [stored] = useState(() => memberId ? loadSavedViewWrite(memberId) : { kind: "empty" as const });
   const [items, setItems] = useState<SavedViewItem[]>([]);
-  const [phase, setPhase] = useState<"idle" | "pending" | "unknown">("idle");
+  const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
+  const [phase, setPhase] = useState<"idle" | "pending" | "unknown">(stored.kind === "ready" ? "unknown" : "idle");
   const phaseRef = useRef(phase);
   const transition = (next: typeof phase) => { phaseRef.current = next; setPhase(next); };
-  const [error, setError] = useState<string>();
-  const intent = useRef<Intent | null>(null);
+  const [error, setError] = useState<string | undefined>(() => stored.kind === "ready" ? frontendText(locale, "SEARCH_SAVED_VIEW_UNKNOWN") : stored.kind === "blocked" ? frontendText(locale, "SEARCH_SAVED_VIEW_RECORD_BLOCKED") : undefined);
+  const intent = useRef<Intent | null>(stored.kind === "ready" ? memoryFrom(stored.intent) : null);
   const [deletion, setDeletion] = useState<{ view: SavedViewItem } | null>(null);
   const deleteRef = useRef<{ view: SavedViewItem } | null>(null);
   const itemsRef = useRef(items); itemsRef.current = items;
@@ -31,15 +44,22 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
     });
     return () => { controller.abort(); owner.current = null; intent.current = null; deleteRef.current = null; };
   }, []);
+  function releaseRecord(operation: Intent) {
+    return !memberId || clearSavedViewWrite(memberId, storedFrom(operation));
+  }
+  function discardRecord() {
+    if (!memberId || !recordBlocked || !discardBlockedSavedViewWrite(memberId)) return;
+    setRecordBlocked(false); setError(undefined);
+  }
   async function save() {
     const controller = owner.current;
-    if (!controller || intent.current || deleteRef.current || draft.isConfirming() || actionBlocked()) return;
+    if (!controller || recordBlocked || intent.current || deleteRef.current || draft.isConfirming() || actionBlocked()) return;
     const name = draft.current.current.name.trim(); if (!name) return;
     const operation: Intent = { kind: "create", name, filters: filters() };
     await run(operation, controller);
   }
   function requestDelete(id: string) {
-    if (!owner.current || intent.current || deleteRef.current || draft.isConfirming() || actionBlocked()) return;
+    if (!owner.current || recordBlocked || intent.current || deleteRef.current || draft.isConfirming() || actionBlocked()) return;
     const view = itemsRef.current.find(item => item.id === id); if (!view) return;
     const decision = { view }; deleteRef.current = decision; setDeletion(decision);
   }
@@ -52,6 +72,9 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
     cancelDelete(); void run(operation, controller);
   }
   async function run(operation: Intent, controller: AbortController) {
+    if (memberId && !saveSavedViewWrite(memberId, storedFrom(operation))) {
+      setError(frontendText(locale, "SEARCH_SAVED_VIEW_NOT_RECORDED")); return;
+    }
     intent.current = operation; generation.current++; transition("pending"); setError(undefined);
     try {
       const result = operation.kind === "create"
@@ -62,11 +85,13 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
     } catch (error) {
       if (owner.current !== controller || intent.current !== operation) return;
       if (error instanceof ApiRequestError && ((error.status === 400 && error.code === "SAVED_VIEW_INVALID") || (error.status === 409 && error.code === "SAVED_VIEW_NAME_CONFLICT"))) {
+        if (!releaseRecord(operation)) { transition("unknown"); setError(frontendText(locale, "SEARCH_SAVED_VIEW_RECORD_STUCK")); return; }
         intent.current = null; transition("idle"); setError(frontendText(locale, "SEARCH_SAVED_VIEW_ERROR"));
       } else { transition("unknown"); setError(frontendText(locale, "SEARCH_SAVED_VIEW_UNKNOWN")); }
     }
   }
   function accept(operation: Intent, result: SavedViewItem | void) {
+      if (!releaseRecord(operation)) { transition("unknown"); setError(frontendText(locale, "SEARCH_SAVED_VIEW_RECORD_STUCK")); return; }
       if (operation.kind === "create" && result) {
         setItems(views => [result, ...views.filter(view => view.id !== result.id)]);
         draft.set("name", ""); draft.checkpoint({ name: "" });
@@ -92,7 +117,7 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
   function mayApply(view: SavedViewItem) {
     return !!owner.current && !intent.current && !deleteRef.current && !draft.isConfirming() && !actionBlocked() && itemsRef.current.includes(view);
   }
-  return { isBlocking: () => intent.current !== null || deleteRef.current !== null, mayApply, items, phase, error, draft, save, check, requestDelete, locked: phase !== "idle" || deletion !== null || draft.confirming,
+  return { isBlocking: () => intent.current !== null || deleteRef.current !== null, mayApply, items, phase, error, draft, save, check, requestDelete, recordBlocked, discardRecord, locked: phase !== "idle" || deletion !== null || draft.confirming,
     confirmation: <>{draft.confirmation}<ConfirmAction open={deletion !== null}
       title={frontendText(locale, "SEARCH_DELETE_VIEW")} description={`${deletion?.view.name ?? ""} — ${frontendText(locale, "SEARCH_DELETE_VIEW_IMPACT")}`}
       cancelLabel={frontendText(locale, "COMMON_CANCEL")} confirmLabel={frontendText(locale, "SEARCH_DELETE_VIEW")} destructive
