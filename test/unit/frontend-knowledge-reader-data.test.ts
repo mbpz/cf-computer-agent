@@ -127,4 +127,4 @@ describe("knowledge reader data boundary", () => {
 
 function json(value: unknown) { return new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } }); }
 function citation() { return { knowledgeItemId: "knowledge-1", title: "Historical", revisionId: "revision-old", chunkId: "chunk-old", headingPath: [], startLine: 1, endLine: 2 }; }
-function historicalRevision() { return { id: "revision-old", knowledgeItemId: "knowledge-1", markdown: "Old text", isCurrent: false, sourceVersionId: "source-old", indexStatus: "indexed", chunks: [{ id: "chunk-old", citationId: "citation-1", text: "Old text", startLine: 1, endLine: 2 }] }; }
+function historicalRevision() { return { id: "revision-old", knowledgeItemId: "knowledge-1", title: "Historical", markdown: "Old text", publishedAt: "2026-09-01T00:00:00.000Z", isCurrent: false, sourceVersionId: "source-old", indexStatus: "indexed", chunks: [{ id: "chunk-old", citationId: "citation-1", text: "Old text", startLine: 1, endLine: 2 }] }; }

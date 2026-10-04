@@ -12,52 +12,77 @@ vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: ob
 vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (text: string) => <div data-test-markdown>{text}</div> }));
 const { Window } = await import("happy-dom");
 
-const revision = {
+const revision: { id: string; knowledgeItemId: string; title?: string; markdown: string; publishedAt?: string; isCurrent?: boolean; sourceVersionId: string; indexStatus: string; chunks: unknown[] } = {
   id: "revision-a",
   knowledgeItemId: "knowledge-a",
-  title: "Readable entry",
+  title: "Launch guide",
   markdown: "Hello",
   publishedAt: "2026-10-04T00:00:00.000Z",
   isCurrent: true,
-  chunks: [] as unknown[],
   sourceVersionId: "source-a",
-  indexStatus: "indexed" as string | undefined,
+  indexStatus: "indexed",
+  chunks: [],
 };
 
-describe("knowledge revision status", () => {
+describe("knowledge revision identity read", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   beforeEach(() => {
-    revision.sourceVersionId = "source-a";
-    revision.indexStatus = "indexed";
+    revision.title = "Launch guide";
+    revision.publishedAt = "2026-10-04T00:00:00.000Z";
+    revision.isCurrent = true;
     browser = new Window({ url: "https://app.test/knowledge/knowledge-a" });
     vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
-  it("does not show a missing index status as pending", async () => {
-    revision.indexStatus = undefined;
+  it("does not label a missing title as untitled", async () => {
+    delete revision.title;
     await mount();
     expect(container.textContent).toContain("Unable to load this knowledge entry.");
-    expect(container.textContent).not.toContain("Parser / index");
-    expect(container.textContent).not.toContain("Readable entry");
+    expect(container.textContent).not.toContain("Untitled knowledge");
+    expect(container.textContent).not.toContain("2026-10-04T00:00:00.000Z");
   });
 
-  it("does not invent a source version id", async () => {
-    revision.sourceVersionId = "";
+  it("does not hide a missing publish time", async () => {
+    delete revision.publishedAt;
     await mount();
     expect(container.textContent).toContain("Unable to load this knowledge entry.");
-    expect(container.textContent).not.toContain("unknown-source");
-    expect(container.textContent).not.toContain("Readable entry");
+    expect(container.textContent).not.toContain("Launch guide");
+    expect(container.textContent).not.toContain("Hello");
   });
 
-  it("shows an explicit pending index and the real source version", async () => {
-    revision.indexStatus = "pending";
+  it("does not treat a missing current flag as a historical revision", async () => {
+    delete revision.isCurrent;
     await mount();
-    expect(container.textContent).toContain("Readable entry");
-    expect(container.textContent).toContain("Parser / index");
-    expect(container.textContent).toContain("pending");
-    expect(container.textContent).toContain("source-a");
+    expect(container.textContent).toContain("Unable to load this knowledge entry.");
+    expect(container.textContent).not.toContain("Historical revision");
+    expect(container.textContent).not.toContain("Launch guide");
+  });
+
+  it("shows an explicit current revision", async () => {
+    await mount();
+    expect(container.textContent).toContain("Launch guide");
+    expect(container.textContent).toContain("2026-10-04T00:00:00.000Z");
+    expect(container.textContent).toContain("Hello");
+    expect(container.textContent).not.toContain("Historical revision");
+    expect(container.textContent).not.toContain("Untitled knowledge");
+    expect(container.textContent).not.toContain("Unable to load this knowledge entry.");
+  });
+
+  it("shows an explicit historical revision", async () => {
+    revision.isCurrent = false;
+    await mount();
+    expect(container.textContent).toContain("Launch guide");
+    expect(container.textContent).toContain("Historical revision");
+    expect(container.textContent).not.toContain("Unable to load this knowledge entry.");
+  });
+
+  it("keeps a blank title untitled when the time and current flag are explicit", async () => {
+    revision.title = "";
+    await mount();
+    expect(container.textContent).toContain("Untitled knowledge");
+    expect(container.textContent).toContain("2026-10-04T00:00:00.000Z");
     expect(container.textContent).not.toContain("Unable to load this knowledge entry.");
   });
 
@@ -65,8 +90,6 @@ describe("knowledge revision status", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const url = String(input);
       const body = { ...revision };
-      if (!body.indexStatus) delete body.indexStatus;
-      if (!body.sourceVersionId) delete body.sourceVersionId;
       if (url === "/api/knowledge/knowledge-a") return Response.json({ knowledge: { currentRevision: body } });
       if (url.endsWith("/favorite")) return Response.json({ favorite: false });
       if (url.endsWith("/related")) return Response.json({ related: { items: [] } });
@@ -77,7 +100,7 @@ describe("knowledge revision status", () => {
     await act(async () => root.render(<KnowledgeReaderRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} memberId="member-a" knowledgeItemId="knowledge-a" />));
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const text = container.textContent ?? "";
-      if (text.includes("Unable to load this knowledge entry.") || text.includes("Readable entry")) break;
+      if (text.includes("Unable to load this knowledge entry.") || text.includes("Launch guide") || text.includes("Untitled knowledge")) break;
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     }
   }

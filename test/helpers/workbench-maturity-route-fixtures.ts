@@ -303,7 +303,7 @@ function message() {
 }
 
 function knowledgeRevision() {
-  return { id: "revision-route-audit", knowledgeItemId: "knowledge-route-audit", title: "Reader fixture", markdown: "# READY::knowledge-reader", isCurrent: true, previousRevisionId: null, sourceVersionId: "source-version-route-audit", sourceVersionOrdinal: 1, parserSchemaVersion: "v1", indexStatus: "indexed", chunks: [] };
+  return { id: "revision-route-audit", knowledgeItemId: "knowledge-route-audit", title: "Reader fixture", markdown: "# READY::knowledge-reader", publishedAt: NOW, isCurrent: true, previousRevisionId: null, sourceVersionId: "source-version-route-audit", sourceVersionOrdinal: 1, parserSchemaVersion: "v1", indexStatus: "indexed", chunks: [] };
 }
 
 function reviewDetail() {

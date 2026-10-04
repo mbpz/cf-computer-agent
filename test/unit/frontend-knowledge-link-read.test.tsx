@@ -12,7 +12,7 @@ vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: ob
 vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (text: string) => <div data-test-markdown>{text}</div> }));
 const { Window } = await import("happy-dom");
 
-const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", title: "Readable entry", markdown: "Hello", sourceVersionId: "source-a", indexStatus: "indexed", chunks: [{ id: "chunk-a", startLine: 1, endLine: 1, text: "Hello", ordinal: 0, headingPath: [] }] };
+const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", title: "Readable entry", markdown: "Hello", publishedAt: "2026-10-04T00:00:00.000Z", isCurrent: true, sourceVersionId: "source-a", indexStatus: "indexed", chunks: [{ id: "chunk-a", startLine: 1, endLine: 1, text: "Hello", ordinal: 0, headingPath: [] }] };
 
 describe("knowledge reader link read", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root; let related: unknown; let backlinks: unknown;

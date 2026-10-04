@@ -95,6 +95,7 @@ function normalizeRevision(value: unknown): KnowledgeRevision | null {
   const indexStatus = record.indexStatus;
   if (typeof sourceVersionId !== "string" || sourceVersionId.length === 0) return null;
   if (indexStatus !== "pending" && indexStatus !== "indexed" && indexStatus !== "search_degraded" && indexStatus !== "failed") return null;
+  if (typeof record.title !== "string" || typeof record.publishedAt !== "string" || record.publishedAt.length === 0 || typeof record.isCurrent !== "boolean") return null;
   const chunks = record.chunks.flatMap((chunk) => {
     if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) return [];
     const item = chunk as Record<string, unknown>;
@@ -116,10 +117,10 @@ function normalizeRevision(value: unknown): KnowledgeRevision | null {
   return {
     id: record.id,
     knowledgeItemId: record.knowledgeItemId,
-    title: typeof record.title === "string" ? record.title : undefined,
+    title: record.title,
     markdown: record.markdown,
-    publishedAt: typeof record.publishedAt === "string" ? record.publishedAt : undefined,
-    isCurrent: record.isCurrent === true,
+    publishedAt: record.publishedAt,
+    isCurrent: record.isCurrent,
     previousRevisionId: typeof record.previousRevisionId === "string" && record.previousRevisionId ? record.previousRevisionId : null,
     sourceVersionId,
     sourceVersionOrdinal: Number.isSafeInteger(record.sourceVersionOrdinal) && (record.sourceVersionOrdinal as number) >= 0 ? record.sourceVersionOrdinal as number : null,
