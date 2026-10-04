@@ -105,6 +105,7 @@ import { ApiRequestError } from "./lib/api";
 import { createNumberedRequestController, parsePageSearch, writePageSearch, type SupportedPageSize } from "./lib/numbered-page";
 import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRoleMember, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
 import { clearAdminRoleWrite, discardBlockedAdminRoleWrite, loadAdminRoleWrite, saveAdminRoleWrite, type AdminRoleWriteIntent } from "./lib/admin-role-write-intent";
+import { persistAdminRoleDraft } from "./lib/admin-role-draft";
 import { createAdminMenu, deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { clearAdminMenuWrite, discardBlockedAdminMenuWrite, loadAdminMenuWrite, saveAdminMenuWrite, type AdminMenuWriteIntent } from "./lib/admin-menu-write-intent";
 import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAsset, type AdminAssetsPage, type AdminAssetStatus } from "./lib/admin-assets-data";
@@ -485,7 +486,7 @@ export function AdminRolesRoute({ locale, memberId }: { locale: LocaleRuntime; m
       setRecordNotice(frontendText(locale, "ADMIN_ROLES_NOT_RECORDED"));
       return false;
     }
-    if (memberId) intentRef.current = intent;
+    if (memberId) { intentRef.current = intent; persistAdminRoleDraft(memberId, null); }
     const scope = epoch.current;
     const token = {};
     writeRef.current = token;
@@ -515,7 +516,7 @@ export function AdminRolesRoute({ locale, memberId }: { locale: LocaleRuntime; m
     if (!memberId || !recordBlockedRef.current || !discardBlockedAdminRoleWrite(memberId)) return;
     recordBlockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
   }
-  return <AdminRolesPage onLoadRetry={retryRead} locale={locale} state={state} saving={saving} writeBlocked={reading || needsRead} readPending={reading || saving} readRequired={needsRead} saveError={recordNotice ?? saveError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord}
+  return <AdminRolesPage onLoadRetry={retryRead} locale={locale} state={state} saving={saving} writeBlocked={reading || needsRead} readPending={reading || saving} readRequired={needsRead} saveError={recordNotice ?? saveError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord} draftMemberId={memberId} suppressDraft={needsRead}
     onSave={recordBlocked ? undefined : (role, allowBits) => mutate({ op: "update", roleId: role.id, allowBits }, () => updateAdminRole(role.id, { allowBits }), "ADMIN_ROLES_SAVE_ERROR")}
     onCreate={recordBlocked ? undefined : (input) => mutate({ op: "create", key: input.key, name: input.name, allowBits: input.allowBits }, () => createAdminRole(input), "ADMIN_ROLES_CREATE_ERROR")}
     onAssignMember={recordBlocked ? undefined : (role, targetId) => mutate({ op: "assign", roleId: role.id, memberId: targetId }, () => assignAdminRoleMember(role.id, targetId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")}

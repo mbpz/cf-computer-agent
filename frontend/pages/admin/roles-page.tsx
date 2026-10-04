@@ -9,6 +9,8 @@ import { Input } from "../../components/ui/input";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { useCreateDraft } from "../../lib/use-create-draft";
+import { discardBlockedAdminRoleDraft, loadAdminRoleDraft, persistAdminRoleDraft } from "../../lib/admin-role-draft";
+import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
 import type { AdminRole } from "../../lib/admin-roles-data";
 
 type RolePageState = { kind: "loading" } | { kind: "error" | "forbidden"; message?: string } | { kind: "ready"; roles: readonly AdminRole[] };
@@ -22,15 +24,19 @@ const groups: ReadonlyArray<{ labelKey: string; keys: readonly PermissionKey[] }
   { labelKey: "ADMIN_ROLES_GROUP_OPERATIONS", keys: ["asset:manage", "duplicate:review", "agent:use", "search:use", "workspace.tasks", "workspace.vm"] },
 ];
 
-export function AdminRolesPage({ onLoadRetry, state, locale, onSelect, onSave, onCreate, onAssignMember, onUnassignMember, saving = false, writeBlocked = false, readPending = false, readRequired = false, saveError, recordBlocked = false, onDiscardRecord }: { onLoadRetry?: () => void; state: RolePageState; locale?: LocaleRuntime; onSelect?: (id: string) => void; onSave?: (role: AdminRole, allowBits: string) => void; onCreate?: (input: { key: string; name: string; allowBits: string }) => Promise<boolean> | void; onAssignMember?: (role: AdminRole, memberId: string) => Promise<boolean> | void; onUnassignMember?: (role: AdminRole, memberId: string) => Promise<boolean> | void; saving?: boolean; writeBlocked?: boolean; readPending?: boolean; readRequired?: boolean; saveError?: string | null; recordBlocked?: boolean; onDiscardRecord?: () => void }) {
+export function AdminRolesPage({ onLoadRetry, state, locale, onSelect, onSave, onCreate, onAssignMember, onUnassignMember, saving = false, writeBlocked = false, readPending = false, readRequired = false, saveError, recordBlocked = false, onDiscardRecord, draftMemberId, suppressDraft = false }: { onLoadRetry?: () => void; state: RolePageState; locale?: LocaleRuntime; onSelect?: (id: string) => void; onSave?: (role: AdminRole, allowBits: string) => void; onCreate?: (input: { key: string; name: string; allowBits: string }) => Promise<boolean> | void; onAssignMember?: (role: AdminRole, memberId: string) => Promise<boolean> | void; onUnassignMember?: (role: AdminRole, memberId: string) => Promise<boolean> | void; saving?: boolean; writeBlocked?: boolean; readPending?: boolean; readRequired?: boolean; saveError?: string | null; recordBlocked?: boolean; onDiscardRecord?: () => void; draftMemberId?: string; suppressDraft?: boolean }) {
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
   if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "ADMIN_ROLES_UNAVAILABLE")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
   if (!state.roles.length) return <PageState kind="empty" title={frontendText(locale, "ADMIN_ROLES_EMPTY")} description={frontendText(locale, "ADMIN_ROLES_DESCRIPTION")} />;
-  return <><RoleEditor roles={state.roles} locale={locale} onSelect={onSelect} onSave={onSave} onCreate={onCreate} onAssignMember={onAssignMember} onUnassignMember={onUnassignMember} saving={saving} writeBlocked={writeBlocked} saveError={saveError} />{recordBlocked && <div role="alert" data-role-write-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_ROLES_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "ADMIN_ROLES_RECORD_DISCARD")}</Button></div>}{(readRequired || saveError) && <div className="space-y-2"><p role="status">{frontendText(locale, "ADMIN_ROLES_READ_REQUIRED")}</p><Button type="button" variant="outline" disabled={readPending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></div>}</>;
+  return <><RoleEditor roles={state.roles} locale={locale} onSelect={onSelect} onSave={onSave} onCreate={onCreate} onAssignMember={onAssignMember} onUnassignMember={onUnassignMember} saving={saving} writeBlocked={writeBlocked} saveError={saveError} draftMemberId={draftMemberId} suppressDraft={suppressDraft} />{recordBlocked && <div role="alert" data-role-write-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_ROLES_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "ADMIN_ROLES_RECORD_DISCARD")}</Button></div>}{(readRequired || saveError) && <div className="space-y-2"><p role="status">{frontendText(locale, "ADMIN_ROLES_READ_REQUIRED")}</p><Button type="button" variant="outline" disabled={readPending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></div>}</>;
 }
 
-function RoleEditor({ roles, locale, onSelect, onSave, onCreate, onAssignMember, onUnassignMember, saving, writeBlocked, saveError }: { roles: readonly AdminRole[]; locale?: LocaleRuntime; onSelect?: (id: string) => void; onSave?: (role: AdminRole, allowBits: string) => void; onCreate?: (input: { key: string; name: string; allowBits: string }) => Promise<boolean> | void; onAssignMember?: (role: AdminRole, memberId: string) => Promise<boolean> | void; onUnassignMember?: (role: AdminRole, memberId: string) => Promise<boolean> | void; saving: boolean; writeBlocked: boolean; saveError?: string | null }) {
-  const [selectedId, setSelectedId] = useState(roles[0]!.id);
+function RoleEditor({ roles, locale, onSelect, onSave, onCreate, onAssignMember, onUnassignMember, saving, writeBlocked, saveError, draftMemberId, suppressDraft }: { roles: readonly AdminRole[]; locale?: LocaleRuntime; onSelect?: (id: string) => void; onSave?: (role: AdminRole, allowBits: string) => void; onCreate?: (input: { key: string; name: string; allowBits: string }) => Promise<boolean> | void; onAssignMember?: (role: AdminRole, memberId: string) => Promise<boolean> | void; onUnassignMember?: (role: AdminRole, memberId: string) => Promise<boolean> | void; saving: boolean; writeBlocked: boolean; saveError?: string | null; draftMemberId?: string; suppressDraft: boolean }) {
+  const [composer] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadAdminRoleDraft(draftMemberId));
+  const restored = composer.kind === "ready" && roles.some((role) => role.id === composer.draft.roleId) ? composer.draft : null;
+  const [draftBlocked, setDraftBlocked] = useState(composer.kind === "blocked" || (composer.kind === "ready" && !restored));
+  const [draftNotice, setDraftNotice] = useState<string>();
+  const [selectedId, setSelectedId] = useState(restored?.roleId ?? roles[0]!.id);
   const selected = roles.find((role) => role.id === selectedId) || roles[0]!;
   const initialMask = useMemo(() => parsePermissionMask(selected.allowBits), [selected.allowBits]);
   type Action = { kind: "save" } | { kind: "assign" | "unassign"; memberId: string } | { kind: "switch"; nextId: string };
@@ -39,8 +45,24 @@ function RoleEditor({ roles, locale, onSelect, onSave, onCreate, onAssignMember,
   const confirmationRef = useRef<Confirmation | null>(null);
   const locked = saving || writeBlocked;
   const blank = (allowBits: string) => ({ mask: allowBits, memberId: "", newKey: "", newName: "", newMask: "0x0" });
-  const draft = useCreateDraft(blank(selected.allowBits), blank(selected.allowBits),
+  const restoredFields = restored && restored.roleId === selected.id
+    ? { mask: restored.mask, memberId: restored.memberId, newKey: restored.newKey, newName: restored.newName, newMask: restored.newMask }
+    : blank(selected.allowBits);
+  const draft = useCreateDraft(restoredFields, blank(selected.allowBits),
     () => locked || confirmationRef.current !== null, locale, () => false);
+  useEffect(() => {
+    if (!draftMemberId || draftBlocked || suppressDraft) return;
+    const fields = draft.fields;
+    const dirty = fields.mask.toLowerCase() !== selected.allowBits.toLowerCase() || fields.memberId !== "" || fields.newKey !== "" || fields.newName !== "" || fields.newMask !== "0x0";
+    const saved = persistAdminRoleDraft(draftMemberId, dirty ? { roleId: selected.id, mask: fields.mask, memberId: fields.memberId, newKey: fields.newKey, newName: fields.newName, newMask: fields.newMask } : null);
+    setDraftNotice(saved ? undefined : frontendText(locale, "ADMIN_ROLE_DRAFT_NOT_RECORDED"));
+  }, [draft.fields.mask, draft.fields.memberId, draft.fields.newKey, draft.fields.newName, draft.fields.newMask, selected.id, selected.allowBits, draftBlocked, suppressDraft, draftMemberId, locale]);
+  useEffect(() => {
+    const clearOnLeave = () => { if (draftMemberId && !draftBlocked && !suppressDraft) persistAdminRoleDraft(draftMemberId, null); };
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+    return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+  }, [draftMemberId, draftBlocked, suppressDraft]);
+  const discardDraft = () => { if (!draftMemberId || !draftBlocked || !discardBlockedAdminRoleDraft(draftMemberId)) return; setDraftBlocked(false); setDraftNotice(undefined); };
   const { memberId, newKey, newName, newMask } = draft.fields;
   const mask = parsePermissionMask(draft.fields.mask);
   const authoritative = useRef({ id: selected.id, mask: initialMask });
@@ -138,6 +160,8 @@ function RoleEditor({ roles, locale, onSelect, onSave, onCreate, onAssignMember,
       : `${selected.name} · ${selected.memberCount} ${frontendText(locale, "ADMIN_ROLES_MEMBERS")}. ${frontendText(locale, "ADMIN_ROLES_SAVE_IMPACT")} ${selected.allowBits} → 0x${mask.toString(16)}. ${frontendText(locale, "ADMIN_ROLES_ADDED_PERMISSIONS")}: ${permissionNames(added)}. ${frontendText(locale, "ADMIN_ROLES_REMOVED_PERMISSIONS")}: ${permissionNames(removed)}.`;
 
   return <><section className="space-y-6" inert={validConfirmation} aria-hidden={validConfirmation || undefined}>
+    {draftBlocked && <div role="alert" data-role-draft-blocked className="space-y-2 text-sm"><p>{frontendText(locale, "ADMIN_ROLE_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardDraft}>{frontendText(locale, "ADMIN_ROLE_DRAFT_RECORD_DISCARD")}</Button></div>}
+    {draftNotice && <p role="alert" className="text-sm">{draftNotice}</p>}
     <div><p className="text-sm font-medium text-primary">{frontendText(locale, "ADMIN_EYEBROW")}</p><h1 className="mt-2 text-2xl font-semibold">{frontendText(locale, "ADMIN_ROLES_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ROLES_DESCRIPTION")}</p></div>
     <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
       <Card><CardHeader><CardTitle className="text-sm">{frontendText(locale, "ADMIN_ROLES_LIST")}</CardTitle></CardHeader><CardContent className="space-y-1 p-2">{roles.map((role) => <button key={role.id} type="button" disabled={locked} onClick={() => selectRole(role.id)} className={`flex w-full items-start justify-between rounded-md px-3 py-2 text-left text-sm ${role.id === selected.id ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"}`}><span><span className="block font-medium">{role.name}</span><span className="text-xs text-muted-foreground">{role.memberCount} {frontendText(locale, "ADMIN_ROLES_MEMBERS")}</span></span>{role.isSystem && <Badge variant="outline">{frontendText(locale, "ADMIN_ROLES_SYSTEM")}</Badge>}</button>)}<div className="mt-3 space-y-2 border-t p-2"><p className="text-xs font-medium">{frontendText(locale, "ADMIN_ROLES_CREATE")}</p><Input disabled={locked} className="h-8" value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder={frontendText(locale, "ADMIN_ROLES_KEY_PLACEHOLDER")} aria-label={frontendText(locale, "ADMIN_ROLES_KEY")} /><Input disabled={locked} className="h-8" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={frontendText(locale, "ADMIN_ROLES_NAME_PLACEHOLDER")} aria-label={frontendText(locale, "ADMIN_ROLES_NAME")} /><Input disabled={locked} className="h-8" value={newMask} onChange={(event) => setNewMask(event.target.value)} placeholder="0x0" aria-label={frontendText(locale, "ADMIN_ROLES_MASK")} /><Button type="button" size="sm" disabled={locked || !newKey || !newName} onClick={() => { void createRole(); }}>{frontendText(locale, "ADMIN_ROLES_CREATE")}</Button></div></CardContent></Card>
