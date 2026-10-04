@@ -24,6 +24,13 @@ export function boardStatusTargets(status: BoardStatus): readonly BoardTargetSta
   return transitions[status];
 }
 
+export function adjacentBoardStatus(status: BoardStatus, direction: "left" | "right"): BoardTargetStatus | null {
+  const index = BOARD_STATUSES.indexOf(status);
+  const next = BOARD_STATUSES[direction === "right" ? index + 1 : index - 1];
+  if (!next || !transitions[status].includes(next)) return null;
+  return next;
+}
+
 export function parseBoardSearch(search: string): BoardPagination {
   const params = new URLSearchParams(search);
   return Object.fromEntries(BOARD_STATUSES.map((status) => [status, parseColumnPage(params, status)])) as unknown as BoardPagination;

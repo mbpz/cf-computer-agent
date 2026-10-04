@@ -1600,7 +1600,8 @@
         "frontend/pages/boards/boards-page.tsx:88:124",
         "frontend/pages/boards/boards-page.tsx:90:130",
         "frontend/pages/boards/boards-page.tsx:92:5",
-        "frontend/pages/boards/boards-page.tsx:111:7"
+        "frontend/pages/boards/boards-page.tsx:108:10",
+        "frontend/pages/boards/boards-page.tsx:117:7"
       ],
       "unresolvedSymbols": []
     },
@@ -26571,10 +26572,33 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/boards/boards-page.tsx:111:7",
+      "id": "frontend/pages/boards/boards-page.tsx:108:10",
       "path": "frontend/pages/boards/boards-page.tsx",
       "owner": "TaskCard",
-      "line": 111,
+      "line": 108,
+      "column": 10,
+      "kind": "jsx",
+      "tag": "Card",
+      "attributes": {
+        "data-board-task": "task.id",
+        "data-optimistic": "optimistic || undefined",
+        "tabIndex": "disabled ? -1 : 0",
+        "aria-keyshortcuts": "\"ArrowLeft ArrowRight\"",
+        "onKeyDown": "(event) => {\n    if (disabled || event.target !== event.currentTarget) return;\n    if (event.key !== \"ArrowLeft\" && event.key !== \"ArrowRight\") return;\n    event.preventDefault();\n    const next = adjacentBoardStatus(status, event.key === \"ArrowRight\" ? \"right\" : \"left\");\n    if (next) onStatusChange(task, next);\n  }"
+      },
+      "handlers": {
+        "onKeyDown": "(event) => {\n    if (disabled || event.target !== event.currentTarget) return;\n    if (event.key !== \"ArrowLeft\" && event.key !== \"ArrowRight\") return;\n    event.preventDefault();\n    const next = adjacentBoardStatus(status, event.key === \"ArrowRight\" ? \"right\" : \"left\");\n    if (next) onStatusChange(task, next);\n  }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/boards/boards-page.tsx:117:7",
+      "path": "frontend/pages/boards/boards-page.tsx",
+      "owner": "TaskCard",
+      "line": 117,
       "column": 7,
       "kind": "jsx",
       "tag": "Select",

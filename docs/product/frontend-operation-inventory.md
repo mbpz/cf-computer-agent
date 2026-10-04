@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：241；操作/转发候选：1049。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：241；操作/转发候选：1050。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -213,7 +213,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/admin/spaces-page.tsx | 33 |
 | frontend/pages/agent-page.tsx | 14 |
 | frontend/pages/boards/board-model.ts | 0 |
-| frontend/pages/boards/boards-page.tsx | 11 |
+| frontend/pages/boards/boards-page.tsx | 12 |
 | frontend/pages/calendar-page.tsx | 6 |
 | frontend/pages/coming-soon-page.tsx | 0 |
 | frontend/pages/focus-page.tsx | 11 |
@@ -275,7 +275,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /agent | frontend/app.tsx#AgentRoute; frontend/app.tsx#AgentConversationRoute; frontend/lib/agent-data.ts#*; frontend/lib/agent-turn-intent.ts#*; frontend/components/agent/agent-feedback.tsx#AgentFeedback; frontend/components/agent/agent-history-list.tsx#AgentHistoryList | 63 | 无（不代表动态边界已核对） |
 | /my-submissions | frontend/app.tsx#MySubmissionsRoute | 37 | 无（不代表动态边界已核对） |
 | /tasks | frontend/app.tsx#TasksRoute; frontend/lib/tasks-data.ts#*; frontend/pages/tasks/task-editor.tsx#TaskEditor | 103 | 无（不代表动态边界已核对） |
-| /boards | frontend/app.tsx#BoardsRoute | 43 | 无（不代表动态边界已核对） |
+| /boards | frontend/app.tsx#BoardsRoute | 44 | 无（不代表动态边界已核对） |
 | /environments | frontend/features/environments/environments-page.tsx#EnvironmentsPage; frontend/features/environments/environment-manager.ts#getEnvironmentManager | 58 | 无（不代表动态边界已核对） |
 | /settings | frontend/pages/settings-page.tsx#SettingsPage | 10 | 无（不代表动态边界已核对） |
 | /admin | frontend/pages/admin/admin-dashboard-route.tsx#AdminDashboardRoute | 12 | 无（不代表动态边界已核对） |
@@ -1461,7 +1461,8 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 88:124 ReadyColumn | Button frontendText(locale, "BOARDS_RETRY") | onClick=() =&gt; onRetry(status) | {"kind":"logical","expression":"state.loadError","operator":"&&"} |
 | 90:130 ReadyColumn | TaskCard  | onStatusChange=onStatusChange | disabled=movesLocked &#124;&#124; state.pending; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.pending &#124;&#124; undefined"}}; {"kind":… |
 | 92:5 ReadyColumn | DataPagination  | onPageChange=(page) =&gt; onPageChange(status, page); onPageSizeChange=(pageSize) =&gt; onPageSizeChange(status, pageSize) | spread: state.pagination |
-| 111:7 TaskCard | Select  | onChange=(event) =&gt; onStatusChange(task, event.currentTarget.value as BoardTargetStatus) | disabled=disabled |
+| 108:10 TaskCard | Card  | onKeyDown=(event) =&gt; { if (disabled &#124;&#124; event.target !== event.currentTarget) return; if (event.key !== "ArrowLeft" && event.key !== "ArrowRight"… |  |
+| 117:7 TaskCard | Select  | onChange=(event) =&gt; onStatusChange(task, event.currentTarget.value as BoardTargetStatus) | disabled=disabled |
 
 ## frontend/pages/calendar-page.tsx
 

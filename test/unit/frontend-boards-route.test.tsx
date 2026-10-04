@@ -79,6 +79,47 @@ describe("task-backed boards route", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
 
+  it("moves a focused card with arrow keys only when the next column is a legal status, and keeps columns in a horizontal scroller", async () => {
+    const mutations: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        mutations.push(String(init.body));
+        const requested = JSON.parse(String(init.body)) as { status: TaskItem["status"] };
+        return Response.json(task(requested.status, "Alpha", "todo-task"));
+      }
+      const status = new URL(url, "https://app.test").searchParams.get("status");
+      if (status === "done") return pageResponse("done", 1, 1, "Finished");
+      if (status === "todo") return pageResponse("todo", 1, 1, "Alpha");
+      return boardPage(url);
+    });
+    await renderBoard();
+
+    const scroller = container.querySelector("[data-board-columns]") as HTMLElement;
+    expect(scroller.className).toContain("overflow-x-auto");
+    expect(column("todo").className).toContain("shrink-0");
+    expect(column("doing").className).toContain("snap-start");
+
+    const select = column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement;
+    select.focus();
+    await act(async () => { select.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
+    await flush();
+    expect(mutations).toEqual([]);
+
+    const card = column("todo").querySelector("[data-board-task='todo-task']") as HTMLElement;
+    expect(card.tabIndex).toBe(0);
+    card.focus();
+    await act(async () => { card.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
+    await flush();
+    expect(mutations).toEqual([JSON.stringify({ status: "doing", expectedStatus: "todo" })]);
+
+    const done = column("done").querySelector("[data-board-task='done-task']") as HTMLElement;
+    done.focus();
+    await act(async () => { done.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })); });
+    await flush();
+    expect(mutations).toEqual([JSON.stringify({ status: "doing", expectedStatus: "todo" })]);
+  });
+
   it("rolls back a move rejected because the task changed elsewhere and reloads every column", async () => {
     const requests: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -9,7 +9,7 @@ import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { TaskItem } from "../../lib/tasks-data";
 import { taskPriorityKey, taskStatusKey } from "../tasks/tasks-model";
-import { BOARD_STATUSES, boardStatusTargets, visibleBoardItems, type BoardColumnStates, type BoardStatus, type BoardTargetStatus } from "./board-model";
+import { BOARD_STATUSES, adjacentBoardStatus, boardStatusTargets, visibleBoardItems, type BoardColumnStates, type BoardStatus, type BoardTargetStatus } from "./board-model";
 
 export interface BoardUnknownMove { task: Pick<TaskItem, "id" | "title">; source: BoardStatus; target: BoardTargetStatus }
 
@@ -46,7 +46,7 @@ export function BoardsPage({ locale, columns, actionError, actionNotice, actionP
     </Alert>}
     {actionError && <Alert variant="destructive"><AlertTitle>{actionError}</AlertTitle></Alert>}
     {actionNotice && <p role="status" className="text-sm">{actionNotice}</p>}
-    <div className="grid items-start gap-4 xl:grid-cols-4">
+    <div data-board-columns="" className="flex snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 xl:grid xl:grid-cols-4 xl:overflow-visible">
       {BOARD_STATUSES.map((status) => <BoardColumn key={status} status={status} state={columns[status]} locale={locale} actionPendingId={actionPendingId} movesLocked={movesLocked} onRetry={onRetry} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} onStatusChange={onStatusChange} />)}
     </div>
   </section>;
@@ -64,7 +64,7 @@ function BoardColumn({ status, state, locale, actionPendingId, movesLocked, onRe
   onStatusChange: (task: TaskItem, status: BoardTargetStatus) => void;
 }) {
   const heading = frontendText(locale, taskStatusKey(status));
-  return <article data-board-column={status} className="min-w-0 space-y-3 rounded-lg border bg-muted/20 p-3">
+  return <article data-board-column={status} className="w-72 shrink-0 snap-start space-y-3 rounded-lg border bg-muted/20 p-3 xl:w-auto xl:min-w-0">
     <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{heading}</h2>{state.kind === "ready" && <Badge variant="secondary">{state.pagination.total}</Badge>}</div>
     {state.kind === "loading" && <div><span className="sr-only">{frontendText(locale, "BOARDS_COLUMN_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "BOARDS_COLUMN_LOADING")} /></div>}
     {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "BOARDS_COLUMN_ERROR")}><Button className="mt-3" variant="outline" onClick={() => onRetry(status)}>{frontendText(locale, "BOARDS_RETRY")}</Button></PageState>}
@@ -105,7 +105,13 @@ function TaskCard({ task, status, locale, disabled, optimistic, onStatusChange }
   const actionLabel = frontendText(locale, "BOARDS_MOVE_TASK")
     .replace("{title}", title)
     .replace("{status}", frontendText(locale, taskStatusKey(status)));
-  return <Card data-board-task={task.id} data-optimistic={optimistic || undefined}>
+  return <Card data-board-task={task.id} data-optimistic={optimistic || undefined} tabIndex={disabled ? -1 : 0} aria-keyshortcuts="ArrowLeft ArrowRight" onKeyDown={(event) => {
+    if (disabled || event.target !== event.currentTarget) return;
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const next = adjacentBoardStatus(status, event.key === "ArrowRight" ? "right" : "left");
+    if (next) onStatusChange(task, next);
+  }}>
     <CardContent className="space-y-3 p-3">
       <div className="space-y-1"><h3 className="break-words text-sm font-medium">{title}</h3><Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge></div>
       <Select aria-label={actionLabel} value="" disabled={disabled} onChange={(event) => onStatusChange(task, event.currentTarget.value as BoardTargetStatus)}>
