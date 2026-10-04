@@ -1,6 +1,8 @@
 import { useFocusActionConfirmation } from "../components/focus-action-confirmation";
 import { Pause, Play, Stop, Timer } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
+import { discardBlockedFocusDraft, loadFocusDraft, persistFocusDraft } from "../lib/focus-draft";
+import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../lib/workspace-location";
 import type { LocaleRuntime } from "../lib/i18n";
 import { frontendText } from "../lib/i18n";
 import type { FocusSession } from "../lib/focus-data";
@@ -21,14 +23,36 @@ export function FocusPage({ locale, state, memberId, pending = false, actionErro
   const confirmation = useFocusActionConfirmation({ locale, session: state.kind === "ready" ? state.session : undefined,
     memberId, selectionVersion, blocked: pending, onTransition });
   const blank = {title: "", taskId: "", taskTitle: ""};
-  const draft = useCreateDraft(blank, blank, () => false, locale,
+  const [storedDraft] = useState(() => memberId ? loadFocusDraft(memberId) : { kind: "empty" as const });
+  const [recordBlocked, setRecordBlocked] = useState(storedDraft.kind === "blocked");
+  const [recordNotice, setRecordNotice] = useState<string>();
+  const draft = useCreateDraft(storedDraft.kind === "ready" ? storedDraft.draft : blank, blank, () => false, locale,
     () => !alive.current || starting.current || view.current.pending || view.current.state.kind !== "ready"
       || !!view.current.state.session || confirmation.isOpen());
+  useEffect(() => {
+    if (!memberId || recordBlocked) return;
+    const saved = persistFocusDraft(memberId, draft.fields);
+    setRecordNotice(saved ? undefined : frontendText(locale, "FOCUS_DRAFT_NOT_RECORDED"));
+  }, [draft.fields.title, draft.fields.taskId, draft.fields.taskTitle, locale, memberId, recordBlocked]);
+  useEffect(() => {
+    // Admitted leave resets the draft after this event. Clear storage in the same turn,
+    // before the page unmounts and skips the field effect.
+    const clearOnLeave = () => { if (memberId && !recordBlocked) persistFocusDraft(memberId, blank); };
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+    return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+  }, [memberId, recordBlocked]);
+  const discardRecord = () => { if (!memberId || !discardBlockedFocusDraft(memberId)) return; setRecordBlocked(false); };
   const {title, taskId, taskTitle} = draft.fields;
   const editable = () => alive.current && !starting.current && !view.current.pending && view.current.state.kind === "ready"
     && !view.current.state.session && !confirmation.isOpen() && !draft.isConfirming();
   useEffect(() => {alive.current = true; return () => {alive.current = false;};}, []);
-  useEffect(() => {draft.set("taskId", ""); draft.set("taskTitle", ""); setPicking(false);}, [selectionVersion]);
+  const selectionSeen = useRef(false);
+  useEffect(() => {
+    // The first value is the mount itself. A restored task must survive it; a later
+    // version means the route invalidated the previous pick.
+    if (!selectionSeen.current) { selectionSeen.current = true; return; }
+    draft.set("taskId", ""); draft.set("taskTitle", ""); setPicking(false);
+  }, [selectionVersion]);
   const hasSession = state.kind === "ready" && !!state.session;
   useEffect(() => {
     if (hasSession || state.kind === "error") {draft.reset(); setPicking(false);}
@@ -39,7 +63,9 @@ export function FocusPage({ locale, state, memberId, pending = false, actionErro
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "FOCUS_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "FOCUS_RETRY")}</Button></PageState>;
   const session = state.session;
-  return <><section className="space-y-5" inert={confirmation.open || draft.confirming ? true : undefined}><div className="flex items-center gap-2"><Timer size={22} weight="duotone" className="text-primary" /><div><h1 className="text-2xl font-semibold">{frontendText(locale, "FOCUS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "FOCUS_DESCRIPTION")}</p></div></div>{session ? <Card><CardHeader><CardTitle>{frontendText(locale, "FOCUS_CURRENT")}</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm">{frontendText(locale, "FOCUS_TASK")}：{session.taskId}</p><p className="text-sm text-muted-foreground">{frontendText(locale, `FOCUS_STATUS_${session.status.toUpperCase()}`)}</p><FocusElapsed session={session} locale={locale} /><div className="flex flex-wrap gap-2">{session.status === "active" && <Button onClick={() => transition("pause")} disabled={controlsPending}><Pause size={16} />{frontendText(locale, "FOCUS_PAUSE")}</Button>}{session.status === "paused" && <Button onClick={() => transition("resume")} disabled={controlsPending}><Play size={16} />{frontendText(locale, "FOCUS_RESUME")}</Button>}{(session.status === "active" || session.status === "paused") && <><Button variant="secondary" onClick={() => confirmation.request("complete")} disabled={controlsPending}>{frontendText(locale, "FOCUS_COMPLETE")}</Button><Button variant="outline" onClick={() => confirmation.request("abandon")} disabled={controlsPending}><Stop size={16} />{frontendText(locale, "FOCUS_ABANDON")}</Button></>}</div></CardContent></Card> : <Card><CardHeader><CardTitle>{frontendText(locale, "FOCUS_START")}</CardTitle></CardHeader><CardContent className="space-y-3"><Button variant="outline" disabled={controlsPending} onClick={() => {if (!editable()) return; draft.edit("taskId", ""); draft.edit("taskTitle", ""); setPicking(true);}}>{frontendText(locale, "FOCUS_CHOOSE_TASK")}</Button>{taskId && <p data-focus-selected="true" className="text-sm">{frontendText(locale, "FOCUS_TASK")}: {taskTitle}</p>}{picking && <FocusTaskPicker locale={locale} onSelect={task => {if (!editable()) return; draft.edit("taskId", task.id); draft.edit("taskTitle", task.title); setPicking(false);}} onDenied={() => {draft.reset(); setPicking(false); onDenied();}} onClose={() => setPicking(false)} />}<Input aria-label={frontendText(locale, "FOCUS_TITLE_FIELD")} value={title} disabled={controlsPending} onChange={(event) => draft.edit("title", event.currentTarget.value)} placeholder={frontendText(locale, "FOCUS_TITLE_PLACEHOLDER")} /><Button onClick={() => { if (!editable() || picking || !draft.current.current.taskId || !onStart) return; const input = draft.current.current; starting.current = true; onStart({taskId: input.taskId, title: input.title.trim() || frontendText(locale, "FOCUS_DEFAULT_TITLE"), durationMinutes: 25}); }} disabled={controlsPending || !taskId || picking}><Play size={16} />{frontendText(locale, "FOCUS_START_ACTION")}</Button></CardContent></Card>}{actionNotice && <p role="status" className="text-sm">{actionNotice}</p>}{actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}</section>{confirmation.dialog}{draft.confirmation}</>;
+  const recordBanner = recordBlocked ? <div data-focus-draft-blocked role="alert"><p>{frontendText(locale, "FOCUS_DRAFT_RECORD_BLOCKED")}</p><button type="button" onClick={discardRecord}>{frontendText(locale, "FOCUS_DRAFT_RECORD_DISCARD")}</button></div>
+    : recordNotice ? <p role="alert">{recordNotice}</p> : null;
+  return <>{recordBanner}<section className="space-y-5" inert={confirmation.open || draft.confirming ? true : undefined}><div className="flex items-center gap-2"><Timer size={22} weight="duotone" className="text-primary" /><div><h1 className="text-2xl font-semibold">{frontendText(locale, "FOCUS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "FOCUS_DESCRIPTION")}</p></div></div>{session ? <Card><CardHeader><CardTitle>{frontendText(locale, "FOCUS_CURRENT")}</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm">{frontendText(locale, "FOCUS_TASK")}：{session.taskId}</p><p className="text-sm text-muted-foreground">{frontendText(locale, `FOCUS_STATUS_${session.status.toUpperCase()}`)}</p><FocusElapsed session={session} locale={locale} /><div className="flex flex-wrap gap-2">{session.status === "active" && <Button onClick={() => transition("pause")} disabled={controlsPending}><Pause size={16} />{frontendText(locale, "FOCUS_PAUSE")}</Button>}{session.status === "paused" && <Button onClick={() => transition("resume")} disabled={controlsPending}><Play size={16} />{frontendText(locale, "FOCUS_RESUME")}</Button>}{(session.status === "active" || session.status === "paused") && <><Button variant="secondary" onClick={() => confirmation.request("complete")} disabled={controlsPending}>{frontendText(locale, "FOCUS_COMPLETE")}</Button><Button variant="outline" onClick={() => confirmation.request("abandon")} disabled={controlsPending}><Stop size={16} />{frontendText(locale, "FOCUS_ABANDON")}</Button></>}</div></CardContent></Card> : <Card><CardHeader><CardTitle>{frontendText(locale, "FOCUS_START")}</CardTitle></CardHeader><CardContent className="space-y-3"><Button variant="outline" disabled={controlsPending} onClick={() => {if (!editable()) return; draft.edit("taskId", ""); draft.edit("taskTitle", ""); setPicking(true);}}>{frontendText(locale, "FOCUS_CHOOSE_TASK")}</Button>{taskId && <p data-focus-selected="true" className="text-sm">{frontendText(locale, "FOCUS_TASK")}: {taskTitle}</p>}{picking && <FocusTaskPicker locale={locale} onSelect={task => {if (!editable()) return; draft.edit("taskId", task.id); draft.edit("taskTitle", task.title); setPicking(false);}} onDenied={() => {draft.reset(); setPicking(false); onDenied();}} onClose={() => setPicking(false)} />}<Input aria-label={frontendText(locale, "FOCUS_TITLE_FIELD")} value={title} disabled={controlsPending} onChange={(event) => draft.edit("title", event.currentTarget.value)} placeholder={frontendText(locale, "FOCUS_TITLE_PLACEHOLDER")} /><Button onClick={() => { if (!editable() || picking || !draft.current.current.taskId || !onStart) return; const input = draft.current.current; starting.current = true; onStart({taskId: input.taskId, title: input.title.trim() || frontendText(locale, "FOCUS_DEFAULT_TITLE"), durationMinutes: 25}); }} disabled={controlsPending || !taskId || picking}><Play size={16} />{frontendText(locale, "FOCUS_START_ACTION")}</Button></CardContent></Card>}{actionNotice && <p role="status" className="text-sm">{actionNotice}</p>}{actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}</section>{confirmation.dialog}{draft.confirmation}</>;
 }
 
 function FocusElapsed({session, locale}: {session: FocusSession; locale: LocaleRuntime}) {

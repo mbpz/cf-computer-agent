@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { act } from "react";
+import { App } from "../../frontend/app";
 import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { forceRemountAppAt, mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -22,6 +23,7 @@ describe("Focus owned task selection through App", () => {
   let seedStorage: [string, string][] = [];
   const transitionKey = "memory-garden:focus-transition:v1:contributor-route-auditor";
   const journalKey = "memory-garden:focus-create:v1:contributor-route-auditor";
+  const draftKey = "memory-garden:focus-draft:v1:contributor-route-auditor";
   const main = () => app!.container.querySelector("main")!;
   const button = (text: string) => [...main().querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
   const click = async (node: HTMLElement) => act(async () => node.click());
@@ -531,5 +533,41 @@ describe("Focus owned task selection through App", () => {
     let resolve!: (response: Response) => void; delayed = () => new Promise(done => {resolve = done;}); await mount(); await click(button("Choose task")); await waitForApp(() => !!resolve);
     const request = calls.find(c => c.path.startsWith("/api/tasks?"))!; await click(button("Close task picker")); expect(request.signal?.aborted).toBe(true);
     await act(async () => resolve(Response.json(page()))); expect(button("Owned task 1")).toBeUndefined(); expect(button("Start focus").disabled).toBe(true);
+  });
+  async function remount() {
+    await act(async () => app!.root.render(null));
+    await act(async () => app!.root.render(<App />));
+    await waitForApp(() => !!button("Start focus"));
+  }
+  it("restores an unsent focus title and task after the page is recreated", async () => {
+    await mount(); await select(); await act(async () => changeTitle("Keep this focus"));
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this focus");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("task-1");
+    await remount();
+    expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Keep this focus");
+    expect(main().querySelector("[data-focus-selected]")?.textContent).toContain("Owned task 1");
+    expect(calls.filter(c => c.path === "/api/focus" && c.method === "POST")).toHaveLength(0);
+    expect(unload()).toBe(true);
+  });
+  it("keeps a typed focus title on screen when the tab cannot record it", async () => {
+    await mount();
+    vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await act(async () => changeTitle("Unrecorded focus"));
+    expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Unrecorded focus");
+    expect(main().textContent).toContain("could not record");
+    expect(calls.filter(c => c.path === "/api/focus" && c.method === "POST")).toHaveLength(0);
+  });
+  it("allows leaving when a saved focus draft cannot be read until it is discarded", async () => {
+    seedStorage = [[draftKey, "{"]];
+    await mount();
+    expect(main().textContent).toContain("can't be read");
+    await navigate("/settings");
+    expect(app!.browser.location.pathname).toBe("/settings");
+    await navigate("/focus");
+    await waitForApp(() => main().textContent?.includes("can't be read") ?? false);
+    await click(button("Discard record"));
+    await act(async () => changeTitle("After discard"));
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("After discard");
+    expect(calls.filter(c => c.path === "/api/focus" && c.method === "POST")).toHaveLength(0);
   });
 });

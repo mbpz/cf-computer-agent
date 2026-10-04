@@ -2102,7 +2102,7 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
     const controller = new AbortController();
     readRef.current = controller;
     busyRef.current = false;
-    setPending(false); setActionError(undefined); setActionNotice(undefined); setSelectionVersion(value => value + 1);
+    setPending(false); setActionError(undefined); setActionNotice(undefined);
     setState({kind: "loading"});
     void (async () => {
       const stored = loadFocusIntent(memberId);

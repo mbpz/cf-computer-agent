@@ -134,6 +134,7 @@
     "frontend/lib/discussions-data.ts",
     "frontend/lib/focus-create-intent.ts",
     "frontend/lib/focus-data.ts",
+    "frontend/lib/focus-draft.ts",
     "frontend/lib/focus-transition-intent.ts",
     "frontend/lib/focus.ts",
     "frontend/lib/goal-tasks-data.ts",
@@ -981,17 +982,21 @@
         "frontend/lib/workspace-browser-history.ts:122:3",
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
-        "frontend/pages/focus-page.tsx:40:84",
-        "frontend/pages/focus-page.tsx:42:863",
-        "frontend/pages/focus-page.tsx:42:1032",
-        "frontend/pages/focus-page.tsx:42:1237",
-        "frontend/pages/focus-page.tsx:42:1390",
-        "frontend/pages/focus-page.tsx:42:1717",
-        "frontend/pages/focus-page.tsx:42:2065",
-        "frontend/pages/focus-page.tsx:42:2333",
-        "frontend/pages/focus-page.tsx:42:2569",
-        "frontend/pages/focus-page.tsx:42:3027",
-        "frontend/pages/focus-page.tsx:42:3099"
+        "frontend/pages/focus-page.tsx:41:5",
+        "frontend/pages/focus-page.tsx:64:84",
+        "frontend/pages/focus-page.tsx:66:40",
+        "frontend/pages/focus-page.tsx:66:142",
+        "frontend/pages/focus-page.tsx:67:22",
+        "frontend/pages/focus-page.tsx:68:877",
+        "frontend/pages/focus-page.tsx:68:1046",
+        "frontend/pages/focus-page.tsx:68:1251",
+        "frontend/pages/focus-page.tsx:68:1404",
+        "frontend/pages/focus-page.tsx:68:1731",
+        "frontend/pages/focus-page.tsx:68:2079",
+        "frontend/pages/focus-page.tsx:68:2347",
+        "frontend/pages/focus-page.tsx:68:2583",
+        "frontend/pages/focus-page.tsx:68:3041",
+        "frontend/pages/focus-page.tsx:68:3113"
       ],
       "unresolvedSymbols": []
     },
@@ -28011,10 +28016,30 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:40:84",
+      "id": "frontend/pages/focus-page.tsx:41:5",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 40,
+      "line": 41,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "WORKSPACE_LOCATION_CHANGE_EVENT",
+      "arguments": [
+        "WORKSPACE_LOCATION_CHANGE_EVENT",
+        "clearOnLeave"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/focus-page.tsx:64:84",
+      "path": "frontend/pages/focus-page.tsx",
+      "owner": "FocusPage",
+      "line": 64,
       "column": 84,
       "kind": "jsx",
       "tag": "Button",
@@ -28045,11 +28070,120 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:863",
+      "id": "frontend/pages/focus-page.tsx:66:40",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 863,
+      "line": 66,
+      "column": 40,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "data-focus-draft-blocked": "true",
+        "role": "\"alert\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "recordBlocked",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <PageState kind=\"loading\" title={frontendText(locale, \"FOCUS_LOADING\")} />;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={state.message}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"FOCUS_RETRY\")}</Button></PageState>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/focus-page.tsx:66:142",
+      "path": "frontend/pages/focus-page.tsx",
+      "owner": "FocusPage",
+      "line": 66,
+      "column": 142,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "onClick": "discardRecord"
+      },
+      "handlers": {
+        "onClick": "discardRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"FOCUS_DRAFT_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "recordBlocked",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <PageState kind=\"loading\" title={frontendText(locale, \"FOCUS_LOADING\")} />;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={state.message}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"FOCUS_RETRY\")}</Button></PageState>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/focus-page.tsx:67:22",
+      "path": "frontend/pages/focus-page.tsx",
+      "owner": "FocusPage",
+      "line": 67,
+      "column": 22,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "recordNotice"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "recordBlocked",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "recordNotice",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <PageState kind=\"loading\" title={frontendText(locale, \"FOCUS_LOADING\")} />;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={state.message}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"FOCUS_RETRY\")}</Button></PageState>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/focus-page.tsx:68:877",
+      "path": "frontend/pages/focus-page.tsx",
+      "owner": "FocusPage",
+      "line": 68,
+      "column": 877,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -28087,11 +28221,11 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:1032",
+      "id": "frontend/pages/focus-page.tsx:68:1046",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 1032,
+      "line": 68,
+      "column": 1046,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -28129,11 +28263,11 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:1237",
+      "id": "frontend/pages/focus-page.tsx:68:1251",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 1237,
+      "line": 68,
+      "column": 1251,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -28172,11 +28306,11 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:1390",
+      "id": "frontend/pages/focus-page.tsx:68:1404",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 1390,
+      "line": 68,
+      "column": 1404,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -28215,11 +28349,11 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:1717",
+      "id": "frontend/pages/focus-page.tsx:68:1731",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 1717,
+      "line": 68,
+      "column": 1731,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -28253,11 +28387,11 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:2065",
+      "id": "frontend/pages/focus-page.tsx:68:2079",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 2065,
+      "line": 68,
+      "column": 2079,
       "kind": "jsx",
       "tag": "FocusTaskPicker",
       "attributes": {
@@ -28297,11 +28431,11 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:2333",
+      "id": "frontend/pages/focus-page.tsx:68:2347",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 2333,
+      "line": 68,
+      "column": 2347,
       "kind": "jsx",
       "tag": "Input",
       "attributes": {
@@ -28335,11 +28469,11 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:2569",
+      "id": "frontend/pages/focus-page.tsx:68:2583",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 2569,
+      "line": 68,
+      "column": 2583,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -28372,11 +28506,11 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:3027",
+      "id": "frontend/pages/focus-page.tsx:68:3041",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 3027,
+      "line": 68,
+      "column": 3041,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -28407,11 +28541,11 @@
       ]
     },
     {
-      "id": "frontend/pages/focus-page.tsx:42:3099",
+      "id": "frontend/pages/focus-page.tsx:68:3113",
       "path": "frontend/pages/focus-page.tsx",
       "owner": "FocusPage",
-      "line": 42,
-      "column": 3099,
+      "line": 68,
+      "column": 3113,
       "kind": "jsx",
       "tag": "div",
       "attributes": {
