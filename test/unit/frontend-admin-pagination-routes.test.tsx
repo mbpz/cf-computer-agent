@@ -372,13 +372,9 @@ describe("numbered admin routes", () => {
     expect(requests[2]!.url).toBe("/api/admin/members?page=1&pageSize=20&status=active");
   });
 
-  it("does not offer contributor status mutations for administrators or unknown member states", async () => {
+  it("shows an administrator without a contributor status action", async () => {
     const requests = memberRequests();
-    await renderMember(requests, memberPage(1, 20, 3, [
-      { ...member("admin", "active"), role: "admin" },
-      { ...member("unknown", "active"), status: "unknown" },
-      { ...member("unscoped", "active"), role: undefined },
-    ]));
+    await renderMember(requests, memberPage(1, 20, 1, [{ ...member("admin", "active"), role: "admin" }]));
     expect(container.textContent).toContain("admin@example.test");
     expect(container.querySelector('button[aria-label^="Disable "]')).toBeNull();
     expect(container.querySelector('button[aria-label^="Enable "]')).toBeNull();
@@ -443,10 +439,17 @@ describe("numbered admin routes", () => {
     await waitFor(() => container.querySelector('button[aria-label="Enable m1@example.test"]') !== null);
   });
 
-  it("renders an unknown member status as unavailable rather than active", async () => {
+  it.each(["unknown status", "missing status", "missing role"] as const)("does not expose a member when the list has %s", async (kind) => {
     const requests = memberRequests();
-    await renderMember(requests, memberPage(1, 20, 1, [{ ...member("m1", "active"), status: undefined }]));
-    expect(container.querySelector('section .space-y-3')?.textContent).toContain("Status unavailable");
+    const row = kind === "unknown status" ? { ...member("m1", "active"), status: "unknown" }
+      : kind === "missing status" ? { ...member("m1", "active"), status: undefined }
+      : { ...member("m1", "active"), role: undefined };
+    await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} />));
+    requests[0]!.pending.resolve(Response.json(memberPage(1, 20, 1, [row])));
+    await waitFor(() => container.querySelector('[data-page-state="error"]') !== null);
+    expect(container.textContent).toContain("Unable to load the page.");
+    expect(container.textContent).not.toContain("m1@example.test");
+    expect(container.textContent).not.toContain("Status unavailable");
     expect(container.querySelector('button[aria-label^="Disable "]')).toBeNull();
   });
 

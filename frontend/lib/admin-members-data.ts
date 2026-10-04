@@ -23,8 +23,10 @@ export async function updateMemberStatus(memberId: string, status: "active" | "d
 function normalizeMember(value: unknown): AdminMember {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("MEMBER_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
-  if (typeof record.id !== "string" || !record.id) throw new Error("MEMBER_RESPONSE_INVALID");
-  return { id: record.id, email: typeof record.email === "string" ? record.email : undefined, role: typeof record.role === "string" ? record.role : undefined, status: typeof record.status === "string" ? record.status : undefined };
+  const role = record.role;
+  const status = record.status;
+  if (typeof record.id !== "string" || !record.id || typeof record.email !== "string" || record.email.length === 0 || (role !== "admin" && role !== "contributor") || (status !== "active" && status !== "disabled")) throw new Error("MEMBER_RESPONSE_INVALID");
+  return { id: record.id, email: record.email, role, status };
 }
 
 export function createAdminMembersRequestController(requester: Fetcher = fetch) {
