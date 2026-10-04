@@ -48,7 +48,7 @@ describe("private reader notes", () => {
 
   it("loads a bounded private note list and drops malformed rows", async () => {
     const requester = async () => new Response(JSON.stringify({ items: [
-      { id: "note-a", knowledgeItemId: "knowledge-a", title: "A", body: "Body", visibility: "private", createdAt: "2026-08-26T00:00:00.000Z", updatedAt: "2026-08-26T00:01:00.000Z" },
+      { id: "note-a", knowledgeItemId: "knowledge-a", title: "A", body: "Body", visibility: "private", access: "owner", createdAt: "2026-08-26T00:00:00.000Z", updatedAt: "2026-08-26T00:01:00.000Z" },
       { id: "note-b", knowledgeItemId: "../other", title: "B", body: "No", visibility: "private", createdAt: "", updatedAt: "" },
     ] }), { status: 200 });
     await expect(loadPrivateKnowledgeNotes(requester)).resolves.toEqual([expect.objectContaining({ id: "note-a", knowledgeItemId: "knowledge-a", visibility: "private" })]);

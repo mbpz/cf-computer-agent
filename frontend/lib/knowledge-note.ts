@@ -123,6 +123,8 @@ export async function loadPrivateKnowledgeNotes(requester: Fetcher = fetch, sign
     if (typeof record.id !== "string" || !ID_PATTERN.test(record.id) || typeof record.knowledgeItemId !== "string" || !ID_PATTERN.test(record.knowledgeItemId)
       || record.visibility !== "private" || typeof record.title !== "string" || typeof record.body !== "string"
       || typeof record.createdAt !== "string" || typeof record.updatedAt !== "string") return [];
+    const access = record.access;
+    if (access !== "owner" && access !== "shared") throw new Error("KNOWLEDGE_NOTES_INVALID");
     return [{
       v: 1 as const,
       id: record.id,
@@ -130,7 +132,7 @@ export async function loadPrivateKnowledgeNotes(requester: Fetcher = fetch, sign
       title: record.title,
       body: record.body,
       visibility: "private" as const,
-      access: record.access === "shared" ? "shared" as const : "owner" as const,
+      access,
       updatedAt: record.updatedAt,
       createdAt: record.createdAt,
     }];
