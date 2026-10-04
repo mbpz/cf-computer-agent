@@ -103,6 +103,7 @@ import { createNumberedRequestController, parsePageSearch, writePageSearch, type
 import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRoleMember, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
 import { clearAdminRoleWrite, discardBlockedAdminRoleWrite, loadAdminRoleWrite, saveAdminRoleWrite, type AdminRoleWriteIntent } from "./lib/admin-role-write-intent";
 import { createAdminMenu, deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
+import { clearAdminMenuWrite, discardBlockedAdminMenuWrite, loadAdminMenuWrite, saveAdminMenuWrite, type AdminMenuWriteIntent } from "./lib/admin-menu-write-intent";
 import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAsset, type AdminAssetsPage, type AdminAssetStatus } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, loadAdminDuplicate, type AdminDuplicateCandidate, type AdminDuplicatePageResult, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import { candidateFromAdminDuplicateIntent, clearAdminDuplicateDecision, discardBlockedAdminDuplicate, loadAdminDuplicateDecisions, saveAdminDuplicateDecision, type AdminDuplicateIntent } from "./lib/admin-duplicate-intent";
@@ -231,7 +232,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin": return session ? <AdminDashboardRoute locale={locale} session={session} /> : <NotFoundPage locale={locale} />;
     case "admin-analytics": return <AdminAnalyticsRoute key={JSON.stringify([session?.member.id, session?.permissionMask, session?.capabilities])} locale={locale} search={search} />;
     case "admin-roles": return <AdminRolesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} />;
-    case "admin-menus": return <AdminMenusRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
+    case "admin-menus": return <AdminMenusRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} />;
     case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
@@ -518,16 +519,21 @@ export function AdminRolesRoute({ locale, memberId }: { locale: LocaleRuntime; m
     onUnassignMember={recordBlocked ? undefined : (role, targetId) => mutate({ op: "unassign", roleId: role.id, memberId: targetId }, () => unassignAdminRoleMember(role.id, targetId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")} />;
 }
 
-export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
+export function AdminMenusRoute({ locale, memberId }: { locale: LocaleRuntime; memberId?: string }) {
+  const [writeStored] = useState(() => memberId ? loadAdminMenuWrite(memberId) : { kind: "empty" as const });
+  const recordBlockedRef = useRef(writeStored.kind === "blocked");
+  const [recordBlocked, setRecordBlocked] = useState(recordBlockedRef.current);
+  const [recordNotice, setRecordNotice] = useState<string>();
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; menus: AdminMenu[] } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [saving, setSaving] = useState(false);
   const [reading, setReading] = useState(false);
-  const [needsRead, setNeedsRead] = useState(false);
+  const [needsRead, setNeedsRead] = useState(writeStored.kind === "ready");
   const [saveError, setSaveError] = useState<string | null>(null);
   const epoch = useRef<object | null>(null);
   const readRef = useRef<AbortController | null>(null);
   const writeRef = useRef<object | null>(null);
-  const blockedRef = useRef(false);
+  const blockedRef = useRef(writeStored.kind === "ready");
+  const intentRef = useRef<AdminMenuWriteIntent | null>(writeStored.kind === "ready" ? writeStored.intent : null);
   useEffect(() => {
     // This guard outlives the editor: denied/failed reads can replace its UI
     // without resolving a write. Never offer "discard" for an unknown outcome.
@@ -558,9 +564,15 @@ export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
       if (epoch.current !== scope || readRef.current !== controller) return false;
       setState({ kind: "ready", menus });
       if (!activeWrite && !writeRef.current) {
-        blockedRef.current = false;
-        setNeedsRead(false);
-        setSaveError(null);
+        const intent = intentRef.current;
+        if (memberId && intent && !clearAdminMenuWrite(memberId, intent)) {
+          blockedRef.current = true; setNeedsRead(true);
+          setRecordNotice(frontendText(locale, "ADMIN_MENUS_RECORD_STUCK"));
+        } else {
+          intentRef.current = null;
+          if (intent) setRecordNotice(undefined);
+          blockedRef.current = false; setNeedsRead(false); setSaveError(null);
+        }
       }
       return true;
     } catch (error) {
@@ -586,8 +598,13 @@ export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
     if (state.kind !== "ready") setState({ kind: "loading" });
     void read();
   };
-  const mutate = async (operation: () => Promise<unknown>, errorKey: string) => {
-    if (!epoch.current || state.kind !== "ready" || writeRef.current || readRef.current || blockedRef.current) return false;
+  const mutate = async (intent: AdminMenuWriteIntent, operation: () => Promise<unknown>, errorKey: string) => {
+    if (recordBlockedRef.current || !epoch.current || state.kind !== "ready" || writeRef.current || readRef.current || blockedRef.current) return false;
+    if (memberId && !saveAdminMenuWrite(memberId, intent)) {
+      setRecordNotice(frontendText(locale, "ADMIN_MENUS_NOT_RECORDED"));
+      return false;
+    }
+    if (memberId) intentRef.current = intent;
     const scope = epoch.current;
     const token = {};
     writeRef.current = token;
@@ -595,6 +612,7 @@ export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
     setSaving(true);
     setNeedsRead(true);
     setSaveError(null);
+    setRecordNotice(undefined);
     try {
       await operation();
       if (epoch.current !== scope) return false;
@@ -613,10 +631,14 @@ export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
       }
     }
   };
-  return <AdminMenusPage onLoadRetry={retryRead} locale={locale} state={state} writeBlocked={saving || reading || needsRead} readPending={reading || saving} readRequired={needsRead} error={saveError}
-    onCreate={(input) => mutate(() => createAdminMenu(input), "ADMIN_MENUS_SAVE_ERROR")}
-    onUpdate={(menu, input) => mutate(() => updateAdminMenu(menu.id, input), "ADMIN_MENUS_SAVE_ERROR")}
-    onDelete={(menu) => { void mutate(() => deleteAdminMenu(menu.id), "ADMIN_MENUS_DELETE_ERROR"); }} />;
+  function discardRecord() {
+    if (!memberId || !recordBlockedRef.current || !discardBlockedAdminMenuWrite(memberId)) return;
+    recordBlockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
+  }
+  return <AdminMenusPage onLoadRetry={retryRead} locale={locale} state={state} writeBlocked={saving || reading || needsRead} readPending={reading || saving} readRequired={needsRead} error={recordNotice ?? saveError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord}
+    onCreate={recordBlocked ? undefined : (input) => mutate({ op: "create", input }, () => createAdminMenu(input), "ADMIN_MENUS_SAVE_ERROR")}
+    onUpdate={recordBlocked ? undefined : (menu, input) => mutate({ op: "update", id: menu.id, input }, () => updateAdminMenu(menu.id, input), "ADMIN_MENUS_SAVE_ERROR")}
+    onDelete={recordBlocked ? undefined : (menu) => { void mutate({ op: "delete", id: menu.id }, () => deleteAdminMenu(menu.id), "ADMIN_MENUS_DELETE_ERROR"); }} />;
 }
 
 
