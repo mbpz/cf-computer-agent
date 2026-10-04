@@ -81,11 +81,12 @@ export async function loadRecentKnowledge(requester: Fetcher = fetch, signal?: A
     const item = value as Record<string, unknown>;
     if (typeof item.knowledgeItemId !== "string" || !item.knowledgeItemId
       || typeof item.title !== "string" || typeof item.lastVisitedAt !== "string") throw new Error("RECENT_KNOWLEDGE_INVALID");
+    if (typeof item.visitCount !== "number" || !Number.isSafeInteger(item.visitCount) || item.visitCount < 1) throw new Error("RECENT_KNOWLEDGE_INVALID");
     return [{
       id: item.knowledgeItemId,
       title: item.title,
       lastVisitedAt: item.lastVisitedAt,
-      visitCount: Number.isSafeInteger(item.visitCount) && (item.visitCount as number) > 0 ? item.visitCount as number : 1,
+      visitCount: item.visitCount,
     }];
   });
 }
