@@ -25,6 +25,10 @@ describe("duplicate decision recovery", () => {
     browser.history.replaceState({}, "", `/admin/duplicates?page=${page}`);
     await act(async () => root.render(<AdminDuplicateRoute locale={locale()} search={browser.location.search} />)); await flush();
   }
+  async function renderMember(page = 1) {
+    browser.history.replaceState({}, "", `/admin/duplicates?page=${page}`);
+    await act(async () => root.render(<AdminDuplicateRoute locale={locale()} memberId="member-a" search={browser.location.search} />)); await flush();
+  }
   function action(label = "Associate", id = "dup-1") { return container.querySelector(`button[aria-label="${label} ${id}"]`) as HTMLButtonElement; }
   async function click(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); await flush(); }
   async function go(page: number) { await act(async () => { writeWorkspaceHistory("push", `/admin/duplicates?page=${page}`); }); await flush(); }
@@ -314,6 +318,50 @@ describe("duplicate decision recovery", () => {
     expect(action()).toBeNull(); expect(container.textContent).not.toContain("stale-private"); expect(container.textContent).not.toContain("Canonical dup-1");
   });
 
+  it("keeps an unknown duplicate decision after refresh and reconciles without resending", async () => {
+    const second = deferred<Response>(); let gets = 0; let posts = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return new Response(null, { status: 503 }); }
+      if (++gets === 1) return numbered([duplicate()]);
+      return second.promise;
+    });
+    await renderMember(); await act(async () => action().click()); await click("Confirm decision");
+    expect(posts).toBe(1);
+    expect(browser.sessionStorage.getItem("memory-garden:admin-duplicate:v1:member-a")).toContain("\"associate\"");
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client"); root = createRoot(container);
+    await renderMember();
+    expect(posts).toBe(1); expect(unloadBlocked()).toBe(true); expect(action()).toBeNull();
+    second.resolve(numbered([duplicate()])); await flush();
+    expect(browser.sessionStorage.getItem("memory-garden:admin-duplicate:v1:member-a")).toBeNull();
+    expect(unloadBlocked()).toBe(false); expect(posts).toBe(1); expect(action().disabled).toBe(false);
+  });
+  it("does not send a duplicate decision when the tab cannot record it", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({ candidate: duplicate("associate") }); }
+      return numbered([duplicate()]);
+    });
+    await renderMember();
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    await act(async () => action().click()); await click("Confirm decision");
+    expect(posts).toBe(0); expect(container.textContent).toContain("could not record");
+  });
+  it("blocks a duplicate decision when its record cannot be read and allows leave until it is discarded", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({ candidate: duplicate("associate") }); }
+      return numbered([duplicate()]);
+    });
+    browser.sessionStorage.setItem("memory-garden:admin-duplicate:v1:member-a", "{");
+    await renderMember();
+    expect(container.textContent).toContain("can't be read"); expect(unloadBlocked()).toBe(false);
+    await leave(); expect(browser.location.pathname).toBe("/home");
+    browser.history.replaceState({}, "", "/admin/duplicates?page=1");
+    await click("Discard record");
+    await act(async () => action().click()); await click("Confirm decision");
+    expect(posts).toBe(1);
+  });
   it.each(["page", "pageSize", "terminal", "duplicate-id"])("rejects a mismatched %s pending list", async (field) => {
     vi.stubGlobal("fetch", async () => {
       const items = field === "duplicate-id" ? [duplicate(), duplicate()] : [duplicate(field === "terminal" ? "associate" : "pending")];

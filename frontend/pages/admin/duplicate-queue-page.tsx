@@ -20,12 +20,14 @@ interface DuplicateQueuePageProps {
   lockedIds?: string[];
   readRequired?: boolean;
   localError?: string;
+  decisionRecordBlocked?: boolean;
+  onDiscardDecisionRecord?: () => void;
   onDecision?: (id: string, decision: DuplicateDecision) => void;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (size: SupportedPageSize) => void;
 }
 
-export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pending, lockedIds, readRequired, localError, onDecision, onPageChange, onPageSizeChange }: DuplicateQueuePageProps) {
+export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pending, lockedIds, readRequired, localError, decisionRecordBlocked = false, onDiscardDecisionRecord, onDecision, onPageChange, onPageSizeChange }: DuplicateQueuePageProps) {
   type Confirmation = { item: AdminDuplicateCandidate; decision: DuplicateDecision; data: AdminDuplicatePageResult };
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
@@ -56,6 +58,7 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
         <h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_DUPLICATE_TITLE")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_DUPLICATE_DESCRIPTION")}</p>
       </div>
+      {decisionRecordBlocked && <div role="alert" data-duplicate-decision-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_DUPLICATE_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardDecisionRecord}>{frontendText(locale, "ADMIN_DUPLICATE_RECORD_DISCARD")}</Button></div>}
       {localError && <p role="alert" className="text-sm text-destructive">{localError}</p>}
       {readRequired && <p role="status" className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_DUPLICATE_READ_REQUIRED")}</p>}
       {(localError || readRequired) && onLoadRetry && <Button type="button" variant="outline" disabled={pending || Boolean(pendingId)} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}

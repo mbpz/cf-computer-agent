@@ -102,6 +102,7 @@ import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRo
 import { createAdminMenu, deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAsset, type AdminAssetsPage, type AdminAssetStatus } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, loadAdminDuplicate, type AdminDuplicateCandidate, type AdminDuplicatePageResult, type DuplicateDecision } from "./lib/admin-duplicates-data";
+import { candidateFromAdminDuplicateIntent, clearAdminDuplicateDecision, discardBlockedAdminDuplicate, loadAdminDuplicateDecisions, saveAdminDuplicateDecision, type AdminDuplicateIntent } from "./lib/admin-duplicate-intent";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
 import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewOperation, type ReviewNoteInput } from "./components/review/review-detail-data";
 import { clearReviewDecision, discardBlockedCurrentReviewDecision, loadCurrentReviewDecision, saveReviewDecision } from "./lib/review-decision-intent";
@@ -230,7 +231,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-menus": return <AdminMenusRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
     case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} />;
-    case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
+    case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
     case "admin-members": return <AdminMembersRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
     case "admin-spaces": return <AdminSpacesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
@@ -3209,13 +3210,17 @@ function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntim
     onReview={recordBlocked ? undefined : (id, action, details) => void review(id, action, details)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
-export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+export function AdminDuplicateRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const initial = parsePageSearch(search);
   const [page, setPage] = useState(initial.page);
   const [pageSize, setPageSize] = useState(initial.pageSize);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminDuplicatePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
+  const [decisionStored] = useState(() => memberId ? loadAdminDuplicateDecisions(memberId) : { kind: "empty" as const });
+  const blockedRef = useRef(decisionStored.kind === "blocked");
+  const [recordBlocked, setRecordBlocked] = useState(blockedRef.current);
+  const [recordNotice, setRecordNotice] = useState<string>();
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [lockedIds, setLockedIds] = useState<string[]>([]);
+  const [lockedIds, setLockedIds] = useState<string[]>(() => decisionStored.kind === "ready" ? decisionStored.intents.map((intent) => intent.submissionId) : []);
   const [pending, setPending] = useState(false);
   const [localError, setLocalError] = useState<string>();
   const [readVersion, setReadVersion] = useState(0);
@@ -3227,8 +3232,9 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
   // These locks are local to this mounted route. Missing from a pending page is
   // not proof of a particular decision, and an acknowledged terminal receipt
   // must never be unlocked by stale pending data.
-  const needsReadRef = useRef(new Set<string>());
-  const unresolvedWrites = useRef(new Map<string, AdminDuplicateCandidate>());
+  const needsReadRef = useRef(new Set<string>(decisionStored.kind === "ready" ? decisionStored.intents.map((intent) => intent.submissionId) : []));
+  const unresolvedWrites = useRef(new Map<string, AdminDuplicateCandidate>(decisionStored.kind === "ready" ? decisionStored.intents.map((intent) => [intent.submissionId, candidateFromAdminDuplicateIntent(intent)]) : []));
+  const intentRef = useRef(new Map<string, AdminDuplicateIntent>(decisionStored.kind === "ready" ? decisionStored.intents.map((intent) => [intent.submissionId, intent]) : []));
   const acknowledgedRef = useRef(new Set<string>());
   const needsClampRef = useRef(false);
   useEffect(() => {
@@ -3277,7 +3283,13 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
         const row = data.items.find(item => item.submissionId === id) ?? await loadAdminDuplicate(id);
         if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
         if (row.canonicalSubmissionId !== expected.canonicalSubmissionId || row.canonicalSourceId !== expected.canonicalSourceId || row.canonicalSourceVersionId !== expected.canonicalSourceVersionId) throw new Error("DUPLICATE_RESPONSE_INVALID");
-        unresolvedWrites.current.delete(id);
+        const intent = intentRef.current.get(id);
+        if (memberId && intent && !clearAdminDuplicateDecision(memberId, intent)) {
+          setRecordNotice(frontendText(locale, "ADMIN_DUPLICATE_RECORD_STUCK"));
+          continue;
+        }
+        intentRef.current.delete(id);
+        unresolvedWrites.current.delete(id); setRecordNotice(undefined);
         if (row.decision === "pending") needsReadRef.current.delete(id);
         else acknowledgedRef.current.add(id);
       }
@@ -3315,15 +3327,26 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
     return () => { invalidateQuery(); };
   }, [locale, page, pageSize, readVersion]);
   const decide = async (id: string, decision: DuplicateDecision) => {
-    if (!controllerRef.current || readRef.current || mutationRef.current || needsReadRef.current.has(id)) return;
+    if (blockedRef.current || !controllerRef.current || readRef.current || mutationRef.current || needsReadRef.current.has(id)) return;
     const candidate = state.kind === "ready" ? state.data.items.find((item) => item.submissionId === id) : undefined;
     if (!candidate || candidate.decision !== "pending") return;
+    const intent: AdminDuplicateIntent = { submissionId: id, decision, canonicalSubmissionId: candidate.canonicalSubmissionId, canonicalSourceId: candidate.canonicalSourceId, canonicalSourceVersionId: candidate.canonicalSourceVersionId };
+    if (memberId && !saveAdminDuplicateDecision(memberId, intent)) {
+      setRecordNotice(frontendText(locale, "ADMIN_DUPLICATE_NOT_RECORDED"));
+      return;
+    }
+    if (memberId) intentRef.current.set(id, intent);
     const token = { id }; const scope = scopeRef.current; const actionQuery = { ...queryRef.current };
-    mutationRef.current = token; needsReadRef.current.add(id); unresolvedWrites.current.set(id, candidate); syncLocks(); setPendingId(id); setLocalError(undefined);
+    mutationRef.current = token; needsReadRef.current.add(id); unresolvedWrites.current.set(id, candidate); syncLocks(); setPendingId(id); setLocalError(undefined); setRecordNotice(undefined);
     try {
       const receipt = await decideAdminDuplicate(id, decision);
       if (scopeRef.current !== scope || !sameQuery(actionQuery)) return;
       if (receipt.canonicalSubmissionId !== candidate.canonicalSubmissionId || receipt.canonicalSourceId !== candidate.canonicalSourceId || receipt.canonicalSourceVersionId !== candidate.canonicalSourceVersionId) throw new Error("DUPLICATE_RESPONSE_INVALID");
+      if (memberId && !clearAdminDuplicateDecision(memberId, intent)) {
+        setRecordNotice(frontendText(locale, "ADMIN_DUPLICATE_RECORD_STUCK"));
+        return;
+      }
+      intentRef.current.delete(id);
       unresolvedWrites.current.delete(id); acknowledgedRef.current.add(id); mutationRef.current = null; setPendingId(null); needsClampRef.current = true;
       if (controllerRef.current) await read(controllerRef.current, actionQuery, true);
     } catch (error: unknown) {
@@ -3332,7 +3355,11 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
       if (mutationRef.current === token) { mutationRef.current = null; setPendingId(null); }
     }
   };
-  return <DuplicateQueuePage onLoadRetry={retryRead} locale={locale} state={state} pendingId={pendingId} pending={pending} lockedIds={lockedIds} readRequired={!pendingId && lockedIds.some((id) => !acknowledgedRef.current.has(id) || (state.kind === "ready" && state.data.items.some((item) => item.submissionId === id)))} localError={localError} onDecision={(id, decision) => void decide(id, decision)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+  function discardRecord() {
+    if (!memberId || !blockedRef.current || !discardBlockedAdminDuplicate(memberId)) return;
+    blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
+  }
+  return <DuplicateQueuePage onLoadRetry={retryRead} locale={locale} state={state} pendingId={pendingId} pending={pending || recordBlocked} lockedIds={lockedIds} readRequired={!pendingId && lockedIds.some((id) => !acknowledgedRef.current.has(id) || (state.kind === "ready" && state.data.items.some((item) => item.submissionId === id)))} localError={recordNotice ?? localError} decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord} onDecision={recordBlocked ? undefined : (id, decision) => void decide(id, decision)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
 export function AdminMembersRoute({ locale, search, load = loadAdminMembers, update = updateMemberStatus }: { locale: LocaleRuntime; search: string; load?: typeof loadAdminMembers; update?: typeof updateMemberStatus }) {
