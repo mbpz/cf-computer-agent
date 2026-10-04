@@ -266,7 +266,7 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (path === "/api/admin/spaces/ready-admin-spaces/collections?limit=50") return Response.json({ items: [] });
       return null;
     case "admin-audit":
-      if (pathname(path) === "/api/admin/audit-events") return probeResponse(state, numbered([]), numbered([{ id: "ready-admin-audit", action: "READY::admin-audit", actorId: "admin-route-auditor", createdAt: NOW }]));
+      if (pathname(path) === "/api/admin/audit-events") return probeResponse(state, numbered([]), numbered([{ id: "ready-admin-audit", action: "member.login", actorKind: "member", actorId: "READY::admin-audit", createdAt: NOW }]));
       return null;
     case "admin-analytics":
       if (pathname(path) === "/api/admin/analytics/overview") return probeResponse(state, analytics(false), analytics(true));
