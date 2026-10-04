@@ -91,6 +91,7 @@ import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussi
 import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
+import { clearAdminAssetRetry, discardBlockedAdminAssetRetry, loadAdminAssetRetries, saveAdminAssetRetry } from "./lib/admin-asset-retry-intent";
 import { clearAdminMemberStatus, discardBlockedAdminMemberStatus, loadAdminMemberStatuses, saveAdminMemberStatus, type AdminMemberStatusIntent } from "./lib/admin-member-status-intent";
 import { createAdminSpace, manageAdminSpace, loadAdminSpacesPage, loadAdminCollections, type AdminSpace, type AdminSpaceCommand } from "./lib/admin-spaces-data";
 import { clearAdminSpaceWrite, discardBlockedAdminSpaceWrite, loadAdminSpaceWrite, saveAdminSpaceWrite, type AdminSpaceWriteIntent } from "./lib/admin-space-write-intent";
@@ -236,7 +237,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
-    case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
+    case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} memberId={session?.member.id} />;
     case "admin-members": return <AdminMembersRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-spaces": return <AdminSpacesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} />;
     case "admin-audit": return <AdminAuditRoute locale={locale} search={search} />;
@@ -3764,13 +3765,17 @@ export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; sea
 
 function memberStatusSearch(search: string): "active" | "disabled" | undefined { const value = new URLSearchParams(search).get("status"); return value === "active" || value === "disabled" ? value : undefined; }
 
-export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const initial = parsePageSearch(search);
   const [page, setPage] = useState(initial.page);
   const [pageSize, setPageSize] = useState(initial.pageSize);
   const [status, setStatus] = useState<AdminAssetStatus | undefined>(() => assetStatusSearch(search));
+  const [retryStored] = useState(() => memberId ? loadAdminAssetRetries(memberId) : { kind: "empty" as const });
+  const blockedRef = useRef(retryStored.kind === "blocked");
+  const [recordBlocked, setRecordBlocked] = useState(blockedRef.current);
+  const [recordNotice, setRecordNotice] = useState<string>();
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminAssetsPage } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
-  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const [pendingIds, setPendingIds] = useState<string[]>(() => retryStored.kind === "ready" ? retryStored.intents.map((intent) => intent.id) : []);
   const [requestPending, setRequestPending] = useState(false);
   const [localError, setLocalError] = useState<string>();
   const [retryError, setRetryError] = useState<string>();
@@ -3784,12 +3789,30 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
   const mutationsRef = useRef(new Map<string, object>());
   // Neither a lost POST response nor a failed follow-up GET permits a blind POST replay.
   // A fresh queue read must expose the row again before a new explicit retry is offered.
-  const needsReadRef = useRef(new Set<string>());
+  const needsReadRef = useRef(new Set<string>(retryStored.kind === "ready" ? retryStored.intents.map((intent) => intent.id) : []));
+  const intentRef = useRef(new Set<string>(retryStored.kind === "ready" ? retryStored.intents.map((intent) => intent.id) : []));
+  const ownedQueryNavigation = useRef(false);
+  const leaveGuardRef = useRef<(() => void) | null>(null);
   const needsClampRef = useRef(false);
+  const releaseLeaveGuard = () => { leaveGuardRef.current?.(); leaveGuardRef.current = null; };
+  const syncLeaveGuard = () => {
+    // Register only while a signed-in retry is unresolved. A permanent guard would
+    // route ordinary back/forward through the async gate and stall query changes.
+    const locked = Boolean(memberId) && (mutationsRef.current.size > 0 || needsReadRef.current.size > 0);
+    if (locked && !leaveGuardRef.current) {
+      const owner = window;
+      const isLocked = () => mutationsRef.current.size > 0 || needsReadRef.current.size > 0;
+      const unregister = registerWorkspaceLeaveGuard(() => ({ kind: isLocked() && !ownedQueryNavigation.current ? "block" : "allow" }));
+      const warn = (event: BeforeUnloadEvent) => { if (isLocked()) { event.preventDefault(); event.returnValue = ""; } };
+      owner.addEventListener("beforeunload", warn);
+      leaveGuardRef.current = () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+    } else if (!locked) releaseLeaveGuard();
+  };
+  useEffect(() => { syncLeaveGuard(); return releaseLeaveGuard; }, []);
   const [readVersion, setReadVersion] = useState(0);
   const queryRef = useRef({ page, pageSize, status });
   const sameQuery = (value: typeof queryRef.current) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize && value.status === queryRef.current.status;
-  const syncPendingIds = () => setPendingIds([...new Set([...mutationsRef.current.keys(), ...needsReadRef.current])]);
+  const syncPendingIds = () => { setPendingIds([...new Set([...mutationsRef.current.keys(), ...needsReadRef.current])]); syncLeaveGuard(); };
   const clearPreview = () => {
     previewAbort.current?.abort(); previewAbort.current = null;
     setPreview(null); setPreviewError(undefined); setPreviewLoading(false);
@@ -3800,7 +3823,15 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
   };
   const deny = (error: unknown) => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
-    invalidateQuery(); mutationsRef.current.clear(); needsReadRef.current.clear(); syncPendingIds();
+    const ids = [...needsReadRef.current];
+    invalidateQuery(); mutationsRef.current.clear(); needsReadRef.current.clear();
+    if (memberId) {
+      for (const id of ids) {
+        if (!clearAdminAssetRetry(memberId, id)) { needsReadRef.current.add(id); setRecordNotice(frontendText(locale, "ADMIN_ASSET_RETRY_RECORD_STUCK")); }
+        else intentRef.current.delete(id);
+      }
+    }
+    syncPendingIds();
     setState({ kind: "forbidden", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
     return true;
   };
@@ -3808,10 +3839,11 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
     const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, next));
     if (next.status) params.set("status", next.status); else params.delete("status");
     const serialized = params.toString();
-    writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
+    ownedQueryNavigation.current = true;
+    try { writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
       invalidateQuery(); queryRef.current = next;
       setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
-    });
+    }); } finally { ownedQueryNavigation.current = false; }
   };
   const read = async (controller: NonNullable<typeof controllerRef.current>, snapshot: typeof queryRef.current, afterRetry = false) => {
     if ((!afterRetry && readRef.current) || controllerRef.current !== controller) return;
@@ -3821,7 +3853,17 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
     try {
       const data = await request.promise;
       if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
-      for (const row of data.items) { if (!mutationsRef.current.has(row.id)) needsReadRef.current.delete(row.id); }
+      for (const row of data.items) {
+        if (mutationsRef.current.has(row.id)) continue;
+        const recorded = intentRef.current.has(row.id);
+        if (memberId && recorded && !clearAdminAssetRetry(memberId, row.id)) {
+          setRecordNotice(frontendText(locale, "ADMIN_ASSET_RETRY_RECORD_STUCK"));
+          continue;
+        }
+        intentRef.current.delete(row.id);
+        if (recorded) setRecordNotice(undefined);
+        needsReadRef.current.delete(row.id);
+      }
       syncPendingIds();
       if ((afterRetry || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)) }, true);
       else { setState({ kind: "ready", data }); needsClampRef.current = false; }
@@ -3854,9 +3896,14 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
     return () => { invalidateQuery(); };
   }, [locale, page, pageSize, status, readVersion]);
   const retry = async (id: string) => {
-    if (!controllerRef.current || readRef.current || mutationsRef.current.has(id) || needsReadRef.current.has(id)) return;
+    if (blockedRef.current || !controllerRef.current || readRef.current || mutationsRef.current.has(id) || needsReadRef.current.has(id)) return;
+    if (memberId && !saveAdminAssetRetry(memberId, { id })) {
+      setRecordNotice(frontendText(locale, "ADMIN_ASSET_RETRY_NOT_RECORDED"));
+      return;
+    }
+    if (memberId) intentRef.current.add(id);
     const token = {}; const scope = scopeRef.current; const actionQuery = { ...queryRef.current };
-    mutationsRef.current.set(id, token); needsReadRef.current.add(id); syncPendingIds(); setRetryError(undefined);
+    mutationsRef.current.set(id, token); needsReadRef.current.add(id); syncPendingIds(); setRetryError(undefined); setRecordNotice(undefined);
     try {
       await retryAdminAsset(id);
       if (scopeRef.current !== scope || !sameQuery(actionQuery)) return;
@@ -3869,6 +3916,10 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
       if (mutationsRef.current.get(id) === token) { mutationsRef.current.delete(id); syncPendingIds(); }
     }
   };
+  function discardRecord() {
+    if (!memberId || !blockedRef.current || !discardBlockedAdminAssetRetry(memberId)) return;
+    blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
+  }
   const showPreview = async (id: string) => {
     if (!controllerRef.current || readRef.current || previewAbort.current) return;
     const abort = new AbortController(); const scope = scopeRef.current;
@@ -3882,7 +3933,7 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
       if (previewAbort.current === abort) { previewAbort.current = null; setPreviewLoading(false); }
     }
   };
-  return <AssetQueuePage onLoadRetry={retryRead} locale={locale} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} data={state.kind === "ready" ? state.data : undefined} localError={localError} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} pending={requestPending} pendingIds={pendingIds} status={status || ""} preview={preview} previewLoading={previewLoading} previewError={previewError} retryError={retryError} onRetry={(id) => void retry(id)} onPreview={(id) => void showPreview(id)} onStatusChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} />;
+  return <AssetQueuePage onLoadRetry={retryRead} locale={locale} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} data={state.kind === "ready" ? state.data : undefined} localError={localError} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} pending={requestPending} pendingIds={pendingIds} status={status || ""} preview={preview} previewLoading={previewLoading} previewError={previewError} retryError={recordNotice ?? retryError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord} onRetry={recordBlocked ? undefined : (id) => void retry(id)} onPreview={(id) => void showPreview(id)} onStatusChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} />;
 }
 
 function assetStatusSearch(search: string): AdminAssetStatus | undefined { const value = new URLSearchParams(search).get("status"); return value === "queued" || value === "processing" || value === "succeeded" || value === "failed_retryable" || value === "failed_terminal" ? value : undefined; }
