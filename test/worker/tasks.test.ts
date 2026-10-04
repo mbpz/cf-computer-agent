@@ -300,6 +300,27 @@ describe("tasks HTTP contract", () => {
     await expect((await api("/api/tasks/task-1", sessionA)).json()).resolves.toMatchObject({ links: [{ id: linkId }] });
   });
 
+  it("rejects stale cross-tab field and status writes over HTTP while matching re-sends still succeed", async () => {
+    const created = await (await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-tabs", title: "Alpha" }) })).json() as { task: { updatedAt: string } };
+    const read = created.task.updatedAt;
+    const tabOne = await api("/api/tasks/task-tabs", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Tab one", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: read }) });
+    expect(tabOne.status).toBe(200);
+    const tabTwo = await api("/api/tasks/task-tabs", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Tab two", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: read }) });
+    expect(tabTwo.status).toBe(409);
+    await expect(tabTwo.json()).resolves.toMatchObject({ error: { code: "TASK_VERSION_CONFLICT" } });
+    const resend = await api("/api/tasks/task-tabs", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Tab one", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: read }) });
+    expect(resend.status).toBe(200);
+    await expect((await api("/api/tasks/task-tabs", sessionA)).json()).resolves.toMatchObject({ task: { title: "Tab one" } });
+
+    expect((await api("/api/tasks/task-tabs/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) })).status).toBe(200);
+    const staleMove = await api("/api/tasks/task-tabs/status", sessionA, { method: "POST", body: JSON.stringify({ status: "done", expectedStatus: "todo" }) });
+    expect(staleMove.status).toBe(409);
+    await expect(staleMove.json()).resolves.toMatchObject({ error: { code: "TASK_STATUS_CONFLICT" } });
+    expect((await api("/api/tasks/task-tabs/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) })).status).toBe(200);
+    const audit = await env.DB.prepare("SELECT action FROM audit_events WHERE resource_id = 'task-tabs' AND action LIKE 'task.%' ORDER BY created_at, id").all<{ action: string }>();
+    expect(audit.results.map((row) => row.action)).toEqual(["task.created", "task.updated", "task.status_changed"]);
+  });
+
   it("accepts identical status replays without adding an audit event", async () => {
     await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
     const first = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });

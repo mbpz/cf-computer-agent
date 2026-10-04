@@ -4,8 +4,8 @@ import { addTaskLink, createTask, deleteTask, loadTaskDetail, removeTaskLink, re
 type TaskFields = { title: string; notes: string; priority: "low" | "medium" | "high"; dueAt: string | null };
 export type TaskWriteIntent =
   | { op: "create"; taskId: string; fields: TaskFields }
-  | { op: "update"; taskId: string; fields: TaskFields }
-  | { op: "status"; taskId: string; status: TaskItem["status"] }
+  | { op: "update"; taskId: string; fields: TaskFields; expectedUpdatedAt?: string }
+  | { op: "status"; taskId: string; status: TaskItem["status"]; expectedStatus?: TaskItem["status"] }
   | { op: "progress"; taskId: string; progress: number }
   | { op: "tags"; taskId: string; tags: string[] }
   | { op: "link"; taskId: string; knowledgeItemId: string }
@@ -17,8 +17,8 @@ export type StoredTaskWrite = { kind: "empty" } | { kind: "blocked" } | { kind: 
 export function runTaskWrite(intent: TaskWriteIntent): Promise<unknown> {
   switch (intent.op) {
     case "create": return createTask({ id: intent.taskId, ...intent.fields });
-    case "update": return updateTask(intent.taskId, intent.fields);
-    case "status": return setTaskStatus(intent.taskId, intent.status);
+    case "update": return updateTask(intent.taskId, intent.expectedUpdatedAt === undefined ? intent.fields : { ...intent.fields, expectedUpdatedAt: intent.expectedUpdatedAt });
+    case "status": return setTaskStatus(intent.taskId, intent.status, fetch, intent.expectedStatus);
     case "progress": return setTaskProgress(intent.taskId, intent.progress);
     case "tags": return replaceTaskTags(intent.taskId, intent.tags);
     case "link": return addTaskLink(intent.taskId, intent.knowledgeItemId);
@@ -73,8 +73,11 @@ export function validTaskWrite(value: unknown): value is TaskWriteIntent {
   const v = value as Record<string, unknown>;
   if (typeof v.taskId !== "string" || !ID.test(v.taskId)) return false;
   switch (v.op) {
-    case "create": case "update": return exactKeys(v, ["op", "taskId", "fields"]) && validFields(v.fields);
-    case "status": return exactKeys(v, ["op", "taskId", "status"]) && typeof v.status === "string" && statuses.includes(v.status);
+    case "create": return exactKeys(v, ["op", "taskId", "fields"]) && validFields(v.fields);
+    case "update": return (exactKeys(v, ["op", "taskId", "fields"]) || (exactKeys(v, ["op", "taskId", "fields", "expectedUpdatedAt"])
+      && typeof v.expectedUpdatedAt === "string" && Number.isFinite(Date.parse(v.expectedUpdatedAt)))) && validFields(v.fields);
+    case "status": return (exactKeys(v, ["op", "taskId", "status"]) || (exactKeys(v, ["op", "taskId", "status", "expectedStatus"])
+      && typeof v.expectedStatus === "string" && statuses.includes(v.expectedStatus))) && typeof v.status === "string" && statuses.includes(v.status);
     case "progress": return exactKeys(v, ["op", "taskId", "progress"]) && Number.isInteger(v.progress) && (v.progress as number) >= 0 && (v.progress as number) <= 100;
     case "tags": return exactKeys(v, ["op", "taskId", "tags"]) && Array.isArray(v.tags) && v.tags.length <= 10
       && v.tags.every((tag) => typeof tag === "string" && !!tag.trim() && [...tag].length <= 32);

@@ -72,7 +72,7 @@ export async function createTask(input: TaskCreateInput, requester: Fetcher = fe
   return { task: taskReceipt(data.task, id), created: data.created };
 }
 
-export async function updateTask(id: string, patch: { title: string; notes: string; priority: string; dueAt: string | null }, requester: Fetcher = fetch): Promise<TaskItem> {
+export async function updateTask(id: string, patch: { title: string; notes: string; priority: string; dueAt: string | null; expectedUpdatedAt?: string }, requester: Fetcher = fetch): Promise<TaskItem> {
   return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) }), id);
 }
 
@@ -84,8 +84,10 @@ export async function deleteTask(id: string, requester: Fetcher = fetch): Promis
   }
 }
 
-export async function setTaskStatus(id: string, status: string, requester: Fetcher = fetch): Promise<TaskItem> {
-  return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) }), id);
+/** With `expectedStatus`, the server rejects with 409 if the task moved elsewhere, unless it is already at `status`. */
+export async function setTaskStatus(id: string, status: string, requester: Fetcher = fetch, expectedStatus?: string): Promise<TaskItem> {
+  const body = expectedStatus === undefined ? { status } : { status, expectedStatus };
+  return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), id);
 }
 
 export async function setTaskProgress(id: string, progress: number, requester: Fetcher = fetch): Promise<TaskItem> {

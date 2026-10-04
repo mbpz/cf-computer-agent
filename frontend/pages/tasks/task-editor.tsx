@@ -15,7 +15,7 @@ import { taskPriorityKey, taskStatusKey } from "./tasks-model";
 type Fields = { title: string; notes: string; priority: string; dueAt: string };
 type Draft = { fields: Fields; tags: string; status: TaskItem["status"]; progress: string; knowledgeId: string };
 type Intent = { op: TaskWriteIntent; clean?: (keyof Draft)[]; acceptedDraft?: Draft };
-type Notice = "TASKS_WRITE_APPLIED" | "TASKS_WRITE_NOT_APPLIED" | "TASKS_WRITE_MISSING" | "TASKS_WRITE_CHECK_FAILED" | "TASKS_WRITE_NOT_RECORDED" | "TASKS_WRITE_RECORD_STUCK";
+type Notice = "TASKS_WRITE_CONFLICT" | "TASKS_WRITE_APPLIED" | "TASKS_WRITE_NOT_APPLIED" | "TASKS_WRITE_MISSING" | "TASKS_WRITE_CHECK_FAILED" | "TASKS_WRITE_NOT_RECORDED" | "TASKS_WRITE_RECORD_STUCK";
 const cleanFor: Record<TaskWriteIntent["op"], (keyof Draft)[]> = { create: ["fields"], update: ["fields"], status: ["status"], progress: ["progress"], tags: ["tags"], link: ["knowledgeId"], unlink: [], delete: [] };
 const blank: Fields = { title: "", notes: "", priority: "medium", dueAt: "" };
 const transitions: Record<TaskItem["status"], TaskItem["status"][]> = {
@@ -155,7 +155,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     if (!retry) next = { ...next, acceptedDraft: currentDraft.current };
     if (!record(next.op)) { setError(false); setNotice("TASKS_WRITE_NOT_RECORDED"); return; }
     gate.current = true; intent.current = next; setBusy(true); setError(false); setNotice(null);
-    let confirmed = false;
+    let confirmed = false; let conflicted = false;
     try {
       await runTaskWrite(next.op);
       const cleared = unrecord(next.op);
@@ -168,11 +168,15 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
       const cleared = rejected && unrecord(next.op);
       if (!active.current) return;
       if (cleared && denied(cause)) return;
-      if (cleared) { intent.current = null; setUnknown(false); setError(true); }
+      conflicted = cleared && cause instanceof ApiRequestError && cause.status === 409;
+      if (conflicted) { intent.current = null; setUnknown(false); setNotice("TASKS_WRITE_CONFLICT"); }
+      else if (cleared) { intent.current = null; setUnknown(false); setError(true); }
       else { setUnknown(true); if (rejected) setNotice("TASKS_WRITE_RECORD_STUCK"); }
     } finally {
       if (active.current) { setBusy(false); gate.current = false; }
     }
+    // A conflict reloads the latest version; the merge keeps this subform's draft for a deliberate re-save.
+    if (conflicted && active.current && taskId) { callbacks.current.onChanged(); await read(); return; }
     if (!confirmed || !active.current) return;
     callbacks.current.onChanged();
     if (!taskId) callbacks.current.onClose();
@@ -213,7 +217,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     const dueAt = detail && fields.dueAt === localTaskDate(detail.task.dueAt) ? detail.task.dueAt : date?.toISOString() ?? null;
     const patch = { title, notes, priority: fields.priority, dueAt };
     const priority = patch.priority as "low" | "medium" | "high";
-    if (taskId) void perform({ clean: ["fields"], op: { op: "update", taskId, fields: { ...patch, priority } } });
+    if (taskId) void perform({ clean: ["fields"], op: { op: "update", taskId, fields: { ...patch, priority }, ...(detail ? { expectedUpdatedAt: detail.task.updatedAt } : {}) } });
     else { createId.current ??= crypto.randomUUID(); void perform({ clean: ["fields"], op: { op: "create", taskId: createId.current, fields: { ...patch, priority } } }); }
   }
   function saveTags() {
@@ -251,7 +255,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
         <Button type="submit" disabled={locked}>{t(taskId ? "TASKS_SAVE" : "TASKS_CREATE")}</Button>
       </form>
       {taskId && detail && <>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); if (!locked) { const next = currentDraft.current.status; void perform({ clean: ["status"], op: { op: "status", taskId, status: next } }); } }}>
+        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); if (!locked) { const next = currentDraft.current.status; void perform({ clean: ["status"], op: { op: "status", taskId, status: next, expectedStatus: detail.task.status } }); } }}>
           <label>{t("TASKS_FIELD_STATUS")}<select className="block w-full rounded border bg-background p-2" aria-label={t("TASKS_FIELD_STATUS")} disabled={locked} value={status} onChange={(event) => edit("status", event.currentTarget.value as TaskItem["status"])}>{transitions[detail.task.status].map((value) => <option key={value} value={value}>{t(taskStatusKey(value))}</option>)}</select></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_STATUS")}</Button>
         </form>

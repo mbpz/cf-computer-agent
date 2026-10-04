@@ -9,7 +9,7 @@ import { normalizeSubtaskCreate, normalizeSubtaskUpdate, validStructureId, type 
 import { TASK_PRIORITIES, TASK_STATUSES, type Task, type TaskLink, type TaskListFilters, type TaskPage, type TaskStatus, type TaskSummary } from "./types";
 
 export interface TaskCreateInput { id?: unknown; title?: unknown; notes?: unknown; priority?: unknown; dueAt?: unknown; knowledgeItemId?: unknown; }
-export interface TaskUpdateInput { title?: unknown; notes?: unknown; priority?: unknown; dueAt?: unknown; }
+export interface TaskUpdateInput { title?: unknown; notes?: unknown; priority?: unknown; dueAt?: unknown; expectedUpdatedAt?: unknown; }
 
 export interface TaskDetail { task: Task; tags: string[]; links: TaskLink[]; }
 
@@ -130,10 +130,21 @@ export class TasksService {
   }
 
   async update(memberId: string, id: string, input: TaskUpdateInput): Promise<Task> {
-    await this.requireOwned(memberId, id);
+    const task = await this.requireOwned(memberId, id);
     const normalized = normalizeUpdate(input);
-    const updated = await this.repository.update(memberId, id, { ...normalized, updatedAt: this.now().getTime() });
-    if (!updated) throw notFound();
+    const expected = parseExpectedVersion((input as Record<string, unknown> | null)?.expectedUpdatedAt);
+    // Absolute-value semantics: a re-send that already matches succeeds without a second write.
+    if (task.title === normalized.title && task.notes === normalized.notes && task.priority === normalized.priority
+      && (task.dueAt === null ? null : Date.parse(task.dueAt)) === normalized.dueAt) return task;
+    const conflict = () => new AppError("TASK_VERSION_CONFLICT", "Task changed since it was read", 409);
+    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw conflict();
+    // Strictly increasing, so two writes in the same millisecond still produce distinct versions.
+    const updatedAt = Math.max(this.now().getTime(), Date.parse(task.updatedAt) + 1);
+    const updated = await this.repository.update(memberId, id, { ...normalized, updatedAt }, expected);
+    if (!updated) {
+      if (expected !== undefined && await this.repository.findOwned(memberId, id)) throw conflict();
+      throw notFound();
+    }
     await this.emitAudit("task.updated", memberId, updated.id, { priority: normalized.priority });
     return updated;
   }
@@ -145,12 +156,16 @@ export class TasksService {
     return void task;
   }
 
-  async setStatus(memberId: string, id: string, status: unknown): Promise<Task> {
+  async setStatus(memberId: string, id: string, status: unknown, expectedStatus?: unknown): Promise<Task> {
     const task = await this.requireOwned(memberId, id);
     const next = normalizeStatus(status);
+    const expected = expectedStatus === undefined ? undefined : normalizeStatus(expectedStatus);
     if (task.status === next) {
       await this.deliverPendingStatusNotifications(memberId, task.id);
       return task; // 绝对值语义:重复提交即成功,同时修复 pending intent
+    }
+    if (expected !== undefined && task.status !== expected) {
+      throw new AppError("TASK_STATUS_CONFLICT", "Task status changed since it was read", 409);
     }
     if (!TRANSITIONS[task.status].includes(next)) {
       throw new AppError("TASK_TRANSITION_INVALID", "Task status transition is invalid", 422);
@@ -306,6 +321,13 @@ export function normalizeTaskCreate(input: TaskCreateInput): {
     id, title, notes, priority: priority as Task["priority"], dueAt: dueAtMs,
     knowledgeItemId: knowledgeItemId as string | null,
   };
+}
+
+function parseExpectedVersion(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  const ms = typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/u.test(value) ? Date.parse(value) : Number.NaN;
+  if (!Number.isFinite(ms)) throw invalid("TASK_INVALID", "Task fields are invalid");
+  return ms;
 }
 
 function normalizeUpdate(input: TaskUpdateInput): { title: string; notes: string; priority: Task["priority"]; dueAt: number | null } {

@@ -100,6 +100,32 @@ describe("TasksService", () => {
     void created;
   });
 
+  it("rejects a stale field update by version, but accepts a re-send that already matches", async () => {
+    const repository = new FakeTasksRepository();
+    const service = createService(repository);
+    const created = { ...(await service.create("member-a", { id: "task-1", title: "Alpha" })).task };
+    const first = { ...await service.update("member-a", "task-1", { title: "Tab one", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: created.updatedAt }) };
+    expect(Date.parse(first.updatedAt)).toBeGreaterThan(Date.parse(created.updatedAt));
+    await expect(service.update("member-a", "task-1", { title: "Tab two", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: created.updatedAt }))
+      .rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    expect((await service.get("member-a", "task-1")).task.title).toBe("Tab one");
+    const replay = await service.update("member-a", "task-1", { title: "Tab one", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: created.updatedAt });
+    expect(replay.updatedAt).toBe(first.updatedAt);
+    await expect(service.update("member-a", "task-1", { title: "Bad", expectedUpdatedAt: "yesterday" })).rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
+    await expect(service.update("member-a", "task-1", { title: "Unconditional" })).resolves.toMatchObject({ title: "Unconditional" });
+  });
+
+  it("rejects a status change whose expected current status is stale, but accepts one already at the target", async () => {
+    const repository = new FakeTasksRepository();
+    const service = createService(repository);
+    await service.create("member-a", { id: "task-1", title: "Alpha" });
+    await service.setStatus("member-a", "task-1", "doing");
+    await expect(service.setStatus("member-a", "task-1", "done", "todo")).rejects.toMatchObject({ code: "TASK_STATUS_CONFLICT", status: 409 });
+    await expect(service.setStatus("member-a", "task-1", "doing", "todo")).resolves.toMatchObject({ status: "doing" });
+    await expect(service.setStatus("member-a", "task-1", "done", "doing")).resolves.toMatchObject({ status: "done" });
+    await expect(service.setStatus("member-a", "task-1", "todo", "nope")).rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
+  });
+
   it("emits one recipient-owned notification only after a real status transition", async () => {
     const repository = new FakeTasksRepository();
     const notifications = new FakeNotificationSink();
@@ -291,9 +317,9 @@ class FakeTasksRepository implements TasksRepositoryPort {
       && (!request.filters.q || task.title.toLowerCase().includes(request.filters.q.toLowerCase())));
     return { items: items.slice((request.page - 1) * request.pageSize, request.page * request.pageSize), pagination: { page: request.page, pageSize: request.pageSize, total: items.length, totalPages: items.length ? Math.ceil(items.length / request.pageSize) : 0 } };
   }
-  async update(memberId: string, id: string, input: TaskUpdate) {
+  async update(memberId: string, id: string, input: TaskUpdate, expectedUpdatedAt?: number) {
     const task = await this.findOwned(memberId, id);
-    if (!task) return null;
+    if (!task || (expectedUpdatedAt !== undefined && Date.parse(task.updatedAt) !== expectedUpdatedAt)) return null;
     Object.assign(task, { title: input.title, notes: input.notes, priority: input.priority, updatedAt: new Date(input.updatedAt).toISOString() });
     return task;
   }

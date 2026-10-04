@@ -68,7 +68,7 @@ describe("task-backed boards route", () => {
     await change(select, "doing");
     expect(column("todo").textContent).not.toContain("Alpha");
     expect(column("doing").textContent).toContain("Alpha");
-    expect(mutations).toEqual([{ url: "/api/tasks/todo-task/status", body: JSON.stringify({ status: "doing" }) }]);
+    expect(mutations).toEqual([{ url: "/api/tasks/todo-task/status", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) }]);
 
     await act(async () => resolveMutation(rejectedResponse())); await flush();
     expect(column("todo").textContent).toContain("Alpha");
@@ -77,6 +77,20 @@ describe("task-backed boards route", () => {
     expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
     expect((column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement).disabled).toBe(false);
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("rolls back a move rejected because the task changed elsewhere and reloads every column", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return Response.json({ error: { code: "TASK_STATUS_CONFLICT", message: "changed", retryable: false } }, { status: 409 });
+      requests.push(String(input)); return boardPage(String(input), { todoTitle: "Alpha" });
+    });
+    await renderBoard();
+    const before = requests.length;
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing"); await flush();
+    expect(container.textContent).toContain("changed elsewhere");
+    expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+    for (const status of ["todo", "doing", "blocked", "done"]) expect(requests.slice(before).filter((url) => statusFromUrl(url) === status).length).toBe(1);
   });
 
   it("blocks leaving during an in-flight move while keeping its own column pagination", async () => {
@@ -213,7 +227,7 @@ describe("task-backed boards route", () => {
       buttonByText(container, "Retry the same move").click();
     }); await flush();
     expect(posts).toHaveLength(3);
-    expect(new Set(posts.map((post) => `${post.url} ${post.body}`))).toEqual(new Set([`/api/tasks/todo-task/status ${JSON.stringify({ status: "doing" })}`]));
+    expect(new Set(posts.map((post) => `${post.url} ${post.body}`))).toEqual(new Set([`/api/tasks/todo-task/status ${JSON.stringify({ status: "doing", expectedStatus: "todo" })}`]));
     expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
     expect(container.textContent).toContain("The move to Doing was saved.");
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
@@ -302,7 +316,7 @@ describe("task-backed boards route", () => {
 
     await change(column("todo").querySelector('select[aria-label="Move Cancel me from To do"]') as HTMLSelectElement, "canceled");
     expect(column("todo").textContent).not.toContain("Cancel me");
-    expect(posts).toEqual([JSON.stringify({ status: "canceled" })]);
+    expect(posts).toEqual([JSON.stringify({ status: "canceled", expectedStatus: "todo" })]);
     expect(container.querySelector('[data-board-column="canceled"]')).toBeNull();
     expect(gets.some((url) => statusFromUrl(url) === "canceled")).toBe(false);
 
@@ -346,7 +360,7 @@ describe("task-backed boards route", () => {
       select.value = "doing"; select.dispatchEvent(new window.Event("change", { bubbles: true }));
       select.value = "doing"; select.dispatchEvent(new window.Event("change", { bubbles: true }));
     });
-    expect(posts).toEqual([JSON.stringify({ status: "doing" })]);
+    expect(posts).toEqual([JSON.stringify({ status: "doing", expectedStatus: "todo" })]);
     expect(column("todo").textContent).not.toContain("Alpha");
     expect(column("doing").textContent).toContain("Loading this task column");
 
@@ -825,7 +839,7 @@ describe("task-backed boards route", () => {
       await moveAlpha(); await flush();
       await refresh();
       await act(async () => buttonByText(container, "Retry the same move").click()); await flush();
-      expect(new Set(posts)).toEqual(new Set([`/api/tasks/todo-task/status ${JSON.stringify({ status: "doing" })}`]));
+      expect(new Set(posts)).toEqual(new Set([`/api/tasks/todo-task/status ${JSON.stringify({ status: "doing", expectedStatus: "todo" })}`]));
       expect(posts).toHaveLength(2);
       expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
       expect(browser.sessionStorage.getItem(KEY)).toBeNull();

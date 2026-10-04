@@ -13,7 +13,7 @@ export interface TasksRepositoryPort {
   insert(input: TaskCreate): Promise<boolean>;
   findOwned(memberId: string, id: string): Promise<Task | null>;
   list(memberId: string, request: TaskListRequest): Promise<TaskPage>;
-  update(memberId: string, id: string, input: TaskUpdate): Promise<Task | null>;
+  update(memberId: string, id: string, input: TaskUpdate, expectedUpdatedAt?: number): Promise<Task | null>;
   compareAndSetStatus(memberId: string, id: string, expectedStatus: TaskStatus, status: TaskStatus, completedAt: number | null, progress: number, updatedAt: number): Promise<boolean>;
   listPendingStatusNotifications(memberId: string, taskId: string, limit: number): Promise<TaskStatusNotificationIntent[]>;
   markStatusNotificationDelivered(memberId: string, intentId: string, deliveredAt: number): Promise<boolean>;
@@ -104,10 +104,11 @@ export class TasksRepository implements TasksRepositoryPort {
     );
   }
 
-  async update(memberId: string, id: string, input: TaskUpdate): Promise<Task | null> {
+  async update(memberId: string, id: string, input: TaskUpdate, expectedUpdatedAt?: number): Promise<Task | null> {
+    const condition = expectedUpdatedAt === undefined ? "" : " AND updated_at = ?";
     const result = await this.db.prepare(
-      `UPDATE tasks SET title = ?, notes = ?, priority = ?, due_at = ?, updated_at = ? WHERE member_id = ? AND id = ?`,
-    ).bind(input.title, input.notes, input.priority, input.dueAt, input.updatedAt, memberId, id).run();
+      `UPDATE tasks SET title = ?, notes = ?, priority = ?, due_at = ?, updated_at = ? WHERE member_id = ? AND id = ?${condition}`,
+    ).bind(input.title, input.notes, input.priority, input.dueAt, input.updatedAt, memberId, id, ...(expectedUpdatedAt === undefined ? [] : [expectedUpdatedAt])).run();
     return result.meta.changes === 1 ? this.findOwned(memberId, id) : null;
   }
 

@@ -471,6 +471,21 @@ describe("private task numbered route", () => {
       expect(browser.sessionStorage.getItem(KEY)).toBeNull();
     });
 
+    it("sends the row status as expected and reports a change made elsewhere, then reloads", async () => {
+      const bodies: string[] = []; let lists = 0;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") { bodies.push(String(init.body)); return Response.json({ error: { code: "TASK_STATUS_CONFLICT", message: "changed" } }, { status: 409 }); }
+        lists += 1; return taskPage(String(input));
+      });
+      await render();
+      const before = lists;
+      await clickButton("Complete: Alpha (task-alpha)"); await flush();
+      expect(bodies).toEqual([JSON.stringify({ status: "done", expectedStatus: "doing" })]);
+      expect(container.textContent).toContain("changed elsewhere");
+      expect(banner()).toBeNull();
+      expect(lists).toBeGreaterThan(before);
+    });
+
     it("does not send a list write it cannot record", async () => {
       let posts = 0;
       vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === "POST") posts += 1; return taskPage(String(input)); });

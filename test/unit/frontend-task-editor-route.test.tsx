@@ -303,7 +303,7 @@ describe("task editor through the real route", () => {
       if (url.endsWith("/status") || url.endsWith("/progress")) { saved = { ...saved, ...JSON.parse(String(init?.body)) }; return Response.json(saved); }
     };
     await mount(); await click("Edit: Alpha (task-alpha)");
-    await change("Task status", "doing"); await click("Save status"); expect(writes.at(-1)!.body).toEqual({ status: "doing" });
+    await change("Task status", "doing"); await click("Save status"); expect(writes.at(-1)!.body).toEqual({ status: "doing", expectedStatus: "todo" });
     await change("Task progress", "40"); await click("Save progress"); expect(writes.at(-1)!.body).toEqual({ progress: 40 });
     await change("Task status", "done"); await click("Save status"); expect((container.querySelector('[aria-label="Task progress"]') as HTMLInputElement).disabled).toBe(true);
   });
@@ -373,7 +373,7 @@ describe("task editor through the real route", () => {
     await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Unsaved title");
     await change("Task tags (comma-separated)", "unsaved-tag"); await change("Knowledge item ID", "unsaved-link");
     await change("Task status", "doing"); await click("Save status");
-    expect(writes).toHaveLength(1); expect(writes[0]!.body).toEqual({ status: "doing" });
+    expect(writes).toHaveLength(1); expect(writes[0]!.body).toEqual({ status: "doing", expectedStatus: "todo" });
     expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Unsaved title");
     expect((container.querySelector('[aria-label="Task tags (comma-separated)"]') as HTMLInputElement).value).toBe("unsaved-tag");
     expect((container.querySelector('[aria-label="Knowledge item ID"]') as HTMLInputElement).value).toBe("unsaved-link");
@@ -490,7 +490,7 @@ describe("task editor through the real route", () => {
       const atSend: Array<string | null> = [];
       responder = (_url, init) => { if (init?.method === "PATCH") atSend.push(browser.sessionStorage.getItem(KEY)); return undefined; };
       await mountAs("alice"); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Recorded"); await click("Save task");
-      expect(JSON.parse(atSend[0]!)).toEqual({ version: 1, memberId: "alice", intent: { op: "update", taskId: "task-alpha", fields: { title: "Recorded", notes: "Original", priority: "medium", dueAt: null } } });
+      expect(JSON.parse(atSend[0]!)).toEqual({ version: 1, memberId: "alice", intent: { op: "update", taskId: "task-alpha", fields: { title: "Recorded", notes: "Original", priority: "medium", dueAt: null }, expectedUpdatedAt: task.updatedAt } });
       expect(browser.sessionStorage.getItem(KEY)).toBeNull();
     });
 
@@ -520,6 +520,29 @@ describe("task editor through the real route", () => {
       expect(writes).toHaveLength(2); expect(writes[1]!.body).toEqual(writes[0]!.body);
       expect(container.querySelector('[role="dialog"]')).toBeNull();
       expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("sends the read version and reports a save rejected as changed elsewhere, reloading while keeping the draft", async () => {
+      let reads = 0;
+      responder = (url, init) => {
+        if (init?.method === "PATCH") return Response.json({ error: { code: "TASK_VERSION_CONFLICT", message: "changed", retryable: false } }, { status: 409 });
+        if (url === "/api/tasks/task-alpha" && !init?.method) { reads += 1; return Response.json({ task: reads > 1 ? { ...saved, notes: "Changed in another tab", updatedAt: "2026-09-27T00:00:00Z" } : saved, tags: [], links: [] }); }
+      };
+      await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Mine"); await click("Save task"); await flush();
+      expect(writes[0]!.body).toMatchObject({ title: "Mine", expectedUpdatedAt: task.updatedAt });
+      expect(container.textContent).toContain("changed elsewhere");
+      expect(container.textContent).not.toContain("The write result is unknown");
+      expect(reads).toBe(2);
+      expect(title().value).toBe("Mine");
+      expect(title().disabled).toBe(false);
+      await click("Save task");
+      expect(writes[1]!.body).toMatchObject({ title: "Mine", expectedUpdatedAt: "2026-09-27T00:00:00Z" });
+    });
+
+    it("sends the read status as the expected status", async () => {
+      responder = (url, init) => { if (url.endsWith("/status")) { saved = { ...saved, status: "doing" }; return Response.json(saved); } };
+      await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task status", "doing"); await click("Save status");
+      expect(writes[0]!.body).toEqual({ status: "doing", expectedStatus: "todo" });
     });
 
     it("clears the record when the write is definitively rejected", async () => {

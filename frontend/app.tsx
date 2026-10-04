@@ -1237,7 +1237,9 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       const rejected = isDefiniteTaskRejection(error);
       const cleared = rejected && unrecord(intent);
       if (activeRef.current && !isAbort(error)) {
-        if (cleared) { if (!clearDeniedTasks(error) && sameQuery(snapshot)) setActionError(frontendText(locale, "TASKS_ACTION_FAILED")); }
+        if (cleared && error instanceof ApiRequestError && error.status === 409) {
+          setActionError(frontendText(locale, "TASKS_ACTION_CONFLICT")); setRetryVersion((value) => value + 1);
+        } else if (cleared) { if (!clearDeniedTasks(error) && sameQuery(snapshot)) setActionError(frontendText(locale, "TASKS_ACTION_FAILED")); }
         // The server may have applied it; the unchanged row is not proof that it did not.
         else markUnknown(rejected);
       }
@@ -1278,6 +1280,10 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       if (activeRef.current) { listRecoveringRef.current = false; syncLeaveGuard(); setListRecovering(false); }
     }
   };
+  const taskRowStatus = (id: string): { expectedStatus?: TaskItem["status"] } => {
+    const item = state.kind === "ready" ? state.data.items.find((candidate) => candidate.id === id) : undefined;
+    return item ? { expectedStatus: item.status } : {};
+  };
   const taskLabel = (id: string) => {
     const item = state.kind === "ready" ? state.data.items.find((candidate) => candidate.id === id) : undefined;
     return item?.title.trim() || id;
@@ -1293,7 +1299,7 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       <Button variant="outline" disabled={listRecovering} onClick={() => void resolveListUnknown("check")}>{frontendText(locale, "TASKS_CHECK_WRITE")}</Button>
       <Button variant="outline" disabled={listRecovering} onClick={() => void resolveListUnknown("retry")}>{frontendText(locale, "TASKS_RETRY_WRITE")}</Button>
     </div>
-  </Alert>}{actionNotice && <p role="status" className="mb-4 text-sm">{actionNotice}</p>}<TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : listUnknown || listRecovering ? "unknown" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate({ op: "status", taskId: id, status }, taskLabel(id))} onDelete={(id) => void mutate({ op: "delete", taskId: id }, taskLabel(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} memberId={memberId} {...(editor.restored ? { restored: editor.restored } : {})} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
+  </Alert>}{actionNotice && <p role="status" className="mb-4 text-sm">{actionNotice}</p>}<TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : listUnknown || listRecovering ? "unknown" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate({ op: "status", taskId: id, status, ...taskRowStatus(id) }, taskLabel(id))} onDelete={(id) => void mutate({ op: "delete", taskId: id }, taskLabel(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} memberId={memberId} {...(editor.restored ? { restored: editor.restored } : {})} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
 }
 
 type TaskListUnknown = { intent: TaskWriteIntent; label: string };
@@ -2694,7 +2700,7 @@ export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntim
     try {
       const current = mode === "check"
         ? (await loadTaskDetail(pending.task.id)).task.status
-        : (await setTaskStatus(pending.task.id, pending.target)).status;
+        : (await setTaskStatus(pending.task.id, pending.target, fetch, pending.source)).status;
       if (live()) settleUnknownMove(pending, outcomeNotice(pending, current));
     } catch (error: unknown) {
       if (!live() || clearDeniedBoard(error)) return;
@@ -2742,7 +2748,7 @@ export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntim
     };
     setActionPendingId(task.id); setActionError(undefined); setActionNotice(undefined); setColumns(optimistic); columnsRef.current = optimistic;
     try {
-      await setTaskStatus(task.id, target);
+      await setTaskStatus(task.id, target, fetch, source);
       const cleared = clearMoveRecord(pending);
       if (!activeRef.current || generation !== actionGenerationRef.current) return;
       if (!cleared) {
@@ -2774,7 +2780,9 @@ export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntim
           if (delta.target && targetMatches && (requestStatesRef.current[delta.target].pending || requestStatesRef.current[delta.target].superseded)) next[delta.target] += 1;
           return next;
         });
-        if (rejected && cleared) setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
+        if (rejected && cleared && error instanceof ApiRequestError && error.status === 409) {
+          setActionError(frontendText(locale, "BOARDS_MOVE_CONFLICT")); refreshAllColumns();
+        } else if (rejected && cleared) setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
         else {
           // The server may have applied the move; the rolled-back cards are not proof that it did not.
           // A rejection whose record could not be cleared is reconciled the same way so the record is not orphaned.

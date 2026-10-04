@@ -47,8 +47,8 @@ export async function routeTasksApi(
   if (status) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status"], "TASK_INVALID");
-    return jsonResponse(await services.tasks.setStatus(member.memberId, decodePathId(status[1]!), input.status), 200, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status", "expectedStatus"], "TASK_INVALID");
+    return jsonResponse(await services.tasks.setStatus(member.memberId, decodePathId(status[1]!), input.status, input.expectedStatus), 200, context.requestId);
   }
 
   const progress = /^\/api\/tasks\/([^/]+)\/progress$/u.exec(url.pathname);
@@ -135,7 +135,7 @@ export async function routeTasksApi(
     const id = decodePathId(task[1]!);
     if (request.method === "GET") return jsonResponse(await services.tasks.get(member.memberId, id), 200, context.requestId);
     if (request.method === "PATCH") {
-      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "notes", "priority", "dueAt"], "TASK_INVALID");
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "notes", "priority", "dueAt", "expectedUpdatedAt"], "TASK_INVALID");
       return jsonResponse(await services.tasks.update(member.memberId, id, input), 200, context.requestId);
     }
     if (request.method === "DELETE") {
