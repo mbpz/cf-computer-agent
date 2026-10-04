@@ -82,6 +82,7 @@
     "frontend/features/environments/authenticated-vm-runtime.ts",
     "frontend/features/environments/connector-session.mjs",
     "frontend/features/environments/deletion-reconciler.ts",
+    "frontend/features/environments/environment-draft.ts",
     "frontend/features/environments/environment-manager.ts",
     "frontend/features/environments/environment-operation-journal.ts",
     "frontend/features/environments/environment-rename-dialog.tsx",
@@ -1729,41 +1730,45 @@
         "frontend/components/ui/select.tsx:5:135",
         "frontend/features/environments/environment-manager.ts:41:3",
         "frontend/features/environments/environment-manager.ts:50:51",
-        "frontend/features/environments/environment-rename-dialog.tsx:44:5",
-        "frontend/features/environments/environment-rename-dialog.tsx:46:7",
-        "frontend/features/environments/environment-rename-dialog.tsx:47:31",
-        "frontend/features/environments/environment-rename-dialog.tsx:48:21",
-        "frontend/features/environments/environment-rename-dialog.tsx:49:37",
-        "frontend/features/environments/environment-rename-dialog.tsx:49:175",
-        "frontend/features/environments/environment-rename-dialog.tsx:52:5",
-        "frontend/features/environments/environments-page.tsx:17:96",
-        "frontend/features/environments/environments-page.tsx:51:26",
-        "frontend/features/environments/environments-page.tsx:55:37",
-        "frontend/features/environments/environments-page.tsx:56:31",
-        "frontend/features/environments/environments-page.tsx:58:7",
-        "frontend/features/environments/environments-page.tsx:62:45",
-        "frontend/features/environments/environments-page.tsx:62:180",
-        "frontend/features/environments/environments-page.tsx:64:25",
-        "frontend/features/environments/environments-page.tsx:72:7",
-        "frontend/features/environments/environments-page.tsx:73:61",
-        "frontend/features/environments/environments-page.tsx:74:61",
-        "frontend/features/environments/environments-page.tsx:74:169",
-        "frontend/features/environments/environments-page.tsx:74:222",
-        "frontend/features/environments/environments-page.tsx:75:61",
-        "frontend/features/environments/environments-page.tsx:76:9",
-        "frontend/features/environments/environments-page.tsx:79:97",
-        "frontend/features/environments/environments-page.tsx:79:286",
-        "frontend/features/environments/environments-page.tsx:79:326",
-        "frontend/features/environments/environments-page.tsx:79:379",
-        "frontend/features/environments/environments-page.tsx:79:451",
-        "frontend/features/environments/environments-page.tsx:81:585",
-        "frontend/features/environments/environments-page.tsx:81:841",
-        "frontend/features/environments/environments-page.tsx:83:89",
-        "frontend/features/environments/environments-page.tsx:83:402",
-        "frontend/features/environments/environments-page.tsx:84:14",
-        "frontend/features/environments/environments-page.tsx:85:5",
-        "frontend/features/environments/environments-page.tsx:85:343",
-        "frontend/features/environments/environments-page.tsx:85:625",
+        "frontend/features/environments/environment-rename-dialog.tsx:45:5",
+        "frontend/features/environments/environment-rename-dialog.tsx:47:7",
+        "frontend/features/environments/environment-rename-dialog.tsx:48:31",
+        "frontend/features/environments/environment-rename-dialog.tsx:49:21",
+        "frontend/features/environments/environment-rename-dialog.tsx:50:37",
+        "frontend/features/environments/environment-rename-dialog.tsx:50:175",
+        "frontend/features/environments/environment-rename-dialog.tsx:53:5",
+        "frontend/features/environments/environments-page.tsx:19:96",
+        "frontend/features/environments/environments-page.tsx:63:5",
+        "frontend/features/environments/environments-page.tsx:84:26",
+        "frontend/features/environments/environments-page.tsx:88:37",
+        "frontend/features/environments/environments-page.tsx:89:31",
+        "frontend/features/environments/environments-page.tsx:91:7",
+        "frontend/features/environments/environments-page.tsx:95:45",
+        "frontend/features/environments/environments-page.tsx:95:180",
+        "frontend/features/environments/environments-page.tsx:97:25",
+        "frontend/features/environments/environments-page.tsx:105:25",
+        "frontend/features/environments/environments-page.tsx:105:147",
+        "frontend/features/environments/environments-page.tsx:106:24",
+        "frontend/features/environments/environments-page.tsx:107:7",
+        "frontend/features/environments/environments-page.tsx:108:61",
+        "frontend/features/environments/environments-page.tsx:109:61",
+        "frontend/features/environments/environments-page.tsx:109:206",
+        "frontend/features/environments/environments-page.tsx:109:259",
+        "frontend/features/environments/environments-page.tsx:110:61",
+        "frontend/features/environments/environments-page.tsx:111:9",
+        "frontend/features/environments/environments-page.tsx:114:97",
+        "frontend/features/environments/environments-page.tsx:114:286",
+        "frontend/features/environments/environments-page.tsx:114:326",
+        "frontend/features/environments/environments-page.tsx:114:379",
+        "frontend/features/environments/environments-page.tsx:114:451",
+        "frontend/features/environments/environments-page.tsx:116:585",
+        "frontend/features/environments/environments-page.tsx:116:841",
+        "frontend/features/environments/environments-page.tsx:118:89",
+        "frontend/features/environments/environments-page.tsx:118:402",
+        "frontend/features/environments/environments-page.tsx:119:14",
+        "frontend/features/environments/environments-page.tsx:120:5",
+        "frontend/features/environments/environments-page.tsx:120:343",
+        "frontend/features/environments/environments-page.tsx:120:625",
         "frontend/lib/use-create-draft.tsx:55:5",
         "frontend/lib/use-create-draft.tsx:56:5",
         "frontend/lib/use-create-draft.tsx:84:19",
@@ -17446,10 +17451,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environment-rename-dialog.tsx:44:5",
+      "id": "frontend/features/environments/environment-rename-dialog.tsx:45:5",
       "path": "frontend/features/environments/environment-rename-dialog.tsx",
       "owner": "EnvironmentRenameDialog",
-      "line": 44,
+      "line": 45,
       "column": 5,
       "kind": "jsx",
       "tag": "Dialog",
@@ -17466,10 +17471,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environment-rename-dialog.tsx:46:7",
+      "id": "frontend/features/environments/environment-rename-dialog.tsx:47:7",
       "path": "frontend/features/environments/environment-rename-dialog.tsx",
       "owner": "EnvironmentRenameDialog",
-      "line": 46,
+      "line": 47,
       "column": 7,
       "kind": "jsx",
       "tag": "form",
@@ -17494,10 +17499,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environment-rename-dialog.tsx:47:31",
+      "id": "frontend/features/environments/environment-rename-dialog.tsx:48:31",
       "path": "frontend/features/environments/environment-rename-dialog.tsx",
       "owner": "EnvironmentRenameDialog",
-      "line": 47,
+      "line": 48,
       "column": 31,
       "kind": "jsx",
       "tag": "Input",
@@ -17530,10 +17535,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environment-rename-dialog.tsx:48:21",
+      "id": "frontend/features/environments/environment-rename-dialog.tsx:49:21",
       "path": "frontend/features/environments/environment-rename-dialog.tsx",
       "owner": "EnvironmentRenameDialog",
-      "line": 48,
+      "line": 49,
       "column": 21,
       "kind": "jsx",
       "tag": "p",
@@ -17567,10 +17572,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environment-rename-dialog.tsx:49:37",
+      "id": "frontend/features/environments/environment-rename-dialog.tsx:50:37",
       "path": "frontend/features/environments/environment-rename-dialog.tsx",
       "owner": "EnvironmentRenameDialog",
-      "line": 49,
+      "line": 50,
       "column": 37,
       "kind": "jsx",
       "tag": "Button",
@@ -17600,10 +17605,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environment-rename-dialog.tsx:49:175",
+      "id": "frontend/features/environments/environment-rename-dialog.tsx:50:175",
       "path": "frontend/features/environments/environment-rename-dialog.tsx",
       "owner": "EnvironmentRenameDialog",
-      "line": 49,
+      "line": 50,
       "column": 175,
       "kind": "jsx",
       "tag": "Button",
@@ -17636,10 +17641,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environment-rename-dialog.tsx:52:5",
+      "id": "frontend/features/environments/environment-rename-dialog.tsx:53:5",
       "path": "frontend/features/environments/environment-rename-dialog.tsx",
       "owner": "EnvironmentRenameDialog",
-      "line": 52,
+      "line": 53,
       "column": 5,
       "kind": "jsx",
       "tag": "ConfirmAction",
@@ -17662,10 +17667,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:17:96",
+      "id": "frontend/features/environments/environments-page.tsx:19:96",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentsPage",
-      "line": 17,
+      "line": 19,
       "column": 96,
       "kind": "jsx",
       "tag": "p",
@@ -17688,10 +17693,30 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:51:26",
+      "id": "frontend/features/environments/environments-page.tsx:63:5",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 51,
+      "line": 63,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "WORKSPACE_LOCATION_CHANGE_EVENT",
+      "arguments": [
+        "WORKSPACE_LOCATION_CHANGE_EVENT",
+        "clearOnLeave"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/features/environments/environments-page.tsx:84:26",
+      "path": "frontend/features/environments/environments-page.tsx",
+      "owner": "EnvironmentView",
+      "line": 84,
       "column": 26,
       "kind": "jsx",
       "tag": "section",
@@ -17714,10 +17739,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:55:37",
+      "id": "frontend/features/environments/environments-page.tsx:88:37",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 55,
+      "line": 88,
       "column": 37,
       "kind": "jsx",
       "tag": "div",
@@ -17743,10 +17768,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:56:31",
+      "id": "frontend/features/environments/environments-page.tsx:89:31",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 56,
+      "line": 89,
       "column": 31,
       "kind": "jsx",
       "tag": "div",
@@ -17772,10 +17797,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:58:7",
+      "id": "frontend/features/environments/environments-page.tsx:91:7",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 58,
+      "line": 91,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -17806,10 +17831,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:62:45",
+      "id": "frontend/features/environments/environments-page.tsx:95:45",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 62,
+      "line": 95,
       "column": 45,
       "kind": "jsx",
       "tag": "Button",
@@ -17847,10 +17872,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:62:180",
+      "id": "frontend/features/environments/environments-page.tsx:95:180",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 62,
+      "line": 95,
       "column": 180,
       "kind": "jsx",
       "tag": "Button",
@@ -17889,10 +17914,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:64:25",
+      "id": "frontend/features/environments/environments-page.tsx:97:25",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 64,
+      "line": 97,
       "column": 25,
       "kind": "jsx",
       "tag": "div",
@@ -17919,20 +17944,115 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:72:7",
+      "id": "frontend/features/environments/environments-page.tsx:105:25",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 72,
+      "line": 105,
+      "column": 25,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "role": "\"alert\"",
+        "data-environment-draft-blocked": "true",
+        "className": "\"mb-3 space-y-2 text-sm\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.closed",
+          "source": "if(state.closed)return <section data-environments-closed role=\"alert\">{t('ENV_ACCOUNT_CLOSED')}</section>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/features/environments/environments-page.tsx:105:147",
+      "path": "frontend/features/environments/environments-page.tsx",
+      "owner": "EnvironmentView",
+      "line": 105,
+      "column": 147,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "onClick": "discardRecord"
+      },
+      "handlers": {
+        "onClick": "discardRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "t('ENV_DRAFT_RECORD_DISCARD')"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.closed",
+          "source": "if(state.closed)return <section data-environments-closed role=\"alert\">{t('ENV_ACCOUNT_CLOSED')}</section>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/features/environments/environments-page.tsx:106:24",
+      "path": "frontend/features/environments/environments-page.tsx",
+      "owner": "EnvironmentView",
+      "line": 106,
+      "column": 24,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\"",
+        "className": "\"mb-3 text-sm\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "recordNotice"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "recordNotice",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.closed",
+          "source": "if(state.closed)return <section data-environments-closed role=\"alert\">{t('ENV_ACCOUNT_CLOSED')}</section>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/features/environments/environments-page.tsx:107:7",
+      "path": "frontend/features/environments/environments-page.tsx",
+      "owner": "EnvironmentView",
+      "line": 107,
       "column": 7,
       "kind": "jsx",
       "tag": "form",
       "attributes": {
         "data-environment-create": "true",
         "className": "\"grid gap-3 sm:grid-cols-2\"",
-        "onSubmit": "event=>{event.preventDefault();if(!alive.current || operationBlocked() || draft.isConfirming() || editRef.current || removeRef.current)return;const input={...draft.current.current};void run(async()=>{const request=manager.create({...input,type:input.type as EnvironmentType});const pending=manager.getSnapshot().pending;if(pending?.kind==='create')submitted.current={operationId:pending.operationId,fields:input};await request;});}"
+        "onSubmit": "event=>{event.preventDefault();if(!alive.current || operationBlocked() || draft.isConfirming() || editRef.current || removeRef.current)return;const input={...draft.current.current};void run(async()=>{const request=manager.create({...input,type:input.type as EnvironmentType});const pending=manager.getSnapshot().pending;if(pending?.kind==='create'){submitted.current={operationId:pending.operationId,fields:{name:input.name,type:input.type as EnvironmentType,taskId:input.taskId}};if(!recordBlocked)persistEnvironmentDraft(scope.origin,scope.memberId,{create:blank,rename:null});}await request;});}"
       },
       "handlers": {
-        "onSubmit": "event=>{event.preventDefault();if(!alive.current || operationBlocked() || draft.isConfirming() || editRef.current || removeRef.current)return;const input={...draft.current.current};void run(async()=>{const request=manager.create({...input,type:input.type as EnvironmentType});const pending=manager.getSnapshot().pending;if(pending?.kind==='create')submitted.current={operationId:pending.operationId,fields:input};await request;});}"
+        "onSubmit": "event=>{event.preventDefault();if(!alive.current || operationBlocked() || draft.isConfirming() || editRef.current || removeRef.current)return;const input={...draft.current.current};void run(async()=>{const request=manager.create({...input,type:input.type as EnvironmentType});const pending=manager.getSnapshot().pending;if(pending?.kind==='create'){submitted.current={operationId:pending.operationId,fields:{name:input.name,type:input.type as EnvironmentType,taskId:input.taskId}};if(!recordBlocked)persistEnvironmentDraft(scope.origin,scope.memberId,{create:blank,rename:null});}await request;});}"
       },
       "spreads": [],
       "labels": [],
@@ -17945,10 +18065,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:73:61",
+      "id": "frontend/features/environments/environments-page.tsx:108:61",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 73,
+      "line": 108,
       "column": 61,
       "kind": "jsx",
       "tag": "Input",
@@ -17980,10 +18100,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:74:61",
+      "id": "frontend/features/environments/environments-page.tsx:109:61",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 74,
+      "line": 109,
       "column": 61,
       "kind": "jsx",
       "tag": "Select",
@@ -17991,10 +18111,10 @@
         "name": "\"type\"",
         "value": "type",
         "disabled": "blocked",
-        "onChange": "event=>draft.edit('type',event.target.value)"
+        "onChange": "event=>draft.edit('type',event.target.value==='temporary'?'temporary':'personal')"
       },
       "handlers": {
-        "onChange": "event=>draft.edit('type',event.target.value)"
+        "onChange": "event=>draft.edit('type',event.target.value==='temporary'?'temporary':'personal')"
       },
       "spreads": [],
       "labels": [],
@@ -18013,11 +18133,11 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:74:169",
+      "id": "frontend/features/environments/environments-page.tsx:109:206",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 74,
-      "column": 169,
+      "line": 109,
+      "column": 206,
       "kind": "jsx",
       "tag": "option",
       "attributes": {
@@ -18050,11 +18170,11 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:74:222",
+      "id": "frontend/features/environments/environments-page.tsx:109:259",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 74,
-      "column": 222,
+      "line": 109,
+      "column": 259,
       "kind": "jsx",
       "tag": "option",
       "attributes": {
@@ -18087,10 +18207,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:75:61",
+      "id": "frontend/features/environments/environments-page.tsx:110:61",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 75,
+      "line": 110,
       "column": 61,
       "kind": "jsx",
       "tag": "Input",
@@ -18121,10 +18241,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:76:9",
+      "id": "frontend/features/environments/environments-page.tsx:111:9",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 76,
+      "line": 111,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -18153,10 +18273,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:79:97",
+      "id": "frontend/features/environments/environments-page.tsx:114:97",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 79,
+      "line": 114,
       "column": 97,
       "kind": "jsx",
       "tag": "Select",
@@ -18180,10 +18300,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:79:286",
+      "id": "frontend/features/environments/environments-page.tsx:114:286",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 79,
+      "line": 114,
       "column": 286,
       "kind": "jsx",
       "tag": "option",
@@ -18212,10 +18332,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:79:326",
+      "id": "frontend/features/environments/environments-page.tsx:114:326",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 79,
+      "line": 114,
       "column": 326,
       "kind": "jsx",
       "tag": "option",
@@ -18244,10 +18364,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:79:379",
+      "id": "frontend/features/environments/environments-page.tsx:114:379",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 79,
+      "line": 114,
       "column": 379,
       "kind": "jsx",
       "tag": "option",
@@ -18276,10 +18396,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:79:451",
+      "id": "frontend/features/environments/environments-page.tsx:114:451",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 79,
+      "line": 114,
       "column": 451,
       "kind": "jsx",
       "tag": "Button",
@@ -18304,10 +18424,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:81:585",
+      "id": "frontend/features/environments/environments-page.tsx:116:585",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 81,
+      "line": 116,
       "column": 585,
       "kind": "jsx",
       "tag": "Button",
@@ -18355,10 +18475,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:81:841",
+      "id": "frontend/features/environments/environments-page.tsx:116:841",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 81,
+      "line": 116,
       "column": 841,
       "kind": "jsx",
       "tag": "Button",
@@ -18406,10 +18526,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:83:89",
+      "id": "frontend/features/environments/environments-page.tsx:118:89",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 83,
+      "line": 118,
       "column": 89,
       "kind": "jsx",
       "tag": "Button",
@@ -18434,10 +18554,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:83:402",
+      "id": "frontend/features/environments/environments-page.tsx:118:402",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 83,
+      "line": 118,
       "column": 402,
       "kind": "jsx",
       "tag": "Button",
@@ -18462,10 +18582,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:84:14",
+      "id": "frontend/features/environments/environments-page.tsx:119:14",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 84,
+      "line": 119,
       "column": 14,
       "kind": "jsx",
       "tag": "EnvironmentRenameDialog",
@@ -18474,10 +18594,13 @@
         "item": "edit",
         "manager": "manager",
         "locale": "locale",
-        "onClose": "()=>{if(editRef.current===edit){editRef.current=null;setEdit(null);}}"
+        "initialName": "renameSeed?.environmentId===edit.id?renameSeed.name:undefined",
+        "onName": "reportRename",
+        "onClose": "()=>{if(editRef.current===edit){editRef.current=null;setEdit(null);setRenameSeed(null);if(!recordBlocked)persistEnvironmentDraft(scope.origin,scope.memberId,{create:environmentCreateIsBlank(asCreate())?blank:asCreate(),rename:null});}}"
       },
       "handlers": {
-        "onClose": "()=>{if(editRef.current===edit){editRef.current=null;setEdit(null);}}"
+        "onName": "reportRename",
+        "onClose": "()=>{if(editRef.current===edit){editRef.current=null;setEdit(null);setRenameSeed(null);if(!recordBlocked)persistEnvironmentDraft(scope.origin,scope.memberId,{create:environmentCreateIsBlank(asCreate())?blank:asCreate(),rename:null});}}"
       },
       "spreads": [],
       "labels": [],
@@ -18496,10 +18619,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:85:5",
+      "id": "frontend/features/environments/environments-page.tsx:120:5",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 85,
+      "line": 120,
       "column": 5,
       "kind": "jsx",
       "tag": "Dialog",
@@ -18521,10 +18644,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:85:343",
+      "id": "frontend/features/environments/environments-page.tsx:120:343",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 85,
+      "line": 120,
       "column": 343,
       "kind": "jsx",
       "tag": "Button",
@@ -18558,10 +18681,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:85:625",
+      "id": "frontend/features/environments/environments-page.tsx:120:625",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 85,
+      "line": 120,
       "column": 625,
       "kind": "jsx",
       "tag": "Button",

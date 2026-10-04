@@ -9,18 +9,19 @@ import { useCreateDraft } from '../../lib/use-create-draft';
 import type { EnvironmentManager } from './environment-manager';
 
 /** The mounted editor owns the original target/version, never a refreshed row. */
-export function EnvironmentRenameDialog({item,manager,locale,onClose}:{item:EnvironmentMetadata;manager:EnvironmentManager;locale:LocaleRuntime;onClose:()=>void}) {
-  const initial=useRef({name:item.name}),alive=useRef(true),sending=useRef(false);
+export function EnvironmentRenameDialog({item,manager,locale,onClose,initialName,onName}:{item:EnvironmentMetadata;manager:EnvironmentManager;locale:LocaleRuntime;onClose:()=>void;initialName?:string;onName?:(name:string)=>void}) {
+  const baseline=useRef({name:item.name}),alive=useRef(true),sending=useRef(false);
   const discardRef=useRef<{name:string}|null>(null),[discard,setDiscard]=useState<{name:string}|null>(null);
   const [invalid,setInvalid]=useState(false);
   const t=(key:string)=>frontendText(locale,key);
   const operationBlocked=()=>{const state=manager.getSnapshot();return state.closed || state.writing || state.recoveryBlocked || !!state.pending;};
-  const draft=useCreateDraft(initial.current,initial.current,()=>operationBlocked() || sending.current || !!discardRef.current,locale,()=>false);
+  const draft=useCreateDraft({name:initialName ?? item.name},baseline.current,()=>operationBlocked() || sending.current || !!discardRef.current,locale,()=>false);
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
+  useEffect(()=>{onName?.(draft.fields.name);},[draft.fields.name,onName]);
   const cancelDiscard=()=>{discardRef.current=null;setDiscard(null);};
   const cancel=()=>{
     if(!alive.current || operationBlocked() || sending.current || discardRef.current || draft.isConfirming())return;
-    if(draft.current.current.name === initial.current.name){onClose();return;}
+    if(draft.current.current.name === baseline.current.name){onClose();return;}
     const snapshot={...draft.current.current};discardRef.current=snapshot;setDiscard(snapshot);
   };
   const confirmDiscard=()=>{

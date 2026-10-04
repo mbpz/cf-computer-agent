@@ -51,6 +51,9 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ENV_PAGE: "Page",
     ENV_SAVE: "Save",
     ENV_CANCEL: "Cancel",
+    ENV_DRAFT_NOT_RECORDED: "This tab could not record the unsent environment, so a refresh will not keep it.",
+    ENV_DRAFT_RECORD_BLOCKED: "The saved environment draft can't be read. Discard the record before relying on it after a refresh.",
+    ENV_DRAFT_RECORD_DISCARD: "Discard record",
     ENV_DELETE_CONFIRM: "Delete this environment record? Its current network will be closed before the request and will not automatically recover if deletion fails. Local VM storage is not integrated; this action does not certify physical erasure.",
 
     PLANNING_WRITE_UNKNOWN: "A previous write needs review. New writes are blocked. Read current data only; the original request will not be resent.",
@@ -1468,6 +1471,9 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ENV_PAGE: "页码",
     ENV_SAVE: "保存",
     ENV_CANCEL: "取消",
+    ENV_DRAFT_NOT_RECORDED: "当前标签页无法记录这份未提交环境，刷新后不会保留。",
+    ENV_DRAFT_RECORD_BLOCKED: "已保存的环境草稿无法读取。丢弃记录后，新的内容才能在刷新后保留。",
+    ENV_DRAFT_RECORD_DISCARD: "丢弃记录",
     ENV_DELETE_CONFIRM: "确认删除此环境记录？请求前会关闭当前网络；删除失败也不会自动恢复。本地 VM 存储尚未接入，此操作不代表物理数据已清除。",
 
     PLANNING_WRITE_UNKNOWN: "上次写入需要核对，已阻止新写入。请仅读取当前数据，不会重新发送原请求。",
