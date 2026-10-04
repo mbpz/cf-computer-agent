@@ -21,14 +21,19 @@ export async function loadMySubmissionsPage({ page, pageSize, status, requester 
 function normalizeSubmission(value: unknown): MySubmissionItem {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("SUBMISSION_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
-  if (typeof record.id !== "string" || !record.id) throw new Error("SUBMISSION_RESPONSE_INVALID");
+  const status = record.status;
+  if (typeof record.id !== "string" || !record.id || typeof record.title !== "string" || !isSubmissionStatus(status)) throw new Error("SUBMISSION_RESPONSE_INVALID");
   const review = normalizeReview(record.review);
   return {
     id: record.id,
-    title: typeof record.title === "string" ? record.title : undefined,
-    status: typeof record.status === "string" ? record.status : undefined,
+    title: record.title,
+    status,
     ...(review ? { review } : {}),
   };
+}
+
+function isSubmissionStatus(value: unknown): value is "draft" | "review_pending" | "published" | "rejected" | "revision_requested" {
+  return value === "draft" || value === "review_pending" || value === "published" || value === "rejected" || value === "revision_requested";
 }
 
 function normalizeReview(value: unknown): MySubmissionReview | null {
