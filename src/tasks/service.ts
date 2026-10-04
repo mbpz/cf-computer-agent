@@ -96,15 +96,32 @@ export class TasksService {
   async updateSubtask(memberId: string, taskId: string, subtaskId: string, input: TaskSubtaskUpdateInput): Promise<TaskSubtask> {
     await this.requireOwned(memberId, taskId);
     if (!validStructureId(subtaskId)) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+    const current = await this.repository.findSubtask(memberId, taskId, subtaskId);
+    if (!current) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
     const normalized = normalizeSubtaskUpdate(input);
-    const updated = await this.repository.updateSubtask(memberId, taskId, subtaskId, { ...normalized, updatedAt: this.now().getTime() });
-    if (!updated) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+    const expected = parseExpectedVersion(input.expectedUpdatedAt);
+    if (current.title === normalized.title && current.status === normalized.status && current.position === normalized.position) return current;
+    if (expected !== undefined && Date.parse(current.updatedAt) !== expected) throw versionConflict();
+    const updatedAt = Math.max(this.now().getTime(), Date.parse(current.updatedAt) + 1);
+    const updated = await this.repository.updateSubtask(memberId, taskId, subtaskId, { ...normalized, updatedAt }, expected);
+    if (!updated) {
+      if (expected !== undefined && await this.repository.findSubtask(memberId, taskId, subtaskId)) throw versionConflict();
+      throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+    }
     return updated;
   }
 
-  async deleteSubtask(memberId: string, taskId: string, subtaskId: string): Promise<void> {
+  async deleteSubtask(memberId: string, taskId: string, subtaskId: string, expectedUpdatedAt?: unknown): Promise<void> {
     await this.requireOwned(memberId, taskId);
-    if (!await this.repository.deleteSubtask(memberId, taskId, subtaskId)) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+    if (!validStructureId(subtaskId)) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+    const current = await this.repository.findSubtask(memberId, taskId, subtaskId);
+    if (!current) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+    const expected = parseExpectedVersion(expectedUpdatedAt);
+    if (expected !== undefined && Date.parse(current.updatedAt) !== expected) throw versionConflict();
+    if (!await this.repository.deleteSubtask(memberId, taskId, subtaskId, expected)) {
+      if (expected !== undefined && await this.repository.findSubtask(memberId, taskId, subtaskId)) throw versionConflict();
+      throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+    }
   }
 
   async listDependencies(memberId: string, taskId: string): Promise<TaskDependency[]> {
@@ -112,20 +129,26 @@ export class TasksService {
     return this.repository.listDependencies(memberId, taskId);
   }
 
-  async addDependency(memberId: string, taskId: string, dependsOnTaskId: unknown): Promise<{ dependency: TaskDependency; created: boolean }> {
-    await this.requireOwned(memberId, taskId);
+  async addDependency(memberId: string, taskId: string, dependsOnTaskId: unknown, expectedUpdatedAt?: unknown): Promise<{ dependency: TaskDependency; created: boolean }> {
+    const task = await this.requireOwned(memberId, taskId);
     if (typeof dependsOnTaskId !== "string" || !validStructureId(dependsOnTaskId) || dependsOnTaskId === taskId) {
       throw new AppError("TASK_DEPENDENCY_INVALID", "Task dependency is invalid", 400);
     }
     await this.requireOwned(memberId, dependsOnTaskId);
+    const existing = (await this.repository.listDependencies(memberId, taskId)).find((item) => item.dependsOnTaskId === dependsOnTaskId);
+    if (existing) return { dependency: existing, created: false };
+    if (expectedUpdatedAt !== undefined) await this.claimVersion(memberId, task, parseExpectedVersion(expectedUpdatedAt));
     const created = await this.repository.insertDependency({ memberId, taskId, dependsOnTaskId, createdAt: this.now().getTime() });
     const dependency = (await this.repository.listDependencies(memberId, taskId)).find((item) => item.dependsOnTaskId === dependsOnTaskId);
     if (!dependency) throw new AppError("TASK_NOT_FOUND", "Task dependency not found", 404, true);
     return { dependency, created };
   }
 
-  async removeDependency(memberId: string, taskId: string, dependsOnTaskId: string): Promise<void> {
-    await this.requireOwned(memberId, taskId);
+  async removeDependency(memberId: string, taskId: string, dependsOnTaskId: string, expectedUpdatedAt?: unknown): Promise<void> {
+    const task = await this.requireOwned(memberId, taskId);
+    const existing = (await this.repository.listDependencies(memberId, taskId)).find((item) => item.dependsOnTaskId === dependsOnTaskId);
+    if (!existing) throw new AppError("TASK_DEPENDENCY_NOT_FOUND", "Task dependency not found", 404);
+    if (expectedUpdatedAt !== undefined) await this.claimVersion(memberId, task, parseExpectedVersion(expectedUpdatedAt));
     if (!await this.repository.deleteDependency(memberId, taskId, dependsOnTaskId)) throw new AppError("TASK_DEPENDENCY_NOT_FOUND", "Task dependency not found", 404);
   }
 

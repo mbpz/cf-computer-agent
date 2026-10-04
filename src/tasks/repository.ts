@@ -33,8 +33,8 @@ export interface TasksRepositoryPort {
   insertSubtask(input: { id: string; memberId: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; createdAt: number; updatedAt: number }): Promise<boolean>;
   findSubtask(memberId: string, taskId: string, id: string): Promise<TaskSubtask | null>;
   listSubtasks(memberId: string, taskId: string): Promise<TaskSubtask[]>;
-  updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }): Promise<TaskSubtask | null>;
-  deleteSubtask(memberId: string, taskId: string, id: string): Promise<boolean>;
+  updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }, expectedUpdatedAt?: number): Promise<TaskSubtask | null>;
+  deleteSubtask(memberId: string, taskId: string, id: string, expectedUpdatedAt?: number): Promise<boolean>;
   insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }): Promise<boolean>;
   listDependencies(memberId: string, taskId: string): Promise<TaskDependency[]>;
   deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string): Promise<boolean>;
@@ -297,19 +297,21 @@ export class TasksRepository implements TasksRepositoryPort {
     return rows.results.map(mapSubtaskRow);
   }
 
-  async updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }): Promise<TaskSubtask | null> {
+  async updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }, expectedUpdatedAt?: number): Promise<TaskSubtask | null> {
+    const condition = expectedUpdatedAt === undefined ? "" : " AND updated_at = ?";
     const result = await this.db.prepare(
       `UPDATE task_subtasks SET title = ?, status = ?, position = ?, updated_at = ?
-       WHERE member_id = ? AND task_id = ? AND id = ?`,
-    ).bind(input.title, input.status, input.position, input.updatedAt, memberId, taskId, id).run();
+       WHERE member_id = ? AND task_id = ? AND id = ?${condition}`,
+    ).bind(input.title, input.status, input.position, input.updatedAt, memberId, taskId, id, ...(expectedUpdatedAt === undefined ? [] : [expectedUpdatedAt])).run();
     if (result.meta.changes !== 1) return null;
     return this.findSubtask(memberId, taskId, id);
   }
 
-  async deleteSubtask(memberId: string, taskId: string, id: string): Promise<boolean> {
+  async deleteSubtask(memberId: string, taskId: string, id: string, expectedUpdatedAt?: number): Promise<boolean> {
+    const condition = expectedUpdatedAt === undefined ? "" : " AND updated_at = ?";
     const result = await this.db.prepare(
-      "DELETE FROM task_subtasks WHERE member_id = ? AND task_id = ? AND id = ?",
-    ).bind(memberId, taskId, id).run();
+      `DELETE FROM task_subtasks WHERE member_id = ? AND task_id = ? AND id = ?${condition}`,
+    ).bind(memberId, taskId, id, ...(expectedUpdatedAt === undefined ? [] : [expectedUpdatedAt])).run();
     return result.meta.changes === 1;
   }
 

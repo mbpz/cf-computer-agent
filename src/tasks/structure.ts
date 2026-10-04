@@ -25,6 +25,7 @@ export interface TaskSubtaskUpdateInput {
   title?: unknown;
   status?: unknown;
   position?: unknown;
+  expectedUpdatedAt?: unknown;
 }
 
 export interface TaskDependency {

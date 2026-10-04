@@ -10,6 +10,38 @@ import type { NotificationEventInput } from "../../src/notifications/types";
 const NOW = new Date("2026-08-26T00:00:00.000Z");
 
 describe("TasksService", () => {
+  it("rejects a stale subtask edit or dependency change and still accepts an identical replay", async () => {
+    const repository = new FakeTasksRepository();
+    const service = createService(repository);
+    await service.create("member-a", { id: "task-1", title: "Alpha" });
+    await service.create("member-a", { id: "task-2", title: "Beta" });
+    const created = await service.createSubtask("member-a", "task-1", { id: "sub-1", title: "First", position: 0 });
+    const read = created.subtask.updatedAt;
+    await service.updateSubtask("member-a", "task-1", "sub-1", { title: "Tab one", status: "todo", position: 0, expectedUpdatedAt: read });
+    await expect(service.updateSubtask("member-a", "task-1", "sub-1", { title: "Tab two", status: "todo", position: 0, expectedUpdatedAt: read }))
+      .rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    expect((await service.listSubtasks("member-a", "task-1")).map((item) => item.title)).toEqual(["Tab one"]);
+    await expect(service.updateSubtask("member-a", "task-1", "sub-1", { title: "Tab one", status: "todo", position: 0, expectedUpdatedAt: read }))
+      .resolves.toMatchObject({ title: "Tab one" });
+    await expect(service.updateSubtask("member-a", "task-1", "sub-1", { title: "Bad", status: "todo", position: 0, expectedUpdatedAt: "yesterday" }))
+      .rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
+    await expect(service.deleteSubtask("member-a", "task-1", "sub-1", read)).rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    const currentSubtask = (await service.listSubtasks("member-a", "task-1"))[0]!.updatedAt;
+    await service.deleteSubtask("member-a", "task-1", "sub-1", currentSubtask);
+    await expect(service.deleteSubtask("member-a", "task-1", "sub-1", currentSubtask)).rejects.toMatchObject({ code: "TASK_NOT_FOUND", status: 404 });
+
+    const parent = (await service.get("member-a", "task-1")).task.updatedAt;
+    await expect(service.addDependency("member-a", "task-1", "task-2", parent)).resolves.toMatchObject({ created: true });
+    await expect(service.addDependency("member-a", "task-1", "task-2", parent)).resolves.toMatchObject({ created: false });
+    await service.create("member-a", { id: "task-3", title: "Gamma" });
+    await expect(service.addDependency("member-a", "task-1", "task-3", parent)).rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    await expect(service.removeDependency("member-a", "task-1", "task-2", parent)).rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    const current = (await service.get("member-a", "task-1")).task.updatedAt;
+    await service.removeDependency("member-a", "task-1", "task-2", current);
+    await expect(service.removeDependency("member-a", "task-1", "task-2", current)).rejects.toMatchObject({ code: "TASK_DEPENDENCY_NOT_FOUND", status: 404 });
+    expect(await service.listDependencies("member-a", "task-1")).toEqual([]);
+  });
+
   it("creates member-owned subtasks idempotently", async () => {
     const repository = new FakeTasksRepository();
     const service = createService(repository);
@@ -426,13 +458,17 @@ class FakeTasksRepository implements TasksRepositoryPort {
     return item && item.memberId === memberId && item.taskId === taskId ? item : null;
   }
   async listSubtasks(memberId: string, taskId: string) { return [...this.subtasks.values()].filter((item) => item.memberId === memberId && item.taskId === taskId); }
-  async updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }) {
+  async updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }, expectedUpdatedAt?: number) {
     const item = await this.findSubtask(memberId, taskId, id);
-    if (!item) return null;
+    if (!item || (expectedUpdatedAt !== undefined && Date.parse(item.updatedAt) !== expectedUpdatedAt)) return null;
     Object.assign(item, { title: input.title, status: input.status, position: input.position, updatedAt: new Date(input.updatedAt).toISOString() });
     return item;
   }
-  async deleteSubtask(memberId: string, taskId: string, id: string) { return (await this.findSubtask(memberId, taskId, id)) !== null && this.subtasks.delete(id); }
+  async deleteSubtask(memberId: string, taskId: string, id: string, expectedUpdatedAt?: number) {
+    const item = await this.findSubtask(memberId, taskId, id);
+    if (!item || (expectedUpdatedAt !== undefined && Date.parse(item.updatedAt) !== expectedUpdatedAt)) return false;
+    return this.subtasks.delete(id);
+  }
   async insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }) {
     const key = `${input.taskId}:${input.dependsOnTaskId}`;
     if (this.dependencies.has(key)) return false;

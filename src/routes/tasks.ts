@@ -92,11 +92,12 @@ export async function routeTasksApi(
     const subtaskId = decodePathId(subtask[2]!);
     requireNoQuery(url);
     if (request.method === "PATCH") {
-      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "status", "position"], "TASK_INVALID");
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "status", "position", "expectedUpdatedAt"], "TASK_INVALID");
       return jsonResponse(await services.tasks.updateSubtask(member.memberId, taskId, subtaskId, input), 200, context.requestId);
     }
     if (request.method === "DELETE") {
-      await services.tasks.deleteSubtask(member.memberId, taskId, subtaskId);
+      const input = await optionalJsonBody(request, ["expectedUpdatedAt"]);
+      await services.tasks.deleteSubtask(member.memberId, taskId, subtaskId, input.expectedUpdatedAt);
       return noContent(context.requestId);
     }
     return methodNotAllowed("DELETE, PATCH", context);
@@ -108,8 +109,8 @@ export async function routeTasksApi(
     requireNoQuery(url);
     if (request.method === "GET") return jsonResponse(await services.tasks.listDependencies(member.memberId, taskId), 200, context.requestId);
     if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["dependsOnTaskId"], "TASK_INVALID");
-    const result = await services.tasks.addDependency(member.memberId, taskId, input.dependsOnTaskId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["dependsOnTaskId", "expectedUpdatedAt"], "TASK_INVALID");
+    const result = await services.tasks.addDependency(member.memberId, taskId, input.dependsOnTaskId, input.expectedUpdatedAt);
     return jsonResponse(result, result.created ? 201 : 200, context.requestId);
   }
 
@@ -117,7 +118,8 @@ export async function routeTasksApi(
   if (dependency) {
     requireNoQuery(url);
     if (request.method !== "DELETE") return methodNotAllowed("DELETE", context);
-    await services.tasks.removeDependency(member.memberId, decodePathId(dependency[1]!), decodePathId(dependency[2]!));
+    const input = await optionalJsonBody(request, ["expectedUpdatedAt"]);
+    await services.tasks.removeDependency(member.memberId, decodePathId(dependency[1]!), decodePathId(dependency[2]!), input.expectedUpdatedAt);
     return noContent(context.requestId);
   }
 

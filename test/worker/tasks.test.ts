@@ -300,6 +300,37 @@ describe("tasks HTTP contract", () => {
     await expect((await api("/api/tasks/task-1", sessionA)).json()).resolves.toMatchObject({ links: [{ id: linkId }] });
   });
 
+  it("rejects stale subtask and dependency writes over HTTP while identical re-sends still succeed", async () => {
+    const created = await (await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-struct", title: "Alpha" }) })).json() as { task: { updatedAt: string } };
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-other", title: "Beta" }) });
+    const sub = await (await api("/api/tasks/task-struct/subtasks", sessionA, { method: "POST", body: JSON.stringify({ id: "sub-1", title: "First", status: "todo", position: 0 }) })).json() as { subtask: { updatedAt: string } };
+    const read = sub.subtask.updatedAt;
+    expect((await api("/api/tasks/task-struct/subtasks/sub-1", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Tab one", status: "todo", position: 0, expectedUpdatedAt: read }) })).status).toBe(200);
+    const stale = await api("/api/tasks/task-struct/subtasks/sub-1", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Tab two", status: "todo", position: 0, expectedUpdatedAt: read }) });
+    expect(stale.status).toBe(409);
+    await expect(stale.json()).resolves.toMatchObject({ error: { code: "TASK_VERSION_CONFLICT" } });
+    expect((await api("/api/tasks/task-struct/subtasks/sub-1", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Tab one", status: "todo", position: 0, expectedUpdatedAt: read }) })).status).toBe(200);
+    const staleDelete = await api("/api/tasks/task-struct/subtasks/sub-1", sessionA, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt: read }) });
+    expect(staleDelete.status).toBe(409);
+    const listed = await (await api("/api/tasks/task-struct/subtasks", sessionA)).json() as Array<{ title: string; updatedAt: string }>;
+    expect(listed.map((item) => item.title)).toEqual(["Tab one"]);
+    expect((await api("/api/tasks/task-struct/subtasks/sub-1", sessionA, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt: listed[0]!.updatedAt }) })).status).toBe(204);
+    expect((await api("/api/tasks/task-struct/subtasks/sub-1", sessionA, { method: "DELETE" })).status).toBe(404);
+
+    const parent = created.task.updatedAt;
+    const linked = await api("/api/tasks/task-struct/dependencies", sessionA, { method: "POST", body: JSON.stringify({ dependsOnTaskId: "task-other", expectedUpdatedAt: parent }) });
+    expect(linked.status).toBe(201);
+    expect((await api("/api/tasks/task-struct/dependencies", sessionA, { method: "POST", body: JSON.stringify({ dependsOnTaskId: "task-other", expectedUpdatedAt: parent }) })).status).toBe(200);
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-third", title: "Gamma" }) });
+    const staleDependency = await api("/api/tasks/task-struct/dependencies", sessionA, { method: "POST", body: JSON.stringify({ dependsOnTaskId: "task-third", expectedUpdatedAt: parent }) });
+    expect(staleDependency.status).toBe(409);
+    expect((await api("/api/tasks/task-struct/dependencies/task-other", sessionA, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt: parent }) })).status).toBe(409);
+    const current = ((await (await api("/api/tasks/task-struct", sessionA)).json()) as { task: { updatedAt: string } }).task.updatedAt;
+    expect((await api("/api/tasks/task-struct/dependencies/task-other", sessionA, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt: current }) })).status).toBe(204);
+    expect((await api("/api/tasks/task-struct/dependencies/task-other", sessionA, { method: "DELETE" })).status).toBe(404);
+    await expect((await api("/api/tasks/task-struct/dependencies", sessionA)).json()).resolves.toEqual([]);
+  });
+
   it("rejects stale progress, tag, and link writes over HTTP while identical re-sends still succeed", async () => {
     const created = await (await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-side", title: "Alpha" }) })).json() as { task: { updatedAt: string } };
     const read = created.task.updatedAt;
