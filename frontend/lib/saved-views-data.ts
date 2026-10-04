@@ -17,8 +17,9 @@ export interface SavedViewItem {
 }
 
 export async function loadSavedViews(requester: Fetcher = fetch): Promise<SavedViewItem[]> {
-  const data = await apiFetch<{ items?: unknown[] }>("/api/saved-views?limit=50", { requester });
-  return Array.isArray(data.items) ? data.items.map(normalizeSavedView).filter((item): item is SavedViewItem => item !== null) : [];
+  const data = await apiFetch<unknown>("/api/saved-views?limit=50", { requester });
+  if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray((data as { items?: unknown }).items)) throw new Error("SAVED_VIEW_INVALID");
+  return (data as { items: unknown[] }).items.map(normalizeSavedView).filter((item): item is SavedViewItem => item !== null);
 }
 
 export async function createSavedView(name: string, filters: Partial<SavedViewFilters>, requester: Fetcher = fetch): Promise<SavedViewItem> {
