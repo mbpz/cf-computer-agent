@@ -52,12 +52,13 @@ function normalizeItem(value: unknown): KnowledgeListItem {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("KNOWLEDGE_RESPONSE_INVALID");
   const item = value as Record<string, unknown>;
   if (typeof item.id !== "string" || item.id.length === 0) throw new Error("KNOWLEDGE_RESPONSE_INVALID");
+  if (typeof item.title !== "string" || typeof item.publishedAt !== "string") throw new Error("KNOWLEDGE_RESPONSE_INVALID");
   const rawTags = Array.isArray(item.tags) ? item.tags : item.tagIds;
   return {
     id: item.id,
-    title: typeof item.title === "string" ? item.title : undefined,
+    title: item.title,
     summary: typeof item.summary === "string" ? item.summary : undefined,
-    publishedAt: typeof item.publishedAt === "string" ? item.publishedAt : undefined,
+    publishedAt: item.publishedAt,
     tags: Array.isArray(rawTags) ? rawTags.filter((tag): tag is string => typeof tag === "string") : [],
   };
 }

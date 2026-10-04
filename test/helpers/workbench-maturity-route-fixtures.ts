@@ -182,7 +182,7 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (path === "/api/submissions") return probeResponse(state, { submission: { id: "submission-created-route-audit" }, similarCandidates: [] }, { submission: { id: "submission-created-route-audit" }, similarCandidates: [] });
       return null;
     case "knowledge":
-      if (pathname(path) === "/api/knowledge") return probeResponse(state, numbered([]), numbered([{ id: "ready-knowledge", title: "READY::knowledge", tags: [] }]));
+      if (pathname(path) === "/api/knowledge") return probeResponse(state, numbered([]), numbered([{ id: "ready-knowledge", title: "READY::knowledge", publishedAt: "2026-10-04", tags: [] }]));
       return null;
     case "knowledge-reader":
       if (path === "/api/knowledge/knowledge-route-audit") return probeResponse(state, {}, { knowledge: { currentRevision: knowledgeRevision() } });

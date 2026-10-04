@@ -8,10 +8,10 @@ describe("knowledge data pagination", () => {
       expect(String(input)).toBe("/api/knowledge?page=2&pageSize=20&spaceId=space-a&kind=markdown");
       expect(init?.credentials).toBe("same-origin");
       expect(init?.signal).toBeInstanceOf(AbortSignal);
-      return Response.json({ items: [{ id: "k1", title: "Guide", tags: ["cf", 1] }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } });
+      return Response.json({ items: [{ id: "k1", title: "Guide", publishedAt: "2026-08-25", tags: ["cf", 1] }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } });
     });
     await expect(loadKnowledgePage({ page: 2, pageSize: 20, spaceId: "space-a", kind: "markdown", requester, signal: new AbortController().signal })).resolves.toEqual({
-      items: [{ id: "k1", title: "Guide", tags: ["cf"] }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 },
+      items: [{ id: "k1", title: "Guide", publishedAt: "2026-08-25", tags: ["cf"] }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 },
     });
   });
 
