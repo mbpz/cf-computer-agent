@@ -7,6 +7,8 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 
 import { loadPlanningIntent, savePlanningIntent, acknowledgePlanningIntent, clearPlanningIntent, type StoredPlanningIntent, type PlanningCreateIntent } from "../lib/planning-create-intent";
+import { discardBlockedPlanningDraft, loadPlanningDraft, persistPlanningDraft } from "../lib/planning-draft";
+import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../lib/workspace-location";
 export interface PlanningCreateCallbacks {
   createMemberId?: string;
   onCreate?: (input: PlanningCreateIntent) => Promise<unknown>;
@@ -21,15 +23,28 @@ export function PlanningCreateForm({ locale, kind, createMemberId, pending = fal
   locale: LocaleRuntime; kind: "GOALS" | "PROJECTS"; pending?: boolean; isSubmitBlocked?: () => boolean;
 }) {
   const [stored] = useState<StoredPlanningIntent>(() => createMemberId ? loadPlanningIntent(createMemberId, kind) : { kind: "empty" });
+  const [composer] = useState(() => createMemberId && stored.kind === "empty" ? loadPlanningDraft(createMemberId, kind) : { kind: "empty" as const });
+  const [recordBlocked, setRecordBlocked] = useState(composer.kind === "blocked");
+  const [recordNotice, setRecordNotice] = useState<string>();
   const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [error, setError] = useState(false);
   const intentRef = useRef<PlanningCreateIntent | null>(stored.kind === "ready" ? stored.intent : null);
   const phaseRef = useRef<Phase>(initialPhase);
   const draft = useCreateDraft<{ title: string; description: string }>(
-    { title: stored.kind === "ready" ? stored.intent.title : "", description: stored.kind === "ready" ? stored.intent.description ?? "" : "" },
+    composer.kind === "ready" ? composer.draft : { title: stored.kind === "ready" ? stored.intent.title : "", description: stored.kind === "ready" ? stored.intent.description ?? "" : "" },
     { title: "", description: "" },
     () => phaseRef.current !== "editing", locale, () => pending || !!isSubmitBlocked?.());
+  useEffect(() => {
+    if (!createMemberId || recordBlocked || phase !== "editing") return;
+    const saved = persistPlanningDraft(createMemberId, kind, draft.fields);
+    setRecordNotice(saved ? undefined : frontendText(locale, "PLANNING_DRAFT_NOT_RECORDED"));
+  }, [draft.fields.title, draft.fields.description, phase, recordBlocked, createMemberId, kind, locale]);
+  useEffect(() => {
+    const clearOnLeave = () => { if (createMemberId && !recordBlocked && phaseRef.current === "editing") persistPlanningDraft(createMemberId, kind, { title: "", description: "" }); };
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+    return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+  }, [createMemberId, kind, recordBlocked]);
   const { title, description } = draft.fields;
   const setTitle = (value: string) => draft.set("title", value);
   const setDescription = (value: string) => draft.set("description", value);
@@ -80,6 +95,7 @@ export function PlanningCreateForm({ locale, kind, createMemberId, pending = fal
     const intent = intentRef.current;
     if (!intent) return;
     if (createMemberId && !savePlanningIntent(createMemberId, kind, intent)) { transition("storage-blocked"); return; }
+    if (createMemberId) persistPlanningDraft(createMemberId, kind, { title: "", description: "" });
     const current = generation.current;
     transition("writing"); setError(false);
     try {
@@ -97,7 +113,10 @@ export function PlanningCreateForm({ locale, kind, createMemberId, pending = fal
     }
   };
   const locked = draft.confirming || pending || phase !== "editing";
+  const discardRecord = () => { if (!createMemberId || !recordBlocked || !discardBlockedPlanningDraft(createMemberId, kind)) return; setRecordBlocked(false); setRecordNotice(undefined); };
   return <div className="space-y-3" aria-busy={phase === "writing" || phase === "reading"}>
+    {recordBlocked && <div role="alert" data-planning-draft-blocked className="space-y-2 text-sm"><p>{frontendText(locale, "PLANNING_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardRecord}>{frontendText(locale, "PLANNING_DRAFT_RECORD_DISCARD")}</Button></div>}
+    {recordNotice && <p role="alert">{recordNotice}</p>}
     <Input aria-label={frontendText(locale, `${kind}_TITLE_FIELD`)} value={title} disabled={locked} onChange={(event) => draft.edit("title", event.currentTarget.value)} placeholder={frontendText(locale, `${kind}_TITLE_PLACEHOLDER`)} />
     <Textarea aria-label={frontendText(locale, `${kind}_DESCRIPTION_FIELD`)} value={description} disabled={locked} onChange={(event) => draft.edit("description", event.currentTarget.value)} placeholder={frontendText(locale, `${kind}_DESCRIPTION_PLACEHOLDER`)} rows={3} />
     {phase === "storage-blocked" ? <><p role="alert">{frontendText(locale, "PLANNING_CREATE_STORAGE_BLOCKED")}</p><Button type="button" data-create-storage-retry disabled={pending} onClick={reloadStored}>{frontendText(locale, "PLANNING_CREATE_STORAGE_RETRY")}</Button></>

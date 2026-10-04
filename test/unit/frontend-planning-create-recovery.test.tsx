@@ -14,6 +14,8 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
   let respond: (body: Record<string, unknown>) => Response | Promise<Response>;
   let readFailure = false;
   let readStatus = 503;
+  let seedDraft: string | undefined;
+  const draftKey = `memory-garden:planning-draft:v1:contributor-route-auditor:${kind.toUpperCase()}`;
   const singular = kind === "goals" ? "goal" : "project";
   const entity = (body: Record<string, unknown>) => ({ ...body, status: "active", progress: 0, targetAt: null, createdAt: "2026-09-26T00:00:00.000Z", updatedAt: "2026-09-26T00:00:00.000Z" });
   const receipt = (body: Record<string, unknown>) => Response.json({ [singular]: entity(body), created: true });
@@ -31,7 +33,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise((done) => setTimeout(done, 0)); }); }
   async function mount() {
     bodies = []; reads = 0; readFailure = false; readStatus = 503; respond = receipt;
-    app = await mountAuthenticatedApp({ url: `https://app.test/${kind}`, role: "contributor", permissionMask: "0x100000", configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); }, fetch: async (input, init) => {
+    app = await mountAuthenticatedApp({ url: `https://app.test/${kind}`, role: "contributor", permissionMask: "0x100000", configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); if (seedDraft !== undefined) browser.sessionStorage.setItem(draftKey, seedDraft); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
@@ -43,7 +45,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     } });
     await waitForApp(() => !!title() && !title().disabled);
   }
-  afterEach(async () => { await app?.unmount(); app = undefined; });
+  afterEach(async () => { await app?.unmount(); app = undefined; seedDraft = undefined; });
 
 
   async function forceLeaveAndReturn() {
@@ -231,6 +233,53 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await act(async () => resolve(Response.json({ ...entity({ id: "existing", clientKey: "existing", title: "Existing private row" }), status: "completed", updatedAt: "2026-09-26T00:00:00.001Z" })));
     await waitForApp(() => !title().disabled);
     expect(title().value).toBe("Wait for status");
+  });
+
+  function unload() { const event = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(event); return event.defaultPrevented; }
+  async function description(value: string) {
+    const node = main().querySelector("textarea")!;
+    await act(async () => {
+      node.value = value;
+      const prop = Object.keys(node).find((name) => name.startsWith("__reactProps$"))!;
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLTextAreaElement }) => void }>)[prop]!.onChange({ currentTarget: node });
+    });
+  }
+  it("keeps an unsent title and description after refresh without creating", async () => {
+    await mount(); await change("Keep this title"); await description("Keep this note");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this title");
+    expect(unload()).toBe(true); expect(bodies).toHaveLength(0);
+    await forceLeaveAndReturn();
+    expect(title().value).toBe("Keep this title");
+    expect(main().querySelector("textarea")!.value).toBe("Keep this note");
+    expect(bodies).toHaveLength(0); expect(unload()).toBe(true);
+  });
+  it("keeps the title on screen when the tab cannot record the draft", async () => {
+    await mount();
+    vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await change("Unrecorded title");
+    expect(title().value).toBe("Unrecorded title");
+    expect(main().textContent).toContain("could not record");
+    expect(bodies).toHaveLength(0);
+  });
+  it("allows leave when the create draft cannot be read and records only after discard", async () => {
+    seedDraft = "{"; await mount();
+    expect(main().textContent).toContain("can't be read"); expect(unload()).toBe(false);
+    await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"));
+    await act(async () => expect(writeWorkspaceHistory("push", `/${kind}`)).toBe("committed"));
+    await waitForApp(() => !!button("[data-planning-draft-blocked] button"));
+    await click(button("[data-planning-draft-blocked] button"));
+    await change("After discard");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("After discard");
+  });
+  it("drops the stored create draft after a confirmed leave", async () => {
+    await mount(); await change("Keep this title");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this title");
+    await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"));
+    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toBeNull();
+    await act(async () => expect(writeWorkspaceHistory("push", `/${kind}`)).toBe("committed"));
+    await waitForApp(() => !!title() && !title().disabled);
+    expect(title().value).toBe(""); expect(unload()).toBe(false);
   });
 
 });
