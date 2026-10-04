@@ -90,8 +90,8 @@ function normalizeRevision(value: unknown): KnowledgeRevision | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   if (typeof record.id !== "string" || !record.id || typeof record.knowledgeItemId !== "string" || !record.knowledgeItemId) return null;
-  if (typeof record.markdown !== "string") return null;
-  const chunks = Array.isArray(record.chunks) ? record.chunks.flatMap((chunk) => {
+  if (typeof record.markdown !== "string" || !Array.isArray(record.chunks)) return null;
+  const chunks = record.chunks.flatMap((chunk) => {
     if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) return [];
     const item = chunk as Record<string, unknown>;
     if (typeof item.id !== "string" || typeof item.text !== "string") return [];
@@ -108,7 +108,7 @@ function normalizeRevision(value: unknown): KnowledgeRevision | null {
       endLine,
       ...(location ? { location } : {}),
     }];
-  }) : [];
+  });
   return {
     id: record.id,
     knowledgeItemId: record.knowledgeItemId,
