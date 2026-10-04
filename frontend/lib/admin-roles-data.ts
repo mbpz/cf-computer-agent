@@ -15,7 +15,7 @@ export interface AdminRole {
 export function normalizeAdminRole(value: unknown): AdminRole | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  if (typeof record.id !== "string" || !record.id || typeof record.key !== "string" || !record.key || typeof record.name !== "string" || !record.name) return null;
+  if (typeof record.id !== "string" || !record.id || typeof record.key !== "string" || !record.key || typeof record.name !== "string" || !record.name || typeof record.description !== "string") return null;
   if (typeof record.allowBits !== "string" || !/^0x[0-9a-f]+$/iu.test(record.allowBits)) return null;
   try {
     const mask = BigInt(record.allowBits);
@@ -29,7 +29,7 @@ export function normalizeAdminRole(value: unknown): AdminRole | null {
     id: record.id,
     key: record.key,
     name: record.name,
-    description: typeof record.description === "string" ? record.description : "",
+    description: record.description,
     allowBits: record.allowBits.toLowerCase(),
     memberCount: record.memberCount,
     assignedMemberIds: record.assignedMemberIds as string[],

@@ -30,7 +30,8 @@ describe("admin role permission matrix", () => {
   });
 
   it("normalizes malformed API role rows instead of exposing unsafe values", () => {
-    expect(normalizeAdminRole({ id: "r1", key: "editor", name: "Editor", allowBits: "0x3", memberCount: 1, assignedMemberIds: ["member-1"], status: "active", isSystem: false })).toMatchObject({ id: "r1", allowBits: "0x3", memberCount: 1, assignedMemberIds: ["member-1"] });
+    expect(normalizeAdminRole({ id: "r1", key: "editor", name: "Editor", description: "", allowBits: "0x3", memberCount: 1, assignedMemberIds: ["member-1"], status: "active", isSystem: false })).toMatchObject({ id: "r1", description: "", allowBits: "0x3", memberCount: 1, assignedMemberIds: ["member-1"] });
+    expect(normalizeAdminRole({ id: "r1", key: "editor", name: "Editor", allowBits: "0x3", memberCount: 1, assignedMemberIds: ["member-1"], status: "active", isSystem: false })).toBeNull();
     expect(normalizeAdminRole({ ...role, memberCount: 2 })).toBeNull();
     expect(normalizeAdminRole({ id: "r2", key: "bad", name: "Bad", allowBits: "not-mask" })).toBeNull();
     expect(normalizeAdminRole({ id: "r3", key: "bad", name: "Bad", allowBits: "0x1", memberCount: -1 })).toBeNull();
