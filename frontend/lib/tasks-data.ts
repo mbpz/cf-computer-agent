@@ -167,12 +167,16 @@ export async function removeTaskLink(taskId: string, linkId: string, requester: 
 function normalizeTask(value: unknown): TaskItem | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
+  const status = record.status;
+  const priority = record.priority;
+  const progress = record.progress;
   if (typeof record.id !== "string" || typeof record.title !== "string") return null;
+  if (!isStatus(status) || !isPriority(priority) || typeof progress !== "number" || !Number.isSafeInteger(progress) || progress < 0 || progress > 100) return null;
   return {
     id: record.id, title: record.title, notes: typeof record.notes === "string" ? record.notes : "",
-    status: isStatus(record.status) ? record.status : "todo",
-    progress: typeof record.progress === "number" ? record.progress : 0,
-    priority: isPriority(record.priority) ? record.priority : "medium",
+    status,
+    progress,
+    priority,
     dueAt: typeof record.dueAt === "string" ? record.dueAt : null,
     completedAt: typeof record.completedAt === "string" ? record.completedAt : null,
     createdAt: typeof record.createdAt === "string" ? record.createdAt : "",
