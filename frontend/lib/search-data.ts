@@ -33,9 +33,8 @@ function normalizeSearchItem(value: unknown): SearchResultItem {
   const record = value as Record<string, unknown>;
   if (typeof record.knowledgeItemId !== "string" || !record.knowledgeItemId) throw new Error("SEARCH_RESPONSE_INVALID");
   const citation = typeof record.citationId === "string" && record.citationId ? record.citationId : undefined;
-  const matchedFields = Array.isArray(record.matchedFields)
-    ? record.matchedFields.filter((field): field is string => typeof field === "string" && MATCHED_FIELDS.has(field))
-    : [];
+  if (!Array.isArray(record.matchedFields)) throw new Error("SEARCH_RESPONSE_INVALID");
+  const matchedFields = record.matchedFields.filter((field): field is string => typeof field === "string" && MATCHED_FIELDS.has(field));
   return {
     id: citation || record.knowledgeItemId,
     knowledgeItemId: record.knowledgeItemId,

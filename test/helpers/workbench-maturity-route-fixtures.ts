@@ -188,7 +188,7 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (path === "/api/knowledge/knowledge-route-audit") return probeResponse(state, {}, { knowledge: { currentRevision: knowledgeRevision() } });
       return null;
     case "search":
-      if (pathname(path) === "/api/knowledge/search") return probeResponse(state, { ...numbered([]), degraded: false }, { ...numbered([{ knowledgeItemId: "ready-search", title: "READY::search", excerpt: "route fixture" }]), degraded: false });
+      if (pathname(path) === "/api/knowledge/search") return probeResponse(state, { ...numbered([]), degraded: false }, { ...numbered([{ knowledgeItemId: "ready-search", title: "READY::search", excerpt: "route fixture", matchedFields: [] }]), degraded: false });
       return null;
     case "agent":
       if (path === "/api/knowledge/chat") {
