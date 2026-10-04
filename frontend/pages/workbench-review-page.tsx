@@ -9,7 +9,7 @@ import { PageState } from "../components/ui/page-state";
 
 export type ReviewTarget = {kind: "task" | "inbox" | "project"; id: string};
 export type WorkbenchReviewPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; snapshot: WorkbenchReviewSnapshot };
-export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onRetry, onOpen }: { locale: LocaleRuntime; period: "daily" | "weekly"; state: WorkbenchReviewPageState; onPeriodChange?: (period: "daily" | "weekly") => void; onRetry?: () => void; onOpen?: (target: ReviewTarget) => void }) {
+export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onRetry, onOpen, periodBlocked = false, periodNotice, onDiscardPeriod }: { locale: LocaleRuntime; period: "daily" | "weekly"; state: WorkbenchReviewPageState; onPeriodChange?: (period: "daily" | "weekly") => void; onRetry?: () => void; onOpen?: (target: ReviewTarget) => void; periodBlocked?: boolean; periodNotice?: string; onDiscardPeriod?: () => void }) {
   const s = state.kind === "ready" ? state.snapshot : null;
   return <section className="space-y-5" aria-busy={state.kind === "loading"}>
     <div className="flex flex-wrap items-end justify-between gap-3">
@@ -20,6 +20,8 @@ export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onR
         <Button aria-pressed={period === "weekly"} variant={period === "weekly" ? "default" : "outline"} onClick={() => onPeriodChange?.("weekly")}>{frontendText(locale, "REVIEW_WEEKLY")}</Button>
       </div>
     </div>
+    {periodBlocked && <div data-review-period-blocked role="alert" className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "REVIEW_PERIOD_RECORD_BLOCKED")}</p><Button variant="outline" onClick={onDiscardPeriod}>{frontendText(locale, "REVIEW_PERIOD_RECORD_DISCARD")}</Button></div>}
+    {periodNotice && <p role="alert" className="text-sm text-destructive">{periodNotice}</p>}
     {state.kind === "loading" && <PageState kind="loading" title={frontendText(locale, "REVIEW_LOADING")} />}
     {state.kind === "error" && <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "REVIEW_RETRY")}</Button></PageState>}
     {s && <>

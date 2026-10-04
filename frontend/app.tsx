@@ -101,6 +101,7 @@ import { persistAdminSpaceDraft } from "./lib/admin-space-draft";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
+import { discardBlockedReviewPeriod, loadReviewPeriod, persistReviewPeriod } from "./lib/review-period";
 import { loadAdminAnalytics, type AdminAnalyticsOverview, type LoadAdminAnalyticsInput } from "./lib/admin-analytics-data";
 import { ApiRequestError } from "./lib/api";
 import { createNumberedRequestController, parsePageSearch, writePageSearch, type SupportedPageSize } from "./lib/numbered-page";
@@ -212,7 +213,7 @@ export function App() {
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "", session?: SessionSnapshot) {
   switch (kind) {
     case "home": return <HomeRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
-    case "knowledge": return <KnowledgeRoute locale={locale} search={search} />;
+    case "knowledge": return <KnowledgeRoute locale={locale} search={search} memberId={session?.member.id} />;
     case "knowledge-reader": return <KnowledgeReaderRoute memberId={session?.member.id} locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute memberId={session?.member.id} locale={locale} search={search} />;
     case "agent": return <AgentRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
@@ -227,7 +228,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "calendar": return <CalendarRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "today": return <TodayRoute key={session?.member.id} locale={locale} />;
     case "focus": return <FocusRoute key={session?.member.id} memberId={session?.member.id} locale={locale} />;
-    case "review": return <WorkbenchReviewRoute locale={locale} />;
+    case "review": return <WorkbenchReviewRoute locale={locale} memberId={session?.member.id} />;
     case "boards": return <BoardsRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
@@ -735,7 +736,7 @@ function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
   return <section className="mx-auto max-w-xl py-16"><h1 className="text-2xl font-semibold">{frontendText(locale, "PAGE_NOT_FOUND_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "PAGE_NOT_FOUND_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/">{frontendText(locale, "PAGE_RETURN_HOME")}</a></section>;
 }
 
-export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const initial = useMemo(() => parsePageSearch(search), [search]);
   const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
   const [retryVersion, setRetryVersion] = useState(0);
@@ -749,7 +750,12 @@ export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; sear
   const [notes, setNotes] = useState<PrivateKnowledgeNoteListItem[]>([]);
   const [activity, setActivity] = useState<WorkspaceActivityItem[]>([]);
   const [activityNextCursor, setActivityNextCursor] = useState<string | null>(null);
-  const [reviewPeriod, setReviewPeriod] = useState<ReviewPeriod>("daily");
+  const [storedPeriod] = useState(() => memberId ? loadReviewPeriod(memberId, "knowledge") : { kind: "empty" as const });
+  const [periodBlocked, setPeriodBlocked] = useState(storedPeriod.kind === "blocked");
+  const [periodNotice, setPeriodNotice] = useState<string>();
+  const restoredPeriod: ReviewPeriod = storedPeriod.kind === "ready" ? storedPeriod.period : "daily";
+  const [reviewPeriod, setReviewPeriod] = useState<ReviewPeriod>(restoredPeriod);
+  const loadedPeriod = useRef(restoredPeriod);
   const [review, setReview] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewResult } | { kind: "error" }>({ kind: "loading" });
   const queryRef = useRef({ page, pageSize });
   useEffect(() => {
@@ -759,16 +765,23 @@ export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; sear
     void loadRecentResearch().then((items) => { if (active) setRecentResearch(items); }).catch(() => { if (active) setRecentResearch([]); });
     void loadPrivateKnowledgeNotes().then((items) => { if (active) setNotes(items); }).catch(() => { if (active) setNotes([]); });
     void loadWorkspaceActivity().then((page) => { if (active) { setActivity(page.items); setActivityNextCursor(page.nextCursor); } }).catch(() => { if (active) { setActivity([]); setActivityNextCursor(null); } });
-    void loadKnowledgeReview("daily").then((data) => { if (active) setReview({ kind: "ready", data }); }).catch(() => { if (active) setReview({ kind: "error" }); });
+    void loadKnowledgeReview(loadedPeriod.current).then((data) => { if (active) setReview({ kind: "ready", data }); }).catch(() => { if (active) setReview({ kind: "error" }); });
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    if (reviewPeriod === "daily") return;
+    if (reviewPeriod === loadedPeriod.current) return;
+    loadedPeriod.current = reviewPeriod;
     let active = true;
     setReview({ kind: "loading" });
     void loadKnowledgeReview(reviewPeriod).then((data) => { if (active) setReview({ kind: "ready", data }); }).catch(() => { if (active) setReview({ kind: "error" }); });
     return () => { active = false; };
   }, [reviewPeriod]);
+  useEffect(() => {
+    if (!memberId || periodBlocked) return;
+    const saved = persistReviewPeriod(memberId, "knowledge", reviewPeriod);
+    setPeriodNotice(saved ? undefined : frontendText(locale, "REVIEW_PERIOD_NOT_RECORDED"));
+  }, [reviewPeriod, memberId, periodBlocked, locale]);
+  const discardPeriod = () => { if (!memberId || !periodBlocked || !discardBlockedReviewPeriod(memberId, "knowledge")) return; setPeriodBlocked(false); setPeriodNotice(undefined); };
   const loadMoreActivity = () => {
     if (!activityNextCursor) return;
     const cursor = activityNextCursor;
@@ -787,7 +800,7 @@ export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; sear
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
   }, [locale, page, pageSize, retryVersion, urlVersion]);
   const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
-  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
+  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
 }
 
 export function SearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
@@ -2316,8 +2329,11 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
   }} />;
 }
 
-export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {
-  const [period, setPeriod] = useState<"daily" | "weekly">("daily");
+export function WorkbenchReviewRoute({ locale, memberId }: { locale: LocaleRuntime; memberId?: string }) {
+  const [storedPeriod] = useState(() => memberId ? loadReviewPeriod(memberId, "workbench") : { kind: "empty" as const });
+  const [periodBlocked, setPeriodBlocked] = useState(storedPeriod.kind === "blocked");
+  const [periodNotice, setPeriodNotice] = useState<string>();
+  const [period, setPeriod] = useState<"daily" | "weekly">(storedPeriod.kind === "ready" ? storedPeriod.period : "daily");
   const [state, setState] = useState<WorkbenchReviewPageState>({ kind: "loading" });
   const [retryVersion, setRetryVersion] = useState(0);
   const [target, setTarget] = useState<ReviewTarget | null>(null);
@@ -2337,6 +2353,12 @@ export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {
     });
     return () => { active = false; controller.abort(); };
   }, [locale, period, retryVersion]);
+  useEffect(() => {
+    if (!memberId || periodBlocked) return;
+    const saved = persistReviewPeriod(memberId, "workbench", period);
+    setPeriodNotice(saved ? undefined : frontendText(locale, "REVIEW_PERIOD_NOT_RECORDED"));
+  }, [period, memberId, periodBlocked, locale]);
+  const discardPeriod = () => { if (!memberId || !periodBlocked || !discardBlockedReviewPeriod(memberId, "workbench")) return; setPeriodBlocked(false); setPeriodNotice(undefined); };
   const changePeriod = (next: "daily" | "weekly") => {
     if (next === period) return;
     // Clear the old snapshot in the same render as the selected period.
@@ -2344,7 +2366,7 @@ export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {
     setState({ kind: "loading" });
     setPeriod(next);
   };
-  return <><div inert={target ? true : undefined}><WorkbenchReviewPage locale={locale} period={period} state={state} onOpen={setTarget} onPeriodChange={changePeriod} onRetry={() => { setState({ kind: "loading" }); setRetryVersion((value) => value + 1); }} /></div>{target && <SnapshotTargetDetail key={`${target.kind}:${target.id}`} target={target} locale={locale} title={frontendText(locale, "REVIEW_DETAIL_TITLE")} onClose={() => setTarget(null)} onDenied={clearDenied} />}</>;
+  return <><div inert={target ? true : undefined}><WorkbenchReviewPage locale={locale} period={period} state={state} onOpen={setTarget} onPeriodChange={changePeriod} onRetry={() => { setState({ kind: "loading" }); setRetryVersion((value) => value + 1); }} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} /></div>{target && <SnapshotTargetDetail key={`${target.kind}:${target.id}`} target={target} locale={locale} title={frontendText(locale, "REVIEW_DETAIL_TITLE")} onClose={() => setTarget(null)} onDenied={clearDenied} />}</>;
 }
 
 export function NotificationsRoute({ locale, search, isAdmin = false, memberId }: { locale: LocaleRuntime; search: string; isAdmin?: boolean; memberId?: string }) {
