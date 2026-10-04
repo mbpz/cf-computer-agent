@@ -104,6 +104,7 @@ import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAs
 import { createAdminDuplicateRequestController, decideAdminDuplicate, loadAdminDuplicate, type AdminDuplicateCandidate, type AdminDuplicatePageResult, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
 import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewOperation, type ReviewNoteInput } from "./components/review/review-detail-data";
+import { clearReviewDecision, discardBlockedCurrentReviewDecision, loadCurrentReviewDecision, saveReviewDecision } from "./lib/review-decision-intent";
 import type { ReviewDecisionState } from "./components/review/review-decision-controls";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { logoutAccount } from "./lib/logout-account";
@@ -227,7 +228,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-analytics": return <AdminAnalyticsRoute key={JSON.stringify([session?.member.id, session?.permissionMask, session?.capabilities])} locale={locale} search={search} />;
     case "admin-roles": return <AdminRolesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
     case "admin-menus": return <AdminMenusRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
-    case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
+    case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
     case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
@@ -3032,21 +3033,25 @@ function needsBoardReplacement(
     || column.kind !== "ready" || column.pending || Boolean(column.loadError);
 }
 
-export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string }) {
+export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string; memberId?: string }) {
   return <ReviewDraftProvider locale={props.locale} preserveUnsent><ReviewQueueSession {...props} /></ReviewDraftProvider>;
 }
-function ReviewQueueSession({ locale, search }: { locale: LocaleRuntime; search: string }) {
+function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const drafts = useReviewDrafts()!;
   const initial = parsePageSearch(search); const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
-  const [decisionState, setDecisionState] = useState<ReviewDecisionState>({ kind: "idle" });
+  const [decisionStored] = useState(() => memberId ? loadCurrentReviewDecision(memberId) : { kind: "empty" as const });
+  const blockedRef = useRef(decisionStored.kind === "blocked");
+  const [recordBlocked, setRecordBlocked] = useState(blockedRef.current);
+  const [recordNotice, setRecordNotice] = useState<string>();
+  const [decisionState, setDecisionState] = useState<ReviewDecisionState>(decisionStored.kind === "ready" ? { kind: "error", action: decisionStored.intent.action, recovery: "retry" } : { kind: "idle" });
   const [completedId, setCompletedId] = useState<string | null>(null);
   const controllerRef = useRef<ReturnType<typeof createReviewQueueRequestController> | null>(null);
   const readRef = useRef<object | null>(null);
   const decisionRef = useRef<{ settled: boolean } | null>(null);
-  const operationRef = useRef<ReviewOperation | null>(null);
+  const operationRef = useRef<ReviewOperation | null>(decisionStored.kind === "ready" ? decisionStored.intent : null);
   const needsClampRef = useRef(false);
   const [clampTarget, setClampTarget] = useState<{ source: { page: number; pageSize: SupportedPageSize }; page: number } | null>(null);
   const lifetimeRef = useRef({});
@@ -3081,7 +3086,12 @@ function ReviewQueueSession({ locale, search }: { locale: LocaleRuntime; search:
         const status = row?.status ?? (await loadReviewDetail(operation.id)).detail.status;
         if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
         if (["published", "rejected", "revision_requested"].includes(status)) {
-          drafts.clear(operation.id); operationRef.current = null; setDecisionState({ kind: "idle" }); setCompletedId(operation.id);
+          if (memberId && !clearReviewDecision(memberId, operation.id, operation)) {
+            setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_STUCK"));
+            setDecisionState({ kind: "error", action: operation.action, recovery: "retry" });
+          } else {
+            drafts.clear(operation.id); operationRef.current = null; setRecordNotice(undefined); setDecisionState({ kind: "idle" }); setCompletedId(operation.id);
+          }
         }
       }
       deniedRef.current = false;
@@ -3120,7 +3130,7 @@ function ReviewQueueSession({ locale, search }: { locale: LocaleRuntime; search:
     }
   }, [clampTarget]);
   const review = async (id: string, action: ReviewDecision, details?: ReviewNoteInput, retryOperation?: ReviewOperation) => {
-    if (decisionRef.current || readRef.current || state.kind !== "ready" || localError || completedId === id || (operationRef.current && operationRef.current !== retryOperation)) return;
+    if (blockedRef.current || decisionRef.current || readRef.current || state.kind !== "ready" || localError || completedId === id || (operationRef.current && operationRef.current !== retryOperation)) return;
     const actionController = controllerRef.current; if (!actionController) return;
     const token = { settled: false }; decisionRef.current = token;
     const lifetime = lifetimeRef.current;
@@ -3136,11 +3146,21 @@ function ReviewQueueSession({ locale, search }: { locale: LocaleRuntime; search:
           if (!ownsDecision()) return;
           if (deniedRef.current) { setDecisionState({ kind: "idle" }); return; }
           operation = prepareReviewDecision(id, action, publish, details);
+          if (memberId && !saveReviewDecision(memberId, id, operation)) {
+            setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_NOT_RECORDED"));
+            setDecisionState({ kind: "idle" });
+            return;
+          }
         }
         operationRef.current = operation;
         const receipt = await sendReviewDecision(operation);
         if (!ownsDecision()) return;
-        drafts.clear(id); operationRef.current = null; token.settled = true;
+        if (memberId && !clearReviewDecision(memberId, operation.id, operation)) {
+          setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_STUCK"));
+          setDecisionState({ kind: "error", action, recovery: "retry" });
+          return;
+        }
+        drafts.clear(id); operationRef.current = null; setRecordNotice(undefined); token.settled = true;
         setDecisionState({ kind: "success", receipt }); setCompletedId(id); needsClampRef.current = true;
       } catch (error: unknown) {
         if (ownsDecision()) {
@@ -3150,7 +3170,14 @@ function ReviewQueueSession({ locale, search }: { locale: LocaleRuntime; search:
             setDecisionState(operationRef.current ? { kind: "error", action, recovery: "retry" } : { kind: "idle" });
           } else {
             const recovery = operationRef.current ? reviewRecovery(error, Boolean(retryOperation)) : "edit";
-            if (recovery === "edit") operationRef.current = null;
+            if (recovery === "edit" && operationRef.current) {
+              if (memberId && !clearReviewDecision(memberId, operationRef.current.id, operationRef.current)) {
+                setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_STUCK"));
+                setDecisionState({ kind: "error", action, recovery: "retry" });
+                return;
+              }
+              operationRef.current = null; setRecordNotice(undefined);
+            }
             setDecisionState({ kind: "error", action, recovery });
           }
         }
@@ -3170,11 +3197,16 @@ function ReviewQueueSession({ locale, search }: { locale: LocaleRuntime; search:
       void read(controller, { ...queryRef.current }, afterDecision);
     }
   };
+  function discardRecord() {
+    if (!memberId || !blockedRef.current || !discardBlockedCurrentReviewDecision(memberId)) return;
+    blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
+  }
   return <ReviewQueuePage onOpenDetail={(id) => writeWorkspaceHistory("push", `/admin/submissions/${encodeURIComponent(id)}`)} locale={locale} state={state}
-    pendingId={pendingId} completedId={completedId} decisionState={decisionState} localError={localError} pending={pending}
+    pendingId={pendingId} completedId={completedId} decisionState={decisionState} localError={recordNotice ?? localError} pending={pending || recordBlocked}
+    decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord}
     onRetry={() => retryRead()} onReloadDecision={() => retryRead(true)}
     onRetryDecision={() => { const operation = operationRef.current; if (operation && decisionState.kind === "error" && decisionState.recovery === "retry") void review(operation.id, operation.action, undefined, operation); }}
-    onReview={(id, action, details) => void review(id, action, details)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+    onReview={recordBlocked ? undefined : (id, action, details) => void review(id, action, details)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
 export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

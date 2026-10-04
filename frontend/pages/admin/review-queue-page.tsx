@@ -11,12 +11,13 @@ import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { ReviewDecision, ReviewNoteInput } from "../../components/review/review-detail-data";
 import { ReviewDecisionControls, ReviewDecisionFeedback, reviewDecisionLocked, type ReviewDecisionState } from "../../components/review/review-decision-controls";
 
-export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onReloadDecision, onOpenDetail, pendingId, completedId, decisionState = { kind: "idle" }, localError, pending, onPageChange, onPageSizeChange, locale }: {
+export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onReloadDecision, onOpenDetail, pendingId, completedId, decisionState = { kind: "idle" }, localError, pending, onPageChange, onPageSizeChange, locale, decisionRecordBlocked = false, onDiscardDecisionRecord }: {
   state: { kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string };
   onRetry?: () => void; onRetryDecision?: () => void; onReloadDecision?: () => void; onOpenDetail?: (id: string) => void;
   onReview?: (id: string, action: ReviewDecision, details?: ReviewNoteInput) => void;
   pendingId?: string | null; completedId?: string | null; decisionState?: ReviewDecisionState; localError?: string; pending?: boolean;
   onPageChange?: (page: number) => void; onPageSizeChange?: (size: SupportedPageSize) => void; locale: LocaleRuntime;
+  decisionRecordBlocked?: boolean; onDiscardDecisionRecord?: () => void;
 }) {
   const confirmationLock = useRef<object | null>(null);
   const retry = <Button type="button" variant="outline" size="sm" disabled={pending} onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>;
@@ -27,6 +28,7 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_REVIEW_QUEUE_TITLE")}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")}</p>
     </div>
+    {decisionRecordBlocked && <div role="alert" data-review-decision-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardDecisionRecord}>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD")}</Button></div>}
     <ReviewDecisionFeedback allowUnknownReload state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onReloadDecision} />
     {localError && <><p role="alert" className="text-sm text-destructive">{localError}</p>{retry}</>}
     {state.data.items.length ? state.data.items.map((item) => {

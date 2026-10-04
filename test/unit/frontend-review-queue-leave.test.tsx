@@ -26,6 +26,7 @@ describe("review queue leave ownership", () => {
   afterEach(async () => {await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals();});
   const locale = () => createLocaleRuntime({storage:{getItem:()=>"en",setItem:()=>{}}});
   async function mount() {await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search}/>)); await flush();}
+  async function mountMember() {await act(async () => root.render(<ReviewQueueRoute locale={locale()} memberId="member-a" search={browser.location.search}/>)); await flush();}
   async function click(label:string) {const el = [...container.querySelectorAll("button")].find(b => b.textContent === label); expect(el, label).toBeTruthy(); await act(async () => el!.click()); await flush();}
   async function decide() {await click("Reject"); await click("Confirm rejection"); const final=container.querySelector("[data-confirm-action]") as HTMLButtonElement; expect(final).toBeTruthy(); await act(async () => final.click()); await flush();}
   async function leave() {await act(async () => writeWorkspaceHistory("push", "/home"));}
@@ -162,6 +163,52 @@ describe("review queue leave ownership", () => {
     await act(async () => {final.click(); writeWorkspaceHistory("push", "/home");}); expect(browser.location.pathname).toBe("/admin/submissions");
     await mount(); await act(async () => detail.resolve(preview("review_pending"))); await flush();
     expect(posts).toBe(0); expect(unload()).toBe(false); expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
+  });
+  it("keeps an unknown queue decision after refresh and retries the same body", async () => {
+    const bodies: string[] = []; let posts = 0;
+    vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; bodies.push(String(init.body)); if (posts === 1) return new Response(null, { status: 503 }); return json({ decision: { submissionId: "review-1", decision: "rejected" } }); }
+      if (String(input).endsWith("/review-1")) return preview("review_pending");
+      return queue();
+    });
+    await mountMember(); await decide();
+    expect(browser.sessionStorage.getItem("memory-garden:review-decision:v1:member-a:review-1")).toContain("reject");
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client"); root = createRoot(container);
+    await mountMember();
+    expect(posts).toBe(1);
+    expect(container.textContent).toContain("The result is unknown");
+    expect(unload()).toBe(true);
+    await click("Retry same decision");
+    expect(posts).toBe(2); expect(bodies[1]).toBe(bodies[0]);
+    expect(browser.sessionStorage.getItem("memory-garden:review-decision:v1:member-a:review-1")).toBeNull();
+  });
+  it("does not send a queue decision when the tab cannot record it", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") posts++;
+      return queue();
+    });
+    await mountMember();
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await decide();
+    expect(posts).toBe(0);
+    expect(container.textContent).toContain("could not record");
+  });
+  it("blocks a queue decision when its record cannot be read, and allows leave until it is discarded", async () => {
+    let posts = 0;
+    browser.sessionStorage.setItem("memory-garden:review-decision-current:v1:member-a", "{");
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({ decision: { submissionId: "review-1", decision: "rejected" } }); }
+      return queue();
+    });
+    await mountMember();
+    expect(container.textContent).toContain("can't be read");
+    await leave(); expect(browser.location.pathname).toBe("/home");
+    browser.history.replaceState({}, "", "/admin/submissions");
+    await click("Discard record");
+    await decide();
+    expect(posts).toBe(1);
   });
   it.each([401,403,500])("allows leaving a read-only %s failure without a write", async status => {
     vi.stubGlobal("fetch", async()=>new Response(null,{status})); await mount(); expect(unload()).toBe(false); await leave(); expect(browser.location.pathname).toBe("/home");

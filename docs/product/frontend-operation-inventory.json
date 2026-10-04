@@ -338,8 +338,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:1886:12",
-        "frontend/app.tsx:1886:165",
+        "frontend/app.tsx:1887:12",
+        "frontend/app.tsx:1887:165",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -446,9 +446,9 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:1437:55",
-        "frontend/app.tsx:1437:241",
-        "frontend/app.tsx:1462:99",
+        "frontend/app.tsx:1438:55",
+        "frontend/app.tsx:1438:241",
+        "frontend/app.tsx:1463:99",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -577,9 +577,9 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:1584:12",
-        "frontend/app.tsx:1584:160",
-        "frontend/app.tsx:1595:22",
+        "frontend/app.tsx:1585:12",
+        "frontend/app.tsx:1585:160",
+        "frontend/app.tsx:1596:22",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -672,9 +672,9 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:1757:12",
-        "frontend/app.tsx:1757:166",
-        "frontend/app.tsx:1759:40",
+        "frontend/app.tsx:1758:12",
+        "frontend/app.tsx:1758:166",
+        "frontend/app.tsx:1760:40",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -770,8 +770,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:1979:12",
-        "frontend/app.tsx:1979:198",
+        "frontend/app.tsx:1980:12",
+        "frontend/app.tsx:1980:198",
         "frontend/components/calendar-cancel-confirmation.tsx:35:13",
         "frontend/components/calendar-create-form.tsx:110:7",
         "frontend/components/calendar-create-form.tsx:111:7",
@@ -856,8 +856,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2015:51",
-        "frontend/app.tsx:2015:184",
+        "frontend/app.tsx:2016:51",
+        "frontend/app.tsx:2016:184",
         "frontend/components/snapshot-target-detail.tsx:46:10",
         "frontend/components/snapshot-target-detail.tsx:48:213",
         "frontend/components/snapshot-target-detail.tsx:49:5",
@@ -898,14 +898,14 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2040:5",
-        "frontend/app.tsx:2191:5",
+        "frontend/app.tsx:2041:5",
         "frontend/app.tsx:2192:5",
-        "frontend/app.tsx:2193:81",
-        "frontend/app.tsx:2197:5",
+        "frontend/app.tsx:2193:5",
+        "frontend/app.tsx:2194:81",
         "frontend/app.tsx:2198:5",
-        "frontend/app.tsx:2199:61",
-        "frontend/app.tsx:2201:10",
+        "frontend/app.tsx:2199:5",
+        "frontend/app.tsx:2200:61",
+        "frontend/app.tsx:2202:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -983,8 +983,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2234:51",
-        "frontend/app.tsx:2234:276",
+        "frontend/app.tsx:2235:51",
+        "frontend/app.tsx:2235:276",
         "frontend/components/snapshot-target-detail.tsx:46:10",
         "frontend/components/snapshot-target-detail.tsx:48:213",
         "frontend/components/snapshot-target-detail.tsx:49:5",
@@ -1029,7 +1029,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:286:10",
+        "frontend/app.tsx:287:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -1069,7 +1069,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:1098:41",
+        "frontend/app.tsx:1099:41",
         "frontend/components/assets/asset-availability-panel.tsx:37:32",
         "frontend/components/assets/asset-availability-panel.tsx:37:67",
         "frontend/components/assets/asset-dropzone.tsx:39:10",
@@ -1140,7 +1140,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:736:10",
+        "frontend/app.tsx:737:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1212,7 +1212,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:832:10",
+        "frontend/app.tsx:833:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1313,19 +1313,19 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:838:88",
-        "frontend/app.tsx:984:183",
-        "frontend/app.tsx:985:324",
-        "frontend/app.tsx:985:437",
-        "frontend/app.tsx:987:181",
-        "frontend/app.tsx:987:292",
-        "frontend/app.tsx:990:33",
-        "frontend/app.tsx:990:200",
-        "frontend/app.tsx:991:83",
-        "frontend/app.tsx:991:250",
-        "frontend/app.tsx:992:566",
-        "frontend/app.tsx:993:37",
-        "frontend/app.tsx:994:7",
+        "frontend/app.tsx:839:88",
+        "frontend/app.tsx:985:183",
+        "frontend/app.tsx:986:324",
+        "frontend/app.tsx:986:437",
+        "frontend/app.tsx:988:181",
+        "frontend/app.tsx:988:292",
+        "frontend/app.tsx:991:33",
+        "frontend/app.tsx:991:200",
+        "frontend/app.tsx:992:83",
+        "frontend/app.tsx:992:250",
+        "frontend/app.tsx:993:566",
+        "frontend/app.tsx:994:37",
+        "frontend/app.tsx:995:7",
         "frontend/components/agent/agent-feedback.tsx:52:7",
         "frontend/components/agent/agent-feedback.tsx:53:7",
         "frontend/components/agent/agent-feedback.tsx:54:7",
@@ -1395,7 +1395,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:1125:10",
+        "frontend/app.tsx:1126:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1456,13 +1456,13 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:1176:5",
-        "frontend/app.tsx:1318:27",
-        "frontend/app.tsx:1322:7",
+        "frontend/app.tsx:1177:5",
+        "frontend/app.tsx:1319:27",
         "frontend/app.tsx:1323:7",
-        "frontend/app.tsx:1325:29",
-        "frontend/app.tsx:1325:90",
-        "frontend/app.tsx:1325:955",
+        "frontend/app.tsx:1324:7",
+        "frontend/app.tsx:1326:29",
+        "frontend/app.tsx:1326:90",
+        "frontend/app.tsx:1326:955",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1573,8 +1573,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2701:5",
-        "frontend/app.tsx:2856:10",
+        "frontend/app.tsx:2702:5",
+        "frontend/app.tsx:2857:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1758,9 +1758,9 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3036:68",
-        "frontend/app.tsx:3059:5",
-        "frontend/app.tsx:3173:10",
+        "frontend/app.tsx:3037:68",
+        "frontend/app.tsx:3064:5",
+        "frontend/app.tsx:3204:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1821,12 +1821,14 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/admin/review-queue-page.tsx:22:17",
-        "frontend/pages/admin/review-queue-page.tsx:30:5",
-        "frontend/pages/admin/review-queue-page.tsx:31:22",
-        "frontend/pages/admin/review-queue-page.tsx:37:11",
-        "frontend/pages/admin/review-queue-page.tsx:44:9",
-        "frontend/pages/admin/review-queue-page.tsx:49:5"
+        "frontend/pages/admin/review-queue-page.tsx:23:17",
+        "frontend/pages/admin/review-queue-page.tsx:31:31",
+        "frontend/pages/admin/review-queue-page.tsx:31:201",
+        "frontend/pages/admin/review-queue-page.tsx:32:5",
+        "frontend/pages/admin/review-queue-page.tsx:33:22",
+        "frontend/pages/admin/review-queue-page.tsx:39:11",
+        "frontend/pages/admin/review-queue-page.tsx:46:9",
+        "frontend/pages/admin/review-queue-page.tsx:51:5"
       ],
       "unresolvedSymbols": []
     },
@@ -1846,8 +1848,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3207:5",
-        "frontend/app.tsx:3303:10",
+        "frontend/app.tsx:3239:5",
+        "frontend/app.tsx:3335:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1917,7 +1919,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3722:10",
+        "frontend/app.tsx:3754:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1993,8 +1995,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3335:5",
-        "frontend/app.tsx:3433:10",
+        "frontend/app.tsx:3367:5",
+        "frontend/app.tsx:3465:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -2065,8 +2067,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:413:5",
-        "frontend/app.tsx:488:10",
+        "frontend/app.tsx:414:5",
+        "frontend/app.tsx:489:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2131,8 +2133,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:514:5",
-        "frontend/app.tsx:590:10",
+        "frontend/app.tsx:515:5",
+        "frontend/app.tsx:591:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2200,8 +2202,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3452:5",
-        "frontend/app.tsx:3534:10",
+        "frontend/app.tsx:3484:5",
+        "frontend/app.tsx:3566:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2275,7 +2277,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3599:10",
+        "frontend/app.tsx:3631:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -2324,7 +2326,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:360:10",
+        "frontend/app.tsx:361:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -2386,8 +2388,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2359:5",
-        "frontend/app.tsx:2417:10",
+        "frontend/app.tsx:2360:5",
+        "frontend/app.tsx:2418:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -2443,7 +2445,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2511:10",
+        "frontend/app.tsx:2512:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2494,8 +2496,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:669:14",
-        "frontend/app.tsx:677:10",
+        "frontend/app.tsx:670:14",
+        "frontend/app.tsx:678:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2579,7 +2581,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2611:10",
+        "frontend/app.tsx:2612:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2886,9 +2888,9 @@
     }
   ],
   "unassignedOperationIds": [
-    "frontend/app.tsx:197:75",
-    "frontend/app.tsx:224:39",
-    "frontend/app.tsx:681:250",
+    "frontend/app.tsx:198:75",
+    "frontend/app.tsx:225:39",
+    "frontend/app.tsx:682:250",
     "frontend/components/history-navigation-notice.tsx:11:10",
     "frontend/components/history-navigation-notice.tsx:13:5",
     "frontend/components/shell/context-rail.tsx:33:7",
@@ -2999,10 +3001,10 @@
   ],
   "operations": [
     {
-      "id": "frontend/app.tsx:197:75",
+      "id": "frontend/app.tsx:198:75",
       "path": "frontend/app.tsx",
       "owner": "App",
-      "line": 197,
+      "line": 198,
       "column": 75,
       "kind": "jsx",
       "tag": "AppShell",
@@ -3045,10 +3047,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:224:39",
+      "id": "frontend/app.tsx:225:39",
       "path": "frontend/app.tsx",
       "owner": "renderPage",
-      "line": 224,
+      "line": 225,
       "column": 39,
       "kind": "jsx",
       "tag": "SettingsPage",
@@ -3070,10 +3072,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:286:10",
+      "id": "frontend/app.tsx:287:10",
       "path": "frontend/app.tsx",
       "owner": "HomeRoute",
-      "line": 286,
+      "line": 287,
       "column": 10,
       "kind": "jsx",
       "tag": "HomePage",
@@ -3091,10 +3093,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:360:10",
+      "id": "frontend/app.tsx:361:10",
       "path": "frontend/app.tsx",
       "owner": "AdminAnalyticsRoute",
-      "line": 360,
+      "line": 361,
       "column": 10,
       "kind": "jsx",
       "tag": "AdminAnalyticsPage",
@@ -3121,10 +3123,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:413:5",
+      "id": "frontend/app.tsx:414:5",
       "path": "frontend/app.tsx",
       "owner": "AdminRolesRoute",
-      "line": 413,
+      "line": 414,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -3141,10 +3143,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:488:10",
+      "id": "frontend/app.tsx:489:10",
       "path": "frontend/app.tsx",
       "owner": "AdminRolesRoute",
-      "line": 488,
+      "line": 489,
       "column": 10,
       "kind": "jsx",
       "tag": "AdminRolesPage",
@@ -3175,10 +3177,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:514:5",
+      "id": "frontend/app.tsx:515:5",
       "path": "frontend/app.tsx",
       "owner": "AdminMenusRoute",
-      "line": 514,
+      "line": 515,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -3195,10 +3197,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:590:10",
+      "id": "frontend/app.tsx:591:10",
       "path": "frontend/app.tsx",
       "owner": "AdminMenusRoute",
-      "line": 590,
+      "line": 591,
       "column": 10,
       "kind": "jsx",
       "tag": "AdminMenusPage",
@@ -3226,10 +3228,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:669:14",
+      "id": "frontend/app.tsx:670:14",
       "path": "frontend/app.tsx",
       "owner": "KnowledgeReaderSession",
-      "line": 669,
+      "line": 670,
       "column": 14,
       "kind": "jsx",
       "tag": "KnowledgeReaderPage",
@@ -3256,10 +3258,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:677:10",
+      "id": "frontend/app.tsx:678:10",
       "path": "frontend/app.tsx",
       "owner": "KnowledgeReaderSession",
-      "line": 677,
+      "line": 678,
       "column": 10,
       "kind": "jsx",
       "tag": "KnowledgeReaderPage",
@@ -3291,10 +3293,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:681:250",
+      "id": "frontend/app.tsx:682:250",
       "path": "frontend/app.tsx",
       "owner": "NotFoundPage",
-      "line": 681,
+      "line": 682,
       "column": 250,
       "kind": "jsx",
       "tag": "a",
@@ -3311,10 +3313,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:736:10",
+      "id": "frontend/app.tsx:737:10",
       "path": "frontend/app.tsx",
       "owner": "KnowledgeRoute",
-      "line": 736,
+      "line": 737,
       "column": 10,
       "kind": "jsx",
       "tag": "KnowledgePage",
@@ -3350,10 +3352,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:832:10",
+      "id": "frontend/app.tsx:833:10",
       "path": "frontend/app.tsx",
       "owner": "MemberSearchRoute",
-      "line": 832,
+      "line": 833,
       "column": 10,
       "kind": "jsx",
       "tag": "SearchPage",
@@ -3402,10 +3404,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:838:88",
+      "id": "frontend/app.tsx:839:88",
       "path": "frontend/app.tsx",
       "owner": "AgentRoute",
-      "line": 838,
+      "line": 839,
       "column": 88,
       "kind": "jsx",
       "tag": "a",
@@ -3421,10 +3423,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:984:183",
+      "id": "frontend/app.tsx:985:183",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 984,
+      "line": 985,
       "column": 183,
       "kind": "jsx",
       "tag": "Button",
@@ -3448,10 +3450,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:985:324",
+      "id": "frontend/app.tsx:986:324",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 985,
+      "line": 986,
       "column": 324,
       "kind": "jsx",
       "tag": "Button",
@@ -3480,10 +3482,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:985:437",
+      "id": "frontend/app.tsx:986:437",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 985,
+      "line": 986,
       "column": 437,
       "kind": "jsx",
       "tag": "Button",
@@ -3513,10 +3515,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:987:181",
+      "id": "frontend/app.tsx:988:181",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 987,
+      "line": 988,
       "column": 181,
       "kind": "jsx",
       "tag": "Button",
@@ -3553,10 +3555,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:987:292",
+      "id": "frontend/app.tsx:988:292",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 987,
+      "line": 988,
       "column": 292,
       "kind": "jsx",
       "tag": "a",
@@ -3592,10 +3594,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:990:33",
+      "id": "frontend/app.tsx:991:33",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 990,
+      "line": 991,
       "column": 33,
       "kind": "jsx",
       "tag": "div",
@@ -3634,10 +3636,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:990:200",
+      "id": "frontend/app.tsx:991:200",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 990,
+      "line": 991,
       "column": 200,
       "kind": "jsx",
       "tag": "Button",
@@ -3680,10 +3682,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:991:83",
+      "id": "frontend/app.tsx:992:83",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 991,
+      "line": 992,
       "column": 83,
       "kind": "jsx",
       "tag": "div",
@@ -3722,10 +3724,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:991:250",
+      "id": "frontend/app.tsx:992:250",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 991,
+      "line": 992,
       "column": 250,
       "kind": "jsx",
       "tag": "Button",
@@ -3768,10 +3770,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:992:566",
+      "id": "frontend/app.tsx:993:566",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 992,
+      "line": 993,
       "column": 566,
       "kind": "jsx",
       "tag": "a",
@@ -3820,10 +3822,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:993:37",
+      "id": "frontend/app.tsx:994:37",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 993,
+      "line": 994,
       "column": 37,
       "kind": "jsx",
       "tag": "a",
@@ -3863,10 +3865,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:994:7",
+      "id": "frontend/app.tsx:995:7",
       "path": "frontend/app.tsx",
       "owner": "AgentConversationRoute",
-      "line": 994,
+      "line": 995,
       "column": 7,
       "kind": "jsx",
       "tag": "AgentPage",
@@ -3916,10 +3918,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:1098:41",
+      "id": "frontend/app.tsx:1099:41",
       "path": "frontend/app.tsx",
       "owner": "MemberSubmitForm",
-      "line": 1098,
+      "line": 1099,
       "column": 41,
       "kind": "jsx",
       "tag": "SubmitPage",
@@ -3942,10 +3944,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1125:10",
+      "id": "frontend/app.tsx:1126:10",
       "path": "frontend/app.tsx",
       "owner": "MySubmissionsRoute",
-      "line": 1125,
+      "line": 1126,
       "column": 10,
       "kind": "jsx",
       "tag": "MySubmissionsPage",
@@ -3969,10 +3971,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1176:5",
+      "id": "frontend/app.tsx:1177:5",
       "path": "frontend/app.tsx",
       "owner": "TasksRoute",
-      "line": 1176,
+      "line": 1177,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -3989,10 +3991,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1318:27",
+      "id": "frontend/app.tsx:1319:27",
       "path": "frontend/app.tsx",
       "owner": "TasksRoute",
-      "line": 1318,
+      "line": 1319,
       "column": 27,
       "kind": "jsx",
       "tag": "Button",
@@ -4017,10 +4019,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1322:7",
+      "id": "frontend/app.tsx:1323:7",
       "path": "frontend/app.tsx",
       "owner": "TasksRoute",
-      "line": 1322,
+      "line": 1323,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -4046,10 +4048,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1323:7",
+      "id": "frontend/app.tsx:1324:7",
       "path": "frontend/app.tsx",
       "owner": "TasksRoute",
-      "line": 1323,
+      "line": 1324,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -4075,10 +4077,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1325:29",
+      "id": "frontend/app.tsx:1326:29",
       "path": "frontend/app.tsx",
       "owner": "TasksRoute",
-      "line": 1325,
+      "line": 1326,
       "column": 29,
       "kind": "jsx",
       "tag": "p",
@@ -4101,10 +4103,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1325:90",
+      "id": "frontend/app.tsx:1326:90",
       "path": "frontend/app.tsx",
       "owner": "TasksRoute",
-      "line": 1325,
+      "line": 1326,
       "column": 90,
       "kind": "jsx",
       "tag": "TasksPage",
@@ -4143,10 +4145,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1325:955",
+      "id": "frontend/app.tsx:1326:955",
       "path": "frontend/app.tsx",
       "owner": "TasksRoute",
-      "line": 1325,
+      "line": 1326,
       "column": 955,
       "kind": "jsx",
       "tag": "TaskEditor",
@@ -4178,10 +4180,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1437:55",
+      "id": "frontend/app.tsx:1438:55",
       "path": "frontend/app.tsx",
       "owner": "InboxRoute",
-      "line": 1437,
+      "line": 1438,
       "column": 55,
       "kind": "jsx",
       "tag": "PlanningWriteRecovery",
@@ -4203,10 +4205,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1437:241",
+      "id": "frontend/app.tsx:1438:241",
       "path": "frontend/app.tsx",
       "owner": "InboxRoute",
-      "line": 1437,
+      "line": 1438,
       "column": 241,
       "kind": "jsx",
       "tag": "InboxPage",
@@ -4249,10 +4251,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1462:99",
+      "id": "frontend/app.tsx:1463:99",
       "path": "frontend/app.tsx",
       "owner": "InboxRoute",
-      "line": 1462,
+      "line": 1463,
       "column": 99,
       "kind": "jsx",
       "tag": "TaskEditor",
@@ -4281,10 +4283,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1584:12",
+      "id": "frontend/app.tsx:1585:12",
       "path": "frontend/app.tsx",
       "owner": "GoalsRoute",
-      "line": 1584,
+      "line": 1585,
       "column": 12,
       "kind": "jsx",
       "tag": "PlanningWriteRecovery",
@@ -4304,10 +4306,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1584:160",
+      "id": "frontend/app.tsx:1585:160",
       "path": "frontend/app.tsx",
       "owner": "GoalsRoute",
-      "line": 1584,
+      "line": 1585,
       "column": 160,
       "kind": "jsx",
       "tag": "GoalsPage",
@@ -4347,10 +4349,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1595:22",
+      "id": "frontend/app.tsx:1596:22",
       "path": "frontend/app.tsx",
       "owner": "GoalsRoute",
-      "line": 1595,
+      "line": 1596,
       "column": 22,
       "kind": "jsx",
       "tag": "GoalTasksEditor",
@@ -4385,10 +4387,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1757:12",
+      "id": "frontend/app.tsx:1758:12",
       "path": "frontend/app.tsx",
       "owner": "ProjectsRoute",
-      "line": 1757,
+      "line": 1758,
       "column": 12,
       "kind": "jsx",
       "tag": "PlanningWriteRecovery",
@@ -4408,10 +4410,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1757:166",
+      "id": "frontend/app.tsx:1758:166",
       "path": "frontend/app.tsx",
       "owner": "ProjectsRoute",
-      "line": 1757,
+      "line": 1758,
       "column": 166,
       "kind": "jsx",
       "tag": "ProjectsPage",
@@ -4456,10 +4458,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1759:40",
+      "id": "frontend/app.tsx:1760:40",
       "path": "frontend/app.tsx",
       "owner": "ProjectsRoute",
-      "line": 1759,
+      "line": 1760,
       "column": 40,
       "kind": "jsx",
       "tag": "ProjectRelationsEditor",
@@ -4494,10 +4496,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1886:12",
+      "id": "frontend/app.tsx:1887:12",
       "path": "frontend/app.tsx",
       "owner": "ProjectTimelineRoute",
-      "line": 1886,
+      "line": 1887,
       "column": 12,
       "kind": "jsx",
       "tag": "PlanningWriteRecovery",
@@ -4517,10 +4519,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1886:165",
+      "id": "frontend/app.tsx:1887:165",
       "path": "frontend/app.tsx",
       "owner": "ProjectTimelineRoute",
-      "line": 1886,
+      "line": 1887,
       "column": 165,
       "kind": "jsx",
       "tag": "ProjectTimelinePage",
@@ -4561,10 +4563,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1979:12",
+      "id": "frontend/app.tsx:1980:12",
       "path": "frontend/app.tsx",
       "owner": "CalendarRoute",
-      "line": 1979,
+      "line": 1980,
       "column": 12,
       "kind": "jsx",
       "tag": "PlanningWriteRecovery",
@@ -4586,10 +4588,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:1979:198",
+      "id": "frontend/app.tsx:1980:198",
       "path": "frontend/app.tsx",
       "owner": "CalendarRoute",
-      "line": 1979,
+      "line": 1980,
       "column": 198,
       "kind": "jsx",
       "tag": "CalendarPage",
@@ -4628,10 +4630,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2015:51",
+      "id": "frontend/app.tsx:2016:51",
       "path": "frontend/app.tsx",
       "owner": "TodayRoute",
-      "line": 2015,
+      "line": 2016,
       "column": 51,
       "kind": "jsx",
       "tag": "TodayPage",
@@ -4651,10 +4653,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2015:184",
+      "id": "frontend/app.tsx:2016:184",
       "path": "frontend/app.tsx",
       "owner": "TodayRoute",
-      "line": 2015,
+      "line": 2016,
       "column": 184,
       "kind": "jsx",
       "tag": "TodayTargetDetail",
@@ -4681,10 +4683,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2040:5",
+      "id": "frontend/app.tsx:2041:5",
       "path": "frontend/app.tsx",
       "owner": "FocusRoute",
-      "line": 2040,
+      "line": 2041,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -4701,10 +4703,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2191:5",
+      "id": "frontend/app.tsx:2192:5",
       "path": "frontend/app.tsx",
       "owner": "FocusRoute",
-      "line": 2191,
+      "line": 2192,
       "column": 5,
       "kind": "jsx",
       "tag": "p",
@@ -4726,10 +4728,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2192:5",
+      "id": "frontend/app.tsx:2193:5",
       "path": "frontend/app.tsx",
       "owner": "FocusRoute",
-      "line": 2192,
+      "line": 2193,
       "column": 5,
       "kind": "jsx",
       "tag": "Button",
@@ -4754,10 +4756,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2193:81",
+      "id": "frontend/app.tsx:2194:81",
       "path": "frontend/app.tsx",
       "owner": "FocusRoute",
-      "line": 2193,
+      "line": 2194,
       "column": 81,
       "kind": "jsx",
       "tag": "Button",
@@ -4787,10 +4789,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2197:5",
+      "id": "frontend/app.tsx:2198:5",
       "path": "frontend/app.tsx",
       "owner": "FocusRoute",
-      "line": 2197,
+      "line": 2198,
       "column": 5,
       "kind": "jsx",
       "tag": "p",
@@ -4817,10 +4819,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:2198:5",
+      "id": "frontend/app.tsx:2199:5",
       "path": "frontend/app.tsx",
       "owner": "FocusRoute",
-      "line": 2198,
+      "line": 2199,
       "column": 5,
       "kind": "jsx",
       "tag": "Button",
@@ -4850,10 +4852,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:2199:61",
+      "id": "frontend/app.tsx:2200:61",
       "path": "frontend/app.tsx",
       "owner": "FocusRoute",
-      "line": 2199,
+      "line": 2200,
       "column": 61,
       "kind": "jsx",
       "tag": "Button",
@@ -4888,10 +4890,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:2201:10",
+      "id": "frontend/app.tsx:2202:10",
       "path": "frontend/app.tsx",
       "owner": "FocusRoute",
-      "line": 2201,
+      "line": 2202,
       "column": 10,
       "kind": "jsx",
       "tag": "FocusPage",
@@ -4929,10 +4931,10 @@
       ]
     },
     {
-      "id": "frontend/app.tsx:2234:51",
+      "id": "frontend/app.tsx:2235:51",
       "path": "frontend/app.tsx",
       "owner": "WorkbenchReviewRoute",
-      "line": 2234,
+      "line": 2235,
       "column": 51,
       "kind": "jsx",
       "tag": "WorkbenchReviewPage",
@@ -4955,10 +4957,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2234:276",
+      "id": "frontend/app.tsx:2235:276",
       "path": "frontend/app.tsx",
       "owner": "WorkbenchReviewRoute",
-      "line": 2234,
+      "line": 2235,
       "column": 276,
       "kind": "jsx",
       "tag": "SnapshotTargetDetail",
@@ -4986,10 +4988,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2359:5",
+      "id": "frontend/app.tsx:2360:5",
       "path": "frontend/app.tsx",
       "owner": "NotificationsRoute",
-      "line": 2359,
+      "line": 2360,
       "column": 5,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -5006,10 +5008,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2417:10",
+      "id": "frontend/app.tsx:2418:10",
       "path": "frontend/app.tsx",
       "owner": "NotificationsRoute",
-      "line": 2417,
+      "line": 2418,
       "column": 10,
       "kind": "jsx",
       "tag": "NotificationsPage",
@@ -5047,10 +5049,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2511:10",
+      "id": "frontend/app.tsx:2512:10",
       "path": "frontend/app.tsx",
       "owner": "MessagesRoute",
-      "line": 2511,
+      "line": 2512,
       "column": 10,
       "kind": "jsx",
       "tag": "MessagesPage",
@@ -5077,10 +5079,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2611:10",
+      "id": "frontend/app.tsx:2612:10",
       "path": "frontend/app.tsx",
       "owner": "MemberDiscussionThreadRoute",
-      "line": 2611,
+      "line": 2612,
       "column": 10,
       "kind": "jsx",
       "tag": "ThreadPage",
@@ -5117,10 +5119,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2701:5",
+      "id": "frontend/app.tsx:2702:5",
       "path": "frontend/app.tsx",
       "owner": "BoardsRoute",
-      "line": 2701,
+      "line": 2702,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -5137,10 +5139,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2856:10",
+      "id": "frontend/app.tsx:2857:10",
       "path": "frontend/app.tsx",
       "owner": "BoardsRoute",
-      "line": 2856,
+      "line": 2857,
       "column": 10,
       "kind": "jsx",
       "tag": "BoardsPage",
@@ -5176,10 +5178,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3036:68",
+      "id": "frontend/app.tsx:3037:68",
       "path": "frontend/app.tsx",
       "owner": "ReviewQueueRoute",
-      "line": 3036,
+      "line": 3037,
       "column": 68,
       "kind": "jsx",
       "tag": "ReviewQueueSession",
@@ -5193,10 +5195,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3059:5",
+      "id": "frontend/app.tsx:3064:5",
       "path": "frontend/app.tsx",
       "owner": "ReviewQueueSession",
-      "line": 3059,
+      "line": 3064,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -5213,10 +5215,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3173:10",
+      "id": "frontend/app.tsx:3204:10",
       "path": "frontend/app.tsx",
       "owner": "ReviewQueueSession",
-      "line": 3173,
+      "line": 3204,
       "column": 10,
       "kind": "jsx",
       "tag": "ReviewQueuePage",
@@ -5227,21 +5229,24 @@
         "pendingId": "pendingId",
         "completedId": "completedId",
         "decisionState": "decisionState",
-        "localError": "localError",
-        "pending": "pending",
+        "localError": "recordNotice ?? localError",
+        "pending": "pending || recordBlocked",
+        "decisionRecordBlocked": "recordBlocked",
+        "onDiscardDecisionRecord": "discardRecord",
         "onRetry": "() => retryRead()",
         "onReloadDecision": "() => retryRead(true)",
         "onRetryDecision": "() => { const operation = operationRef.current; if (operation && decisionState.kind === \"error\" && decisionState.recovery === \"retry\") void review(operation.id, operation.action, undefined, operation); }",
-        "onReview": "(id, action, details) => void review(id, action, details)",
+        "onReview": "recordBlocked ? undefined : (id, action, details) => void review(id, action, details)",
         "onPageChange": "(next) => navigate({ page: next, pageSize })",
         "onPageSizeChange": "(next) => navigate({ page: 1, pageSize: next })"
       },
       "handlers": {
         "onOpenDetail": "(id) => writeWorkspaceHistory(\"push\", `/admin/submissions/${encodeURIComponent(id)}`)",
+        "onDiscardDecisionRecord": "discardRecord",
         "onRetry": "() => retryRead()",
         "onReloadDecision": "() => retryRead(true)",
         "onRetryDecision": "() => { const operation = operationRef.current; if (operation && decisionState.kind === \"error\" && decisionState.recovery === \"retry\") void review(operation.id, operation.action, undefined, operation); }",
-        "onReview": "(id, action, details) => void review(id, action, details)",
+        "onReview": "recordBlocked ? undefined : (id, action, details) => void review(id, action, details)",
         "onPageChange": "(next) => navigate({ page: next, pageSize })",
         "onPageSizeChange": "(next) => navigate({ page: 1, pageSize: next })"
       },
@@ -5251,10 +5256,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3207:5",
+      "id": "frontend/app.tsx:3239:5",
       "path": "frontend/app.tsx",
       "owner": "AdminDuplicateRoute",
-      "line": 3207,
+      "line": 3239,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -5271,10 +5276,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3303:10",
+      "id": "frontend/app.tsx:3335:10",
       "path": "frontend/app.tsx",
       "owner": "AdminDuplicateRoute",
-      "line": 3303,
+      "line": 3335,
       "column": 10,
       "kind": "jsx",
       "tag": "DuplicateQueuePage",
@@ -5303,10 +5308,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3335:5",
+      "id": "frontend/app.tsx:3367:5",
       "path": "frontend/app.tsx",
       "owner": "AdminMembersRoute",
-      "line": 3335,
+      "line": 3367,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -5323,10 +5328,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3433:10",
+      "id": "frontend/app.tsx:3465:10",
       "path": "frontend/app.tsx",
       "owner": "AdminMembersRoute",
-      "line": 3433,
+      "line": 3465,
       "column": 10,
       "kind": "jsx",
       "tag": "MembersPage",
@@ -5362,10 +5367,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3452:5",
+      "id": "frontend/app.tsx:3484:5",
       "path": "frontend/app.tsx",
       "owner": "AdminSpacesRoute",
-      "line": 3452,
+      "line": 3484,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -5382,10 +5387,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3534:10",
+      "id": "frontend/app.tsx:3566:10",
       "path": "frontend/app.tsx",
       "owner": "AdminSpacesRoute",
-      "line": 3534,
+      "line": 3566,
       "column": 10,
       "kind": "jsx",
       "tag": "SpacesPage",
@@ -5418,10 +5423,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3599:10",
+      "id": "frontend/app.tsx:3631:10",
       "path": "frontend/app.tsx",
       "owner": "AdminAuditRoute",
-      "line": 3599,
+      "line": 3631,
       "column": 10,
       "kind": "jsx",
       "tag": "AuditPage",
@@ -5448,10 +5453,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3722:10",
+      "id": "frontend/app.tsx:3754:10",
       "path": "frontend/app.tsx",
       "owner": "AdminAssetsRoute",
-      "line": 3722,
+      "line": 3754,
       "column": 10,
       "kind": "jsx",
       "tag": "AssetQueuePage",
@@ -24185,10 +24190,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-queue-page.tsx:22:17",
+      "id": "frontend/pages/admin/review-queue-page.tsx:23:17",
       "path": "frontend/pages/admin/review-queue-page.tsx",
       "owner": "ReviewQueuePage",
-      "line": 22,
+      "line": 23,
       "column": 17,
       "kind": "jsx",
       "tag": "Button",
@@ -24210,10 +24215,82 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-queue-page.tsx:30:5",
+      "id": "frontend/pages/admin/review-queue-page.tsx:31:31",
       "path": "frontend/pages/admin/review-queue-page.tsx",
       "owner": "ReviewQueuePage",
-      "line": 30,
+      "line": 31,
+      "column": 31,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "role": "\"alert\"",
+        "data-review-decision-record-blocked": "true",
+        "className": "\"space-y-2 text-sm text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "decisionRecordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <div aria-busy=\"true\"><Skeleton className=\"h-24\" /></div>;"
+        },
+        {
+          "condition": "state.kind !== \"ready\"",
+          "source": "if (state.kind !== \"ready\") return <PageState kind={state.kind} title={state.message || frontendText(locale, \"COMMON_UNABLE_TO_LOAD\")}>{retry}</PageState>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/admin/review-queue-page.tsx:31:201",
+      "path": "frontend/pages/admin/review-queue-page.tsx",
+      "owner": "ReviewQueuePage",
+      "line": 31,
+      "column": 201,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "onClick": "onDiscardDecisionRecord"
+      },
+      "handlers": {
+        "onClick": "onDiscardDecisionRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_REVIEW_DECISION_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "decisionRecordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <div aria-busy=\"true\"><Skeleton className=\"h-24\" /></div>;"
+        },
+        {
+          "condition": "state.kind !== \"ready\"",
+          "source": "if (state.kind !== \"ready\") return <PageState kind={state.kind} title={state.message || frontendText(locale, \"COMMON_UNABLE_TO_LOAD\")}>{retry}</PageState>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/admin/review-queue-page.tsx:32:5",
+      "path": "frontend/pages/admin/review-queue-page.tsx",
+      "owner": "ReviewQueuePage",
+      "line": 32,
       "column": 5,
       "kind": "jsx",
       "tag": "ReviewDecisionFeedback",
@@ -24243,10 +24320,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-queue-page.tsx:31:22",
+      "id": "frontend/pages/admin/review-queue-page.tsx:33:22",
       "path": "frontend/pages/admin/review-queue-page.tsx",
       "owner": "ReviewQueuePage",
-      "line": 31,
+      "line": 33,
       "column": 22,
       "kind": "jsx",
       "tag": "p",
@@ -24278,10 +24355,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-queue-page.tsx:37:11",
+      "id": "frontend/pages/admin/review-queue-page.tsx:39:11",
       "path": "frontend/pages/admin/review-queue-page.tsx",
       "owner": "ReviewQueuePage",
-      "line": 37,
+      "line": 39,
       "column": 11,
       "kind": "jsx",
       "tag": "a",
@@ -24320,10 +24397,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-queue-page.tsx:44:9",
+      "id": "frontend/pages/admin/review-queue-page.tsx:46:9",
       "path": "frontend/pages/admin/review-queue-page.tsx",
       "owner": "ReviewQueuePage",
-      "line": 44,
+      "line": 46,
       "column": 9,
       "kind": "jsx",
       "tag": "ReviewDecisionControls",
@@ -24367,10 +24444,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-queue-page.tsx:49:5",
+      "id": "frontend/pages/admin/review-queue-page.tsx:51:5",
       "path": "frontend/pages/admin/review-queue-page.tsx",
       "owner": "ReviewQueuePage",
-      "line": 49,
+      "line": 51,
       "column": 5,
       "kind": "jsx",
       "tag": "DataPagination",

@@ -2,6 +2,7 @@ import { validReviewNote, type ReviewDecision, type ReviewOperation } from "../c
 
 export type StoredReviewDecision = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intent: ReviewOperation };
 const storageKey = (memberId: string, submissionId: string) => `memory-garden:review-decision:v1:${encodeURIComponent(memberId)}:${encodeURIComponent(submissionId)}`;
+const currentKey = (memberId: string) => `memory-garden:review-decision-current:v1:${encodeURIComponent(memberId)}`;
 const idPattern = /^[A-Za-z0-9_-]+$/u;
 const actions = new Set<ReviewDecision>(["publish", "reject", "request_changes"]);
 function isId(value: unknown): value is string { return typeof value === "string" && idPattern.test(value); }
@@ -66,23 +67,53 @@ export function saveReviewDecision(memberId: string, submissionId: string, inten
   try {
     const stored = { id: intent.id, action: intent.action, path: intent.path, body: intent.body };
     if (stored.id !== submissionId || !validReviewDecision(stored) || loadReviewDecision(memberId, submissionId).kind !== "empty") return false;
-    storage().setItem(storageKey(memberId, submissionId), JSON.stringify({ version: 1, memberId, submissionId, intent: stored }));
+    const box = storage();
+    box.setItem(storageKey(memberId, submissionId), JSON.stringify({ version: 1, memberId, submissionId, intent: stored }));
+    box.setItem(currentKey(memberId), submissionId);
     const saved = loadReviewDecision(memberId, submissionId);
-    return saved.kind === "ready" && same(saved.intent, stored);
+    if (!(saved.kind === "ready" && same(saved.intent, stored) && box.getItem(currentKey(memberId)) === submissionId)) {
+      box.removeItem(storageKey(memberId, submissionId)); box.removeItem(currentKey(memberId)); return false;
+    }
+    return true;
   } catch { return false; }
 }
 export function clearReviewDecision(memberId: string, submissionId: string, intent: ReviewOperation): boolean {
   try {
     const previous = loadReviewDecision(memberId, submissionId);
     if (previous.kind === "blocked" || (previous.kind === "ready" && !same(previous.intent, intent))) return false;
-    storage().removeItem(storageKey(memberId, submissionId));
-    return storage().getItem(storageKey(memberId, submissionId)) === null;
+    const box = storage();
+    box.removeItem(storageKey(memberId, submissionId));
+    if (box.getItem(currentKey(memberId)) === submissionId) box.removeItem(currentKey(memberId));
+    return box.getItem(storageKey(memberId, submissionId)) === null && box.getItem(currentKey(memberId)) !== submissionId;
   } catch { return false; }
 }
 export function discardBlockedReviewDecision(memberId: string, submissionId: string): boolean {
   try {
     if (!memberId || loadReviewDecision(memberId, submissionId).kind !== "blocked") return false;
-    storage().removeItem(storageKey(memberId, submissionId));
-    return storage().getItem(storageKey(memberId, submissionId)) === null;
+    const box = storage();
+    box.removeItem(storageKey(memberId, submissionId));
+    if (box.getItem(currentKey(memberId)) === submissionId) box.removeItem(currentKey(memberId));
+    return box.getItem(storageKey(memberId, submissionId)) === null;
+  } catch { return false; }
+}
+export function loadCurrentReviewDecision(memberId: string): StoredReviewDecision {
+  try {
+    if (!memberId) return { kind: "blocked" };
+    const pointer = storage().getItem(currentKey(memberId));
+    if (pointer === null) return { kind: "empty" };
+    if (!isId(pointer)) return { kind: "blocked" };
+    const stored = loadReviewDecision(memberId, pointer);
+    if (stored.kind !== "ready" || stored.intent.id !== pointer) return { kind: "blocked" };
+    return stored;
+  } catch { return { kind: "blocked" }; }
+}
+export function discardBlockedCurrentReviewDecision(memberId: string): boolean {
+  try {
+    if (!memberId || loadCurrentReviewDecision(memberId).kind !== "blocked") return false;
+    const box = storage();
+    const pointer = box.getItem(currentKey(memberId));
+    box.removeItem(currentKey(memberId));
+    if (pointer && isId(pointer) && loadReviewDecision(memberId, pointer).kind === "blocked") box.removeItem(storageKey(memberId, pointer));
+    return loadCurrentReviewDecision(memberId).kind === "empty";
   } catch { return false; }
 }
