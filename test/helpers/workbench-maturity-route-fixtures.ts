@@ -61,7 +61,7 @@ export function createMaturityRouteFetch(options: {
   requests?: string[];
   discussionDenied?: boolean;
 }): typeof globalThis.fetch {
-  return async (input) => {
+  return async (input, init) => {
     const path = String(input);
     options.requests?.push(path);
     if (path === "/api/navigation") return Response.json({ tree: currentNavigationFixture(options.role, options.permissionMask) });
@@ -74,7 +74,7 @@ export function createMaturityRouteFetch(options: {
     const common = commonAuxiliaryResponse(path);
     if (common) return common;
 
-    const response = routeFamilyResponse(options.routeId, options.state, path);
+    const response = routeFamilyResponse(options.routeId, options.state, path, init);
     if (response) return response;
     throw new Error(`unplanned ${options.routeId}/${options.state} maturity request: ${path}`);
   };
@@ -149,7 +149,7 @@ function commonAuxiliaryResponse(path: string): Response | null {
   return null;
 }
 
-function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState, path: string): Promise<Response> | Response | null {
+function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState, path: string, init?: RequestInit): Promise<Response> | Response | null {
   switch (routeId) {
     case "graph":
       if (pathname(path) === "/api/graph") return probeResponse(state,
@@ -191,7 +191,10 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (pathname(path) === "/api/knowledge/search") return probeResponse(state, { ...numbered([]), degraded: false }, { ...numbered([{ knowledgeItemId: "ready-search", title: "READY::search", excerpt: "route fixture" }]), degraded: false });
       return null;
     case "agent":
-      if (path === "/api/knowledge/chat") return probeResponse(state, {}, { answer: "READY::agent", evidenceConfidence: 1, citations: [] });
+      if (path === "/api/knowledge/chat") {
+        const key = new Headers(init?.headers).get("idempotency-key");
+        return probeResponse(state, {}, { answer: "READY::agent", evidenceConfidence: 1, citations: [], sources: [], conversationId: "conv-maturity", ...(key ? { idempotencyKey: key } : {}) });
+      }
       return null;
     case "my-submissions":
       if (pathname(path) === "/api/submissions/mine") return probeResponse(state, numbered([]), numbered([{ id: "ready-my-submissions", title: "READY::my-submissions", status: "review_pending" }]));

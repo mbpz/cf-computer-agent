@@ -43,7 +43,7 @@ export async function askAgent({ question, scope, conversationId, idempotencyKey
     headers: { "content-type": "application/json", ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}) },
     body: JSON.stringify({ question: question.trim(), scope, ...(conversationId ? { conversationId } : {}) }),
   });
-  if (idempotencyKey && (data.idempotencyKey !== idempotencyKey || (conversationId !== undefined && data.conversationId !== conversationId) || typeof data.answer !== "string" || typeof data.conversationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(data.conversationId))) throw new Error("CHAT_RECEIPT_UNKNOWN");
+  if (idempotencyKey && (data.idempotencyKey !== idempotencyKey || (conversationId !== undefined && data.conversationId !== conversationId) || typeof data.answer !== "string" || typeof data.conversationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(data.conversationId) || typeof data.evidenceConfidence !== "number" || !Number.isFinite(data.evidenceConfidence) || data.evidenceConfidence < 0 || data.evidenceConfidence > 1 || !Array.isArray(data.citations) || !Array.isArray(data.sources))) throw new Error("CHAT_RECEIPT_UNKNOWN");
   const confidence = typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.8
     ? "high"
     : typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.5 ? "medium" : "low";

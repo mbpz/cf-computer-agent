@@ -271,7 +271,7 @@ describe("agent request cancellation route", () => {
     const old = deferred<Response>(); const current = deferred<Response>(); let feedback = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith("/feedback")) return ++feedback === 1 ? old.promise : current.promise;
-      return Response.json({answer: "Answer", conversationId: "conv-1", citations: [], idempotencyKey: new Headers(init?.headers).get("idempotency-key")});
+      return Response.json({answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], idempotencyKey: new Headers(init?.headers).get("idempotency-key")});
     });
     await render(); await question("Question"); await submit(); await click("Useful");
     await act(async () => root.render(<AgentRoute locale={language} memberId="new-member" />));
@@ -320,7 +320,7 @@ describe("agent request cancellation route", () => {
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
       requests.push(init!);
       if (requests.length === 1) throw new Error("response lost");
-      return Response.json({ answer: "Recovered answer", conversationId: "recovered-turn", idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
+      return Response.json({ answer: "Recovered answer", conversationId: "recovered-turn", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" />));
     await question("Original question"); await submit();
@@ -377,7 +377,7 @@ describe("agent request cancellation route", () => {
   it("uses a new key with the recovered conversation for the next distinct question", async () => {
     const requests: RequestInit[] = [];
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
-      requests.push(init!); return Response.json({ answer: "Verified answer", conversationId: "conv-stable", idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
+      requests.push(init!); return Response.json({ answer: "Verified answer", conversationId: "conv-stable", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-sequence" />));
     await question("First"); await submit(); await question("Second"); await submit();
@@ -602,7 +602,7 @@ describe("agent request cancellation route", () => {
       expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
     });
     expect(browser.location.pathname).toBe("/agent"); expect(init?.signal?.aborted).toBe(false);
-    await act(async () => late.resolve(Response.json({answer: "Verified", conversationId: "conv-nav", idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: []})));
+    await act(async () => late.resolve(Response.json({answer: "Verified", conversationId: "conv-nav", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: []})));
     await flush(); expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
   });
 
@@ -647,7 +647,7 @@ describe("agent request cancellation route", () => {
     const storage = browser.sessionStorage;
     Object.defineProperty(browser, "sessionStorage", {configurable: true, value: {getItem: (key: string) => storage.getItem(key), removeItem: () => {throw new Error("denied");}}});
     try {
-      await act(async () => late.resolve(Response.json({answer: "Verified", conversationId: "conv-nav", idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: []}))); await flush();
+      await act(async () => late.resolve(Response.json({answer: "Verified", conversationId: "conv-nav", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: []}))); await flush();
       expect(container.textContent).toContain("Question recovery storage is unavailable or invalid");
       expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
       await click("Abandon unconfirmed question"); expect(leave()).toBe("blocked");
