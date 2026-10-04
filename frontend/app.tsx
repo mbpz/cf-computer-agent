@@ -101,6 +101,7 @@ import { loadAdminAnalytics, type AdminAnalyticsOverview, type LoadAdminAnalytic
 import { ApiRequestError } from "./lib/api";
 import { createNumberedRequestController, parsePageSearch, writePageSearch, type SupportedPageSize } from "./lib/numbered-page";
 import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRoleMember, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
+import { clearAdminRoleWrite, discardBlockedAdminRoleWrite, loadAdminRoleWrite, saveAdminRoleWrite, type AdminRoleWriteIntent } from "./lib/admin-role-write-intent";
 import { createAdminMenu, deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAsset, type AdminAssetsPage, type AdminAssetStatus } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, loadAdminDuplicate, type AdminDuplicateCandidate, type AdminDuplicatePageResult, type DuplicateDecision } from "./lib/admin-duplicates-data";
@@ -229,7 +230,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "coming-soon": return <ComingSoonPage locale={locale} />;
     case "admin": return session ? <AdminDashboardRoute locale={locale} session={session} /> : <NotFoundPage locale={locale} />;
     case "admin-analytics": return <AdminAnalyticsRoute key={JSON.stringify([session?.member.id, session?.permissionMask, session?.capabilities])} locale={locale} search={search} />;
-    case "admin-roles": return <AdminRolesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
+    case "admin-roles": return <AdminRolesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} />;
     case "admin-menus": return <AdminMenusRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
     case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} />;
@@ -395,16 +396,21 @@ function useInitialReadRetry(kind: string, start: () => void) {
   return { retryVersion: version, retryRead: retry };
 }
 
-export function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
+export function AdminRolesRoute({ locale, memberId }: { locale: LocaleRuntime; memberId?: string }) {
+  const [writeStored] = useState(() => memberId ? loadAdminRoleWrite(memberId) : { kind: "empty" as const });
+  const recordBlockedRef = useRef(writeStored.kind === "blocked");
+  const [recordBlocked, setRecordBlocked] = useState(recordBlockedRef.current);
+  const [recordNotice, setRecordNotice] = useState<string>();
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; roles: AdminRole[] } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [saving, setSaving] = useState(false);
   const [reading, setReading] = useState(false);
-  const [needsRead, setNeedsRead] = useState(false);
+  const [needsRead, setNeedsRead] = useState(writeStored.kind === "ready");
   const [saveError, setSaveError] = useState<string | null>(null);
   const epoch = useRef<object | null>(null);
   const readRef = useRef<AbortController | null>(null);
   const writeRef = useRef<object | null>(null);
-  const blockedRef = useRef(false);
+  const blockedRef = useRef(writeStored.kind === "ready");
+  const intentRef = useRef<AdminRoleWriteIntent | null>(writeStored.kind === "ready" ? writeStored.intent : null);
   useEffect(() => {
     // This guard outlives the editor: denied/failed reads can replace its UI
     // without resolving a write. Never offer "discard" for an unknown outcome.
@@ -435,9 +441,15 @@ export function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
       if (epoch.current !== scope || readRef.current !== controller) return false;
       setState({ kind: "ready", roles });
       if (!activeWrite && !writeRef.current) {
-        blockedRef.current = false;
-        setNeedsRead(false);
-        setSaveError(null);
+        const intent = intentRef.current;
+        if (memberId && intent && !clearAdminRoleWrite(memberId, intent)) {
+          blockedRef.current = true; setNeedsRead(true);
+          setRecordNotice(frontendText(locale, "ADMIN_ROLES_RECORD_STUCK"));
+        } else {
+          intentRef.current = null;
+          if (intent) setRecordNotice(undefined);
+          blockedRef.current = false; setNeedsRead(false); setSaveError(null);
+        }
       }
       return true;
     } catch (error) {
@@ -463,8 +475,13 @@ export function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
     if (state.kind !== "ready") setState({ kind: "loading" });
     void read();
   };
-  const mutate = async (operation: () => Promise<unknown>, errorKey: string) => {
-    if (!epoch.current || state.kind !== "ready" || writeRef.current || readRef.current || blockedRef.current) return false;
+  const mutate = async (intent: AdminRoleWriteIntent, operation: () => Promise<unknown>, errorKey: string) => {
+    if (recordBlockedRef.current || !epoch.current || state.kind !== "ready" || writeRef.current || readRef.current || blockedRef.current) return false;
+    if (memberId && !saveAdminRoleWrite(memberId, intent)) {
+      setRecordNotice(frontendText(locale, "ADMIN_ROLES_NOT_RECORDED"));
+      return false;
+    }
+    if (memberId) intentRef.current = intent;
     const scope = epoch.current;
     const token = {};
     writeRef.current = token;
@@ -472,6 +489,7 @@ export function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
     setSaving(true);
     setNeedsRead(true);
     setSaveError(null);
+    setRecordNotice(undefined);
     try {
       await operation();
       if (epoch.current !== scope) return false;
@@ -489,11 +507,15 @@ export function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
       }
     }
   };
-  return <AdminRolesPage onLoadRetry={retryRead} locale={locale} state={state} saving={saving} writeBlocked={reading || needsRead} readPending={reading || saving} readRequired={needsRead} saveError={saveError}
-    onSave={(role, allowBits) => mutate(() => updateAdminRole(role.id, { allowBits }), "ADMIN_ROLES_SAVE_ERROR")}
-    onCreate={(input) => mutate(() => createAdminRole(input), "ADMIN_ROLES_CREATE_ERROR")}
-    onAssignMember={(role, memberId) => mutate(() => assignAdminRoleMember(role.id, memberId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")}
-    onUnassignMember={(role, memberId) => mutate(() => unassignAdminRoleMember(role.id, memberId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")} />;
+  function discardRecord() {
+    if (!memberId || !recordBlockedRef.current || !discardBlockedAdminRoleWrite(memberId)) return;
+    recordBlockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
+  }
+  return <AdminRolesPage onLoadRetry={retryRead} locale={locale} state={state} saving={saving} writeBlocked={reading || needsRead} readPending={reading || saving} readRequired={needsRead} saveError={recordNotice ?? saveError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord}
+    onSave={recordBlocked ? undefined : (role, allowBits) => mutate({ op: "update", roleId: role.id, allowBits }, () => updateAdminRole(role.id, { allowBits }), "ADMIN_ROLES_SAVE_ERROR")}
+    onCreate={recordBlocked ? undefined : (input) => mutate({ op: "create", key: input.key, name: input.name, allowBits: input.allowBits }, () => createAdminRole(input), "ADMIN_ROLES_CREATE_ERROR")}
+    onAssignMember={recordBlocked ? undefined : (role, targetId) => mutate({ op: "assign", roleId: role.id, memberId: targetId }, () => assignAdminRoleMember(role.id, targetId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")}
+    onUnassignMember={recordBlocked ? undefined : (role, targetId) => mutate({ op: "unassign", roleId: role.id, memberId: targetId }, () => unassignAdminRoleMember(role.id, targetId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")} />;
 }
 
 export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
