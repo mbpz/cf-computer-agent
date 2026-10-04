@@ -91,6 +91,7 @@ import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussi
 import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
+import { clearAdminMemberStatus, discardBlockedAdminMemberStatus, loadAdminMemberStatuses, saveAdminMemberStatus, type AdminMemberStatusIntent } from "./lib/admin-member-status-intent";
 import { createAdminSpace, manageAdminSpace, loadAdminSpacesPage, loadAdminCollections, type AdminSpace, type AdminSpaceCommand } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
@@ -233,7 +234,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
-    case "admin-members": return <AdminMembersRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
+    case "admin-members": return <AdminMembersRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-spaces": return <AdminSpacesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
     case "admin-audit": return <AdminAuditRoute locale={locale} search={search} />;
     case "not-found": return <NotFoundPage locale={locale} />;
@@ -3362,13 +3363,17 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
   return <DuplicateQueuePage onLoadRetry={retryRead} locale={locale} state={state} pendingId={pendingId} pending={pending || recordBlocked} lockedIds={lockedIds} readRequired={!pendingId && lockedIds.some((id) => !acknowledgedRef.current.has(id) || (state.kind === "ready" && state.data.items.some((item) => item.submissionId === id)))} localError={recordNotice ?? localError} decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord} onDecision={recordBlocked ? undefined : (id, decision) => void decide(id, decision)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
-export function AdminMembersRoute({ locale, search, load = loadAdminMembers, update = updateMemberStatus }: { locale: LocaleRuntime; search: string; load?: typeof loadAdminMembers; update?: typeof updateMemberStatus }) {
+export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMembers, update = updateMemberStatus }: { locale: LocaleRuntime; search: string; memberId?: string; load?: typeof loadAdminMembers; update?: typeof updateMemberStatus }) {
   const initial = parsePageSearch(search);
   const [page, setPage] = useState(initial.page);
   const [pageSize, setPageSize] = useState(initial.pageSize);
   const [status, setStatus] = useState<"active" | "disabled" | undefined>(() => memberStatusSearch(search));
+  const [statusStored] = useState(() => memberId ? loadAdminMemberStatuses(memberId) : { kind: "empty" as const });
+  const blockedRef = useRef(statusStored.kind === "blocked");
+  const [recordBlocked, setRecordBlocked] = useState(blockedRef.current);
+  const [recordNotice, setRecordNotice] = useState<string>();
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminMembersPage } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
-  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const [pendingIds, setPendingIds] = useState<string[]>(() => statusStored.kind === "ready" ? statusStored.intents.map((intent) => intent.id) : []);
   const [pending, setPending] = useState(false);
   const [localError, setLocalError] = useState<string>();
   const [actionError, setActionError] = useState<string>();
@@ -3380,10 +3385,11 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
   const mutationsRef = useRef(new Map<string, object>());
   // In-memory safety only: an uncertain PATCH is not replayed. A later GET must
   // expose this row before another explicit change; absence is not proof of success.
-  const needsReadRef = useRef(new Set<string>());
+  const needsReadRef = useRef(new Set<string>(statusStored.kind === "ready" ? statusStored.intents.map((intent) => intent.id) : []));
   // A validated PATCH receipt resolves its outcome; row readiness is separate.
   // Without a receipt, only a post-settlement GET containing that row unlocks leave.
-  const unresolvedWrites = useRef(new Set<string>());
+  const unresolvedWrites = useRef(new Set<string>(statusStored.kind === "ready" ? statusStored.intents.map((intent) => intent.id) : []));
+  const intentRef = useRef(new Map<string, AdminMemberStatusIntent>(statusStored.kind === "ready" ? statusStored.intents.map((intent) => [intent.id, intent]) : []));
   const ownedQueryNavigation = useRef(false);
   useEffect(() => {
     const owner = window;
@@ -3435,6 +3441,13 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
       if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
       for (const row of data.items) {
         if (!activeAtStart.has(row.id) && !mutationsRef.current.has(row.id)) {
+          const intent = intentRef.current.get(row.id);
+          if (memberId && intent && !clearAdminMemberStatus(memberId, intent)) {
+            setRecordNotice(frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_STUCK"));
+            continue;
+          }
+          intentRef.current.delete(row.id);
+          if (intent) setRecordNotice(undefined);
           needsReadRef.current.delete(row.id); unresolvedWrites.current.delete(row.id);
         }
       }
@@ -3471,13 +3484,24 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
     return () => { invalidateQuery(); };
   }, [load, locale, page, pageSize, status, readVersion]);
   const changeStatus = async (id: string, nextStatus: "active" | "disabled") => {
-    if (!controllerRef.current || readRef.current || mutationsRef.current.has(id) || needsReadRef.current.has(id)) return;
+    if (blockedRef.current || !controllerRef.current || readRef.current || mutationsRef.current.has(id) || needsReadRef.current.has(id)) return;
     const member = state.kind === "ready" ? state.data.items.find((item) => item.id === id) : undefined;
     if (member?.role !== "contributor" || (member.status !== "active" && member.status !== "disabled") || member.status === nextStatus) return;
+    const intent: AdminMemberStatusIntent = { id, status: nextStatus };
+    if (memberId && !saveAdminMemberStatus(memberId, intent)) {
+      setRecordNotice(frontendText(locale, "ADMIN_MEMBER_STATUS_NOT_RECORDED"));
+      return;
+    }
+    if (memberId) intentRef.current.set(id, intent);
     const token = {}; const scope = scopeRef.current; const actionQuery = { ...queryRef.current };
-    mutationsRef.current.set(id, token); needsReadRef.current.add(id); unresolvedWrites.current.add(id); syncPendingIds(); setActionError(undefined);
+    mutationsRef.current.set(id, token); needsReadRef.current.add(id); unresolvedWrites.current.add(id); syncPendingIds(); setActionError(undefined); setRecordNotice(undefined);
     try {
       await update(id, nextStatus);
+      if (memberId && !clearAdminMemberStatus(memberId, intent)) {
+        setRecordNotice(frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_STUCK"));
+        return;
+      }
+      intentRef.current.delete(id);
       unresolvedWrites.current.delete(id);
       if (scopeRef.current !== scope || !sameQuery(actionQuery)) return;
       mutationsRef.current.delete(id); syncPendingIds(); needsClampRef.current = true;
@@ -3489,7 +3513,11 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
       if (mutationsRef.current.get(id) === token) { mutationsRef.current.delete(id); syncPendingIds(); }
     }
   };
-  return <MembersPage onLoadRetry={retryRead} locale={locale} status={status || ""} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} pageError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending} pendingIds={pendingIds} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} actionError={actionError} onStatusFilterChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} onStatusChange={changeStatus} />;
+  function discardRecord() {
+    if (!memberId || !blockedRef.current || !discardBlockedAdminMemberStatus(memberId)) return;
+    blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
+  }
+  return <MembersPage onLoadRetry={retryRead} locale={locale} status={status || ""} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} pageError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending || recordBlocked} pendingIds={pendingIds} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} actionError={recordNotice ?? actionError} statusRecordBlocked={recordBlocked} onDiscardStatusRecord={discardRecord} onStatusFilterChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} onStatusChange={recordBlocked ? undefined : changeStatus} />;
 }
 
 export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
