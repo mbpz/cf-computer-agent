@@ -274,3 +274,8 @@ GraphPage 的进行中/未确认动作改为页面所有（节点快照 + client
 ### 看板未知移动跨刷新续行（基线ef7e933）
 
 BoardsRoute 未知移动改由标签页/成员记录承载，重新挂载即恢复锁与核对入口；记录写入失败不发请求，清除失败不解锁。见 `docs/product/navigation-board-move-refresh-evidence.md`。Task 4 整体及原生门禁仍开放；下一允许继续任务编辑器未知写入跨刷新恢复（C01）。
+
+
+### 任务编辑器未知写入续行（基线e98035b）
+
+TaskEditor 意图可序列化、可只读核对并跨刷新恢复；TasksRoute 重新打开编辑器承接锁定。见 `docs/product/navigation-task-write-recovery-evidence.md`。Task 4 整体及原生门禁仍开放；下一允许继续任务列表行快捷状态/删除的未知结果分流。

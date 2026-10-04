@@ -14,6 +14,7 @@ import { ProjectRelationsEditor } from "./components/project-relations-editor";
 import { useCreateDraft } from "./lib/use-create-draft";
 import { AgentHistoryList } from "./components/agent/agent-history-list";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { Alert, AlertTitle } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
 import { PageState } from "./components/ui/page-state";
 import { HistoryNavigationNotice } from "./components/history-navigation-notice";
@@ -48,6 +49,7 @@ import { FocusPage, type FocusPageState } from "./pages/focus-page";
 import { WorkbenchReviewPage, type WorkbenchReviewPageState } from "./pages/workbench-review-page";
 import { BoardsPage, type BoardUnknownMove } from "./pages/boards/boards-page";
 import { clearBoardMove, discardBlockedBoardMove, loadBoardMove, saveBoardMove, type BoardMoveIntent } from "./lib/board-move-intent";
+import { discardBlockedTaskWrite, loadTaskWrite, type TaskWriteIntent } from "./lib/task-write-intent";
 import { taskStatusKey } from "./pages/tasks/tasks-model";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
@@ -203,7 +205,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "submit": return session ? <SubmitRoute locale={locale} memberId={session.member.id} /> : <NotFoundPage locale={locale} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "graph": return <GraphRoute locale={locale} />;
-    case "tasks": return <TasksRoute key={session?.member.id} locale={locale} search={search} />;
+    case "tasks": return <TasksRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "inbox": return <InboxRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "goals": return <GoalsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "projects": return <ProjectsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
@@ -1100,8 +1102,12 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
   return <MySubmissionsPage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
-export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
-  const [editor, setEditor] = useState<{ taskId: string | null } | null>(null);
+export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
+  // A write whose result was unknown before a refresh reopens its editor in the same locked state.
+  const [stored] = useState(() => memberId ? loadTaskWrite(memberId) : { kind: "empty" as const });
+  const [editor, setEditor] = useState<{ taskId: string | null; restored?: TaskWriteIntent } | null>(() => stored.kind === "ready"
+    ? { taskId: stored.intent.op === "create" ? null : stored.intent.taskId, restored: stored.intent } : null);
+  const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
   const initialPage = useMemo(() => parsePageSearch(search), [search]);
   const initialFilters = useMemo(() => taskFiltersFromSearch(search), [search]);
   const [page, setPage] = useState(initialPage.page);
@@ -1202,7 +1208,11 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
     } finally { actionPendingRef.current = false; setActionPendingId(null); }
   };
   const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;
-  return <><div inert={editor ? true : undefined}><TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
+  const discardRecord = () => { if (memberId && discardBlockedTaskWrite(memberId)) setRecordBlocked(false); };
+  return <><div inert={editor ? true : undefined}>{recordBlocked && <Alert variant="destructive" data-task-write-record-blocked="" className="mb-4">
+    <AlertTitle>{frontendText(locale, "TASKS_WRITE_RECORD_BLOCKED")}</AlertTitle>
+    <div className="mt-3"><Button variant="outline" onClick={discardRecord}>{frontendText(locale, "TASKS_WRITE_RECORD_DISCARD")}</Button></div>
+  </Alert>}<TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} memberId={memberId} {...(editor.restored ? { restored: editor.restored } : {})} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
 }
 
 export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {

@@ -423,4 +423,135 @@ describe("task editor through the real route", () => {
     await mount(); await click("Edit: Alpha (task-alpha)"); await click("Save task");
     expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(container.textContent).not.toContain("Alpha");
   });
+
+  describe("unknown write reconciliation", () => {
+    const KEY = "memory-garden:task-write:v1:alice";
+    async function mountAs(memberId: string) { await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" memberId={memberId} />)); await flush(); await flush(); }
+    async function refresh(memberId = "alice") { await act(async () => root.unmount()); root = createRoot(container); await mountAs(memberId); }
+    async function leave() { let result: string | undefined; await act(async () => { result = writeWorkspaceHistory("push", "/settings"); }); return result; }
+    const title = () => container.querySelector('[aria-label="Task title"]') as HTMLInputElement;
+
+    it("checks an unknown field write read-only and releases it as not saved while keeping the draft", async () => {
+      responder = (_url, init) => init?.method === "PATCH" ? Promise.reject(new TypeError("offline")) : undefined;
+      await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Unknown"); await click("Save task");
+      expect(container.textContent).toContain("The write result is unknown");
+      await click("Check the result");
+      expect(writes).toHaveLength(1);
+      expect(container.textContent).not.toContain("The write result is unknown");
+      expect(container.textContent).toContain("The change is not on the task");
+      expect(title().disabled).toBe(false); expect(title().value).toBe("Unknown");
+    });
+
+    it("reports a checked write as saved when the read matches the intent", async () => {
+      responder = (_url, init) => { if (init?.method === "PATCH") { saved = { ...saved, ...JSON.parse(String(init.body)) }; return Promise.reject(new TypeError("offline")); } };
+      await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Landed"); await click("Save task");
+      await click("Check the result");
+      expect(writes).toHaveLength(1);
+      expect(container.textContent).toContain("The change was saved.");
+      expect(title().value).toBe("Landed"); expect(title().disabled).toBe(false);
+      expect(await leave()).toBe("committed");
+    });
+
+    it("settles an unknown status write whose retry is rejected after a change elsewhere by checking", async () => {
+      let posts = 0;
+      responder = (url, init) => {
+        if (url.endsWith("/status") && init?.method === "POST") {
+          posts += 1;
+          if (posts === 1) { saved = { ...saved, status: "blocked" }; return Promise.reject(new TypeError("offline")); }
+          return Response.json({ error: { code: "TASK_TRANSITION_INVALID", message: "invalid", retryable: false } }, { status: 422 });
+        }
+      };
+      await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task status", "doing"); await click("Save status");
+      await click("Retry same operation");
+      expect(container.textContent).toContain("The write result is unknown");
+      await click("Check the result");
+      expect(posts).toBe(2);
+      expect(container.textContent).not.toContain("The write result is unknown");
+      expect(container.textContent).toContain("The change is not on the task");
+      expect(await leave()).toBe("deferred");
+      expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+    });
+
+    it("creates again with the same task id after a not-saved check", async () => {
+      let attempt = 0;
+      responder = (url, init) => {
+        if (url === "/api/tasks" && init?.method === "POST") { attempt += 1; if (attempt === 1) return Promise.reject(new TypeError("offline")); }
+        if (/^\/api\/tasks\/[^/?]+$/u.test(url) && !init?.method && attempt === 1) return Response.json({ error: { code: "TASK_NOT_FOUND", message: "missing", retryable: false } }, { status: 404 });
+      };
+      await mount(); await click("New task"); await change("Task title", "Once"); await click("Create task");
+      await click("Check the result");
+      expect(container.textContent).toContain("The change is not on the task");
+      await click("Create task");
+      expect(writes).toHaveLength(2); expect(writes[1]!.body.id).toBe(writes[0]!.body.id);
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+    });
+
+    it("records the write before sending and clears it after the receipt", async () => {
+      const atSend: Array<string | null> = [];
+      responder = (_url, init) => { if (init?.method === "PATCH") atSend.push(browser.sessionStorage.getItem(KEY)); return undefined; };
+      await mountAs("alice"); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Recorded"); await click("Save task");
+      expect(JSON.parse(atSend[0]!)).toEqual({ version: 1, memberId: "alice", intent: { op: "update", taskId: "task-alpha", fields: { title: "Recorded", notes: "Original", priority: "medium", dueAt: null } } });
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("reopens an unknown field write after refresh, locked, and settles it by checking", async () => {
+      responder = (_url, init) => { if (init?.method === "PATCH") { saved = { ...saved, ...JSON.parse(String(init.body)) }; return Promise.reject(new TypeError("offline")); } };
+      await mountAs("alice"); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Across refresh"); await click("Save task");
+      await refresh();
+      expect(container.textContent).toContain("The write result is unknown");
+      expect(title().disabled).toBe(true);
+      expect(await leave()).toBe("blocked");
+      const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(true);
+      await click("Check the result");
+      expect(writes).toHaveLength(1);
+      expect(container.textContent).toContain("The change was saved.");
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+      expect(await leave()).toBe("committed");
+    });
+
+    it("reopens an unknown creation after refresh with its fields and retries the same id", async () => {
+      let attempt = 0;
+      responder = (url, init) => { if (url === "/api/tasks" && init?.method === "POST") { attempt += 1; if (attempt === 1) return Promise.reject(new TypeError("offline")); } };
+      await mountAs("alice"); await click("New task"); await change("Task title", "Created once"); await click("Create task");
+      await refresh();
+      expect(container.textContent).toContain("The write result is unknown");
+      expect(title().value).toBe("Created once");
+      await click("Retry same operation");
+      expect(writes).toHaveLength(2); expect(writes[1]!.body).toEqual(writes[0]!.body);
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("clears the record when the write is definitively rejected", async () => {
+      responder = (_url, init) => init?.method === "PATCH" ? Response.json({ error: { code: "TASK_INVALID", message: "bad", retryable: false } }, { status: 422 }) : undefined;
+      await mountAs("alice"); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Rejected"); await click("Save task");
+      expect(container.textContent).toContain("Unable to update the task.");
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("does not reopen one member's unknown write for another member", async () => {
+      responder = (_url, init) => init?.method === "PATCH" ? Promise.reject(new TypeError("offline")) : undefined;
+      await mountAs("alice"); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Private"); await click("Save task");
+      await refresh("bob");
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+      expect(container.textContent).not.toContain("Private");
+      expect(browser.sessionStorage.getItem(KEY)).not.toBeNull();
+    });
+
+    it("does not send a write it cannot record, and an unreadable record can only be discarded", async () => {
+      browser.sessionStorage.setItem(KEY, "{broken");
+      await mountAs("alice");
+      const blocked = container.querySelector("[data-task-write-record-blocked]") as HTMLElement;
+      expect(blocked.textContent).toContain("can't be read");
+      await click("Edit: Alpha (task-alpha)"); await change("Task title", "Blocked"); await click("Save task");
+      expect(writes).toHaveLength(0);
+      expect(container.textContent).toContain("was not sent");
+      await click("Close task editor"); await click("Discard changes");
+      await click("Discard record");
+      expect(container.querySelector("[data-task-write-record-blocked]")).toBeNull();
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+      await click("Edit: Alpha (task-alpha)"); await change("Task title", "Now sent"); await click("Save task");
+      expect(writes).toHaveLength(1);
+    });
+  });
 });
