@@ -82,6 +82,7 @@ import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goa
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendarEvent, readCreatedCalendar, loadCalendarNumbered, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
+import { msUntilNextUtcDate } from "./lib/today-clock";
 import { type FocusSession, loadFocusTransitionReceipt, loadCurrentFocus, loadFocusReceipt, startFocus, transitionFocus } from "./lib/focus-data";
 import { loadWorkbenchReview } from "./lib/workbench-review-data";
 import { buildWorkbenchSummary } from "./lib/workbench-data";
@@ -2138,6 +2139,10 @@ export function TodayRoute({ locale }: { locale: LocaleRuntime }) {
     void loadToday(fetch, controller.signal).then((snapshot) => { if (active) setState({ kind: "ready", snapshot }); }).catch((error: unknown) => { if (active && !isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); });
     return () => { active = false; controller.abort(); };
   }, [locale, retryVersion]);
+  useEffect(() => {
+    const timer = setTimeout(() => setRetryVersion((value) => value + 1), msUntilNextUtcDate());
+    return () => clearTimeout(timer);
+  }, [retryVersion]);
   return <><div inert={target ? true : undefined}><TodayPage locale={locale} state={state} onOpen={setTarget} onRetry={() => setRetryVersion((value) => value + 1)} /></div>{target && <TodayTargetDetail key={`${target.kind}:${target.id}`} target={target} locale={locale} onClose={() => setTarget(null)} onDenied={clearDenied} />}</>;
 }
 
