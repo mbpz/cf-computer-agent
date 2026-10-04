@@ -24,13 +24,11 @@ export async function loadKnowledgeReview(period: ReviewPeriod, requester: Fetch
   return normalizeReview(data, period);
 }
 
-function normalizeReview(input: unknown, fallbackPeriod: ReviewPeriod): ReviewResult {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return { period: fallbackPeriod, from: "", to: "", items: [] };
+function normalizeReview(input: unknown, requested: ReviewPeriod): ReviewResult {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("KNOWLEDGE_REVIEW_INVALID");
   const value = input as Record<string, unknown>;
-  const period = value.period === "weekly" ? "weekly" : value.period === "daily" ? "daily" : fallbackPeriod;
-  const from = typeof value.from === "string" ? value.from : "";
-  const to = typeof value.to === "string" ? value.to : "";
-  const items = Array.isArray(value.items) ? value.items.flatMap((item) => {
+  if (value.period !== requested || typeof value.from !== "string" || typeof value.to !== "string" || !Array.isArray(value.items)) throw new Error("KNOWLEDGE_REVIEW_INVALID");
+  const items = value.items.flatMap((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const record = item as Record<string, unknown>;
     if (typeof record.knowledgeItemId !== "string" || !record.knowledgeItemId
@@ -49,6 +47,6 @@ function normalizeReview(input: unknown, fallbackPeriod: ReviewPeriod): ReviewRe
       reason: record.reason as "new" | "to_read",
       favorite: record.favorite,
     }];
-  }) : [];
-  return { period, from, to, items };
+  });
+  return { period: requested, from: value.from, to: value.to, items };
 }

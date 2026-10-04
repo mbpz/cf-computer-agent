@@ -318,7 +318,7 @@ function analytics(withMarker: boolean) {
 }
 
 function emptyReview() {
-  return { period: "daily", generatedAt: NOW, pending: [], stale: [], favorites: [], recent: [] };
+  return { period: "daily", from: "2026-10-03T00:00:00.000Z", to: "2026-10-04T00:00:00.000Z", items: [] };
 }
 
 export function apiError(status: number, code: string, retryable = false): Response {
