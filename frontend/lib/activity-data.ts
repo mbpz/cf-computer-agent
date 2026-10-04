@@ -14,12 +14,13 @@ export type WorkspaceActivityAction =
   | "task.progress_changed"
   | "task.tags_replaced"
   | "task.linked"
-  | "task.unlinked";
+  | "task.unlinked"
+  | "discussion.message_sent";
 
 export interface WorkspaceActivityItem {
   id: string;
   action: WorkspaceActivityAction;
-  resourceType: "submission" | "knowledge" | "task";
+  resourceType: "submission" | "knowledge" | "task" | "discussion_thread";
   resourceId: string;
   createdAt: string;
 }
@@ -33,6 +34,7 @@ const ACTIONS = new Set<WorkspaceActivityAction>([
   "submission.created", "submission.draft_saved", "submission.rejected", "submission.revision_requested", "submission.resubmitted",
   "knowledge.published", "knowledge.rolled_back", "knowledge.restored", "knowledge.downloaded",
   "task.status_changed", "task.progress_changed", "task.tags_replaced", "task.linked", "task.unlinked",
+  "discussion.message_sent",
 ]);
 
 export async function loadWorkspaceActivity({ cursor, requester = fetch, signal }: { cursor?: string | null; requester?: Fetcher; signal?: AbortSignal } = {}): Promise<WorkspaceActivityPage> {
@@ -52,7 +54,7 @@ function normalizeActivity(value: unknown): WorkspaceActivityItem | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   if (typeof record.id !== "string" || !record.id || typeof record.action !== "string" || !ACTIONS.has(record.action as WorkspaceActivityAction)
-    || (record.resourceType !== "submission" && record.resourceType !== "knowledge" && record.resourceType !== "task")
+    || (record.resourceType !== "submission" && record.resourceType !== "knowledge" && record.resourceType !== "task" && record.resourceType !== "discussion_thread")
     || typeof record.resourceId !== "string" || !record.resourceId || typeof record.createdAt !== "string" || !record.createdAt) return null;
   return { id: record.id, action: record.action as WorkspaceActivityAction, resourceType: record.resourceType, resourceId: record.resourceId, createdAt: record.createdAt };
 }

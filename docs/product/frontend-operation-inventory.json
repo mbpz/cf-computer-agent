@@ -1031,22 +1031,22 @@
         "frontend/components/ui/card.tsx:12:86",
         "frontend/components/ui/page-state.tsx:12:10",
         "frontend/components/ui/skeleton.tsx:4:92",
-        "frontend/pages/home-page.tsx:65:163",
-        "frontend/pages/home-page.tsx:71:18",
-        "frontend/pages/home-page.tsx:71:91",
-        "frontend/pages/home-page.tsx:81:9",
-        "frontend/pages/home-page.tsx:93:13",
+        "frontend/pages/home-page.tsx:66:163",
+        "frontend/pages/home-page.tsx:72:18",
+        "frontend/pages/home-page.tsx:72:91",
+        "frontend/pages/home-page.tsx:82:9",
         "frontend/pages/home-page.tsx:94:13",
-        "frontend/pages/home-page.tsx:104:13",
-        "frontend/pages/home-page.tsx:117:13",
-        "frontend/pages/home-page.tsx:123:19",
-        "frontend/pages/home-page.tsx:141:38",
-        "frontend/pages/home-page.tsx:152:49",
-        "frontend/pages/home-page.tsx:160:409",
-        "frontend/pages/home-page.tsx:160:1410",
-        "frontend/pages/home-page.tsx:160:2022",
-        "frontend/pages/home-page.tsx:160:2156",
-        "frontend/pages/home-page.tsx:160:2284"
+        "frontend/pages/home-page.tsx:95:13",
+        "frontend/pages/home-page.tsx:105:13",
+        "frontend/pages/home-page.tsx:118:13",
+        "frontend/pages/home-page.tsx:124:19",
+        "frontend/pages/home-page.tsx:142:38",
+        "frontend/pages/home-page.tsx:153:49",
+        "frontend/pages/home-page.tsx:161:409",
+        "frontend/pages/home-page.tsx:161:1410",
+        "frontend/pages/home-page.tsx:161:2022",
+        "frontend/pages/home-page.tsx:161:2156",
+        "frontend/pages/home-page.tsx:161:2284"
       ],
       "unresolvedSymbols": []
     },
@@ -1181,7 +1181,7 @@
         "frontend/pages/knowledge-page.tsx:25:754",
         "frontend/pages/knowledge-page.tsx:25:1251",
         "frontend/pages/knowledge-page.tsx:29:222",
-        "frontend/pages/knowledge-page.tsx:29:706",
+        "frontend/pages/knowledge-page.tsx:29:803",
         "frontend/pages/knowledge-page.tsx:33:234",
         "frontend/pages/knowledge-page.tsx:37:964",
         "frontend/pages/knowledge-page.tsx:41:433"
@@ -28893,10 +28893,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:65:163",
+      "id": "frontend/pages/home-page.tsx:66:163",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 65,
+      "line": 66,
       "column": 163,
       "kind": "jsx",
       "tag": "button",
@@ -28932,10 +28932,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:71:18",
+      "id": "frontend/pages/home-page.tsx:72:18",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 71,
+      "line": 72,
       "column": 18,
       "kind": "jsx",
       "tag": "div",
@@ -28962,10 +28962,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:71:91",
+      "id": "frontend/pages/home-page.tsx:72:91",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 71,
+      "line": 72,
       "column": 91,
       "kind": "jsx",
       "tag": "button",
@@ -28998,10 +28998,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:81:9",
+      "id": "frontend/pages/home-page.tsx:82:9",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 81,
+      "line": 82,
       "column": 9,
       "kind": "jsx",
       "tag": "a",
@@ -29031,10 +29031,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:93:13",
+      "id": "frontend/pages/home-page.tsx:94:13",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 93,
+      "line": 94,
       "column": 13,
       "kind": "jsx",
       "tag": "a",
@@ -29064,10 +29064,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:94:13",
+      "id": "frontend/pages/home-page.tsx:95:13",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 94,
+      "line": 95,
       "column": 13,
       "kind": "jsx",
       "tag": "a",
@@ -29097,10 +29097,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:104:13",
+      "id": "frontend/pages/home-page.tsx:105:13",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 104,
+      "line": 105,
       "column": 13,
       "kind": "jsx",
       "tag": "a",
@@ -29130,10 +29130,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:117:13",
+      "id": "frontend/pages/home-page.tsx:118:13",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 117,
+      "line": 118,
       "column": 13,
       "kind": "jsx",
       "tag": "a",
@@ -29163,10 +29163,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:123:19",
+      "id": "frontend/pages/home-page.tsx:124:19",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 123,
+      "line": 124,
       "column": 19,
       "kind": "jsx",
       "tag": "a",
@@ -29210,10 +29210,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:141:38",
+      "id": "frontend/pages/home-page.tsx:142:38",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 141,
+      "line": 142,
       "column": 38,
       "kind": "jsx",
       "tag": "a",
@@ -29264,10 +29264,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:152:49",
+      "id": "frontend/pages/home-page.tsx:153:49",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 152,
+      "line": 153,
       "column": 49,
       "kind": "jsx",
       "tag": "a",
@@ -29303,10 +29303,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:160:409",
+      "id": "frontend/pages/home-page.tsx:161:409",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 160,
+      "line": 161,
       "column": 409,
       "kind": "jsx",
       "tag": "a",
@@ -29323,10 +29323,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:160:1410",
+      "id": "frontend/pages/home-page.tsx:161:1410",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 160,
+      "line": 161,
       "column": 1410,
       "kind": "jsx",
       "tag": "a",
@@ -29352,10 +29352,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:160:2022",
+      "id": "frontend/pages/home-page.tsx:161:2022",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 160,
+      "line": 161,
       "column": 2022,
       "kind": "jsx",
       "tag": "a",
@@ -29372,10 +29372,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:160:2156",
+      "id": "frontend/pages/home-page.tsx:161:2156",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 160,
+      "line": 161,
       "column": 2156,
       "kind": "jsx",
       "tag": "a",
@@ -29392,10 +29392,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:160:2284",
+      "id": "frontend/pages/home-page.tsx:161:2284",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 160,
+      "line": 161,
       "column": 2284,
       "kind": "jsx",
       "tag": "a",
@@ -30270,7 +30270,7 @@
       "tag": "a",
       "attributes": {
         "key": "item.id",
-        "href": "item.resourceType === \"knowledge\" ? `/knowledge/${encodeURIComponent(item.resourceId)}` : item.resourceType === \"task\" ? \"/tasks\" : \"/my-submissions\"",
+        "href": "item.resourceType === \"knowledge\" ? `/knowledge/${encodeURIComponent(item.resourceId)}` : item.resourceType === \"task\" ? \"/tasks\" : item.resourceType === \"discussion_thread\" ? `/messages/${encodeURIComponent(item.resourceId)}` : \"/my-submissions\"",
         "className": "\"flex items-center justify-between gap-3 rounded-md border p-3 text-sm transition hover:bg-accent\""
       },
       "handlers": {},
@@ -30285,11 +30285,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-page.tsx:29:706",
+      "id": "frontend/pages/knowledge-page.tsx:29:803",
       "path": "frontend/pages/knowledge-page.tsx",
       "owner": "ActivityPanel",
       "line": 29,
-      "column": 706,
+      "column": 803,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {

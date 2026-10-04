@@ -54,6 +54,7 @@ export interface AuditActionMap {
   "task.deleted": { resourceType: "task"; metadata: { status: TaskStatus } };
   "task.linked": { resourceType: "task"; metadata: { knowledgeItemId: string } };
   "task.unlinked": { resourceType: "task"; metadata: { knowledgeItemId: string } };
+  "discussion.message_sent": { resourceType: "discussion_thread"; metadata: { messageId: string } };
   "maintenance.drain_started": { resourceType: "maintenance"; metadata: { window: string; epoch: number } };
   "maintenance.resumed": { resourceType: "maintenance"; metadata: { window: string; epoch: number } };
 }
@@ -96,6 +97,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "task.deleted",
   "task.linked",
   "task.unlinked",
+  "discussion.message_sent",
   "maintenance.drain_started",
   "maintenance.resumed",
 ]);
@@ -131,12 +133,13 @@ export type ActivityAction =
   | "task.progress_changed"
   | "task.tags_replaced"
   | "task.linked"
-  | "task.unlinked";
+  | "task.unlinked"
+  | "discussion.message_sent";
 
 export interface ActivityItem {
   id: string;
   action: ActivityAction;
-  resourceType: "submission" | "knowledge" | "task";
+  resourceType: "submission" | "knowledge" | "task" | "discussion_thread";
   resourceId: string;
   createdAt: string;
 }
@@ -444,6 +447,12 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["knowledgeItemId"]));
       if (!isBoundedId(metadata.knowledgeItemId)) throw invalidMetadata();
       return safeMetadata({ knowledgeItemId: metadata.knowledgeItemId });
+    }
+    case "discussion.message_sent": {
+      assertResourceType(resourceType, "discussion_thread");
+      const metadata = readPlainDataObject(input, new Set(["messageId"]));
+      if (!isBoundedId(metadata.messageId)) throw invalidMetadata();
+      return safeMetadata({ messageId: metadata.messageId });
     }
     case "maintenance.drain_started":
     case "maintenance.resumed": {

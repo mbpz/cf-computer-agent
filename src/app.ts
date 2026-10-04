@@ -391,7 +391,7 @@ function createRequestServices(
     sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
     savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),
     notifications,
-    discussions: new DiscussionsService(discussionRecords, discussionAuthorization, { notifications }),
+    discussions: new DiscussionsService(discussionRecords, discussionAuthorization, { notifications, audit }),
     tasks: new TasksService(taskRecords, { audit, notifications }),
     inbox: new InboxService(inboxRecords, {
       promoteTask: (memberId, item, updatedAt) => new InboxTaskPromotion(env.DB).promote(memberId, item, updatedAt),

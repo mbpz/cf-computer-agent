@@ -505,6 +505,51 @@ describe("discussion HTTP contract", () => {
     await expect(older.json()).resolves.toMatchObject({ items: [{ sequence: 1 }] });
   });
 
+  it("records the sender's discussion message in activity once, without the body or other members", async () => {
+    const sent = await api("/api/discussions/messages", sessionA, {
+      method: "POST",
+      body: JSON.stringify({
+        context: { kind: "knowledge", id: "knowledge-a" },
+        body: "Private discussion body",
+        clientKey: "activity-message",
+      }),
+    });
+    expect(sent.status).toBe(201);
+    const sentBody = await sent.json() as { thread: { id: string }; message: { id: string } };
+    const audits = await env.DB.prepare(
+      "SELECT action, resource_type, resource_id, actor_id, metadata FROM audit_events WHERE action = 'discussion.message_sent'",
+    ).all<{ action: string; resource_type: string; resource_id: string; actor_id: string; metadata: string }>();
+    expect(audits.results).toEqual([{
+      action: "discussion.message_sent",
+      resource_type: "discussion_thread",
+      resource_id: sentBody.thread.id,
+      actor_id: "member-a",
+      metadata: JSON.stringify({ messageId: sentBody.message.id }),
+    }]);
+    expect(audits.results[0]?.metadata).not.toContain("Private discussion body");
+
+    const replay = await api("/api/discussions/messages", sessionA, {
+      method: "POST",
+      body: JSON.stringify({
+        context: { kind: "knowledge", id: "knowledge-a" },
+        body: "Private discussion body",
+        clientKey: "activity-message",
+      }),
+    });
+    expect(replay.status).toBe(200);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_events WHERE action = 'discussion.message_sent'").first("count")).toBe(1);
+
+    const mine = await api("/api/activity?limit=20", sessionA);
+    expect(mine.status).toBe(200);
+    await expect(mine.json()).resolves.toMatchObject({
+      items: [{ action: "discussion.message_sent", resourceType: "discussion_thread", resourceId: sentBody.thread.id }],
+    });
+    const other = await api("/api/activity?limit=20", sessionB);
+    expect(other.status).toBe(200);
+    const otherBody = await other.json() as { items: Array<{ resourceId: string }> };
+    expect(otherBody.items.map((item) => item.resourceId)).not.toContain(sentBody.thread.id);
+  });
+
   it("fails closed on unknown, duplicated, malformed, oversized, and cross-member inputs", async () => {
     const created = await api("/api/discussions/messages", sessionA, {
       method: "POST",

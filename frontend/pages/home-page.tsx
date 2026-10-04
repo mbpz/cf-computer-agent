@@ -34,6 +34,7 @@ const ACTIVITY_LABEL_KEYS: Record<string, string> = {
   "task.tags_replaced": "WORKBENCH_ACTIVITY_TASK_TAGS_REPLACED",
   "task.linked": "WORKBENCH_ACTIVITY_TASK_LINKED",
   "task.unlinked": "WORKBENCH_ACTIVITY_TASK_UNLINKED",
+  "discussion.message_sent": "WORKBENCH_ACTIVITY_DISCUSSION_MESSAGE_SENT",
 };
 
 function textWithCount(locale: LocaleRuntime | undefined, key: string, count: number): string {

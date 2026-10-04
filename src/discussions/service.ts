@@ -1,3 +1,4 @@
+import type { AuditRepository } from "../audit/repository";
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
 import { parsePageRequest, type PageRequest } from "../pagination";
@@ -32,6 +33,7 @@ export interface DiscussionsServiceOptions {
   id?: () => string;
   now?: () => Date;
   notifications?: DiscussionNotificationSink;
+  audit?: Pick<AuditRepository, "writeAudit">;
 }
 
 export class DiscussionsService {
@@ -151,6 +153,7 @@ export class DiscussionsService {
       createdAt: now,
     });
     if (inserted.message.threadId !== authorizedThread.id) throw invalidMessage();
+    if (inserted.created) await this.recordMessageSent(authorizedThread.id, inserted.message);
     await this.repairParticipants(authorizedThread, inserted.message, now);
     await this.deliverNotifications(authorizedThread, inserted.message);
     return { thread: await this.getThread(actorMemberId, authorizedThread.id), ...inserted };
@@ -184,6 +187,20 @@ export class DiscussionsService {
       [message.authorMemberId, ...eligibleMentions],
       joinedAt,
     );
+  }
+
+  private async recordMessageSent(threadId: string, message: DiscussionMessage): Promise<void> {
+    if (!this.options.audit) return;
+    await this.options.audit.writeAudit({
+      id: normalizeGeneratedId(this.id()),
+      actorKind: "member",
+      actorId: message.authorMemberId,
+      action: "discussion.message_sent",
+      resourceType: "discussion_thread",
+      resourceId: threadId,
+      metadata: { messageId: message.id },
+      createdAt: message.createdAt,
+    });
   }
 
   private async deliverNotifications(thread: DiscussionThread, message: DiscussionMessage): Promise<void> {
