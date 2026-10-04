@@ -130,6 +130,61 @@ describe("search query draft ownership", () => {
     await click("[data-saved-view-apply]"); await click("[data-confirm-action]");
     expect(new URLSearchParams(browser.location.search).get("q")).toBe("saved"); expect(queryInput().value).toBe("saved"); expect(unloadWarns()).toBe(false);
   });
+  const composerKey = "memory-garden:search-composer:v1:member-a";
+  it("keeps an unsent query and view name after refresh without creating a view", async () => {
+    let posts = 0;
+    const handler = async (_url: string, init?: RequestInit) => { if (init?.method === "POST") posts += 1; return Response.json({ items: [] }); };
+    await mount(handler);
+    await act(async () => { editQuery("Keep this query"); edit("Keep name"); });
+    expect(browser.sessionStorage.getItem(composerKey)).toContain("Keep this query");
+    expect(unloadWarns()).toBe(true);
+    await act(async () => root.unmount());
+    root = createRoot(container); posts = 0;
+    await mount(handler);
+    expect(queryInput().value).toBe("Keep this query");
+    expect(input().value).toBe("Keep name");
+    expect(posts).toBe(0);
+    expect(unloadWarns()).toBe(true);
+  });
+  it("keeps the query on screen when the tab cannot record the draft", async () => {
+    await mount();
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await act(async () => editQuery("Unrecorded query"));
+    expect(queryInput().value).toBe("Unrecorded query");
+    expect(container.textContent).toContain("could not record");
+  });
+  it("allows leave when the search draft cannot be read and records only after discard", async () => {
+    browser.sessionStorage.setItem(composerKey, "{");
+    await mount();
+    expect(container.textContent).toContain("can't be read");
+    expect(unloadWarns()).toBe(false);
+    await act(async () => expect(writeWorkspaceHistory("push", "/knowledge")).toBe("committed"));
+    browser.history.replaceState({}, "", "/search?q=docs");
+    await click("[data-search-composer-blocked] button");
+    await act(async () => editQuery("After discard"));
+    expect(browser.sessionStorage.getItem(composerKey)).toContain("After discard");
+  });
+  it("drops the stored search draft after a confirmed leave", async () => {
+    await mount();
+    await act(async () => editQuery("Keep this query"));
+    expect(browser.sessionStorage.getItem(composerKey)).toContain("Keep this query");
+    await act(async () => expect(writeWorkspaceHistory("push", "/knowledge")).toBe("deferred"));
+    await click("[data-confirm-action]");
+    expect(browser.sessionStorage.getItem(composerKey)).toBeNull();
+    await act(async () => expect(writeWorkspaceHistory("push", "/search?q=docs")).toBe("committed"));
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await mount();
+    expect(queryInput().value).toBe("docs");
+    expect(input().value).toBe("");
+    expect(unloadWarns()).toBe(false);
+  });
+  it("does not keep a submitted query as an unsent draft", async () => {
+    await mount();
+    await act(async () => { editQuery("submitted"); searchSubmit(); });
+    expect(browser.sessionStorage.getItem(composerKey)).toBeNull();
+    expect(unloadWarns()).toBe(false);
+  });
 });
 function props<T>(element: HTMLElement): T { return (element as unknown as Record<string, T>)[Object.keys(element).find(key => key.startsWith("__reactProps$"))!]!; }
 

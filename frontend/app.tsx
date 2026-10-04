@@ -66,6 +66,7 @@ import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type LoadSearchPageInput, type SearchPageResult } from "./lib/search-data";
 import { type SavedViewItem } from "./lib/saved-views-data";
 import { useSavedViews } from "./lib/use-saved-views";
+import { discardBlockedSearchComposerDraft, loadSearchComposerDraft, persistSearchComposerDraft } from "./lib/search-composer-draft";
 import { clearAgentIntent, createAgentIntent, loadAgentIntent, saveAgentIntent, type AgentTurnIntent, type StoredAgentIntent } from "./lib/agent-turn-intent";
 import { clearAgentFeedback, discardBlockedAgentFeedback, loadAgentFeedback, type AgentFeedbackIntent } from "./lib/agent-feedback-intent";
 import { discardBlockedAgentComposerDraft, loadAgentComposerDraft, persistAgentComposerDraft } from "./lib/agent-composer-draft";
@@ -812,17 +813,47 @@ function MemberSearchRoute({ locale, search, memberId }: { locale: LocaleRuntime
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createSearchRequestController> | null>(null);
   const queryRef = useRef({ query: activeQuery, page, pageSize });
+  const [composerStored] = useState(() => memberId ? loadSearchComposerDraft(memberId) : { kind: "empty" as const });
+  const [composerBlocked, setComposerBlocked] = useState(composerStored.kind === "blocked");
+  const [composerNotice, setComposerNotice] = useState<string>();
+  const queryBaseline = useRef(initialQuery);
+  const restoredQuery = composerStored.kind === "ready" && composerStored.draft.query !== initialQuery ? composerStored.draft.query : initialQuery;
+  const restoredName = composerStored.kind === "ready" ? composerStored.draft.name : "";
   const saved = useSavedViews(locale, () => {
     const params = new URLSearchParams(readWorkspaceLocation().search);
     return { q: params.get("q") ?? "", spaceId: params.get("spaceId"), collectionId: params.get("collectionId"),
       tagIds: params.getAll("tagId"), tagMode: params.get("tagMode") === "and" ? "and" : "or" };
-  }, (): boolean => queryDraft.isConfirming(), memberId);
-  const queryDraft = useCreateDraft({ query: initialQuery }, { query: initialQuery },
+  }, (): boolean => queryDraft.isConfirming(), memberId, composerBlocked ? "" : restoredName);
+  const queryDraft = useCreateDraft({ query: restoredQuery }, { query: initialQuery },
     saved.isBlocking, locale, (): boolean => saved.draft.isConfirming());
+  const rememberComposer = () => {
+    if (!memberId || composerBlocked) return;
+    const query = queryDraft.current.current.query === queryBaseline.current ? "" : queryDraft.current.current.query;
+    const savedDraft = persistSearchComposerDraft(memberId, { query, name: saved.draft.current.current.name });
+    setComposerNotice(savedDraft ? undefined : frontendText(locale, "SEARCH_COMPOSER_NOT_RECORDED"));
+  };
+  useEffect(() => {
+    if (!memberId || composerBlocked) return;
+    // A submitted view name belongs to the write record. Keeping it here would
+    // restore a second dirty name after refresh, after that write has settled.
+    if (saved.phase !== "idle" || saved.recordBlocked) {
+      const query = queryDraft.current.current.query === queryBaseline.current ? "" : queryDraft.current.current.query;
+      const savedDraft = persistSearchComposerDraft(memberId, { query, name: "" });
+      setComposerNotice(savedDraft ? undefined : frontendText(locale, "SEARCH_COMPOSER_NOT_RECORDED"));
+      return;
+    }
+    rememberComposer();
+  }, [queryDraft.fields.query, saved.draft.fields.name, composerBlocked, memberId, saved.phase, saved.recordBlocked]);
+  useEffect(() => {
+    const clearOnLeave = () => { if (memberId && !composerBlocked) persistSearchComposerDraft(memberId, { query: "", name: "" }); };
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+    return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+  }, [memberId, composerBlocked]);
   useEffect(() => {
     const onPopState = () => {
       const next = new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "";
       const pagination = parsePageSearch(readWorkspaceLocation().search);
+      queryBaseline.current = next;
       queryDraft.set("query", next); queryDraft.checkpoint({ query: next });
       setActiveQuery(next);
       queryRef.current = { query: next, ...pagination }; setPage(pagination.page); setPageSize(pagination.pageSize); setUrlVersion((value) => value + 1);
@@ -879,7 +910,8 @@ function MemberSearchRoute({ locale, search, memberId }: { locale: LocaleRuntime
       setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
     });
   };
-  return <SearchPage locale={locale} query={queryDraft.fields.query} queryLocked={saved.locked || queryDraft.confirming || queryDraft.applicationPending} state={state} pending={pending} localError={localError} onQueryChange={(value) => queryDraft.edit("query", value)} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={<>{saved.confirmation}{queryDraft.confirmation}</>} savedViews={saved.items} savedViewPending={saved.locked || saved.recordBlocked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} savedViewRecordBlocked={saved.recordBlocked} onDiscardSavedViewRecord={saved.discardRecord} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} />;
+  const discardComposer = () => { if (!memberId || !composerBlocked || !discardBlockedSearchComposerDraft(memberId)) return; setComposerBlocked(false); setComposerNotice(undefined); };
+  return <SearchPage locale={locale} query={queryDraft.fields.query} queryLocked={saved.locked || queryDraft.confirming || queryDraft.applicationPending} state={state} pending={pending} localError={localError} onQueryChange={(value) => queryDraft.edit("query", value)} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={<>{saved.confirmation}{queryDraft.confirmation}</>} savedViews={saved.items} savedViewPending={saved.locked || saved.recordBlocked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} savedViewRecordBlocked={saved.recordBlocked} onDiscardSavedViewRecord={saved.discardRecord} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} composerBlocked={composerBlocked} composerNotice={composerNotice} onDiscardComposer={discardComposer} />;
 }
 
 export function AgentRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {

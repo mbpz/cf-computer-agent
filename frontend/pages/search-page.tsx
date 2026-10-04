@@ -13,7 +13,7 @@ export type SearchState =
   | { kind: "ready"; query?: string; degraded: boolean; results: readonly SearchResultItem[]; pagination: { page: number; pageSize: 20 | 50 | 100; total: number; totalPages: number } }
   | { kind: "error"; message: string };
 
-export function SearchPage({ state, locale, query, queryLocked = false, pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView, savedViewRecordBlocked = false, onDiscardSavedViewRecord }: {
+export function SearchPage({ state, locale, query, queryLocked = false, pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView, savedViewRecordBlocked = false, onDiscardSavedViewRecord, composerBlocked = false, composerNotice, onDiscardComposer }: {
   state: SearchState;
   locale: LocaleRuntime;
   query?: string; queryLocked?: boolean;
@@ -30,12 +30,15 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
   savedViewUnknown?: boolean; onCheckSavedView?: () => void;
   savedViewRecordBlocked?: boolean; onDiscardSavedViewRecord?: () => void;
   savedViewName?: string; onSavedViewNameChange?: (value: string) => void; savedViewConfirmation?: ReactNode;
+  composerBlocked?: boolean; composerNotice?: string; onDiscardComposer?: () => void;
 }) {
   const [localName, setLocalName] = useState("");
   const savedViewName = controlledName ?? localName;
   const setSavedViewName = onSavedViewNameChange ?? setLocalName;
   const inputQuery = query ?? (state.kind === "ready" ? state.query ?? "" : "");
   return <section className="space-y-5">
+    {composerBlocked && <div role="alert" data-search-composer-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "SEARCH_COMPOSER_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardComposer}>{frontendText(locale, "SEARCH_COMPOSER_RECORD_DISCARD")}</Button></div>}
+    {composerNotice && <p role="alert">{composerNotice}</p>}
     {savedViewConfirmation}
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "SEARCH_TITLE")}</h1></div>
     <form className="flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>

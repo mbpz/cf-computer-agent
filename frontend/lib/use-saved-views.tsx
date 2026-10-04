@@ -19,7 +19,7 @@ function memoryFrom(intent: SavedViewWriteIntent): Intent {
 }
 
 /** One member-keyed owner. A transport error is not evidence that a write failed. */
-export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<SavedViewFilters>, actionBlocked: () => boolean = () => false, memberId?: string) {
+export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<SavedViewFilters>, actionBlocked: () => boolean = () => false, memberId?: string, initialName = "") {
   const [stored] = useState(() => memberId ? loadSavedViewWrite(memberId) : { kind: "empty" as const });
   const [items, setItems] = useState<SavedViewItem[]>([]);
   const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
@@ -33,7 +33,7 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
   const itemsRef = useRef(items); itemsRef.current = items;
   const owner = useRef<AbortController | null>(null);
   const generation = useRef(0);
-  const draft = useCreateDraft({ name: "" }, { name: "" }, () => intent.current !== null || deleteRef.current !== null, locale, actionBlocked);
+  const draft = useCreateDraft({ name: initialName }, { name: "" }, () => intent.current !== null || deleteRef.current !== null, locale, actionBlocked);
   useEffect(() => {
     const controller = new AbortController(); owner.current = controller;
     const revision = generation.current;
