@@ -93,6 +93,7 @@ import { createReviewQueueRequestController, type ReviewQueuePageResult } from "
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
 import { clearAdminMemberStatus, discardBlockedAdminMemberStatus, loadAdminMemberStatuses, saveAdminMemberStatus, type AdminMemberStatusIntent } from "./lib/admin-member-status-intent";
 import { createAdminSpace, manageAdminSpace, loadAdminSpacesPage, loadAdminCollections, type AdminSpace, type AdminSpaceCommand } from "./lib/admin-spaces-data";
+import { clearAdminSpaceWrite, discardBlockedAdminSpaceWrite, loadAdminSpaceWrite, saveAdminSpaceWrite, type AdminSpaceWriteIntent } from "./lib/admin-space-write-intent";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
@@ -235,7 +236,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
     case "admin-members": return <AdminMembersRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
-    case "admin-spaces": return <AdminSpacesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
+    case "admin-spaces": return <AdminSpacesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} />;
     case "admin-audit": return <AdminAuditRoute locale={locale} search={search} />;
     case "not-found": return <NotFoundPage locale={locale} />;
     default: return assertNever(kind);
@@ -3520,14 +3521,19 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
   return <MembersPage onLoadRetry={retryRead} locale={locale} status={status || ""} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} pageError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending || recordBlocked} pendingIds={pendingIds} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} actionError={recordNotice ?? actionError} statusRecordBlocked={recordBlocked} onDiscardStatusRecord={discardRecord} onStatusFilterChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} onStatusChange={recordBlocked ? undefined : changeStatus} />;
 }
 
-export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
+export function AdminSpacesRoute({ locale, memberId }: { locale: LocaleRuntime; memberId?: string }) {
+  const [writeStored] = useState(() => memberId ? loadAdminSpaceWrite(memberId) : { kind: "empty" as const });
+  const recordBlockedRef = useRef(writeStored.kind === "blocked");
+  const [recordBlocked, setRecordBlocked] = useState(recordBlockedRef.current);
+  const [recordNotice, setRecordNotice] = useState<string>();
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; spaces: AdminSpace[]; nextCursor?: string } | { kind: "error"; message: string }>({ kind: "loading" });
   const [pending, setPending] = useState(false);
-  const [needsRead, setNeedsRead] = useState(false);
+  const [needsRead, setNeedsRead] = useState(writeStored.kind === "ready");
   const scope = useRef(0);
   const write = useRef<object | null>(null);
-  const blocked = useRef(false);
-  const unresolvedWrite = useRef(false);
+  const blocked = useRef(writeStored.kind === "ready");
+  const unresolvedWrite = useRef(writeStored.kind === "ready");
+  const intentRef = useRef<AdminSpaceWriteIntent | null>(writeStored.kind === "ready" ? writeStored.intent : null);
   useEffect(() => {
     // Keep the unresolved-write guard mounted even when denied reads hide editors.
     const owner = window;
@@ -3572,7 +3578,17 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
       if (epoch !== scope.current || controller.signal.aborted) return false;
       setState({ kind: "ready", spaces, nextCursor });
       // A GET started before a write settled is not post-write evidence.
-      if (!activeWrite && !write.current) { unresolvedWrite.current = false; blocked.current = false; setNeedsRead(false); }
+      if (!activeWrite && !write.current) {
+        const intent = intentRef.current;
+        if (memberId && intent && !clearAdminSpaceWrite(memberId, intent)) {
+          unresolvedWrite.current = true; blocked.current = true; setNeedsRead(true);
+          setRecordNotice(frontendText(locale, "ADMIN_SPACE_RECORD_STUCK"));
+        } else {
+          intentRef.current = null;
+          if (intent) setRecordNotice(undefined);
+          unresolvedWrite.current = false; blocked.current = false; setNeedsRead(false);
+        }
+      }
       return true;
     } catch (error) {
       if (epoch !== scope.current || controller.signal.aborted) return false;
@@ -3588,8 +3604,14 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
     return () => { scope.current++; readController.current?.abort(); readController.current = null; };
   }, [locale]);
   const create = async (input: { slug: string; name: string }) => {
-    if (write.current || readController.current || blocked.current || state.kind !== "ready") return false;
-    const token = {}; const epoch = scope.current; write.current = token; unresolvedWrite.current = true; requireRead();
+    if (recordBlockedRef.current || write.current || readController.current || blocked.current || state.kind !== "ready") return false;
+    const intent: AdminSpaceWriteIntent = { op: "create", slug: input.slug, name: input.name };
+    if (memberId && !saveAdminSpaceWrite(memberId, intent)) {
+      setRecordNotice(frontendText(locale, "ADMIN_SPACE_NOT_RECORDED"));
+      return false;
+    }
+    if (memberId) intentRef.current = intent;
+    const token = {}; const epoch = scope.current; write.current = token; unresolvedWrite.current = true; requireRead(); setRecordNotice(undefined);
     try {
       await createAdminSpace(input);
       if (epoch !== scope.current) return false;
@@ -3601,10 +3623,16 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
     } finally { if (write.current === token) write.current = null; }
   };
   const manage = async (command: AdminSpaceCommand) => {
-    if (write.current || readController.current || blocked.current || state.kind !== "ready") return false;
+    if (recordBlockedRef.current || write.current || readController.current || blocked.current || state.kind !== "ready") return false;
     const current = state.spaces.find(item => item.id === command.spaceId);
     if (!current || current.readOnly || current.kind === "legacy") return false;
-    const token = {}; const epoch = scope.current; write.current = token; unresolvedWrite.current = true; requireRead();
+    const intent: AdminSpaceWriteIntent = { op: "manage", command };
+    if (memberId && !saveAdminSpaceWrite(memberId, intent)) {
+      setRecordNotice(frontendText(locale, "ADMIN_SPACE_NOT_RECORDED"));
+      return false;
+    }
+    if (memberId) intentRef.current = intent;
+    const token = {}; const epoch = scope.current; write.current = token; unresolvedWrite.current = true; requireRead(); setRecordNotice(undefined);
     try {
       await manageAdminSpace(command, current);
       if (epoch !== scope.current) return false;
@@ -3618,7 +3646,11 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
       return false;
     } finally { if (write.current === token) write.current = null; }
   };
-  return <SpacesPage onLoadRetry={() => void read()} locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} nextCursor={state.kind === "ready" ? state.nextCursor : undefined} onLoadMore={() => void read("spaces")} onLoadCollections={id => void read("collections", id)} pending={pending} blocked={needsRead} navigationBlocked={unresolvedWrite.current} needsRead={needsRead} onCreate={create} onManage={manage} />;
+  function discardRecord() {
+    if (!memberId || !recordBlockedRef.current || !discardBlockedAdminSpaceWrite(memberId)) return;
+    recordBlockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
+  }
+  return <SpacesPage onLoadRetry={() => void read()} locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} nextCursor={state.kind === "ready" ? state.nextCursor : undefined} onLoadMore={() => void read("spaces")} onLoadCollections={id => void read("collections", id)} pending={pending} blocked={needsRead || recordBlocked} navigationBlocked={unresolvedWrite.current} needsRead={needsRead} recordBlocked={recordBlocked} recordNotice={recordNotice} onDiscardRecord={discardRecord} onCreate={recordBlocked ? undefined : create} onManage={recordBlocked ? undefined : manage} />;
 }
 
 export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
