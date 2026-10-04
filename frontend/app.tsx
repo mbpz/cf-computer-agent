@@ -1508,7 +1508,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     onOpenTask={item => { if (!pendingRef.current && !writingRef.current && !captureLockedRef.current && !writeRecovery.locked && item.promotedTaskId) setTaskTarget(item.promotedTaskId); }}
     onPageChange={next => navigate({ ...query, page: next })}
     onPageSizeChange={next => navigate({ ...query, page: 1, pageSize: next })}
-    onFilterChange={next => navigate({ ...query, page: 1, status: next })} /></div>{taskTarget && <TaskEditor key={`${memberId}:${taskTarget}`} taskId={taskTarget} locale={locale} onClose={() => setTaskTarget(null)} onChanged={() => setRetryVersion(value => value + 1)} onDenied={error => { if (clearDenied(error)) setTaskTarget(null); }} />}</>;
+    onFilterChange={next => navigate({ ...query, page: 1, status: next })} /></div>{taskTarget && <TaskEditor key={`${memberId}:${taskTarget}`} taskId={taskTarget} memberId={memberId} locale={locale} onClose={() => setTaskTarget(null)} onChanged={() => setRetryVersion(value => value + 1)} onDenied={error => { if (clearDenied(error)) setTaskTarget(null); }} />}</>;
 }
 
 export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {

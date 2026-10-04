@@ -427,6 +427,59 @@ describe("task editor through the real route", () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(container.textContent).not.toContain("Alpha");
   });
 
+  it("restores an unsent task title after the editor is recreated", async () => {
+    async function mountAs() { await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" memberId="alice" />)); await flush(); await flush(); }
+    await mountAs();
+    await click("Edit: Alpha (task-alpha)");
+    await change("Task title", "Keep this title");
+    expect(browser.sessionStorage.getItem("memory-garden:task-editor-draft:v1:alice:task:task-alpha")).toContain("Keep this title");
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await mountAs();
+    await click("Edit: Alpha (task-alpha)");
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Keep this title");
+    expect(writes).toHaveLength(0);
+    const unload = new browser.Event("beforeunload", { cancelable: true });
+    browser.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+  });
+  it("clears an unsent task draft when the editor discard is confirmed", async () => {
+    async function mountAs() { await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" memberId="alice" />)); await flush(); await flush(); }
+    await mountAs();
+    await click("Edit: Alpha (task-alpha)");
+    await change("Task title", "Keep this title");
+    expect(browser.sessionStorage.getItem("memory-garden:task-editor-draft:v1:alice:task:task-alpha")).toContain("Keep this title");
+    await click("Close task editor");
+    await click("Discard changes");
+    expect(browser.sessionStorage.getItem("memory-garden:task-editor-draft:v1:alice:task:task-alpha")).toBeNull();
+    await click("Edit: Alpha (task-alpha)");
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Alpha");
+  });
+  it("keeps a typed task title on screen when the tab cannot record it", async () => {
+    async function mountAs() { await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" memberId="alice" />)); await flush(); await flush(); }
+    await mountAs();
+    await click("Edit: Alpha (task-alpha)");
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await change("Task title", "Unrecorded title");
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Unrecorded title");
+    expect(container.textContent).toContain("could not record");
+    expect(writes).toHaveLength(0);
+  });
+  it("allows leaving when a saved task draft cannot be read until it is discarded", async () => {
+    browser.sessionStorage.setItem("memory-garden:task-editor-draft:v1:alice:task:task-alpha", "{");
+    async function mountAs() { await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" memberId="alice" />)); await flush(); await flush(); }
+    await mountAs();
+    await click("Edit: Alpha (task-alpha)");
+    expect(container.textContent).toContain("can't be read");
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"); });
+    browser.history.replaceState({}, "", "/tasks");
+    await click("Edit: Alpha (task-alpha)");
+    await click("Discard record");
+    await change("Task title", "After discard");
+    expect(browser.sessionStorage.getItem("memory-garden:task-editor-draft:v1:alice:task:task-alpha")).toContain("After discard");
+    expect(writes).toHaveLength(0);
+  });
+
   describe("unknown write reconciliation", () => {
     const KEY = "memory-garden:task-write:v1:alice";
     async function mountAs(memberId: string) { await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" memberId={memberId} />)); await flush(); await flush(); }

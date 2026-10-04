@@ -7,13 +7,14 @@ import { Input } from "../../components/ui/input";
 import { ApiRequestError } from "../../lib/api";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { loadDependencies, loadSubtasks, loadTaskDetail, type TaskDependency, type TaskDetail, type TaskItem, type TaskSubtask } from "../../lib/tasks-data";
+import { clearTaskEditorDraft, loadTaskEditorDraft, persistTaskEditorDraft, type TaskEditorDraft } from "../../lib/task-editor-draft";
 import { checkTaskWrite, clearTaskWrite, runTaskWrite, saveTaskWrite, type TaskWriteIntent } from "../../lib/task-write-intent";
 import { registerWorkspaceLeaveGuard, WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
 import type { WorkspaceLeaveDecision } from "../../lib/workspace-navigation-gate";
 import { taskPriorityKey, taskStatusKey } from "./tasks-model";
 
 type Fields = { title: string; notes: string; priority: string; dueAt: string };
-type Draft = { fields: Fields; tags: string; status: TaskItem["status"]; progress: string; knowledgeId: string; subtaskTitle: string; dependsOnTaskId: string };
+type Draft = TaskEditorDraft;
 type Intent = { op: TaskWriteIntent; clean?: (keyof Draft)[]; acceptedDraft?: Draft };
 type Notice = "TASKS_WRITE_CONFLICT" | "TASKS_WRITE_APPLIED" | "TASKS_WRITE_NOT_APPLIED" | "TASKS_WRITE_MISSING" | "TASKS_WRITE_CHECK_FAILED" | "TASKS_WRITE_NOT_RECORDED" | "TASKS_WRITE_RECORD_STUCK";
 const cleanFor: Record<TaskWriteIntent["op"], (keyof Draft)[]> = { create: ["fields"], update: ["fields"], status: ["status"], progress: ["progress"], tags: ["tags"], link: ["knowledgeId"], unlink: [], delete: [], "subtask-create": ["subtaskTitle"], "subtask-update": [], "subtask-delete": [], "dependency-add": ["dependsOnTaskId"], "dependency-remove": [] };
@@ -42,13 +43,18 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
   memberId?: string; restored?: TaskWriteIntent;
 }) {
   const t = (key: Parameters<typeof frontendText>[1]) => frontendText(locale, key);
-  const [fields, setFields] = useState<Fields>(() => intendedFields(restored) ?? blank);
+  const [storedDraft] = useState(() => memberId && !restored ? loadTaskEditorDraft(memberId, taskId) : { kind: "empty" as const });
+  const [recordBlocked, setRecordBlocked] = useState(storedDraft.kind === "blocked");
+  const [recordNotice, setRecordNotice] = useState<string>();
+  const readyDraft = storedDraft.kind === "ready" ? storedDraft : null;
+  const blankDraft = (): Draft => ({ fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "", subtaskTitle: "", dependsOnTaskId: "" });
+  const [fields, setFields] = useState<Fields>(() => readyDraft?.draft.fields ?? intendedFields(restored) ?? blank);
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [subtasks, setSubtasks] = useState<TaskSubtask[]>([]);
   const [dependencies, setDependencies] = useState<TaskDependency[]>([]);
-  const [tags, setTags] = useState(""); const [knowledgeId, setKnowledgeId] = useState("");
-  const [subtaskTitle, setSubtaskTitle] = useState(""); const [dependsOnTaskId, setDependsOnTaskId] = useState("");
-  const [status, setStatus] = useState<TaskItem["status"]>("todo"); const [progress, setProgress] = useState("0");
+  const [tags, setTags] = useState(readyDraft?.draft.tags ?? ""); const [knowledgeId, setKnowledgeId] = useState(readyDraft?.draft.knowledgeId ?? "");
+  const [subtaskTitle, setSubtaskTitle] = useState(readyDraft?.draft.subtaskTitle ?? ""); const [dependsOnTaskId, setDependsOnTaskId] = useState(readyDraft?.draft.dependsOnTaskId ?? "");
+  const [status, setStatus] = useState<TaskItem["status"]>(readyDraft?.draft.status ?? "todo"); const [progress, setProgress] = useState(readyDraft?.draft.progress ?? "0");
   const [reading, setReading] = useState(taskId !== null); const [readError, setReadError] = useState(false);
   const [busy, setBusy] = useState(false); const [unknown, setUnknown] = useState(restored !== undefined); const [error, setError] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -60,8 +66,13 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
   const callbacks = useRef({ onChanged, onDenied, onClose }); callbacks.current = { onChanged, onDenied, onClose };
   const [discardDecision, setDiscardDecision] = useState<{ snapshot: string; navigation?: WorkspaceLeaveDecision } | null>(null);
   const discardRef = useRef<typeof discardDecision>(null);
-  const baseline = useRef<Draft>({ fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "", subtaskTitle: "", dependsOnTaskId: "" });
-  const currentDraft = useRef<Draft>({ ...baseline.current, fields: fields });
+  const baseline = useRef<Draft>(readyDraft?.baseline ?? blankDraft());
+  const currentDraft = useRef<Draft>(readyDraft?.draft ?? { ...baseline.current, fields: intendedFields(restored) ?? blank });
+  function remember() {
+    if (!memberId || recordBlocked || intent.current) return;
+    const saved = persistTaskEditorDraft(memberId, taskId, baseline.current, currentDraft.current);
+    setRecordNotice(saved ? undefined : t("TASKS_DRAFT_NOT_RECORDED"));
+  }
   // Input handlers update this ref before React flushes, so same-event navigation
   // cannot observe the previous render's draft.
   function edit<K extends keyof Draft>(key: K, value: Draft[K]) {
@@ -69,6 +80,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     currentDraft.current = { ...currentDraft.current, [key]: value };
     const next = currentDraft.current;
     setFields(next.fields); setTags(next.tags); setStatus(next.status); setProgress(next.progress); setKnowledgeId(next.knowledgeId); setSubtaskTitle(next.subtaskTitle); setDependsOnTaskId(next.dependsOnTaskId);
+    remember();
   }
   const snapshot = JSON.stringify([taskId, currentDraft.current]);
   const confirmingDiscard = discardDecision !== null && discardDecision.snapshot === snapshot && !busy && !unknown;
@@ -114,8 +126,9 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     if (!(cause instanceof ApiRequestError) || (cause.status !== 401 && cause.status !== 403)) return false;
     readController.current?.abort(); generation.current += 1;
     unregisterLeave.current?.(); unregisterLeave.current = null;
-    currentDraft.current = { fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "", subtaskTitle: "", dependsOnTaskId: "" };
+    currentDraft.current = blankDraft();
     baseline.current = currentDraft.current;
+    if (memberId) clearTaskEditorDraft(memberId, taskId);
     clearDiscard(); setDetail(null); setSubtasks([]); setDependencies([]); setFields(blank); setTags(""); setKnowledgeId(""); setSubtaskTitle(""); setDependsOnTaskId(""); setStatus("todo"); setProgress("0");
     callbacks.current.onDenied(cause); return true;
   };
@@ -139,6 +152,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
       baseline.current = loaded; currentDraft.current = merged;
       setDetail(next); setSubtasks(nextSubtasks); setDependencies(nextDependencies);
       setFields(merged.fields); setTags(merged.tags); setStatus(merged.status); setProgress(merged.progress); setKnowledgeId(merged.knowledgeId); setSubtaskTitle(merged.subtaskTitle); setDependsOnTaskId(merged.dependsOnTaskId);
+      remember();
     } catch (cause) {
       if (!active.current || controller.signal.aborted || version !== generation.current) return;
       if (!denied(cause)) setReadError(true);
@@ -157,6 +171,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     // Only an acknowledged write advances the submitted subform's baseline.
     if (next.acceptedDraft) baseline.current = { ...baseline.current, ...Object.fromEntries((next.clean ?? []).map(key => [key, next.acceptedDraft![key]])) };
     if (next.op.op === "create") createId.current = null;
+    remember();
   };
   async function perform(next: Intent, retry = false) {
     if (discardRef.current !== null || gate.current || (intent.current && !retry)) return;
@@ -242,10 +257,14 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
   const discard = () => {
     if (!active.current || !confirmingDiscard || discardRef.current !== discardDecision || gate.current || intent.current) return;
     if (discardDecision.snapshot !== JSON.stringify([taskId, currentDraft.current])) { cancelDiscard(); return; }
+    if (memberId && !clearTaskEditorDraft(memberId, taskId)) { setRecordNotice(t("TASKS_DRAFT_NOT_RECORDED")); return; }
     if (discardDecision.navigation) { discardDecision.navigation.accept(); return; }
     cancelDiscard(); callbacks.current.onClose();
   };
+  const discardRecord = () => { if (!memberId || !clearTaskEditorDraft(memberId, taskId)) return; setRecordBlocked(false); };
   const content = <div className="space-y-4" aria-busy={busy || reading}>
+    {recordBlocked ? <div data-task-draft-blocked role="alert"><p>{t("TASKS_DRAFT_RECORD_BLOCKED")}</p><button type="button" onClick={discardRecord}>{t("TASKS_DRAFT_RECORD_DISCARD")}</button></div> : null}
+    {recordNotice ? <p role="alert">{recordNotice}</p> : null}
     {busy && <p role="status">{t("TASKS_SAVING")}</p>}
     {unknown && <div role="alert" data-task-write-unknown=""><p>{t("TASKS_WRITE_UNKNOWN")}</p><div className="mt-2 flex flex-wrap gap-2">
       <Button variant="outline" disabled={busy} onClick={() => void check()}>{t("TASKS_CHECK_WRITE")}</Button>
