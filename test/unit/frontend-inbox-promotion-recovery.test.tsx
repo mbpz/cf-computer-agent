@@ -32,6 +32,7 @@ describe("inbox promotion recovery through App", () => {
       if (path === "/api/session") return Response.json({ member: { id: member, email: `${member}@app.test`, role: "contributor" }, capabilities: ["knowledge:read", "submission:create", "submission:read-own"], permissionMask: "0x100000", logoutUrl: "/auth/logout" });
       if (path === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (path === "/api/telemetry/pageview") return new Response(null, { status: 204 });
+      if (path === "/api/tasks/task-1/subtasks" || path === "/api/tasks/task-1/dependencies") return Response.json([]);
       if (path === "/api/tasks/task-1") {
         calls.push(`GET ${path}`);
         if (detailStatus !== 200) return apiError(detailStatus, "TASK_NOT_FOUND");

@@ -19,6 +19,9 @@ export interface TaskSummary { todo: number; doing: number; blocked: number; don
 export interface TaskFilters { status?: string; priority?: string; tag?: string; due?: string; q?: string; }
 export type TaskPage = FrontendNumberedPage<TaskItem>;
 export interface TaskDetail { task: TaskItem; tags: string[]; links: TaskLinkItem[]; }
+export type TaskSubtaskStatus = "todo" | "doing" | "done" | "canceled";
+export interface TaskSubtask { id: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; updatedAt: string; }
+export interface TaskDependency { taskId: string; dependsOnTaskId: string; }
 export interface TaskCreateInput { id?: string; title: string; notes?: string; priority?: string; dueAt?: string | null; knowledgeItemId?: string; }
 
 function taskQuery(filters: TaskFilters, pagination: FrontendPageRequest): string {
@@ -108,6 +111,48 @@ export async function addTaskLink(taskId: string, knowledgeItemId: string, reque
   return linkReceipt(data?.link, taskId, knowledgeItemId);
 }
 
+export async function loadSubtasks(taskId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<TaskSubtask[]> {
+  const data = await apiFetch<unknown>(`/api/tasks/${encodeURIComponent(taskId)}/subtasks`, { requester, signal });
+  if (!Array.isArray(data)) throw new Error("TASK_SUBTASKS_INVALID");
+  return data.map((item) => subtaskReceipt(item, taskId));
+}
+export async function createSubtask(taskId: string, input: { id: string; title: string; status: TaskSubtaskStatus; position: number }, requester: Fetcher = fetch): Promise<TaskSubtask> {
+  const data = await apiFetch<{ subtask?: unknown }>(`/api/tasks/${encodeURIComponent(taskId)}/subtasks`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  const subtask = subtaskReceipt(data?.subtask, taskId);
+  if (subtask.id !== input.id) throw new Error("TASK_SUBTASK_INVALID");
+  return subtask;
+}
+export async function updateSubtask(taskId: string, subtaskId: string, input: { title: string; status: TaskSubtaskStatus; position: number; expectedUpdatedAt: string }, requester: Fetcher = fetch): Promise<TaskSubtask> {
+  const data = await apiFetch<unknown>(`/api/tasks/${encodeURIComponent(taskId)}/subtasks/${encodeURIComponent(subtaskId)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  const subtask = subtaskReceipt(data, taskId);
+  if (subtask.id !== subtaskId) throw new Error("TASK_SUBTASK_INVALID");
+  return subtask;
+}
+export async function deleteSubtask(taskId: string, subtaskId: string, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<void> {
+  try {
+    await apiFetch<void>(`/api/tasks/${encodeURIComponent(taskId)}/subtasks/${encodeURIComponent(subtaskId)}`, { requester, method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }) });
+  } catch (error) {
+    if (!(error instanceof ApiRequestError) || error.status !== 404) throw error;
+  }
+}
+export async function loadDependencies(taskId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<TaskDependency[]> {
+  const data = await apiFetch<unknown>(`/api/tasks/${encodeURIComponent(taskId)}/dependencies`, { requester, signal });
+  if (!Array.isArray(data)) throw new Error("TASK_DEPENDENCIES_INVALID");
+  return data.map((item) => dependencyReceipt(item, taskId));
+}
+export async function addDependency(taskId: string, dependsOnTaskId: string, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<TaskDependency> {
+  const data = await apiFetch<{ dependency?: unknown }>(`/api/tasks/${encodeURIComponent(taskId)}/dependencies`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dependsOnTaskId, expectedUpdatedAt }) });
+  const dependency = dependencyReceipt(data?.dependency, taskId);
+  if (dependency.dependsOnTaskId !== dependsOnTaskId) throw new Error("TASK_DEPENDENCY_INVALID");
+  return dependency;
+}
+export async function removeDependency(taskId: string, dependsOnTaskId: string, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<void> {
+  try {
+    await apiFetch<void>(`/api/tasks/${encodeURIComponent(taskId)}/dependencies/${encodeURIComponent(dependsOnTaskId)}`, { requester, method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }) });
+  } catch (error) {
+    if (!(error instanceof ApiRequestError) || error.status !== 404) throw error;
+  }
+}
 export async function removeTaskLink(taskId: string, linkId: string, requester: Fetcher = fetch, expectedUpdatedAt?: string): Promise<void> {
   try {
     const init = expectedUpdatedAt === undefined
@@ -159,6 +204,19 @@ function taskReceipt(value: unknown, expectedId: string): TaskItem {
   return record;
 }
 
+function subtaskReceipt(value: unknown, taskId: string): TaskSubtask {
+  const item = value as TaskSubtask | undefined;
+  const status = item?.status;
+  if (!item || typeof item.id !== "string" || !item.id || item.taskId !== taskId || typeof item.title !== "string" || !item.title
+    || (status !== "todo" && status !== "doing" && status !== "done" && status !== "canceled")
+    || !Number.isInteger(item.position) || item.position < 0 || typeof item.updatedAt !== "string" || !Number.isFinite(Date.parse(item.updatedAt))) throw new Error("TASK_SUBTASK_INVALID");
+  return { id: item.id, taskId, title: item.title, status, position: item.position, updatedAt: item.updatedAt };
+}
+function dependencyReceipt(value: unknown, taskId: string): TaskDependency {
+  const item = value as TaskDependency | undefined;
+  if (!item || item.taskId !== taskId || typeof item.dependsOnTaskId !== "string" || !item.dependsOnTaskId) throw new Error("TASK_DEPENDENCY_INVALID");
+  return { taskId, dependsOnTaskId: item.dependsOnTaskId };
+}
 function linkReceipt(value: unknown, taskId: string, knowledgeItemId?: string): TaskLinkItem {
   const link = value as TaskLinkItem | undefined;
   if (!link || typeof link.id !== "string" || !link.id || link.taskId !== taskId

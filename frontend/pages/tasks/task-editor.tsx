@@ -6,17 +6,17 @@ import { Sheet, SheetContent, SheetTitle } from "../../components/ui/sheet";
 import { Input } from "../../components/ui/input";
 import { ApiRequestError } from "../../lib/api";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
-import { loadTaskDetail, type TaskDetail, type TaskItem } from "../../lib/tasks-data";
+import { loadDependencies, loadSubtasks, loadTaskDetail, type TaskDependency, type TaskDetail, type TaskItem, type TaskSubtask } from "../../lib/tasks-data";
 import { checkTaskWrite, clearTaskWrite, runTaskWrite, saveTaskWrite, type TaskWriteIntent } from "../../lib/task-write-intent";
 import { registerWorkspaceLeaveGuard, WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
 import type { WorkspaceLeaveDecision } from "../../lib/workspace-navigation-gate";
 import { taskPriorityKey, taskStatusKey } from "./tasks-model";
 
 type Fields = { title: string; notes: string; priority: string; dueAt: string };
-type Draft = { fields: Fields; tags: string; status: TaskItem["status"]; progress: string; knowledgeId: string };
+type Draft = { fields: Fields; tags: string; status: TaskItem["status"]; progress: string; knowledgeId: string; subtaskTitle: string; dependsOnTaskId: string };
 type Intent = { op: TaskWriteIntent; clean?: (keyof Draft)[]; acceptedDraft?: Draft };
 type Notice = "TASKS_WRITE_CONFLICT" | "TASKS_WRITE_APPLIED" | "TASKS_WRITE_NOT_APPLIED" | "TASKS_WRITE_MISSING" | "TASKS_WRITE_CHECK_FAILED" | "TASKS_WRITE_NOT_RECORDED" | "TASKS_WRITE_RECORD_STUCK";
-const cleanFor: Record<TaskWriteIntent["op"], (keyof Draft)[]> = { create: ["fields"], update: ["fields"], status: ["status"], progress: ["progress"], tags: ["tags"], link: ["knowledgeId"], unlink: [], delete: [] };
+const cleanFor: Record<TaskWriteIntent["op"], (keyof Draft)[]> = { create: ["fields"], update: ["fields"], status: ["status"], progress: ["progress"], tags: ["tags"], link: ["knowledgeId"], unlink: [], delete: [], "subtask-create": ["subtaskTitle"], "subtask-update": [], "subtask-delete": [], "dependency-add": ["dependsOnTaskId"], "dependency-remove": [] };
 const blank: Fields = { title: "", notes: "", priority: "medium", dueAt: "" };
 const transitions: Record<TaskItem["status"], TaskItem["status"][]> = {
   todo: ["todo", "doing", "done", "canceled"], doing: ["doing", "todo", "blocked", "done", "canceled"],
@@ -44,7 +44,10 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
   const t = (key: Parameters<typeof frontendText>[1]) => frontendText(locale, key);
   const [fields, setFields] = useState<Fields>(() => intendedFields(restored) ?? blank);
   const [detail, setDetail] = useState<TaskDetail | null>(null);
+  const [subtasks, setSubtasks] = useState<TaskSubtask[]>([]);
+  const [dependencies, setDependencies] = useState<TaskDependency[]>([]);
   const [tags, setTags] = useState(""); const [knowledgeId, setKnowledgeId] = useState("");
+  const [subtaskTitle, setSubtaskTitle] = useState(""); const [dependsOnTaskId, setDependsOnTaskId] = useState("");
   const [status, setStatus] = useState<TaskItem["status"]>("todo"); const [progress, setProgress] = useState("0");
   const [reading, setReading] = useState(taskId !== null); const [readError, setReadError] = useState(false);
   const [busy, setBusy] = useState(false); const [unknown, setUnknown] = useState(restored !== undefined); const [error, setError] = useState(false);
@@ -57,7 +60,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
   const callbacks = useRef({ onChanged, onDenied, onClose }); callbacks.current = { onChanged, onDenied, onClose };
   const [discardDecision, setDiscardDecision] = useState<{ snapshot: string; navigation?: WorkspaceLeaveDecision } | null>(null);
   const discardRef = useRef<typeof discardDecision>(null);
-  const baseline = useRef<Draft>({ fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "" });
+  const baseline = useRef<Draft>({ fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "", subtaskTitle: "", dependsOnTaskId: "" });
   const currentDraft = useRef<Draft>({ ...baseline.current, fields: fields });
   // Input handlers update this ref before React flushes, so same-event navigation
   // cannot observe the previous render's draft.
@@ -65,7 +68,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     if (gate.current || intent.current || discardRef.current) return;
     currentDraft.current = { ...currentDraft.current, [key]: value };
     const next = currentDraft.current;
-    setFields(next.fields); setTags(next.tags); setStatus(next.status); setProgress(next.progress); setKnowledgeId(next.knowledgeId);
+    setFields(next.fields); setTags(next.tags); setStatus(next.status); setProgress(next.progress); setKnowledgeId(next.knowledgeId); setSubtaskTitle(next.subtaskTitle); setDependsOnTaskId(next.dependsOnTaskId);
   }
   const snapshot = JSON.stringify([taskId, currentDraft.current]);
   const confirmingDiscard = discardDecision !== null && discardDecision.snapshot === snapshot && !busy && !unknown;
@@ -111,9 +114,9 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     if (!(cause instanceof ApiRequestError) || (cause.status !== 401 && cause.status !== 403)) return false;
     readController.current?.abort(); generation.current += 1;
     unregisterLeave.current?.(); unregisterLeave.current = null;
-    currentDraft.current = { fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "" };
+    currentDraft.current = { fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "", subtaskTitle: "", dependsOnTaskId: "" };
     baseline.current = currentDraft.current;
-    clearDiscard(); setDetail(null); setFields(blank); setTags(""); setKnowledgeId(""); setStatus("todo"); setProgress("0");
+    clearDiscard(); setDetail(null); setSubtasks([]); setDependencies([]); setFields(blank); setTags(""); setKnowledgeId(""); setSubtaskTitle(""); setDependsOnTaskId(""); setStatus("todo"); setProgress("0");
     callbacks.current.onDenied(cause); return true;
   };
   async function read() {
@@ -121,16 +124,21 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     readController.current?.abort(); const controller = new AbortController(); readController.current = controller;
     const version = ++generation.current; setReading(true); setReadError(false); setDetail(null);
     try {
-      const next = await loadTaskDetail(taskId, fetch, controller.signal);
+      const [next, nextSubtasks, nextDependencies] = await Promise.all([
+        loadTaskDetail(taskId, fetch, controller.signal),
+        loadSubtasks(taskId, fetch, controller.signal),
+        loadDependencies(taskId, fetch, controller.signal),
+      ]);
       if (!active.current || controller.signal.aborted || version !== generation.current) return;
       const loaded: Draft = { fields: { title: next.task.title, notes: next.task.notes, priority: next.task.priority, dueAt: localTaskDate(next.task.dueAt) },
-        tags: next.tags.join(", "), status: next.task.status, progress: String(next.task.progress), knowledgeId: "" };
+        tags: next.tags.join(", "), status: next.task.status, progress: String(next.task.progress), knowledgeId: "", subtaskTitle: "", dependsOnTaskId: "" };
       // A subform write/readback must not erase drafts belonging to other subforms.
       const merged = Object.fromEntries((Object.keys(loaded) as (keyof Draft)[]).map(key => [key,
         JSON.stringify(currentDraft.current[key]) !== JSON.stringify(baseline.current[key]) ? currentDraft.current[key] : loaded[key],
       ])) as Draft;
       baseline.current = loaded; currentDraft.current = merged;
-      setDetail(next); setFields(merged.fields); setTags(merged.tags); setStatus(merged.status); setProgress(merged.progress); setKnowledgeId(merged.knowledgeId);
+      setDetail(next); setSubtasks(nextSubtasks); setDependencies(nextDependencies);
+      setFields(merged.fields); setTags(merged.tags); setStatus(merged.status); setProgress(merged.progress); setKnowledgeId(merged.knowledgeId); setSubtaskTitle(merged.subtaskTitle); setDependsOnTaskId(merged.dependsOnTaskId);
     } catch (cause) {
       if (!active.current || controller.signal.aborted || version !== generation.current) return;
       if (!denied(cause)) setReadError(true);
@@ -272,6 +280,16 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
           <Button type="submit" disabled={locked || detail.links.length >= 5}>{t("TASKS_LINK_ADD")}</Button>
         </form>
         <ul className="space-y-2">{detail.links.map((link) => <li key={link.id} className="break-words rounded border p-2"><p>{link.knowledgeTitle ?? t("TASKS_LINK_UNAVAILABLE")}</p><p className="text-xs text-muted-foreground">{link.knowledgeItemId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_LINK_REMOVE")}: ${link.id}`} onClick={() => void perform({ op: { op: "unlink", taskId, linkId: link.id, expectedUpdatedAt: detail.task.updatedAt } })}>{t("TASKS_LINK_REMOVE")}</Button></li>)}</ul>
+        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); if (locked || !title || [...title].length > 240 || /[\u0000-\u001f\u007f-\u009f]/u.test(title)) { setError(true); return; } void perform({ clean: ["subtaskTitle"], op: { op: "subtask-create", taskId, subtaskId: crypto.randomUUID(), title, status: "todo", position: subtasks.length } }); }}>
+          <label>{t("TASKS_SUBTASK_TITLE")}<Input aria-label={t("TASKS_SUBTASK_TITLE")} value={subtaskTitle} maxLength={480} disabled={locked} onChange={(event) => edit("subtaskTitle", event.currentTarget.value)} /></label>
+          <Button type="submit" disabled={locked}>{t("TASKS_SUBTASK_ADD")}</Button>
+        </form>
+        <ul className="space-y-2">{subtasks.map((item) => <li key={item.id} className="break-words rounded border p-2"><p>{item.title}</p><label className="mt-2 block text-xs text-muted-foreground">{t("TASKS_SUBTASK_STATUS")}<select className="mt-1 block w-full rounded border bg-background p-2 text-sm text-foreground" aria-label={`${t("TASKS_SUBTASK_STATUS")}: ${item.title}`} disabled={locked} value={item.status} onChange={(event) => { const status = event.currentTarget.value as TaskSubtask["status"]; if (status !== item.status) void perform({ op: { op: "subtask-update", taskId, subtaskId: item.id, title: item.title, status, position: item.position, expectedUpdatedAt: item.updatedAt } }); }}>{(["todo", "doing", "done", "canceled"] as const).map((status) => <option key={status} value={status}>{t(taskStatusKey(status))}</option>)}</select></label><div className="mt-2 flex flex-wrap gap-2"><Button variant="outline" disabled={locked} aria-label={`${item.status === "done" ? t("TASKS_SUBTASK_REOPEN") : t("TASKS_SUBTASK_DONE")}: ${item.title}`} onClick={() => void perform({ op: { op: "subtask-update", taskId, subtaskId: item.id, title: item.title, status: item.status === "done" ? "todo" : "done", position: item.position, expectedUpdatedAt: item.updatedAt } })}>{item.status === "done" ? t("TASKS_SUBTASK_REOPEN") : t("TASKS_SUBTASK_DONE")}</Button><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_SUBTASK_REMOVE")}: ${item.title}`} onClick={() => void perform({ op: { op: "subtask-delete", taskId, subtaskId: item.id, expectedUpdatedAt: item.updatedAt } })}>{t("TASKS_SUBTASK_REMOVE")}</Button></div></li>)}</ul>
+        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const dependsOnTaskId = currentDraft.current.dependsOnTaskId.trim(); if (locked || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(dependsOnTaskId) || dependsOnTaskId === taskId) { setError(true); return; } void perform({ clean: ["dependsOnTaskId"], op: { op: "dependency-add", taskId, dependsOnTaskId, expectedUpdatedAt: detail.task.updatedAt } }); }}>
+          <label>{t("TASKS_DEPENDENCY_ID")}<Input aria-label={t("TASKS_DEPENDENCY_ID")} value={dependsOnTaskId} maxLength={128} disabled={locked} onChange={(event) => edit("dependsOnTaskId", event.currentTarget.value)} /></label>
+          <Button type="submit" disabled={locked}>{t("TASKS_DEPENDENCY_ADD")}</Button>
+        </form>
+        <ul className="space-y-2">{dependencies.map((item) => <li key={item.dependsOnTaskId} className="break-words rounded border p-2"><p className="text-xs text-muted-foreground">{item.dependsOnTaskId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_DEPENDENCY_REMOVE")}: ${item.dependsOnTaskId}`} onClick={() => void perform({ op: { op: "dependency-remove", taskId, dependsOnTaskId: item.dependsOnTaskId, expectedUpdatedAt: detail.task.updatedAt } })}>{t("TASKS_DEPENDENCY_REMOVE")}</Button></li>)}</ul>
       </>}
     </>}
     <Button variant="outline" disabled={locked} onClick={close}>{t("TASKS_CLOSE")}</Button>

@@ -35,6 +35,7 @@ describe("task editor through the real route", () => {
       if (method === "PATCH") { saved = { ...saved, ...JSON.parse(String(init?.body)) }; return Response.json(saved); }
       if (url.endsWith("/tags")) return Response.json({ tags: JSON.parse(String(init?.body)).tags });
       if (url.endsWith("/links") && method === "POST") return Response.json({ link: { id: "link-one", taskId: task.id, knowledgeItemId: JSON.parse(String(init?.body)).knowledgeItemId, knowledgeTitle: null, createdAt: task.createdAt } });
+      if ((url.endsWith("/subtasks") || url.endsWith("/dependencies")) && method === "GET") return Response.json([]);
       return Response.json({ task: saved, tags: [], links: [] });
     });
   });

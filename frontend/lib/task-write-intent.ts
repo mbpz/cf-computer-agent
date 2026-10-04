@@ -1,5 +1,5 @@
 import { ApiRequestError } from "./api";
-import { addTaskLink, createTask, deleteTask, loadTaskDetail, removeTaskLink, replaceTaskTags, setTaskProgress, setTaskStatus, updateTask, type TaskDetail, type TaskItem } from "./tasks-data";
+import { addDependency, addTaskLink, createSubtask, createTask, deleteSubtask, deleteTask, loadDependencies, loadSubtasks, loadTaskDetail, removeDependency, removeTaskLink, replaceTaskTags, setTaskProgress, setTaskStatus, updateSubtask, updateTask, type TaskDetail, type TaskItem, type TaskSubtaskStatus } from "./tasks-data";
 
 type TaskFields = { title: string; notes: string; priority: "low" | "medium" | "high"; dueAt: string | null };
 export type TaskWriteIntent =
@@ -10,7 +10,12 @@ export type TaskWriteIntent =
   | { op: "tags"; taskId: string; tags: string[]; expectedUpdatedAt?: string }
   | { op: "link"; taskId: string; knowledgeItemId: string; expectedUpdatedAt?: string }
   | { op: "unlink"; taskId: string; linkId: string; expectedUpdatedAt?: string }
-  | { op: "delete"; taskId: string };
+  | { op: "delete"; taskId: string }
+  | { op: "subtask-create"; taskId: string; subtaskId: string; title: string; status: TaskSubtaskStatus; position: number }
+  | { op: "subtask-update"; taskId: string; subtaskId: string; title: string; status: TaskSubtaskStatus; position: number; expectedUpdatedAt: string }
+  | { op: "subtask-delete"; taskId: string; subtaskId: string; expectedUpdatedAt: string }
+  | { op: "dependency-add"; taskId: string; dependsOnTaskId: string; expectedUpdatedAt: string }
+  | { op: "dependency-remove"; taskId: string; dependsOnTaskId: string; expectedUpdatedAt: string };
 export type StoredTaskWrite = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intent: TaskWriteIntent };
 
 // Every operation is an absolute or id-keyed write, so sending the same intent again cannot add a second effect.
@@ -24,6 +29,11 @@ export function runTaskWrite(intent: TaskWriteIntent): Promise<unknown> {
     case "link": return addTaskLink(intent.taskId, intent.knowledgeItemId, fetch, intent.expectedUpdatedAt);
     case "unlink": return removeTaskLink(intent.taskId, intent.linkId, fetch, intent.expectedUpdatedAt);
     case "delete": return deleteTask(intent.taskId);
+    case "subtask-create": return createSubtask(intent.taskId, { id: intent.subtaskId, title: intent.title, status: intent.status, position: intent.position });
+    case "subtask-update": return updateSubtask(intent.taskId, intent.subtaskId, { title: intent.title, status: intent.status, position: intent.position, expectedUpdatedAt: intent.expectedUpdatedAt });
+    case "subtask-delete": return deleteSubtask(intent.taskId, intent.subtaskId, intent.expectedUpdatedAt);
+    case "dependency-add": return addDependency(intent.taskId, intent.dependsOnTaskId, intent.expectedUpdatedAt);
+    case "dependency-remove": return removeDependency(intent.taskId, intent.dependsOnTaskId, intent.expectedUpdatedAt);
   }
 }
 
@@ -47,20 +57,53 @@ export function taskWriteOutcome(intent: TaskWriteIntent, detail: TaskDetail): "
     case "link": return detail.links.some((link) => link.knowledgeItemId === intent.knowledgeItemId) ? "applied" : "not_applied";
     case "unlink": return detail.links.some((link) => link.id === intent.linkId) ? "not_applied" : "applied";
     case "delete": return "not_applied";
+    // Subtasks and dependencies are not on the task detail. checkTaskWrite reads them directly.
+    case "subtask-create":
+    case "subtask-update":
+    case "subtask-delete":
+    case "dependency-add":
+    case "dependency-remove": return "not_applied";
   }
 }
 
 /** Read-only reconciliation. A missing task means a delete landed and a creation did not. */
 export async function checkTaskWrite(intent: TaskWriteIntent): Promise<"applied" | "not_applied" | "missing"> {
+  if (intent.op === "subtask-create" || intent.op === "subtask-update" || intent.op === "subtask-delete") return checkSubtaskWrite(intent);
+  if (intent.op === "dependency-add" || intent.op === "dependency-remove") return checkDependencyWrite(intent);
   try { return taskWriteOutcome(intent, await loadTaskDetail(intent.taskId)); }
   catch (cause) {
     if (!(cause instanceof ApiRequestError && cause.status === 404)) throw cause;
     return intent.op === "delete" ? "applied" : intent.op === "create" ? "not_applied" : "missing";
   }
 }
+async function checkSubtaskWrite(intent: Extract<TaskWriteIntent, { op: "subtask-create" | "subtask-update" | "subtask-delete" }>): Promise<"applied" | "not_applied" | "missing"> {
+  try {
+    const found = (await loadSubtasks(intent.taskId)).find((item) => item.id === intent.subtaskId);
+    if (intent.op === "subtask-delete") return found ? "not_applied" : "applied";
+    if (!found) return intent.op === "subtask-create" ? "not_applied" : "missing";
+    return found.title === intent.title && found.status === intent.status && found.position === intent.position ? "applied" : "not_applied";
+  } catch (cause) {
+    if (!(cause instanceof ApiRequestError && cause.status === 404)) throw cause;
+    return intent.op === "subtask-delete" ? "applied" : intent.op === "subtask-create" ? "not_applied" : "missing";
+  }
+}
+async function checkDependencyWrite(intent: Extract<TaskWriteIntent, { op: "dependency-add" | "dependency-remove" }>): Promise<"applied" | "not_applied" | "missing"> {
+  try {
+    const found = (await loadDependencies(intent.taskId)).some((item) => item.dependsOnTaskId === intent.dependsOnTaskId);
+    return intent.op === "dependency-remove" ? (found ? "not_applied" : "applied") : (found ? "applied" : "not_applied");
+  } catch (cause) {
+    if (!(cause instanceof ApiRequestError && cause.status === 404)) throw cause;
+    return intent.op === "dependency-remove" ? "applied" : "not_applied";
+  }
+}
 
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const statuses: readonly string[] = ["todo", "doing", "blocked", "done", "canceled"];
+const subtaskStatuses: readonly string[] = ["todo", "doing", "done", "canceled"];
+const versioned = (value: unknown) => typeof value === "string" && Number.isFinite(Date.parse(value));
+const structureId = (value: unknown) => typeof value === "string" && ID.test(value);
+const subtaskBody = (value: Record<string, unknown>) => structureId(value.subtaskId) && typeof value.title === "string" && !!value.title.trim() && [...value.title].length <= 240
+  && typeof value.status === "string" && subtaskStatuses.includes(value.status) && Number.isInteger(value.position) && (value.position as number) >= 0 && (value.position as number) <= 10000;
 const exactKeys = (value: object, keys: readonly string[]) => Object.keys(value).length === keys.length && Object.keys(value).every((key) => keys.includes(key));
 function optionalVersion(value: Record<string, unknown>, keys: readonly string[]): boolean {
   if (exactKeys(value, keys)) return true;
@@ -88,6 +131,11 @@ export function validTaskWrite(value: unknown): value is TaskWriteIntent {
     case "link": return optionalVersion(v, ["op", "taskId", "knowledgeItemId"]) && typeof v.knowledgeItemId === "string" && ID.test(v.knowledgeItemId);
     case "unlink": return optionalVersion(v, ["op", "taskId", "linkId"]) && typeof v.linkId === "string" && ID.test(v.linkId);
     case "delete": return exactKeys(v, ["op", "taskId"]);
+    case "subtask-create": return exactKeys(v, ["op", "taskId", "subtaskId", "title", "status", "position"]) && subtaskBody(v);
+    case "subtask-update": return exactKeys(v, ["op", "taskId", "subtaskId", "title", "status", "position", "expectedUpdatedAt"]) && subtaskBody(v) && versioned(v.expectedUpdatedAt);
+    case "subtask-delete": return exactKeys(v, ["op", "taskId", "subtaskId", "expectedUpdatedAt"]) && structureId(v.subtaskId) && versioned(v.expectedUpdatedAt);
+    case "dependency-add":
+    case "dependency-remove": return exactKeys(v, ["op", "taskId", "dependsOnTaskId", "expectedUpdatedAt"]) && structureId(v.dependsOnTaskId) && v.dependsOnTaskId !== v.taskId && versioned(v.expectedUpdatedAt);
     default: return false;
   }
 }
