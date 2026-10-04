@@ -335,6 +335,66 @@ describe("GraphPage", () => {
   });
 });
 
+describe("graph view refresh", () => {
+  const viewKey = "memory-garden:graph-view:v1:member-a";
+  const query = () => host.querySelector("[data-graph-query]") as HTMLInputElement;
+  const lens = () => host.querySelector("[data-graph-lens]") as HTMLSelectElement;
+  async function typeQuery(value: string) {
+    const el = query();
+    const key = Object.keys(el).find((name) => name.startsWith("__reactProps$"));
+    await act(async () => { (el as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[key!].onChange({ currentTarget: { value } }); });
+  }
+  async function render(load = vi.fn(async () => snapshot)) {
+    await act(async () => { root.render(<GraphRoute memberId="member-a" locale={createLocaleRuntime()} load={load} />); });
+    await flush();
+    return load;
+  }
+  async function remount(load = vi.fn(async () => snapshot)) {
+    act(() => root.unmount());
+    root = createRoot(host);
+    return render(load);
+  }
+
+  it("keeps graph filters after refresh and does not block leave", async () => {
+    const load = await render();
+    await typeQuery("Launch");
+    await change(lens(), "knowledge");
+    await flush();
+    expect(window.sessionStorage.getItem(viewKey)).toContain("Launch");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+    const again = await remount();
+    expect(query().value).toBe("Launch");
+    expect(lens().value).toBe("knowledge");
+    expect(again.mock.calls.some(([input]) => input.scope === "knowledge")).toBe(true);
+    expect(load.mock.calls.some(([input]) => input.scope === "knowledge")).toBe(true);
+    expect(writeWorkspaceHistory("push", "/home")).toBe("committed");
+  });
+
+  it("keeps the graph filters on screen when the tab cannot record them", async () => {
+    await render();
+    const storage = window.sessionStorage;
+    const original = storage.setItem;
+    Object.defineProperty(storage, "setItem", { configurable: true, writable: true, value(key: string, value: string) { if (String(key).includes("graph-view")) throw new Error("full"); return original.call(storage, key, value); } });
+    await typeQuery("Launch");
+    await flush();
+    expect(query().value).toBe("Launch");
+    expect(host.textContent).toContain("could not record");
+  });
+
+  it("allows leave when the graph filters cannot be read and records only after discard", async () => {
+    window.sessionStorage.setItem(viewKey, "{");
+    await render();
+    expect(host.textContent).toContain("can't be read");
+    expect(query().value).toBe("");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+    const discard = [...host.querySelectorAll("button")].find((item) => item.textContent === "Discard record") as HTMLButtonElement;
+    await act(async () => discard.click());
+    await typeQuery("After discard");
+    await flush();
+    expect(window.sessionStorage.getItem(viewKey)).toContain("After discard");
+  });
+});
+
 async function renderReadyGraph(graph: GraphSnapshot = snapshot) {
   const load = vi.fn(async () => graph);
   await act(async () => { root.render(<GraphRoute locale={createLocaleRuntime()} load={load} />); });
