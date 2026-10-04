@@ -43,7 +43,7 @@ export async function askAgent({ question, scope, conversationId, idempotencyKey
     headers: { "content-type": "application/json", ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}) },
     body: JSON.stringify({ question: question.trim(), scope, ...(conversationId ? { conversationId } : {}) }),
   });
-  if (idempotencyKey && (data.idempotencyKey !== idempotencyKey || (conversationId !== undefined && data.conversationId !== conversationId) || typeof data.answer !== "string" || typeof data.conversationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(data.conversationId) || typeof data.evidenceConfidence !== "number" || !Number.isFinite(data.evidenceConfidence) || data.evidenceConfidence < 0 || data.evidenceConfidence > 1 || !Array.isArray(data.citations) || !Array.isArray(data.sources))) throw new Error("CHAT_RECEIPT_UNKNOWN");
+  if (idempotencyKey && (data.idempotencyKey !== idempotencyKey || (conversationId !== undefined && data.conversationId !== conversationId) || typeof data.answer !== "string" || typeof data.conversationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(data.conversationId) || typeof data.evidenceConfidence !== "number" || !Number.isFinite(data.evidenceConfidence) || data.evidenceConfidence < 0 || data.evidenceConfidence > 1 || !Array.isArray(data.citations) || !data.citations.every(isKeyedCitation) || !Array.isArray(data.sources) || !data.sources.every(isKeyedSource))) throw new Error("CHAT_RECEIPT_UNKNOWN");
   const confidence = typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.8
     ? "high"
     : typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.5 ? "medium" : "low";
@@ -85,6 +85,19 @@ export async function cancelAgentConversation(conversationId: string, requester:
     headers: { "content-type": "application/json" },
   });
   return data.cancelled === true;
+}
+
+function isKeyedSource(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.citationId === "string" && record.citationId.length > 0
+    && typeof record.knowledgeItemId === "string" && record.knowledgeItemId.length > 0
+    && typeof record.title === "string"
+    && typeof record.spaceId === "string" && record.spaceId.length > 0;
+}
+
+function isKeyedCitation(value: unknown): boolean {
+  return (typeof value === "string" && value.length > 0) || isKeyedSource(value);
 }
 
 function normalizeCitation(value: unknown): AgentCitation | null {
