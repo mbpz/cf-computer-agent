@@ -7,6 +7,8 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
+import { discardBlockedAdminSpaceDraft, loadAdminSpaceDraft, persistAdminSpaceDraft, type SpaceEditorFields } from "../../lib/admin-space-draft";
+import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
 
 import type { AdminSpaceCommand, AdminRecordFields } from "../../lib/admin-spaces-data";
 
@@ -21,15 +23,39 @@ interface SpacesPageProps {
   recordBlocked?: boolean; recordNotice?: string; onDiscardRecord?: () => void;
   nextCursor?: string; onLoadMore?: () => void; onLoadCollections?: (id: string) => void;
   onCreate?: (input: { slug: string; name: string }) => Promise<boolean | void> | void; locale?: LocaleRuntime;
+  draftMemberId?: string; suppressDraft?: boolean;
 }
 export function SpacesPage(props: SpacesPageProps) {
   if (props.loading) return <PageState kind="loading" title={frontendText(props.locale, "APP_LOADING_TITLE")} />;
   if (props.error) return <PageState kind="error" title={props.error}>{props.onLoadRetry && <Button type="button" variant="outline" onClick={props.onLoadRetry}>{frontendText(props.locale, "COMMON_RETRY")}</Button>}</PageState>;
   return <SpacesEditor {...props} />;
 }
-function SpacesEditor({ onLoadRetry, spaces, onCreate, onManage, locale, blocked = false, navigationBlocked = blocked, pending = false, needsRead = false, recordBlocked = false, recordNotice, onDiscardRecord, nextCursor, onLoadMore, onLoadCollections }: SpacesPageProps) {
-  const [target, setTarget] = useState<EditorTarget | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+function editorBaseline(target: EditorTarget): SpaceEditorFields {
+  const source = target.kind === "space" ? target.space : target.collection;
+  return { name: source?.name ?? "", slug: target.space.slug ?? "", description: source?.description ?? "", status: source?.status ?? "active", position: String(source?.position ?? 0), parentId: target.collection?.parentId ?? "" };
+}
+function resolvedEditor(spaces: readonly SpaceSummary[], editor: { kind: EditorTarget["kind"]; spaceId: string; collectionId: string } | null): EditorTarget | null {
+  if (!editor) return null;
+  const space = spaces.find((item) => item.id === editor.spaceId);
+  if (!space || space.readOnly || space.kind === "legacy") return null;
+  if (editor.kind === "space") return { kind: "space", space };
+  if (editor.kind === "create-collection") return { kind: "create-collection", space };
+  const collection = (space.collections ?? []).find((item): item is CollectionSummary => typeof item !== "string" && item.id === editor.collectionId);
+  return collection ? { kind: "collection", space, collection } : null;
+}
+function SpacesEditor({ onLoadRetry, spaces, onCreate, onManage, locale, blocked = false, navigationBlocked = blocked, pending = false, needsRead = false, recordBlocked = false, recordNotice, onDiscardRecord, nextCursor, onLoadMore, onLoadCollections, draftMemberId, suppressDraft = false }: SpacesPageProps) {
+  const [composer] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadAdminSpaceDraft(draftMemberId));
+  const restoredEditor = composer.kind === "ready" ? resolvedEditor(spaces, composer.draft.editor) : null;
+  const editorMissing = composer.kind === "ready" && Boolean(composer.draft.editor) && !restoredEditor;
+  const [draftBlocked, setDraftBlocked] = useState(composer.kind === "blocked" || editorMissing);
+  const restoredCreate = !draftBlocked && composer.kind === "ready" && composer.draft.create ? composer.draft.create : null;
+  const restoredFields = !draftBlocked && restoredEditor && composer.kind === "ready" ? composer.draft.editor?.fields ?? null : null;
+  const [target, setTarget] = useState<EditorTarget | null>(restoredEditor && !draftBlocked ? restoredEditor : null);
+  const [createOpen, setCreateOpen] = useState(Boolean(restoredCreate) && !target);
+  const [live, setLive] = useState<SpaceEditorFields | null>(restoredFields);
+  const [draftNotice, setDraftNotice] = useState<string>();
+  const seedTarget = useRef(target);
+  const seedFields = useRef(restoredFields);
   const initialDraft = useRef({ slug: "", name: "" });
   const [createState, setCreateState] = useState<"idle" | "pending" | "error">("idle");
   const submitting = useRef(false);
@@ -37,12 +63,30 @@ function SpacesEditor({ onLoadRetry, spaces, onCreate, onManage, locale, blocked
   const [discard, setDiscard] = useState<typeof initialDraft.current | null>(null);
   const discardRef = useRef<typeof initialDraft.current | null>(null);
   const alive = useRef(true);
-  const createDraft = useCreateDraft(initialDraft.current, initialDraft.current, () => navigationBlocked || submitting.current || discardRef.current !== null, locale, () => locked || Boolean(target));
+  const createDraft = useCreateDraft(restoredCreate ?? initialDraft.current, initialDraft.current, () => navigationBlocked || submitting.current || discardRef.current !== null, locale, () => locked || Boolean(target));
   const draft = createDraft.fields;
   const validDiscard = Boolean(discard && discard === draft && createOpen && !locked);
   const cancelDiscard = () => { discardRef.current = null; setDiscard(null); };
   useEffect(() => { if (discard && !validDiscard) cancelDiscard(); }, [discard, validDiscard]);
   useEffect(() => { alive.current = true; return () => { alive.current = false; discardRef.current = null; }; }, []);
+  const reportFields = (fields: SpaceEditorFields) => setLive((current) => current && JSON.stringify(current) === JSON.stringify(fields) ? current : fields);
+  useEffect(() => {
+    if (!draftMemberId || draftBlocked || suppressDraft) return;
+    const createFields = createDraft.fields;
+    const create = createOpen && (createFields.name || createFields.slug) ? { slug: createFields.slug, name: createFields.name } : null;
+    const baseline = target ? editorBaseline(target) : null;
+    const editor = target && live && baseline && JSON.stringify(live) !== JSON.stringify(baseline)
+      ? { kind: target.kind, spaceId: target.space.id, collectionId: target.collection?.id ?? "", fields: live }
+      : null;
+    const saved = persistAdminSpaceDraft(draftMemberId, create || editor ? { create, editor } : null);
+    setDraftNotice(saved ? undefined : frontendText(locale, "ADMIN_SPACE_DRAFT_NOT_RECORDED"));
+  }, [createDraft.fields, createOpen, target, live, draftBlocked, suppressDraft, draftMemberId, locale]);
+  useEffect(() => {
+    const clearOnLeave = () => { if (draftMemberId && !draftBlocked && !suppressDraft) persistAdminSpaceDraft(draftMemberId, null); };
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+    return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+  }, [draftMemberId, draftBlocked, suppressDraft]);
+  const discardDraft = () => { if (!draftMemberId || !draftBlocked || !discardBlockedAdminSpaceDraft(draftMemberId)) return; setDraftBlocked(false); setDraftNotice(undefined); };
   const toggleCreate = () => {
     if (!alive.current || locked || target || submitting.current || discardRef.current || createDraft.isConfirming()) return;
     const draft = createDraft.current.current;
@@ -76,13 +120,14 @@ function SpacesEditor({ onLoadRetry, spaces, onCreate, onManage, locale, blocked
       if (alive.current) setCreateState("error");
     } finally { submitting.current = false; }
   };
-  return <><section className="space-y-5" inert={validDiscard} aria-hidden={validDiscard || undefined}><div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_SPACES_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_SPACES_DESCRIPTION")}</p></div><Button disabled={locked || Boolean(target)} onClick={toggleCreate}>{createOpen ? frontendText(locale, "ADMIN_SPACE_CANCEL") : frontendText(locale, "ADMIN_CREATE_SPACE")}</Button></div>{recordBlocked && <div role="alert" data-space-write-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_SPACE_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "ADMIN_SPACE_RECORD_DISCARD")}</Button></div>}{recordNotice && <p role="alert" className="text-sm text-destructive">{recordNotice}</p>}{needsRead && <div role="alert"><p>{frontendText(locale, "ADMIN_SPACE_READ_REQUIRED")}</p><Button type="button" variant="outline" disabled={pending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></div>}{createOpen && <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_SPACE_CREATE_TITLE")}</CardTitle></CardHeader><CardContent><form className="grid gap-4 sm:grid-cols-2" onSubmit={submit} aria-busy={createState === "pending" ? "true" : undefined}><div><Label htmlFor="admin-space-name">{frontendText(locale, "ADMIN_SPACE_NAME")}</Label><Input id="admin-space-name" value={draft.name} onChange={(event) => { const value = event.currentTarget.value; createDraft.edit("name", value); }} disabled={locked} maxLength={120} required /></div><div><Label htmlFor="admin-space-slug">{frontendText(locale, "ADMIN_SPACE_SLUG")}</Label><Input id="admin-space-slug" value={draft.slug} onChange={(event) => { const value = event.currentTarget.value; createDraft.edit("slug", value); }} disabled={locked} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxLength={80} required /></div><div className="sm:col-span-2 flex flex-wrap items-center gap-3"><Button type="submit" disabled={locked}>{createState === "pending" ? frontendText(locale, "ADMIN_SPACE_CREATING") : frontendText(locale, "ADMIN_SPACE_CREATE")}</Button>{createState === "error" && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "ADMIN_SPACE_CREATE_ERROR")}</p>}</div></form></CardContent></Card>}{target && onManage && <RecordEditor records={spaces} target={target} locale={locale} locked={locked} navigationBlocked={navigationBlocked} onCancel={() => setTarget(null)} onSave={async command => { const saved = await onManage(command); if (saved) setTarget(null); return saved; }} />}{spaces.length ? <div className="grid gap-4 md:grid-cols-2">{spaces.map((space) => <Card key={space.id}><CardContent className="p-5"><h2 className="font-medium">{space.name || frontendText(locale, "ADMIN_UNNAMED_SPACE")}</h2><p className="mt-1 text-xs text-muted-foreground">{space.slug || frontendText(locale, "ADMIN_SLUG_UNAVAILABLE")}</p>{onManage && <div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={locked || createOpen || Boolean(target) || space.readOnly || space.kind === "legacy"} onClick={() => setTarget({ kind: "space", space })}>{frontendText(locale, "ADMIN_SPACE_EDIT")}: {space.name}</Button><Button type="button" variant="outline" disabled={locked || createOpen || Boolean(target) || space.readOnly || space.kind === "legacy"} onClick={() => setTarget({ kind: "create-collection", space })}>{frontendText(locale, "ADMIN_COLLECTION_CREATE")}: {space.name}</Button></div>}<p className="mt-4 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_COLLECTIONS")}: {(space.collections ?? []).map((collection) => typeof collection === "string" ? collection : collection.name || frontendText(locale, "ADMIN_NONE")).join(", ") || frontendText(locale, "ADMIN_NONE")}</p>{onManage && <ul className="mt-3 space-y-2">{(space.collections ?? []).filter((item): item is CollectionSummary => typeof item !== "string" && Boolean(item.id)).map(collection => <li key={collection.id}><Button type="button" variant="ghost" disabled={locked || createOpen || Boolean(target) || space.readOnly || space.kind === "legacy"} onClick={() => setTarget({ kind: "collection", space, collection })}>{frontendText(locale, "ADMIN_COLLECTION_EDIT")}: {collection.name}</Button></li>)}</ul>}{space.collectionsCursor && <Button type="button" variant="outline" disabled={locked} onClick={() => onLoadCollections?.(space.id)}>{frontendText(locale, "ADMIN_LOAD_MORE")}: {space.name}</Button>}</CardContent></Card>)}</div> : <PageState kind="empty" title={frontendText(locale, "ADMIN_SPACES_EMPTY")} description={frontendText(locale, "ADMIN_SPACES_DESCRIPTION")} />}{nextCursor && <Button type="button" variant="outline" disabled={locked} onClick={onLoadMore}>{frontendText(locale, "ADMIN_LOAD_MORE")}</Button>}</section><ConfirmAction open={validDiscard} title={frontendText(locale,"ADMIN_RECORD_DISCARD_TITLE")}
+  return <><section className="space-y-5" inert={validDiscard} aria-hidden={validDiscard || undefined}><div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_SPACES_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_SPACES_DESCRIPTION")}</p></div><Button disabled={locked || Boolean(target)} onClick={toggleCreate}>{createOpen ? frontendText(locale, "ADMIN_SPACE_CANCEL") : frontendText(locale, "ADMIN_CREATE_SPACE")}</Button></div>{recordBlocked && <div role="alert" data-space-write-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_SPACE_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "ADMIN_SPACE_RECORD_DISCARD")}</Button></div>}{recordNotice && <p role="alert" className="text-sm text-destructive">{recordNotice}</p>}{draftBlocked && <div role="alert" data-space-draft-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_SPACE_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardDraft}>{frontendText(locale, "ADMIN_SPACE_DRAFT_RECORD_DISCARD")}</Button></div>}{draftNotice && <p role="alert" className="text-sm text-destructive">{draftNotice}</p>}{needsRead && <div role="alert"><p>{frontendText(locale, "ADMIN_SPACE_READ_REQUIRED")}</p><Button type="button" variant="outline" disabled={pending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></div>}{createOpen && <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_SPACE_CREATE_TITLE")}</CardTitle></CardHeader><CardContent><form className="grid gap-4 sm:grid-cols-2" onSubmit={submit} aria-busy={createState === "pending" ? "true" : undefined}><div><Label htmlFor="admin-space-name">{frontendText(locale, "ADMIN_SPACE_NAME")}</Label><Input id="admin-space-name" value={draft.name} onChange={(event) => { const value = event.currentTarget.value; createDraft.edit("name", value); }} disabled={locked} maxLength={120} required /></div><div><Label htmlFor="admin-space-slug">{frontendText(locale, "ADMIN_SPACE_SLUG")}</Label><Input id="admin-space-slug" value={draft.slug} onChange={(event) => { const value = event.currentTarget.value; createDraft.edit("slug", value); }} disabled={locked} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxLength={80} required /></div><div className="sm:col-span-2 flex flex-wrap items-center gap-3"><Button type="submit" disabled={locked}>{createState === "pending" ? frontendText(locale, "ADMIN_SPACE_CREATING") : frontendText(locale, "ADMIN_SPACE_CREATE")}</Button>{createState === "error" && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "ADMIN_SPACE_CREATE_ERROR")}</p>}</div></form></CardContent></Card>}{target && onManage && <RecordEditor records={spaces} target={target} locale={locale} locked={locked} navigationBlocked={navigationBlocked} initialFields={seedTarget.current && target.kind === seedTarget.current.kind && target.space.id === seedTarget.current.space.id && (target.collection?.id ?? "") === (seedTarget.current.collection?.id ?? "") ? seedFields.current ?? undefined : undefined} onFields={reportFields} onCancel={() => { seedTarget.current = null; seedFields.current = null; setLive(null); setTarget(null); }} onSave={async command => { const saved = await onManage(command); if (saved) { seedTarget.current = null; seedFields.current = null; setLive(null); setTarget(null); } return saved; }} />}{spaces.length ? <div className="grid gap-4 md:grid-cols-2">{spaces.map((space) => <Card key={space.id}><CardContent className="p-5"><h2 className="font-medium">{space.name || frontendText(locale, "ADMIN_UNNAMED_SPACE")}</h2><p className="mt-1 text-xs text-muted-foreground">{space.slug || frontendText(locale, "ADMIN_SLUG_UNAVAILABLE")}</p>{onManage && <div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={locked || createOpen || Boolean(target) || space.readOnly || space.kind === "legacy"} onClick={() => setTarget({ kind: "space", space })}>{frontendText(locale, "ADMIN_SPACE_EDIT")}: {space.name}</Button><Button type="button" variant="outline" disabled={locked || createOpen || Boolean(target) || space.readOnly || space.kind === "legacy"} onClick={() => setTarget({ kind: "create-collection", space })}>{frontendText(locale, "ADMIN_COLLECTION_CREATE")}: {space.name}</Button></div>}<p className="mt-4 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_COLLECTIONS")}: {(space.collections ?? []).map((collection) => typeof collection === "string" ? collection : collection.name || frontendText(locale, "ADMIN_NONE")).join(", ") || frontendText(locale, "ADMIN_NONE")}</p>{onManage && <ul className="mt-3 space-y-2">{(space.collections ?? []).filter((item): item is CollectionSummary => typeof item !== "string" && Boolean(item.id)).map(collection => <li key={collection.id}><Button type="button" variant="ghost" disabled={locked || createOpen || Boolean(target) || space.readOnly || space.kind === "legacy"} onClick={() => setTarget({ kind: "collection", space, collection })}>{frontendText(locale, "ADMIN_COLLECTION_EDIT")}: {collection.name}</Button></li>)}</ul>}{space.collectionsCursor && <Button type="button" variant="outline" disabled={locked} onClick={() => onLoadCollections?.(space.id)}>{frontendText(locale, "ADMIN_LOAD_MORE")}: {space.name}</Button>}</CardContent></Card>)}</div> : <PageState kind="empty" title={frontendText(locale, "ADMIN_SPACES_EMPTY")} description={frontendText(locale, "ADMIN_SPACES_DESCRIPTION")} />}{nextCursor && <Button type="button" variant="outline" disabled={locked} onClick={onLoadMore}>{frontendText(locale, "ADMIN_LOAD_MORE")}</Button>}</section><ConfirmAction open={validDiscard} title={frontendText(locale,"ADMIN_RECORD_DISCARD_TITLE")}
     description={frontendText(locale,"ADMIN_RECORD_DISCARD_IMPACT")} cancelLabel={frontendText(locale,"COMMON_CANCEL")}
     confirmLabel={frontendText(locale,"ADMIN_RECORD_DISCARD_CONFIRM")} destructive onCancel={cancelDiscard} onConfirm={confirmDiscard} />{createDraft.confirmation}</>;
 }
 
-function RecordEditor({ target, records, locale, locked, navigationBlocked, onCancel, onSave }: {
+function RecordEditor({ target, records, locale, locked, navigationBlocked, onCancel, onSave, initialFields, onFields }: {
   target: EditorTarget; records: readonly SpaceSummary[]; locale?: LocaleRuntime; locked: boolean; navigationBlocked: boolean; onCancel: () => void; onSave: (command: AdminSpaceCommand) => Promise<boolean>;
+  initialFields?: SpaceEditorFields; onFields?: (fields: SpaceEditorFields) => void;
 }) {
   const [requestKey] = useState(() => crypto.randomUUID());
   const source = target.kind === "space" ? target.space : target.collection;
@@ -97,8 +142,9 @@ function RecordEditor({ target, records, locale, locked, navigationBlocked, onCa
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
   const alive = useRef(true);
-  const recordDraft = useCreateDraft(initialDraft.current, initialDraft.current, () => navigationBlocked || writing.current || confirmationRef.current !== null, locale, () => false);
+  const recordDraft = useCreateDraft(initialFields ?? initialDraft.current, initialDraft.current, () => navigationBlocked || writing.current || confirmationRef.current !== null, locale, () => false);
   const draft = recordDraft.fields;
+  useEffect(() => { onFields?.(draft); }, [draft, onFields]);
   const validConfirmation = Boolean(confirmation && !busy && confirmation.draft === draft
     && (confirmation.kind === "discard" || confirmation.records === records));
   const cancelConfirmation = () => { confirmationRef.current = null; setConfirmation(null); };

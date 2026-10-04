@@ -74,6 +74,72 @@ describe("space write refresh recovery", () => {
     await createSpace();
     expect(posts).toBe(1);
   });
+
+  const draftKey = "memory-garden:admin-space-draft:v1:member-a";
+  const name = () => container.querySelector("#admin-space-name") as HTMLInputElement;
+  async function remount() {
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client"); root = createRoot(container);
+    await render();
+  }
+  it("keeps an unsent space after refresh without creating it", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posts += 1; return json({ space: space() }); }
+      return String(url).includes("/collections") ? json({ items: [] }) : json({ items: [space()] });
+    });
+    await render(); await click("Create space"); await input("admin-space-name", "Keep this space"); await input("admin-space-slug", "keep-space");
+    expect(browser.sessionStorage.getItem(draftKey)).toContain("Keep this space");
+    expect(unloadBlocked()).toBe(true); expect(posts).toBe(0);
+    await remount();
+    expect(name().value).toBe("Keep this space");
+    expect((container.querySelector("#admin-space-slug") as HTMLInputElement).value).toBe("keep-space");
+    expect(posts).toBe(0); expect(unloadBlocked()).toBe(true);
+  });
+  it("keeps the space draft on screen when the tab cannot record it", async () => {
+    vi.stubGlobal("fetch", async (url: unknown) => String(url).includes("/collections") ? json({ items: [] }) : json({ items: [space()] }));
+    await render(); await click("Create space");
+    const storage = browser.sessionStorage;
+    const original = storage.setItem;
+    Object.defineProperty(storage, "setItem", { configurable: true, writable: true, value(key: string, value: string) { if (String(key).includes("admin-space-draft")) throw new Error("full"); return original.call(storage, key, value); } });
+    await input("admin-space-name", "Unrecorded");
+    expect(name().value).toBe("Unrecorded");
+    expect(container.textContent).toContain("could not record");
+  });
+  it("allows leave when the space draft cannot be read and records only after discard", async () => {
+    vi.stubGlobal("fetch", async (url: unknown) => String(url).includes("/collections") ? json({ items: [] }) : json({ items: [space()] }));
+    browser.sessionStorage.setItem(draftKey, "{");
+    await render();
+    expect(container.textContent).toContain("can't be read"); expect(unloadBlocked()).toBe(false);
+    await leave(); expect(browser.location.pathname).toBe("/home");
+    browser.history.replaceState({}, "", "/admin/spaces");
+    await act(async () => writeWorkspaceHistory("push", "/admin/spaces")); await flush();
+    await click("Discard record");
+    await click("Create space"); await input("admin-space-name", "After discard");
+    expect(browser.sessionStorage.getItem(draftKey)).toContain("After discard");
+  });
+  it("drops the stored space draft after a confirmed leave", async () => {
+    vi.stubGlobal("fetch", async (url: unknown) => String(url).includes("/collections") ? json({ items: [] }) : json({ items: [space()] }));
+    await render(); await click("Create space"); await input("admin-space-name", "Keep this space");
+    expect(browser.sessionStorage.getItem(draftKey)).toContain("Keep this space");
+    await act(async () => expect(writeWorkspaceHistory("push", "/home")).toBe("deferred"));
+    await click("Discard changes");
+    expect(browser.sessionStorage.getItem(draftKey)).toBeNull();
+    expect(name().value).toBe(""); expect(unloadBlocked()).toBe(false);
+  });
+  it("keeps an unsent space edit after refresh without saving", async () => {
+    let patches = 0;
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+      if (init?.method === "PATCH") { patches += 1; return json({ space: space() }); }
+      return String(url).includes("/collections") ? json({ items: [] }) : json({ items: [space()] });
+    });
+    await render(); await click("Edit space: Private space"); await input("admin-record-name", "Keep this edit");
+    expect(browser.sessionStorage.getItem(draftKey)).toContain("Keep this edit");
+    expect(unloadBlocked()).toBe(true); expect(patches).toBe(0);
+    await remount();
+    expect((container.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("Keep this edit");
+    expect(patches).toBe(0); expect(unloadBlocked()).toBe(true);
+  });
 });
 
 function space(overrides: Record<string, unknown> = {}) { return { id: "space-1", name: "Private space", slug: "private-space", description: "", kind: "shared", status: "active", position: 0, readOnly: false, createdAt: "2026-09-28T00:00:00.000Z", updatedAt: "2026-09-28T00:00:00.000Z", ...overrides }; }
