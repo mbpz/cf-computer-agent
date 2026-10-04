@@ -2692,13 +2692,15 @@
         "frontend/pages/knowledge-reader-page.tsx:84:5107",
         "frontend/pages/knowledge-reader-page.tsx:84:5338",
         "frontend/pages/knowledge-reader-page.tsx:92:448",
-        "frontend/pages/knowledge-reader-page.tsx:98:362",
-        "frontend/pages/knowledge-reader-page.tsx:104:358",
-        "frontend/pages/knowledge-reader-page.tsx:120:584",
-        "frontend/pages/knowledge-reader-page.tsx:120:927",
-        "frontend/pages/knowledge-reader-page.tsx:120:1061",
-        "frontend/pages/knowledge-reader-page.tsx:120:1886",
-        "frontend/pages/knowledge-reader-page.tsx:132:38"
+        "frontend/pages/knowledge-reader-page.tsx:97:206",
+        "frontend/pages/knowledge-reader-page.tsx:99:362",
+        "frontend/pages/knowledge-reader-page.tsx:104:200",
+        "frontend/pages/knowledge-reader-page.tsx:106:358",
+        "frontend/pages/knowledge-reader-page.tsx:122:584",
+        "frontend/pages/knowledge-reader-page.tsx:122:927",
+        "frontend/pages/knowledge-reader-page.tsx:122:1061",
+        "frontend/pages/knowledge-reader-page.tsx:122:1886",
+        "frontend/pages/knowledge-reader-page.tsx:134:38"
       ],
       "unresolvedSymbols": [],
       "routePattern": "/^\\/knowledge\\/[A-Za-z0-9_-]+$/u"
@@ -34635,10 +34637,41 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:98:362",
+      "id": "frontend/pages/knowledge-reader-page.tsx:97:206",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "RelatedKnowledgePanel",
-      "line": 98,
+      "line": 97,
+      "column": 206,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\"",
+        "className": "\"text-sm text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"KNOWLEDGE_RELATED_UNREAD\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"error\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <Card data-related-knowledge=\"true\"><CardHeader><CardTitle className=\"text-base\">{frontendText(locale, \"KNOWLEDGE_RELATED_TITLE\")}</CardTitle></CardHeader><CardContent className=\"text-sm text-muted-foreground\">{frontendText(locale, \"KNOWLEDGE_RELATED_LOADING\")}</CardContent></Card>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/knowledge-reader-page.tsx:99:362",
+      "path": "frontend/pages/knowledge-reader-page.tsx",
+      "owner": "RelatedKnowledgePanel",
+      "line": 99,
       "column": 362,
       "kind": "jsx",
       "tag": "a",
@@ -34667,16 +34700,51 @@
           "source": "if (state.kind === \"loading\") return <Card data-related-knowledge=\"true\"><CardHeader><CardTitle className=\"text-base\">{frontendText(locale, \"KNOWLEDGE_RELATED_TITLE\")}</CardTitle></CardHeader><CardContent className=\"text-sm text-muted-foreground\">{frontendText(locale, \"KNOWLEDGE_RELATED_LOADING\")}</CardContent></Card>;"
         },
         {
-          "condition": "state.kind === \"error\" || state.kind === \"idle\"",
-          "source": "if (state.kind === \"error\" || state.kind === \"idle\") return null;"
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <Card data-related-knowledge=\"true\"><CardHeader><CardTitle className=\"text-base\">{frontendText(locale, \"KNOWLEDGE_RELATED_TITLE\")}</CardTitle></CardHeader><CardContent><p role=\"alert\" className=\"text-sm text-destructive\">{frontendText(locale, \"KNOWLEDGE_RELATED_UNREAD\")}</p></CardContent></Card>;"
+        },
+        {
+          "condition": "state.kind === \"idle\"",
+          "source": "if (state.kind === \"idle\") return null;"
         }
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:104:358",
+      "id": "frontend/pages/knowledge-reader-page.tsx:104:200",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "BacklinkPanel",
       "line": 104,
+      "column": 200,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\"",
+        "className": "\"text-sm text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"KNOWLEDGE_BACKLINKS_UNREAD\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"error\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <Card data-backlinks=\"true\"><CardHeader><CardTitle className=\"text-base\">{frontendText(locale, \"KNOWLEDGE_BACKLINKS_TITLE\")}</CardTitle></CardHeader><CardContent className=\"text-sm text-muted-foreground\">{frontendText(locale, \"KNOWLEDGE_BACKLINKS_LOADING\")}</CardContent></Card>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/knowledge-reader-page.tsx:106:358",
+      "path": "frontend/pages/knowledge-reader-page.tsx",
+      "owner": "BacklinkPanel",
+      "line": 106,
       "column": 358,
       "kind": "jsx",
       "tag": "a",
@@ -34705,16 +34773,20 @@
           "source": "if (state.kind === \"loading\") return <Card data-backlinks=\"true\"><CardHeader><CardTitle className=\"text-base\">{frontendText(locale, \"KNOWLEDGE_BACKLINKS_TITLE\")}</CardTitle></CardHeader><CardContent className=\"text-sm text-muted-foreground\">{frontendText(locale, \"KNOWLEDGE_BACKLINKS_LOADING\")}</CardContent></Card>;"
         },
         {
-          "condition": "state.kind === \"error\" || state.kind === \"idle\"",
-          "source": "if (state.kind === \"error\" || state.kind === \"idle\") return null;"
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <Card data-backlinks=\"true\"><CardHeader><CardTitle className=\"text-base\">{frontendText(locale, \"KNOWLEDGE_BACKLINKS_TITLE\")}</CardTitle></CardHeader><CardContent><p role=\"alert\" className=\"text-sm text-destructive\">{frontendText(locale, \"KNOWLEDGE_BACKLINKS_UNREAD\")}</p></CardContent></Card>;"
+        },
+        {
+          "condition": "state.kind === \"idle\"",
+          "source": "if (state.kind === \"idle\") return null;"
         }
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:120:584",
+      "id": "frontend/pages/knowledge-reader-page.tsx:122:584",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "SourcePanel",
-      "line": 120,
+      "line": 122,
       "column": 584,
       "kind": "jsx",
       "tag": "a",
@@ -34738,10 +34810,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:120:927",
+      "id": "frontend/pages/knowledge-reader-page.tsx:122:927",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "SourcePanel",
-      "line": 120,
+      "line": 122,
       "column": 927,
       "kind": "jsx",
       "tag": "div",
@@ -34763,10 +34835,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:120:1061",
+      "id": "frontend/pages/knowledge-reader-page.tsx:122:1061",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "SourcePanel",
-      "line": 120,
+      "line": 122,
       "column": 1061,
       "kind": "jsx",
       "tag": "button",
@@ -34798,10 +34870,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:120:1886",
+      "id": "frontend/pages/knowledge-reader-page.tsx:122:1886",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "SourcePanel",
-      "line": 120,
+      "line": 122,
       "column": 1886,
       "kind": "jsx",
       "tag": "div",
@@ -34822,10 +34894,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:132:38",
+      "id": "frontend/pages/knowledge-reader-page.tsx:134:38",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "RevisionDiffPanel",
-      "line": 132,
+      "line": 134,
       "column": 38,
       "kind": "jsx",
       "tag": "p",

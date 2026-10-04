@@ -141,8 +141,8 @@ function commonAuxiliaryResponse(path: string): Response | null {
   if (path === "/api/knowledge/activity?limit=20") return Response.json({ items: [] });
   if (path === "/api/knowledge/review?period=daily") return Response.json(emptyReview());
   if (path.endsWith("/favorite")) return Response.json({ favorite: false });
-  if (path.endsWith("/related")) return Response.json({ related: [] });
-  if (path.endsWith("/backlinks")) return Response.json({ backlinks: [] });
+  if (path.endsWith("/related")) return Response.json({ related: { items: [] } });
+  if (path.endsWith("/backlinks")) return Response.json({ backlinks: { items: [] } });
   if (path.endsWith("/note")) return Response.json({ note: null });
   if (path.endsWith("/comments")) return Response.json({ comments: [] });
   if (path === "/api/members/active") return Response.json({ items: [] });

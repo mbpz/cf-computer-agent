@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：270；操作/转发候选：1163。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：270；操作/转发候选：1165。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -251,7 +251,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/home-page.tsx | 16 |
 | frontend/pages/inbox-page.tsx | 13 |
 | frontend/pages/knowledge-page.tsx | 26 |
-| frontend/pages/knowledge-reader-page.tsx | 43 |
+| frontend/pages/knowledge-reader-page.tsx | 45 |
 | frontend/pages/login-page.tsx | 2 |
 | frontend/pages/messages/discussion-model.ts | 0 |
 | frontend/pages/messages/messages-page.tsx | 4 |
@@ -319,7 +319,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /admin/analytics | frontend/app.tsx#AdminAnalyticsRoute | 43 | 无（不代表动态边界已核对） |
 | /notifications | frontend/app.tsx#NotificationsRoute; frontend/lib/notifications-data.ts#* | 43 | 无（不代表动态边界已核对） |
 | /messages | frontend/app.tsx#MessagesRoute | 22 | 无（不代表动态边界已核对） |
-| /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 71 | 无（不代表动态边界已核对） |
+| /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 73 | 无（不代表动态边界已核对） |
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 45 | 无（不代表动态边界已核对） |
 | /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 66 | 无（不代表动态边界已核对） |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 94 | 无（不代表动态边界已核对） |
@@ -1760,13 +1760,15 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 84:5107 ReaderNotePanel | button frontendText(locale, "KNOWLEDGE_NOTE_SHARE_REVOKE") | onClick=() =&gt; sharing.request("revoke", share); type="button" | disabled=sharing.locked; {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"branch","expression":"(sharing.phase === \"loading\" &#124;&#124… |
 | 84:5338 ReaderNotePanel | p frontendText(locale, "KNOWLEDGE_NOTE_SHARE_ERROR") |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.error","operator":"&&"} |
 | 92:448 ReaderOutlinePanel | button heading.label | onClick=() =&gt; onSelectChunk(heading.id); type="button" | {"kind":"branch","expression":"headings.length === 0","branch":"false"}; {"kind":"repeat","expression":"headings"} |
-| 98:362 RelatedKnowledgePanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"state.items.length === 0","branch":"false"}; {"kind":"repeat","expression":"state.items"}; earlier return: state.kind === "loa… |
-| 104:358 BacklinkPanel | a  | href="/knowledge/" + encodeURIComponent(item.id) | {"kind":"branch","expression":"state.items.length === 0","branch":"false"}; {"kind":"repeat","expression":"state.items"}; earlier return: state.kind === "loa… |
-| 120:584 SourcePanel | a frontendText(locale, "KNOWLEDGE_READER_DOWNLOAD") | href=downloadHref | {"kind":"logical","expression":"downloadHref","operator":"&&"} |
-| 120:927 SourcePanel | div  |  | {"kind":"branch","expression":"revision.chunks.length === 0","branch":"false"} |
-| 120:1061 SourcePanel | button  | onClick=() =&gt; onSelectChunk(chunk.id); type="button" | {"kind":"branch","expression":"revision.chunks.length === 0","branch":"false"}; {"kind":"repeat","expression":"revision.chunks"} |
-| 120:1886 SourcePanel | div  |  | {"kind":"logical","expression":"selectedChunk","operator":"&&"} |
-| 132:38 RevisionDiffPanel | p frontendText(locale, "KNOWLEDGE_READER_DIFF_ERROR") |  | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 97:206 RelatedKnowledgePanel | p frontendText(locale, "KNOWLEDGE_RELATED_UNREAD") |  | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 99:362 RelatedKnowledgePanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"state.items.length === 0","branch":"false"}; {"kind":"repeat","expression":"state.items"}; earlier return: state.kind === "loa… |
+| 104:200 BacklinkPanel | p frontendText(locale, "KNOWLEDGE_BACKLINKS_UNREAD") |  | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 106:358 BacklinkPanel | a  | href="/knowledge/" + encodeURIComponent(item.id) | {"kind":"branch","expression":"state.items.length === 0","branch":"false"}; {"kind":"repeat","expression":"state.items"}; earlier return: state.kind === "loa… |
+| 122:584 SourcePanel | a frontendText(locale, "KNOWLEDGE_READER_DOWNLOAD") | href=downloadHref | {"kind":"logical","expression":"downloadHref","operator":"&&"} |
+| 122:927 SourcePanel | div  |  | {"kind":"branch","expression":"revision.chunks.length === 0","branch":"false"} |
+| 122:1061 SourcePanel | button  | onClick=() =&gt; onSelectChunk(chunk.id); type="button" | {"kind":"branch","expression":"revision.chunks.length === 0","branch":"false"}; {"kind":"repeat","expression":"revision.chunks"} |
+| 122:1886 SourcePanel | div  |  | {"kind":"logical","expression":"selectedChunk","operator":"&&"} |
+| 134:38 RevisionDiffPanel | p frontendText(locale, "KNOWLEDGE_READER_DIFF_ERROR") |  | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
 
 ## frontend/pages/login-page.tsx
 

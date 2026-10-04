@@ -94,13 +94,15 @@ function ReaderOutlinePanel({ locale, revision, selectedChunkId, onSelectChunk }
 
 function RelatedKnowledgePanel({ locale, state }: { locale?: LocaleRuntime; state: RelatedState }) {
   if (state.kind === "loading") return <Card data-related-knowledge="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_RELATED_TITLE")}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_LOADING")}</CardContent></Card>;
-  if (state.kind === "error" || state.kind === "idle") return null;
+  if (state.kind === "error") return <Card data-related-knowledge="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_RELATED_TITLE")}</CardTitle></CardHeader><CardContent><p role="alert" className="text-sm text-destructive">{frontendText(locale, "KNOWLEDGE_RELATED_UNREAD")}</p></CardContent></Card>;
+  if (state.kind === "idle") return null;
   return <Card data-related-knowledge="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_RELATED_TITLE")}</CardTitle></CardHeader><CardContent>{state.items.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_EMPTY")}</p> : <div className="grid gap-2">{state.items.map((item) => <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span><span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_MATCHED")} {item.reasonFields.map((field) => relatedFieldLabel(field, locale)).join(", ") || frontendText(locale, "COMMON_VALUE_UNAVAILABLE")}</span></a>)}</div>}</CardContent></Card>;
 }
 
 function BacklinkPanel({ locale, state }: { locale?: LocaleRuntime; state: BacklinkState }) {
   if (state.kind === "loading") return <Card data-backlinks="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_BACKLINKS_TITLE")}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_LOADING")}</CardContent></Card>;
-  if (state.kind === "error" || state.kind === "idle") return null;
+  if (state.kind === "error") return <Card data-backlinks="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_BACKLINKS_TITLE")}</CardTitle></CardHeader><CardContent><p role="alert" className="text-sm text-destructive">{frontendText(locale, "KNOWLEDGE_BACKLINKS_UNREAD")}</p></CardContent></Card>;
+  if (state.kind === "idle") return null;
   return <Card data-backlinks="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_BACKLINKS_TITLE")}</CardTitle></CardHeader><CardContent>{state.items.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_EMPTY")}</p> : <div className="grid gap-2">{state.items.map((item) => <a key={item.id} href={"/knowledge/" + encodeURIComponent(item.id)} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span><span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_LINES")} {item.startLine}–{item.endLine}</span></a>)}</div>}</CardContent></Card>;
 }
 
