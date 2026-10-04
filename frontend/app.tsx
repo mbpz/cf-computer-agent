@@ -108,6 +108,7 @@ import { clearAdminRoleWrite, discardBlockedAdminRoleWrite, loadAdminRoleWrite, 
 import { persistAdminRoleDraft } from "./lib/admin-role-draft";
 import { createAdminMenu, deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { clearAdminMenuWrite, discardBlockedAdminMenuWrite, loadAdminMenuWrite, saveAdminMenuWrite, type AdminMenuWriteIntent } from "./lib/admin-menu-write-intent";
+import { persistAdminMenuDraft } from "./lib/admin-menu-draft";
 import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAsset, type AdminAssetsPage, type AdminAssetStatus } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, loadAdminDuplicate, type AdminDuplicateCandidate, type AdminDuplicatePageResult, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import { candidateFromAdminDuplicateIntent, clearAdminDuplicateDecision, discardBlockedAdminDuplicate, loadAdminDuplicateDecisions, saveAdminDuplicateDecision, type AdminDuplicateIntent } from "./lib/admin-duplicate-intent";
@@ -608,7 +609,7 @@ export function AdminMenusRoute({ locale, memberId }: { locale: LocaleRuntime; m
       setRecordNotice(frontendText(locale, "ADMIN_MENUS_NOT_RECORDED"));
       return false;
     }
-    if (memberId) intentRef.current = intent;
+    if (memberId) { intentRef.current = intent; persistAdminMenuDraft(memberId, null); }
     const scope = epoch.current;
     const token = {};
     writeRef.current = token;
@@ -639,7 +640,7 @@ export function AdminMenusRoute({ locale, memberId }: { locale: LocaleRuntime; m
     if (!memberId || !recordBlockedRef.current || !discardBlockedAdminMenuWrite(memberId)) return;
     recordBlockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
   }
-  return <AdminMenusPage onLoadRetry={retryRead} locale={locale} state={state} writeBlocked={saving || reading || needsRead} readPending={reading || saving} readRequired={needsRead} error={recordNotice ?? saveError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord}
+  return <AdminMenusPage onLoadRetry={retryRead} locale={locale} state={state} writeBlocked={saving || reading || needsRead} readPending={reading || saving} readRequired={needsRead} error={recordNotice ?? saveError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord} draftMemberId={memberId} suppressDraft={needsRead}
     onCreate={recordBlocked ? undefined : (input) => mutate({ op: "create", input }, () => createAdminMenu(input), "ADMIN_MENUS_SAVE_ERROR")}
     onUpdate={recordBlocked ? undefined : (menu, input) => mutate({ op: "update", id: menu.id, input }, () => updateAdminMenu(menu.id, input), "ADMIN_MENUS_SAVE_ERROR")}
     onDelete={recordBlocked ? undefined : (menu) => { void mutate({ op: "delete", id: menu.id }, () => deleteAdminMenu(menu.id), "ADMIN_MENUS_DELETE_ERROR"); }} />;

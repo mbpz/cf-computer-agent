@@ -72,6 +72,65 @@ describe("menu write refresh recovery", () => {
     await disable();
     expect(patches).toBe(1);
   });
+
+  const draftKey = "memory-garden:admin-menu-draft:v1:member-a";
+  const path = () => container.querySelector('[name="path"]') as HTMLInputElement;
+  async function typePath(value: string) {
+    const el = path();
+    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value); el.dispatchEvent(new browser.Event("input", { bubbles: true })); });
+    await flush();
+  }
+  async function remount() {
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client");
+    root = createRoot(container);
+    await render();
+  }
+  it("keeps an unsent menu edit after refresh without saving", async () => {
+    let patches = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "PATCH") { patches += 1; return json({ menu: menu() }); }
+      return json({ tree: [menu()] });
+    });
+    await render(); await click("Edit menu"); await typePath("/keep-this");
+    expect(browser.sessionStorage.getItem(draftKey)).toContain("/keep-this");
+    expect(unloadBlocked()).toBe(true); expect(patches).toBe(0);
+    await remount();
+    expect(path().value).toBe("/keep-this");
+    expect(patches).toBe(0); expect(unloadBlocked()).toBe(true);
+  });
+  it("keeps the menu draft on screen when the tab cannot record it", async () => {
+    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    await render(); await click("Edit menu");
+    const storage = browser.sessionStorage;
+    const original = storage.setItem;
+    Object.defineProperty(storage, "setItem", { configurable: true, writable: true, value(key: string, value: string) { if (String(key).includes("admin-menu-draft")) throw new Error("full"); return original.call(storage, key, value); } });
+    await typePath("/unrecorded");
+    expect(path().value).toBe("/unrecorded");
+    expect(container.textContent).toContain("could not record");
+  });
+  it("allows leave when the menu draft cannot be read and records only after discard", async () => {
+    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    browser.sessionStorage.setItem(draftKey, "{");
+    await render();
+    expect(container.textContent).toContain("can't be read"); expect(unloadBlocked()).toBe(false);
+    await leave(); expect(browser.location.pathname).toBe("/home");
+    browser.history.replaceState({}, "", "/admin/menus");
+    await act(async () => writeWorkspaceHistory("push", "/admin/menus")); await flush();
+    await click("Discard record");
+    await click("Edit menu"); await typePath("/after-discard");
+    expect(browser.sessionStorage.getItem(draftKey)).toContain("/after-discard");
+  });
+  it("drops the stored menu draft after a confirmed leave", async () => {
+    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    await render(); await click("Edit menu"); await typePath("/keep-this");
+    expect(browser.sessionStorage.getItem(draftKey)).toContain("/keep-this");
+    await act(async () => expect(writeWorkspaceHistory("push", "/home")).toBe("deferred"));
+    await click("Discard changes");
+    expect(browser.sessionStorage.getItem(draftKey)).toBeNull();
+    expect(path().value).toBe("/private-menu");
+    expect(unloadBlocked()).toBe(false);
+  });
 });
 
 function menu(overrides: Record<string, unknown> = {}) { return { id: "custom", parentId: null, key: "custom", labelKey: "NAV_HOME", path: "/private-menu", icon: null, groupName: "workspace", position: 1, requiredBits: "0x0", status: "active", visible: true, isSystem: false, children: [], ...overrides }; }

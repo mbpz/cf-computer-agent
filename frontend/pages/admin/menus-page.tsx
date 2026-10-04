@@ -8,19 +8,32 @@ import { menuSnapshot } from "../../../shared/admin-menu-fields";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { MenuEditor, describeMenuChanges } from "./menu-editor";
 import { useCreateDraft } from "../../lib/use-create-draft";
+import { discardBlockedAdminMenuDraft, loadAdminMenuDraft, menuEditorBaseline, persistAdminMenuDraft, type MenuEditorFields } from "../../lib/admin-menu-draft";
+import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
 import type { AdminMenu, AdminMenuCreate, AdminMenuUpdate } from "../../lib/admin-menus-data";
 
-export function AdminMenusPage({ onLoadRetry, state, locale, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked = false, readPending = false, readRequired = false, recordBlocked = false, onDiscardRecord }: { onLoadRetry?: () => void; state: { kind: "loading" } | { kind: "error" | "forbidden"; message?: string } | { kind: "ready"; menus: readonly AdminMenu[] }; locale?: LocaleRuntime; onUpdate?: (menu: AdminMenu, input: AdminMenuUpdate) => Promise<boolean> | void; onCreate?: (input: AdminMenuCreate) => Promise<boolean>; onDelete?: (menu: AdminMenu) => void; pendingId?: string | null; error?: string | null; writeBlocked?: boolean; readPending?: boolean; readRequired?: boolean; recordBlocked?: boolean; onDiscardRecord?: () => void }) {
+export function AdminMenusPage({ onLoadRetry, state, locale, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked = false, readPending = false, readRequired = false, recordBlocked = false, onDiscardRecord, draftMemberId, suppressDraft = false }: { onLoadRetry?: () => void; state: { kind: "loading" } | { kind: "error" | "forbidden"; message?: string } | { kind: "ready"; menus: readonly AdminMenu[] }; locale?: LocaleRuntime; onUpdate?: (menu: AdminMenu, input: AdminMenuUpdate) => Promise<boolean> | void; onCreate?: (input: AdminMenuCreate) => Promise<boolean>; onDelete?: (menu: AdminMenu) => void; pendingId?: string | null; error?: string | null; writeBlocked?: boolean; readPending?: boolean; readRequired?: boolean; recordBlocked?: boolean; onDiscardRecord?: () => void; draftMemberId?: string; suppressDraft?: boolean }) {
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
   if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "ADMIN_MENUS_UNAVAILABLE")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
-  return <ReadyMenus menus={state.menus} {...{ locale, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked, onDiscardRecord }} />;
+  return <ReadyMenus menus={state.menus} {...{ locale, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked, onDiscardRecord, draftMemberId, suppressDraft }} />;
 }
 
 type PositionAttempt = { menu: AdminMenu; position: number };
 type ReadyProps = Omit<Parameters<typeof AdminMenusPage>[0], "state"> & { menus: readonly AdminMenu[] };
-function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked = false, onDiscardRecord }: ReadyProps) {
+function findMenu(menus: readonly AdminMenu[], id: string): AdminMenu | undefined {
+  for (const menu of menus) { if (menu.id === id) return menu; const child = findMenu(menu.children, id); if (child) return child; }
+}
+function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked = false, onDiscardRecord, draftMemberId, suppressDraft = false }: ReadyProps) {
+  const [composer] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadAdminMenuDraft(draftMemberId));
+  const restored = composer.kind === "ready" ? composer.draft : null;
+  const restoredMenu = restored?.mode === "edit" ? findMenu(menus, restored.menuId) : undefined;
+  const blockedRecord = composer.kind === "blocked" || Boolean(restored?.mode === "edit" && !restoredMenu);
+  const [draftBlocked, setDraftBlocked] = useState(blockedRecord);
+  const [draftNotice, setDraftNotice] = useState<string>();
+  const [live, setLive] = useState<MenuEditorFields | null>(blockedRecord || !restored ? null : restored.fields);
+  const reportFields = (fields: MenuEditorFields) => setLive((current) => JSON.stringify(current) === JSON.stringify(fields) ? current : fields);
   const [positionAttempts, setPositionAttempts] = useState<Record<string, PositionAttempt>>({});
-  const [editor, setEditor] = useState<{ menu?: AdminMenu } | null>(null);
+  const [editor, setEditor] = useState<{ menu?: AdminMenu } | null>(blockedRecord || !restored ? null : restored.mode === "create" ? {} : { menu: restoredMenu });
   const busy = Boolean(pendingId) || Boolean(writeBlocked);
   type Confirmation = { menu: AdminMenu; input?: AdminMenuUpdate; menus: readonly AdminMenu[] };
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -31,6 +44,20 @@ function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, 
   const cancelConfirmation = () => { confirmationRef.current = null; setConfirmation(null); };
   useEffect(() => { if (confirmation && !validConfirmation) cancelConfirmation(); }, [confirmation, validConfirmation]);
   useEffect(() => () => { confirmationRef.current = null; }, []);
+  useEffect(() => {
+    if (!draftMemberId || draftBlocked || suppressDraft) return;
+    if (!editor) { setDraftNotice(persistAdminMenuDraft(draftMemberId, null) ? undefined : frontendText(locale, "ADMIN_MENU_DRAFT_NOT_RECORDED")); return; }
+    if (!live) return;
+    const dirty = JSON.stringify(live) !== JSON.stringify(menuEditorBaseline(editor.menu));
+    const saved = persistAdminMenuDraft(draftMemberId, dirty ? { mode: editor.menu ? "edit" : "create", menuId: editor.menu?.id ?? "", fields: live } : null);
+    setDraftNotice(saved ? undefined : frontendText(locale, "ADMIN_MENU_DRAFT_NOT_RECORDED"));
+  }, [editor, live, draftBlocked, suppressDraft, draftMemberId, locale]);
+  useEffect(() => {
+    const clearOnLeave = () => { if (draftMemberId && !draftBlocked && !suppressDraft) persistAdminMenuDraft(draftMemberId, null); };
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+    return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+  }, [draftMemberId, draftBlocked, suppressDraft]);
+  const discardDraft = () => { if (!draftMemberId || !draftBlocked || !discardBlockedAdminMenuDraft(draftMemberId)) return; setDraftBlocked(false); setDraftNotice(undefined); };
   const requestConfirmation = (menu: AdminMenu, input?: AdminMenuUpdate) => {
     if (busy || readPending || editor || confirmationRef.current || menu.isSystem) return;
     if (input ? !onUpdate : !onDelete || menu.children.length > 0) return;
@@ -53,7 +80,9 @@ function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, 
     <div><p className="text-sm font-medium text-primary">{frontendText(locale, "ADMIN_EYEBROW")}</p><h1 className="mt-2 text-2xl font-semibold">{frontendText(locale, "ADMIN_MENUS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_MENUS_DESCRIPTION")}</p></div>
     {onCreate && <Button type="button" disabled={busy || Boolean(editor) || countMenus(menus) >= 200} onClick={() => setEditor({})}>{frontendText(locale, "ADMIN_MENUS_CREATE")}</Button>}
     {recovery}
-    {editor && <MenuEditor menu={editor.menu} menus={menus} locale={locale} busy={busy} onCancel={() => setEditor(null)} onSave={async input => {
+    {draftBlocked && <div role="alert" data-menu-draft-blocked className="mb-4 space-y-2 text-sm"><p>{frontendText(locale, "ADMIN_MENU_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardDraft}>{frontendText(locale, "ADMIN_MENU_DRAFT_RECORD_DISCARD")}</Button></div>}
+    {draftNotice && <p role="alert" className="mb-4 text-sm">{draftNotice}</p>}
+    {editor && <MenuEditor menu={editor.menu} menus={menus} locale={locale} busy={busy} initialFields={live ?? undefined} onFields={reportFields} onCancel={() => { setEditor(null); setLive(null); }} onSave={async input => {
       const saved = editor.menu ? await onUpdate?.(editor.menu, { ...input, expected: menuSnapshot(editor.menu) }) : await onCreate?.(input as AdminMenuCreate);
       if (saved) setEditor(null);
     }} />}

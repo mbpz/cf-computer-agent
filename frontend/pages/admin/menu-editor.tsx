@@ -5,13 +5,15 @@ import { Button } from "../../components/ui/button";
 import type { AdminMenu, AdminMenuCreate, AdminMenuUpdate } from "../../lib/admin-menus-data";
 import { useCreateDraft } from "../../lib/use-create-draft";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
+import { menuEditorBaseline, type MenuEditorFields } from "../../lib/admin-menu-draft";
 
 // A mounted editor owns its initial snapshot. A recovery GET must not rebase it.
-export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave }: {
+export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave, initialFields, onFields }: {
   menu?: AdminMenu; menus: readonly AdminMenu[]; locale?: LocaleRuntime; busy: boolean;
   onCancel: () => void; onSave: (input: AdminMenuCreate | AdminMenuUpdate) => Promise<void>;
+  initialFields?: MenuEditorFields; onFields?: (fields: MenuEditorFields) => void;
 }) {
-  const initialDraft = useRef({ key: menu?.key ?? "", labelKey: menu?.labelKey ?? "NAV_HOME", path: menu?.path ?? "", parentId: menu?.parentId ?? "", icon: menu?.icon ?? "", groupName: menu?.groupName ?? "workspace", position: String(menu?.position ?? 0), requiredBits: menu?.requiredBits ?? "0x0", status: menu?.status ?? "active", visible: String(menu?.visible ?? true) });
+  const initialDraft = useRef(menuEditorBaseline(menu));
   const [invalid, setInvalid] = useState(false);
   const submitting = useRef(false);
   const [pending, setPending] = useState(false);
@@ -20,9 +22,10 @@ export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave }: {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
   const alive = useRef(true);
-  const formDraft = useCreateDraft(initialDraft.current, initialDraft.current,
+  const formDraft = useCreateDraft(initialFields ?? initialDraft.current, initialDraft.current,
     () => busy || submitting.current || confirmationRef.current !== null, locale, () => false);
   const draft = formDraft.fields;
+  useEffect(() => { onFields?.(draft); }, [draft, onFields]);
   const validConfirmation = !!(confirmation && !pending && confirmation.draft === draft
     && (confirmation.kind === "discard" || (!busy && confirmation.menus === menus)));
   const cancelConfirmation = () => { confirmationRef.current = null; setConfirmation(null); };
