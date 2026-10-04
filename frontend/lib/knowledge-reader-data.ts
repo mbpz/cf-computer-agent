@@ -51,8 +51,9 @@ export interface KnowledgeRevisionDiff {
 
 export async function loadKnowledgeFavorite(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<boolean> {
   assertKnowledgeId(knowledgeItemId);
-  const data = await apiFetch<{ favorite?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/favorite`, { requester, signal });
-  return data.favorite === true;
+  const data = await apiFetch<unknown>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/favorite`, { requester, signal });
+  if (!data || typeof data !== "object" || Array.isArray(data) || typeof (data as { favorite?: unknown }).favorite !== "boolean") throw new Error("KNOWLEDGE_FAVORITE_INVALID");
+  return (data as { favorite: boolean }).favorite;
 }
 
 export async function setKnowledgeFavorite(knowledgeItemId: string, favorite: boolean, requester: Fetcher = fetch): Promise<boolean> {

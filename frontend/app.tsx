@@ -671,6 +671,7 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
   const [relatedState, setRelatedState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly RelatedKnowledgeItem[] } | { kind: "error" }>({ kind: "idle" });
   const [backlinkState, setBacklinkState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly KnowledgeBacklinkItem[] } | { kind: "error" }>({ kind: "idle" });
   const [favorite, setFavorite] = useState<boolean | null>(null);
+  const [favoriteError, setFavoriteError] = useState(false);
   const [retry, setRetry] = useState(0);
   const diffGeneration = useRef(0);
   useEffect(() => {
@@ -682,15 +683,16 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     setRelatedState({ kind: "idle" });
     setBacklinkState({ kind: "idle" });
     setFavorite(null);
+    setFavoriteError(false);
     void request.promise.then(({ generation, revision }) => {
       if (controller.isCurrent(generation)) {
         setState({ kind: "ready", revision });
         setRelatedState({ kind: "loading" });
         setBacklinkState({ kind: "loading" });
         void loadKnowledgeFavorite(knowledgeItemId).then((value) => {
-          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setFavorite(value);
+          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) { setFavoriteError(false); setFavorite(value); }
         }).catch(() => {
-          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setFavorite(false);
+          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) { setFavorite(null); setFavoriteError(true); }
         });
         void loadRelatedKnowledge(knowledgeItemId).then((items) => {
           if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setRelatedState({ kind: "ready", items });
@@ -730,7 +732,7 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     setFavorite(next);
     try { await setKnowledgeFavorite(knowledgeItemId, next); } catch { setFavorite(!next); }
   };
-  return <KnowledgeReaderPage memberId={memberId} locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} favorite={favorite} onToggleFavorite={toggleFavorite} />;
+  return <KnowledgeReaderPage memberId={memberId} locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} favorite={favorite} favoriteError={favoriteError} onToggleFavorite={toggleFavorite} />;
 }
 
 function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
