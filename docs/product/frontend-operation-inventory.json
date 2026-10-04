@@ -169,6 +169,7 @@
     "frontend/lib/review-comment-intent.ts",
     "frontend/lib/review-data.ts",
     "frontend/lib/review-decision-intent.ts",
+    "frontend/lib/review-note-draft.ts",
     "frontend/lib/route-access.ts",
     "frontend/lib/router.ts",
     "frontend/lib/saved-view-intent.ts",
@@ -1786,7 +1787,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3085:68",
+        "frontend/app.tsx:3085:94",
         "frontend/app.tsx:3112:5",
         "frontend/app.tsx:3252:10",
         "frontend/components/data-pagination.tsx:39:10",
@@ -1811,6 +1812,9 @@
         "frontend/components/review/review-decision-controls.tsx:160:12",
         "frontend/components/review/review-decision-controls.tsx:171:36",
         "frontend/components/review/review-decision-controls.tsx:172:105",
+        "frontend/components/review/review-drafts.tsx:63:22",
+        "frontend/components/review/review-drafts.tsx:65:7",
+        "frontend/components/review/review-drafts.tsx:67:21",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2708,6 +2712,9 @@
         "frontend/components/review/review-decision-controls.tsx:160:12",
         "frontend/components/review/review-decision-controls.tsx:171:36",
         "frontend/components/review/review-decision-controls.tsx:172:105",
+        "frontend/components/review/review-drafts.tsx:63:22",
+        "frontend/components/review/review-drafts.tsx:65:7",
+        "frontend/components/review/review-drafts.tsx:67:21",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:13:106",
         "frontend/components/ui/badge.tsx:20:72",
@@ -5226,11 +5233,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3085:68",
+      "id": "frontend/app.tsx:3085:94",
       "path": "frontend/app.tsx",
       "owner": "ReviewQueueRoute",
       "line": 3085,
-      "column": 68,
+      "column": 94,
       "kind": "jsx",
       "tag": "ReviewQueueSession",
       "attributes": {},
@@ -10378,6 +10385,83 @@
           "source": "if (state.kind !== \"error\") return null;"
         }
       ]
+    },
+    {
+      "id": "frontend/components/review/review-drafts.tsx:63:22",
+      "path": "frontend/components/review/review-drafts.tsx",
+      "owner": "ReviewDraftProvider",
+      "line": 63,
+      "column": 22,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "data-review-note-draft-blocked": "true",
+        "role": "\"alert\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "recordBlocked",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/review/review-drafts.tsx:65:7",
+      "path": "frontend/components/review/review-drafts.tsx",
+      "owner": "ReviewDraftProvider",
+      "line": 65,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "onClick": "discardRecord"
+      },
+      "handlers": {
+        "onClick": "discardRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"REVIEW_NOTE_DRAFT_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "recordBlocked",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/review/review-drafts.tsx:67:21",
+      "path": "frontend/components/review/review-drafts.tsx",
+      "owner": "ReviewDraftProvider",
+      "line": 67,
+      "column": 21,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "recordNotice"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "recordNotice",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
     },
     {
       "id": "frontend/components/search/search-result-list.tsx:6:157",

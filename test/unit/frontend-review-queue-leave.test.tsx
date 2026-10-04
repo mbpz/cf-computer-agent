@@ -210,6 +210,55 @@ describe("review queue leave ownership", () => {
     await decide();
     expect(posts).toBe(1);
   });
+  it("restores an unsent review note after the queue owner is recreated", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") posts++;
+      return queue();
+    });
+    await mountMember();
+    await click("Reject");
+    await typeNote("Keep this note");
+    expect(browser.sessionStorage.getItem("memory-garden:review-note-draft:v1:member-a")).toContain("Keep this note");
+    await act(async () => root.render(null));
+    await mountMember();
+    expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement).value).toBe("Keep this note");
+    expect(unload()).toBe(true);
+    expect(posts).toBe(0);
+    await leave();
+    await dismissLeave(true);
+    expect(browser.location.pathname).toBe("/home");
+    expect(unload()).toBe(false);
+    expect(container.textContent).not.toContain("Keep this note");
+    expect(browser.sessionStorage.getItem("memory-garden:review-note-draft:v1:member-a")).toBeNull();
+    browser.history.replaceState({}, "", "/admin/submissions");
+    await act(async () => root.render(null));
+    await mountMember();
+    expect(container.querySelector("textarea[data-review-note]")).toBeNull();
+  });
+  it("keeps a typed review note on screen when the tab cannot record it", async () => {
+    vi.stubGlobal("fetch", async () => queue());
+    await mountMember();
+    await click("Reject");
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await typeNote("Unrecorded note");
+    expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement).value).toBe("Unrecorded note");
+    expect(container.textContent).toContain("could not record");
+    expect(unload()).toBe(true);
+  });
+  it("allows leaving when a saved review note cannot be read until it is discarded", async () => {
+    browser.sessionStorage.setItem("memory-garden:review-note-draft:v1:member-a", "{");
+    vi.stubGlobal("fetch", async () => queue());
+    await mountMember();
+    expect(container.textContent).toContain("can't be read");
+    await leave();
+    expect(browser.location.pathname).toBe("/home");
+    browser.history.replaceState({}, "", "/admin/submissions");
+    await click("Discard record");
+    await click("Reject");
+    await typeNote("After discard");
+    expect(browser.sessionStorage.getItem("memory-garden:review-note-draft:v1:member-a")).toContain("After discard");
+  });
   it.each([401,403,500])("allows leaving a read-only %s failure without a write", async status => {
     vi.stubGlobal("fetch", async()=>new Response(null,{status})); await mount(); expect(unload()).toBe(false); await leave(); expect(browser.location.pathname).toBe("/home");
   });

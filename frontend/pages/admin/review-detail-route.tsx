@@ -14,7 +14,7 @@ export type ReviewDetailRouteState = { kind: "loading" } | { kind: "ready"; data
 
 export function ReviewDetailRoute({ id, locale, memberId, requester = fetch }: { id: string; locale?: LocaleRuntime; memberId?: string; requester?: Fetcher }) {
   // A newly selected object must never render the previous object's actions.
-  return <ReviewDraftProvider key={id} locale={locale} preserveUnsent><ReviewCommentsProvider key={memberId ?? "preview"} submissionId={id} locale={locale} memberId={memberId} requester={requester}><ReviewDetailSession id={id} locale={locale} memberId={memberId} requester={requester} /></ReviewCommentsProvider></ReviewDraftProvider>;
+  return <ReviewDraftProvider key={id} locale={locale} memberId={memberId} preserveUnsent><ReviewCommentsProvider key={memberId ?? "preview"} submissionId={id} locale={locale} memberId={memberId} requester={requester}><ReviewDetailSession id={id} locale={locale} memberId={memberId} requester={requester} /></ReviewCommentsProvider></ReviewDraftProvider>;
 }
 
 function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; locale?: LocaleRuntime; memberId?: string; requester: Fetcher }) {

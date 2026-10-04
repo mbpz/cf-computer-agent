@@ -3082,7 +3082,7 @@ function needsBoardReplacement(
 }
 
 export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string; memberId?: string }) {
-  return <ReviewDraftProvider locale={props.locale} preserveUnsent><ReviewQueueSession {...props} /></ReviewDraftProvider>;
+  return <ReviewDraftProvider locale={props.locale} memberId={props.memberId} preserveUnsent><ReviewQueueSession {...props} /></ReviewDraftProvider>;
 }
 function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const drafts = useReviewDrafts()!;

@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：253；操作/转发候选：1093。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：254；操作/转发候选：1096。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -50,7 +50,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/review/review-decision-controls.tsx | 17 |
 | frontend/components/review/review-detail-data.ts | 0 |
 | frontend/components/review/review-detail-model.ts | 0 |
-| frontend/components/review/review-drafts.tsx | 0 |
+| frontend/components/review/review-drafts.tsx | 3 |
 | frontend/components/search/search-result-list.tsx | 2 |
 | frontend/components/shell/app-shell.tsx | 64 |
 | frontend/components/shell/command-palette.tsx | 8 |
@@ -178,6 +178,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/lib/review-comment-intent.ts | 0 |
 | frontend/lib/review-data.ts | 0 |
 | frontend/lib/review-decision-intent.ts | 0 |
+| frontend/lib/review-note-draft.ts | 0 |
 | frontend/lib/route-access.ts | 0 |
 | frontend/lib/router.ts | 0 |
 | frontend/lib/saved-view-intent.ts | 0 |
@@ -291,7 +292,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /environments | frontend/features/environments/environments-page.tsx#EnvironmentsPage; frontend/features/environments/environment-manager.ts#getEnvironmentManager | 58 | 无（不代表动态边界已核对） |
 | /settings | frontend/pages/settings-page.tsx#SettingsPage | 10 | 无（不代表动态边界已核对） |
 | /admin | frontend/pages/admin/admin-dashboard-route.tsx#AdminDashboardRoute | 12 | 无（不代表动态边界已核对） |
-| /admin/submissions | frontend/app.tsx#ReviewQueueRoute | 71 | 无（不代表动态边界已核对） |
+| /admin/submissions | frontend/app.tsx#ReviewQueueRoute | 74 | 无（不代表动态边界已核对） |
 | /admin/duplicates | frontend/app.tsx#AdminDuplicateRoute; frontend/lib/admin-duplicates-data.ts#* | 54 | 无（不代表动态边界已核对） |
 | /admin/assets | frontend/app.tsx#AdminAssetsRoute; frontend/lib/admin-assets-data.ts#* | 60 | 无（不代表动态边界已核对） |
 | /admin/members | frontend/app.tsx#AdminMembersRoute; frontend/lib/admin-members-data.ts#* | 55 | 无（不代表动态边界已核对） |
@@ -304,7 +305,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /messages | frontend/app.tsx#MessagesRoute | 22 | 无（不代表动态边界已核对） |
 | /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 70 | 无（不代表动态边界已核对） |
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 42 | 无（不代表动态边界已核对） |
-| /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 63 | 无（不代表动态边界已核对） |
+| /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 66 | 无（不代表动态边界已核对） |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 94 | 无（不代表动态边界已核对） |
 | &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 38 | 无（不代表动态边界已核对） |
 | &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 8 | 无（不代表动态边界已核对） |
@@ -381,7 +382,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 2660:10 MemberDiscussionThreadRoute | ThreadPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRefresh=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page… |  |
 | 2750:5 BoardsRoute | owner.addEventListener  | "beforeunload", warn |  |
 | 2905:10 BoardsRoute | BoardsPage  | onDiscardRecord=() =&gt; { if (!memberId &#124;&#124; !discardBlockedBoardMove(memberId)) { setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK"));… |  |
-| 3085:68 ReviewQueueRoute | ReviewQueueSession  |  | spread: props |
+| 3085:94 ReviewQueueRoute | ReviewQueueSession  |  | spread: props |
 | 3112:5 ReviewQueueSession | owner.addEventListener  | "beforeunload", warn |  |
 | 3252:10 ReviewQueueSession | ReviewQueuePage  | onOpenDetail=(id) =&gt; writeWorkspaceHistory("push", &#96;/admin/submissions/${encodeURIComponent(id)}&#96;); onDiscardDecisionRecord=discardRecord; onRetry… |  |
 | 3292:5 AdminDuplicateRoute | owner.addEventListener  | "beforeunload", warn |  |
@@ -681,6 +682,14 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 160:12 ReviewDecisionFeedback | Alert  |  | {"kind":"branch","expression":"state.kind === \"success\"","branch":"true"} |
 | 171:36 ReviewDecisionFeedback | Button frontendText(locale, "ADMIN_REVIEW_RETRY_SAME") | onClick=onRetry; type="button" | {"kind":"logical","expression":"state.recovery === \"retry\"","operator":"&&"}; earlier return: state.kind === "success"; earlier return: state.kind !== "error" |
 | 172:105 ReviewDecisionFeedback | Button frontendText(locale, "ADMIN_REVIEW_RELOAD") | onClick=onReload; type="button" | {"kind":"logical","expression":"(state.recovery === \"reload\" &#124;&#124; (state.recovery === \"retry\" && allowUnknownReload && onReload))","operator":"&&… |
+
+## frontend/components/review/review-drafts.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 63:22 ReviewDraftProvider | div  |  | {"kind":"branch","expression":"recordBlocked","branch":"true"} |
+| 65:7 ReviewDraftProvider | button frontendText(locale, "REVIEW_NOTE_DRAFT_RECORD_DISCARD") | onClick=discardRecord; type="button" | {"kind":"branch","expression":"recordBlocked","branch":"true"} |
+| 67:21 ReviewDraftProvider | p recordNotice |  | {"kind":"branch","expression":"recordNotice","branch":"true"} |
 
 ## frontend/components/search/search-result-list.tsx
 

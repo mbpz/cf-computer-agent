@@ -1,6 +1,7 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useCreateDraft } from "../../lib/use-create-draft";
-import type { LocaleRuntime } from "../../lib/i18n";
+import { frontendText, type LocaleRuntime } from "../../lib/i18n";
+import { discardBlockedReviewNoteDraft, loadReviewNoteDraft, persistReviewNoteDraft } from "../../lib/review-note-draft";
 import type { ReviewNoteInput } from "./review-detail-data";
 
 export type ReviewNoteAction = "reject" | "request_changes";
@@ -19,13 +20,25 @@ type ReviewDrafts = {
 const Context = createContext<ReviewDrafts | null>(null);
 export const useReviewDrafts = () => useContext(Context);
 
-/** Route/session-owned memory only. Removed or denied rows cannot erase a note.
- * No private note content is rendered by this owner; its dialog is generic.
+/** Unsent notes stay with this owner. A signed-in member's note is also kept in this tab across refresh.
+ * Removed or denied rows cannot erase a note. This owner does not render the note; its dialog is generic.
  */
-export function ReviewDraftProvider({ children, locale, preserveUnsent = false }: {
-  children: ReactNode; locale?: LocaleRuntime; preserveUnsent?: boolean;
+export function ReviewDraftProvider({ children, locale, preserveUnsent = false, memberId }: {
+  children: ReactNode; locale?: LocaleRuntime; preserveUnsent?: boolean; memberId?: string;
 }) {
-  const draft = useCreateDraft({ notes: "{}" }, { notes: "{}" }, () => false, locale, () => false);
+  const [stored] = useState(() => memberId ? loadReviewNoteDraft(memberId) : { kind: "empty" as const });
+  const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
+  const [recordNotice, setRecordNotice] = useState<string>();
+  const draft = useCreateDraft({ notes: stored.kind === "ready" ? stored.notes : "{}" }, { notes: "{}" }, () => false, locale, () => false);
+  useEffect(() => {
+    if (!memberId || recordBlocked) return;
+    const saved = persistReviewNoteDraft(memberId, draft.fields.notes);
+    setRecordNotice(saved ? undefined : frontendText(locale, "REVIEW_NOTE_DRAFT_NOT_RECORDED"));
+  }, [draft.fields.notes, locale, memberId, recordBlocked]);
+  const discardRecord = () => {
+    if (!memberId || !discardBlockedReviewNoteDraft(memberId)) return;
+    setRecordBlocked(false);
+  };
   // Stable methods read synchronous refs, including same-event edits and leave.
   // The current serialized value below only notifies consumers to re-render.
   const api = useMemo(() => {
@@ -47,6 +60,11 @@ export function ReviewDraftProvider({ children, locale, preserveUnsent = false }
     };
   }, []);
   return <Context.Provider value={{ ...api, revision: draft.fields.notes, confirming: draft.confirming, preserveUnsent }}>
+    {recordBlocked ? <div data-review-note-draft-blocked role="alert">
+      <p>{frontendText(locale, "REVIEW_NOTE_DRAFT_RECORD_BLOCKED")}</p>
+      <button type="button" onClick={discardRecord}>{frontendText(locale, "REVIEW_NOTE_DRAFT_RECORD_DISCARD")}</button>
+    </div> : null}
+    {recordNotice ? <p role="alert">{recordNotice}</p> : null}
     {children}{draft.confirmation}
   </Context.Provider>;
 }
