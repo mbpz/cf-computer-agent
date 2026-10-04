@@ -50,7 +50,7 @@ describe("private task numbered route", () => {
   it("clears a stale action error when browser history restores a query", async () => {
     let listRequests = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") return errorResponse();
+      if (init?.method === "POST") return rejectedResponse();
       listRequests += 1;
       return listRequests < 3 ? taskPage(String(input)) : new Promise<Response>(() => undefined);
     });
@@ -219,7 +219,7 @@ describe("private task numbered route", () => {
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Complete: Alpha (task-alpha)");
-    await act(async () => { writeWorkspaceHistory("replace", browser.location.href); }); await flush();
+    await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
     expect(gets).toBe(2);
     await act(async () => resolveMutation(Response.json({ error: { code: "DENIED" } }, { status: 403 }))); await flush();
     expect(container.textContent).not.toContain("Alpha");
@@ -255,8 +255,8 @@ describe("private task numbered route", () => {
     expect(container.textContent).not.toContain("Unable to update the task.");
   });
 
-  it("reports mutation failures as non-load action errors", async () => {
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST" ? errorResponse() : taskPage(String(input)));
+  it("reports definite mutation rejections as non-load action errors", async () => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST" ? rejectedResponse() : taskPage(String(input)));
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Complete: Alpha (task-alpha)"); await flush();
     expect(container.textContent).toContain("Unable to update the task."); expect(container.textContent).not.toContain("Unable to load the page.");
@@ -266,7 +266,7 @@ describe("private task numbered route", () => {
   it("clears a stale action error when debounced query navigation starts", async () => {
     let listRequests = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") return errorResponse();
+      if (init?.method === "POST") return rejectedResponse();
       listRequests += 1;
       return listRequests === 1 ? taskPage(String(input)) : new Promise<Response>(() => undefined);
     });
@@ -356,15 +356,130 @@ describe("private task numbered route", () => {
     expect((container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("does not automatically repeat a failed delete and requires a fresh confirmation for another attempt", async () => {
+  it("does not automatically repeat a rejected delete and requires a fresh confirmation for another attempt", async () => {
     let deletes = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "DELETE") { deletes++; throw new TypeError("Network failed"); } return taskPage(String(input));
+      if (init?.method === "DELETE") { deletes++; return rejectedResponse(); } return taskPage(String(input));
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Delete: Alpha (task-alpha)"); await clickButton("Delete permanently"); await flush();
     expect(deletes).toBe(1); expect(container.textContent).toContain("Unable to update the task."); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
     await clickButton("Delete: Alpha (task-alpha)"); expect(deletes).toBe(1); await clickButton("Cancel"); expect(deletes).toBe(1);
+  });
+
+  describe("unknown list writes", () => {
+    const KEY = "memory-garden:task-write:v1:alice";
+    async function leave() { let result: string | undefined; await act(async () => { result = writeWorkspaceHistory("push", "/settings"); }); return result; }
+    async function render(memberId?: string) { await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} {...(memberId ? { memberId } : {})} />)); await flush(); }
+    const banner = () => container.querySelector("[data-task-list-unknown]") as HTMLElement | null;
+
+    it("locks an unknown status change, keeps list queries usable, and settles it by a read-only check", async () => {
+      let posts = 0; const gets: string[] = [];
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") { posts += 1; return errorResponse(); }
+        gets.push(url);
+        if (url === "/api/tasks/task-alpha") return Response.json({ task: { ...createTask("Alpha"), status: "done" }, tags: [], links: [] });
+        return taskPage(url);
+      });
+      await render();
+      await clickButton("Complete: Alpha (task-alpha)"); await flush();
+      expect(banner()?.textContent).toContain("Alpha");
+      expect(banner()?.textContent).toContain("unknown");
+      expect(container.textContent).not.toContain("Unable to update the task.");
+      expect((container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(true);
+      expect(await leave()).toBe("blocked");
+      const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(true);
+      await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
+      expect(browser.location.search).toContain("priority=high");
+      expect(banner()).not.toBeNull();
+
+      await clickButton("Check the result"); await flush();
+      expect(posts).toBe(1); expect(gets).toContain("/api/tasks/task-alpha");
+      expect(banner()).toBeNull();
+      expect(container.textContent).toContain("The change was saved.");
+      expect(await leave()).toBe("committed");
+    });
+
+    it("reports a checked change that is not on the task and unlocks", async () => {
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") return errorResponse();
+        if (url === "/api/tasks/task-alpha") return Response.json({ task: createTask("Alpha"), tags: [], links: [] });
+        return taskPage(url);
+      });
+      await render();
+      await clickButton("Complete: Alpha (task-alpha)"); await flush();
+      await clickButton("Check the result"); await flush();
+      expect(banner()).toBeNull();
+      expect(container.textContent).toContain("The change is not on the task.");
+      expect((container.querySelector('[aria-label="Complete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("retries an unknown delete and accepts a 404 retry as already deleted", async () => {
+      let deletes = 0; let gone = false;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "DELETE") { deletes += 1; if (deletes === 1) { gone = true; throw new TypeError("Network failed"); } return Response.json({ error: { code: "TASK_NOT_FOUND", message: "missing" } }, { status: 404 }); }
+        return gone ? Response.json({ items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }) : taskPage(String(input));
+      });
+      browser.history.replaceState({}, "", "/tasks");
+      await render();
+      await clickButton("Delete: Alpha (task-alpha)"); await clickButton("Delete permanently"); await flush();
+      expect(banner()).not.toBeNull();
+      await clickButton("Retry same operation"); await flush();
+      expect(deletes).toBe(2);
+      expect(banner()).toBeNull();
+      expect(container.textContent).toContain("The change was saved.");
+    });
+
+    it("restores an unknown delete after refresh from the tab record and checks it", async () => {
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "DELETE") throw new TypeError("Network failed");
+        if (url === "/api/tasks/task-alpha") return Response.json({ error: { code: "TASK_NOT_FOUND", message: "missing" } }, { status: 404 });
+        return taskPage(url);
+      });
+      await render("alice");
+      await clickButton("Delete: Alpha (task-alpha)"); await clickButton("Delete permanently"); await flush();
+      expect(JSON.parse(browser.sessionStorage.getItem(KEY)!)).toEqual({ version: 1, memberId: "alice", intent: { op: "delete", taskId: "task-alpha" } });
+      await act(async () => root.unmount()); root = createRoot(container); await render("alice");
+      expect(banner()?.textContent).toContain("task-alpha");
+      expect(await leave()).toBe("blocked");
+      await clickButton("Check the result"); await flush();
+      expect(banner()).toBeNull();
+      expect(container.textContent).toContain("The change was saved.");
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("restores a status write after refresh as a list check instead of an editor", async () => {
+      browser.sessionStorage.setItem(KEY, JSON.stringify({ version: 1, memberId: "alice", intent: { op: "status", taskId: "task-alpha", status: "done" } }));
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input) === "/api/tasks/task-alpha"
+        ? Response.json({ task: { ...createTask("Alpha"), status: "done" }, tags: [], links: [] }) : taskPage(String(input)));
+      await render("alice");
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+      expect(banner()).not.toBeNull();
+      await clickButton("Check the result"); await flush();
+      expect(banner()).toBeNull();
+    });
+
+    it("clears the record on a definite rejection and shows the failure", async () => {
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST" ? rejectedResponse() : taskPage(String(input)));
+      await render("alice");
+      await clickButton("Complete: Alpha (task-alpha)"); await flush();
+      expect(container.textContent).toContain("Unable to update the task.");
+      expect(banner()).toBeNull();
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("does not send a list write it cannot record", async () => {
+      let posts = 0;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === "POST") posts += 1; return taskPage(String(input)); });
+      await render("alice");
+      vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+      await clickButton("Complete: Alpha (task-alpha)"); await flush();
+      expect(posts).toBe(0);
+      expect(container.textContent).toContain("was not sent");
+    });
   });
 
   async function clickButton(name: string) {
@@ -375,6 +490,7 @@ describe("private task numbered route", () => {
 
 function createTask(title: string) { return { id: `task-${title.toLowerCase()}`, title, notes: "", status: "doing", progress: 10, priority: "high", dueAt: null, completedAt: null, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }; }
 function taskPage(url: string, empty = false, title = "Alpha"): Response { const params = new URL(url, "https://app.test").searchParams; const page = Number(params.get("page") || "1"); const pageSize = Number(params.get("pageSize") || "20"); const items = empty && page === 2 ? [] : [createTask(title)]; const total = empty || page === 1 ? 1 : 21; return Response.json({ items, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } }); }
+function rejectedResponse(): Response { return Response.json({ error: { code: "TASK_TRANSITION_INVALID", message: "invalid", retryable: false } }, { status: 422 }); }
 function errorResponse(): Response { return Response.json({ error: { code: "TEST_ERROR", message: "failed", retryable: true } }, { status: 500 }); }
 async function change(control: HTMLInputElement | HTMLSelectElement, value: string) { await act(async () => {
   if (control.tagName === "INPUT") {

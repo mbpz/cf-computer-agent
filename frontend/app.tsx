@@ -49,7 +49,7 @@ import { FocusPage, type FocusPageState } from "./pages/focus-page";
 import { WorkbenchReviewPage, type WorkbenchReviewPageState } from "./pages/workbench-review-page";
 import { BoardsPage, type BoardUnknownMove } from "./pages/boards/boards-page";
 import { clearBoardMove, discardBlockedBoardMove, loadBoardMove, saveBoardMove, type BoardMoveIntent } from "./lib/board-move-intent";
-import { discardBlockedTaskWrite, loadTaskWrite, type TaskWriteIntent } from "./lib/task-write-intent";
+import { checkTaskWrite, clearTaskWrite, discardBlockedTaskWrite, loadTaskWrite, runTaskWrite, saveTaskWrite, type TaskWriteIntent } from "./lib/task-write-intent";
 import { taskStatusKey } from "./pages/tasks/tasks-model";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
@@ -72,7 +72,7 @@ import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submiss
 import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, saveSubmissionIntent, type SubmissionIntent } from "./lib/submission-intent";
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
-import { createTasksRequestController, deleteTask, loadTaskDetail, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
+import { createTasksRequestController, loadTaskDetail, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import { createInbox, readCreatedInbox, loadInboxItem, loadInboxNumbered, parseInboxSearch, writeInboxSearch, promoteInboxTask, updateInboxStatus, type InboxPageRequest, type InboxItem } from "./lib/inbox-data";
 import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
@@ -1103,10 +1103,21 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
 }
 
 export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
-  // A write whose result was unknown before a refresh reopens its editor in the same locked state.
+  // A write whose result was unknown before a refresh comes back locked: field drafts reopen their
+  // editor so they stay visible, every other operation is reconciled from the list.
   const [stored] = useState(() => memberId ? loadTaskWrite(memberId) : { kind: "empty" as const });
-  const [editor, setEditor] = useState<{ taskId: string | null; restored?: TaskWriteIntent } | null>(() => stored.kind === "ready"
+  const restoredInEditor = stored.kind === "ready" && (stored.intent.op === "create" || stored.intent.op === "update");
+  const [editor, setEditor] = useState<{ taskId: string | null; restored?: TaskWriteIntent } | null>(() => stored.kind === "ready" && restoredInEditor
     ? { taskId: stored.intent.op === "create" ? null : stored.intent.taskId, restored: stored.intent } : null);
+  const restoredListUnknown: TaskListUnknown | null = stored.kind === "ready" && !restoredInEditor ? { intent: stored.intent, label: stored.intent.taskId } : null;
+  const [listUnknown, setListUnknown] = useState<TaskListUnknown | null>(restoredListUnknown);
+  const [listRecovering, setListRecovering] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | undefined>();
+  const listUnknownRef = useRef<TaskListUnknown | null>(restoredListUnknown);
+  const listRecoveringRef = useRef(false);
+  const activeRef = useRef(true);
+  const ownedNavigationRef = useRef(false);
+  const leaveGuardRef = useRef<(() => void) | null>(null);
   const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
   const initialPage = useMemo(() => parsePageSearch(search), [search]);
   const initialFilters = useMemo(() => taskFiltersFromSearch(search), [search]);
@@ -1127,11 +1138,34 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
   const sameQuery = (value: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }) =>
     value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize
       && JSON.stringify(value.filters) === JSON.stringify(queryRef.current.filters);
+  // Registered only while a list write is pending or unknown; call at every lock transition.
+  const syncLeaveGuard = useCallback(() => {
+    const locked = () => actionPendingRef.current || listRecoveringRef.current || listUnknownRef.current !== null;
+    if (locked() && !leaveGuardRef.current) leaveGuardRef.current = registerWorkspaceLeaveGuard(() => ({ kind: locked() && !ownedNavigationRef.current ? "block" : "allow" }));
+    else if (!locked() && leaveGuardRef.current) { leaveGuardRef.current(); leaveGuardRef.current = null; }
+  }, []);
+  useEffect(() => {
+    activeRef.current = true;
+    const owner = window;
+    const warn = (event: BeforeUnloadEvent) => {
+      if (actionPendingRef.current || listRecoveringRef.current || listUnknownRef.current) { event.preventDefault(); event.returnValue = ""; }
+    };
+    owner.addEventListener("beforeunload", warn);
+    syncLeaveGuard();
+    return () => {
+      activeRef.current = false; actionPendingRef.current = false; listRecoveringRef.current = false; listUnknownRef.current = null; syncLeaveGuard();
+      owner.removeEventListener("beforeunload", warn);
+    };
+  }, [syncLeaveGuard]);
+  const record = (intent: TaskWriteIntent) => !memberId || saveTaskWrite(memberId, intent);
+  const unrecord = (intent: TaskWriteIntent) => !memberId || clearTaskWrite(memberId, intent);
 
   const clearDeniedTasks = (error: unknown): boolean => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
     // Invalidate pending reads so a late response cannot restore protected rows.
     controllerRef.current?.dispose();
+    listUnknownRef.current = null; listRecoveringRef.current = false; syncLeaveGuard();
+    setListUnknown(null); setListRecovering(false); setActionNotice(undefined);
     setEditor(null);
     setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
     setPending(false); setLocalLoadError(undefined); setActionError(undefined);
@@ -1170,12 +1204,14 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
 
   const navigate = (next: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }, replace = false) => {
     const url = taskSearch(next);
-    writeWorkspaceHistory(replace ? "replace" : "push", `/tasks${url}`, () => {
+    // Only this list's own read-only query changes may pass while a write is pending or unknown.
+    ownedNavigationRef.current = true;
+    try { writeWorkspaceHistory(replace ? "replace" : "push", `/tasks${url}`, () => {
       setActionError(undefined);
       if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }
       queryRef.current = next;
       setPage(next.page); setPageSize(next.pageSize); setFilters(next.filters); setDraftFilters(next.filters);
-    });
+    }); } finally { ownedNavigationRef.current = false; }
   };
   const changeTextFilters = (nextFilters: TaskFilterState) => {
     setDraftFilters(nextFilters);
@@ -1185,14 +1221,27 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       navigate({ page: 1, pageSize: queryRef.current.pageSize, filters: nextFilters }, true);
     }, 300);
   };
-  const mutate = async (id: string, mutation: () => Promise<unknown>) => {
-    if (actionPendingRef.current) return;
+  const mutate = async (intent: TaskWriteIntent, label: string) => {
+    if (actionPendingRef.current || listUnknownRef.current || listRecoveringRef.current) return;
+    if (!record(intent)) { setActionNotice(undefined); setActionError(frontendText(locale, "TASKS_WRITE_NOT_RECORDED")); return; }
     const snapshot = { ...queryRef.current, filters: { ...queryRef.current.filters } };
-    actionPendingRef.current = true; setActionPendingId(id); setActionError(undefined); setLocalLoadError(undefined);
-    try { await mutation(); }
-    catch (error: unknown) {
-      if (sameQuery(snapshot) && !isAbort(error) && !clearDeniedTasks(error)) setActionError(frontendText(locale, "TASKS_ACTION_FAILED"));
-      actionPendingRef.current = false; setActionPendingId(null);
+    actionPendingRef.current = true; syncLeaveGuard(); setActionPendingId(intent.taskId); setActionError(undefined); setActionNotice(undefined); setLocalLoadError(undefined);
+    const markUnknown = (stuck: boolean) => {
+      const pending = { intent, label }; listUnknownRef.current = pending; setListUnknown(pending);
+      if (stuck) setActionError(frontendText(locale, "TASKS_WRITE_RECORD_STUCK"));
+    };
+    try {
+      await runTaskWrite(intent);
+      if (!unrecord(intent) && activeRef.current) markUnknown(true);
+    } catch (error: unknown) {
+      const rejected = isDefiniteTaskRejection(error);
+      const cleared = rejected && unrecord(intent);
+      if (activeRef.current && !isAbort(error)) {
+        if (cleared) { if (!clearDeniedTasks(error) && sameQuery(snapshot)) setActionError(frontendText(locale, "TASKS_ACTION_FAILED")); }
+        // The server may have applied it; the unchanged row is not proof that it did not.
+        else markUnknown(rejected);
+      }
+      actionPendingRef.current = false; syncLeaveGuard(); setActionPendingId(null);
       return;
     }
     try {
@@ -1205,14 +1254,51 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       else { setState({ kind: "ready", data }); setPending(false); }
     } catch (error: unknown) {
       if (sameQuery(snapshot) && !isAbort(error) && !clearDeniedTasks(error)) { setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
-    } finally { actionPendingRef.current = false; setActionPendingId(null); }
+    } finally { actionPendingRef.current = false; syncLeaveGuard(); setActionPendingId(null); }
+  };
+  const resolveListUnknown = async (mode: "check" | "retry") => {
+    const pending = listUnknownRef.current;
+    if (!pending || listRecoveringRef.current || actionPendingRef.current) return;
+    listRecoveringRef.current = true; syncLeaveGuard(); setListRecovering(true); setActionError(undefined); setActionNotice(undefined);
+    const live = () => activeRef.current && listUnknownRef.current === pending;
+    try {
+      let outcome: "applied" | "not_applied" | "missing" = "applied";
+      if (mode === "check") outcome = await checkTaskWrite(pending.intent);
+      else await runTaskWrite(pending.intent);
+      if (!live()) return;
+      if (!unrecord(pending.intent)) { setActionError(frontendText(locale, "TASKS_WRITE_RECORD_STUCK")); return; }
+      listUnknownRef.current = null; setListUnknown(null);
+      setActionNotice(frontendText(locale, outcome === "applied" ? "TASKS_WRITE_APPLIED" : outcome === "missing" ? "TASKS_WRITE_MISSING" : "TASKS_LIST_WRITE_NOT_APPLIED"));
+      setRetryVersion((value) => value + 1);
+    } catch (error: unknown) {
+      if (!live() || clearDeniedTasks(error)) return;
+      // A rejected retry does not prove the earlier attempt failed; only a read can settle it.
+      setActionError(frontendText(locale, mode === "check" ? "TASKS_WRITE_CHECK_FAILED" : "TASKS_LIST_WRITE_STILL_UNKNOWN"));
+    } finally {
+      if (activeRef.current) { listRecoveringRef.current = false; syncLeaveGuard(); setListRecovering(false); }
+    }
+  };
+  const taskLabel = (id: string) => {
+    const item = state.kind === "ready" ? state.data.items.find((candidate) => candidate.id === id) : undefined;
+    return item?.title.trim() || id;
   };
   const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;
   const discardRecord = () => { if (memberId && discardBlockedTaskWrite(memberId)) setRecordBlocked(false); };
   return <><div inert={editor ? true : undefined}>{recordBlocked && <Alert variant="destructive" data-task-write-record-blocked="" className="mb-4">
     <AlertTitle>{frontendText(locale, "TASKS_WRITE_RECORD_BLOCKED")}</AlertTitle>
     <div className="mt-3"><Button variant="outline" onClick={discardRecord}>{frontendText(locale, "TASKS_WRITE_RECORD_DISCARD")}</Button></div>
-  </Alert>}<TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} memberId={memberId} {...(editor.restored ? { restored: editor.restored } : {})} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
+  </Alert>}{listUnknown && <Alert variant="destructive" data-task-list-unknown="" className="mb-4">
+    <AlertTitle>{frontendText(locale, "TASKS_LIST_WRITE_UNKNOWN").replace("{title}", listUnknown.label)}</AlertTitle>
+    <div className="mt-3 flex flex-wrap gap-2">
+      <Button variant="outline" disabled={listRecovering} onClick={() => void resolveListUnknown("check")}>{frontendText(locale, "TASKS_CHECK_WRITE")}</Button>
+      <Button variant="outline" disabled={listRecovering} onClick={() => void resolveListUnknown("retry")}>{frontendText(locale, "TASKS_RETRY_WRITE")}</Button>
+    </div>
+  </Alert>}{actionNotice && <p role="status" className="mb-4 text-sm">{actionNotice}</p>}<TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : listUnknown || listRecovering ? "unknown" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate({ op: "status", taskId: id, status }, taskLabel(id))} onDelete={(id) => void mutate({ op: "delete", taskId: id }, taskLabel(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} memberId={memberId} {...(editor.restored ? { restored: editor.restored } : {})} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
+}
+
+type TaskListUnknown = { intent: TaskWriteIntent; label: string };
+function isDefiniteTaskRejection(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
 }
 
 export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {

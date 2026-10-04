@@ -28,7 +28,7 @@ describe("task write intent", () => {
   });
 
   it.each([
-    ["an unknown op", { op: "delete", taskId: "t1" }],
+    ["an unknown op", { op: "archive", taskId: "t1" }],
     ["an extra key", { op: "status", taskId: "t1", status: "done", extra: 1 }],
     ["an invalid status", { op: "status", taskId: "t1", status: "archived" }],
     ["fractional progress", { op: "progress", taskId: "t1", progress: 1.5 }],

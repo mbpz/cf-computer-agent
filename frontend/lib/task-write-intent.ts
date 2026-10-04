@@ -1,4 +1,5 @@
-import { addTaskLink, createTask, removeTaskLink, replaceTaskTags, setTaskProgress, setTaskStatus, updateTask, type TaskDetail, type TaskItem } from "./tasks-data";
+import { ApiRequestError } from "./api";
+import { addTaskLink, createTask, deleteTask, loadTaskDetail, removeTaskLink, replaceTaskTags, setTaskProgress, setTaskStatus, updateTask, type TaskDetail, type TaskItem } from "./tasks-data";
 
 type TaskFields = { title: string; notes: string; priority: "low" | "medium" | "high"; dueAt: string | null };
 export type TaskWriteIntent =
@@ -8,7 +9,8 @@ export type TaskWriteIntent =
   | { op: "progress"; taskId: string; progress: number }
   | { op: "tags"; taskId: string; tags: string[] }
   | { op: "link"; taskId: string; knowledgeItemId: string }
-  | { op: "unlink"; taskId: string; linkId: string };
+  | { op: "unlink"; taskId: string; linkId: string }
+  | { op: "delete"; taskId: string };
 export type StoredTaskWrite = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intent: TaskWriteIntent };
 
 // Every operation is an absolute or id-keyed write, so sending the same intent again cannot add a second effect.
@@ -21,6 +23,7 @@ export function runTaskWrite(intent: TaskWriteIntent): Promise<unknown> {
     case "tags": return replaceTaskTags(intent.taskId, intent.tags);
     case "link": return addTaskLink(intent.taskId, intent.knowledgeItemId);
     case "unlink": return removeTaskLink(intent.taskId, intent.linkId);
+    case "delete": return deleteTask(intent.taskId);
   }
 }
 
@@ -43,6 +46,16 @@ export function taskWriteOutcome(intent: TaskWriteIntent, detail: TaskDetail): "
     }
     case "link": return detail.links.some((link) => link.knowledgeItemId === intent.knowledgeItemId) ? "applied" : "not_applied";
     case "unlink": return detail.links.some((link) => link.id === intent.linkId) ? "not_applied" : "applied";
+    case "delete": return "not_applied";
+  }
+}
+
+/** Read-only reconciliation. A missing task means a delete landed and a creation did not. */
+export async function checkTaskWrite(intent: TaskWriteIntent): Promise<"applied" | "not_applied" | "missing"> {
+  try { return taskWriteOutcome(intent, await loadTaskDetail(intent.taskId)); }
+  catch (cause) {
+    if (!(cause instanceof ApiRequestError && cause.status === 404)) throw cause;
+    return intent.op === "delete" ? "applied" : intent.op === "create" ? "not_applied" : "missing";
   }
 }
 
@@ -67,6 +80,7 @@ export function validTaskWrite(value: unknown): value is TaskWriteIntent {
       && v.tags.every((tag) => typeof tag === "string" && !!tag.trim() && [...tag].length <= 32);
     case "link": return exactKeys(v, ["op", "taskId", "knowledgeItemId"]) && typeof v.knowledgeItemId === "string" && ID.test(v.knowledgeItemId);
     case "unlink": return exactKeys(v, ["op", "taskId", "linkId"]) && typeof v.linkId === "string" && ID.test(v.linkId);
+    case "delete": return exactKeys(v, ["op", "taskId"]);
     default: return false;
   }
 }

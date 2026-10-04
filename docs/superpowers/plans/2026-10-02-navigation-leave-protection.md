@@ -279,3 +279,8 @@ BoardsRoute 未知移动改由标签页/成员记录承载，重新挂载即恢�
 ### 任务编辑器未知写入续行（基线e98035b）
 
 TaskEditor 意图可序列化、可只读核对并跨刷新恢复；TasksRoute 重新打开编辑器承接锁定。见 `docs/product/navigation-task-write-recovery-evidence.md`。Task 4 整体及原生门禁仍开放；下一允许继续任务列表行快捷状态/删除的未知结果分流。
+
+
+### 任务列表快捷写入续行（基线c9b5abc）
+
+TasksRoute 列表写入进行中/未知时注册共享离页守卫（仅锁定期间），本页查询以同步 owned 标记放行；未知结果仅核对或同意图重试解锁。见 `docs/product/navigation-task-list-write-recovery-evidence.md`。Task 4 整体及原生门禁仍开放。

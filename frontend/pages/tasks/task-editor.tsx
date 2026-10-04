@@ -7,7 +7,7 @@ import { Input } from "../../components/ui/input";
 import { ApiRequestError } from "../../lib/api";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { loadTaskDetail, type TaskDetail, type TaskItem } from "../../lib/tasks-data";
-import { clearTaskWrite, runTaskWrite, saveTaskWrite, taskWriteOutcome, type TaskWriteIntent } from "../../lib/task-write-intent";
+import { checkTaskWrite, clearTaskWrite, runTaskWrite, saveTaskWrite, type TaskWriteIntent } from "../../lib/task-write-intent";
 import { registerWorkspaceLeaveGuard, WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
 import type { WorkspaceLeaveDecision } from "../../lib/workspace-navigation-gate";
 import { taskPriorityKey, taskStatusKey } from "./tasks-model";
@@ -16,7 +16,7 @@ type Fields = { title: string; notes: string; priority: string; dueAt: string };
 type Draft = { fields: Fields; tags: string; status: TaskItem["status"]; progress: string; knowledgeId: string };
 type Intent = { op: TaskWriteIntent; clean?: (keyof Draft)[]; acceptedDraft?: Draft };
 type Notice = "TASKS_WRITE_APPLIED" | "TASKS_WRITE_NOT_APPLIED" | "TASKS_WRITE_MISSING" | "TASKS_WRITE_CHECK_FAILED" | "TASKS_WRITE_NOT_RECORDED" | "TASKS_WRITE_RECORD_STUCK";
-const cleanFor: Record<TaskWriteIntent["op"], (keyof Draft)[]> = { create: ["fields"], update: ["fields"], status: ["status"], progress: ["progress"], tags: ["tags"], link: ["knowledgeId"], unlink: [] };
+const cleanFor: Record<TaskWriteIntent["op"], (keyof Draft)[]> = { create: ["fields"], update: ["fields"], status: ["status"], progress: ["progress"], tags: ["tags"], link: ["knowledgeId"], unlink: [], delete: [] };
 const blank: Fields = { title: "", notes: "", priority: "medium", dueAt: "" };
 const transitions: Record<TaskItem["status"], TaskItem["status"][]> = {
   todo: ["todo", "doing", "done", "canceled"], doing: ["doing", "todo", "blocked", "done", "canceled"],
@@ -184,11 +184,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     gate.current = true; setBusy(true); setNotice(null); setError(false);
     let settled: "applied" | "not_applied" | "missing" | null = null;
     try {
-      try { settled = taskWriteOutcome(pending.op, await loadTaskDetail(pending.op.taskId)); }
-      catch (cause) {
-        if (!(cause instanceof ApiRequestError && cause.status === 404)) throw cause;
-        settled = pending.op.op === "create" ? "not_applied" : "missing";
-      }
+      settled = await checkTaskWrite(pending.op);
       if (!active.current || intent.current !== pending) { settled = null; return; }
       if (!unrecord(pending.op)) { settled = null; setNotice("TASKS_WRITE_RECORD_STUCK"); return; }
       if (settled === "applied") acknowledge(pending);
