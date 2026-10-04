@@ -67,7 +67,8 @@ import { createSearchRequestController, type LoadSearchPageInput, type SearchPag
 import { type SavedViewItem } from "./lib/saved-views-data";
 import { useSavedViews } from "./lib/use-saved-views";
 import { clearAgentIntent, createAgentIntent, loadAgentIntent, saveAgentIntent, type AgentTurnIntent, type StoredAgentIntent } from "./lib/agent-turn-intent";
-import { agentScopeSearch, agentLocationFromSearch, loadAgentConversation, createAgentRequestController, type AgentConversation, type AgentAnswer, type AgentScope } from "./lib/agent-data";
+import { clearAgentFeedback, discardBlockedAgentFeedback, loadAgentFeedback, type AgentFeedbackIntent } from "./lib/agent-feedback-intent";
+import { agentScopeSearch, agentLocationFromSearch, loadAgentConversation, createAgentRequestController, submitAgentFeedback, type AgentConversation, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
 import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, saveSubmissionIntent, type SubmissionIntent } from "./lib/submission-intent";
@@ -869,8 +870,12 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   const alive = useRef(true);
   // Route-owned reservation survives child UI changes. Only a verified feedback
   // receipt releases it; unknown delivery is not an ordinary discardable draft.
-  const feedbackLock = useRef<string | null>(null);
-  const [feedbackBlocked, setFeedbackBlocked] = useState(false);
+  const [feedbackStored] = useState(() => memberId ? loadAgentFeedback(memberId) : { kind: "empty" as const });
+  const feedbackLock = useRef<string | null>(feedbackStored.kind === "ready" ? feedbackStored.intent.conversationId : null);
+  const [feedbackBlocked, setFeedbackBlocked] = useState(feedbackStored.kind !== "empty");
+  const [feedbackIntent, setFeedbackIntent] = useState<AgentFeedbackIntent | null>(feedbackStored.kind === "ready" ? feedbackStored.intent : null);
+  const [feedbackRecordBlocked, setFeedbackRecordBlocked] = useState(feedbackStored.kind === "blocked");
+  const [feedbackNotice, setFeedbackNotice] = useState<string>();
   // Submitted turns and unsent input share admission, but have distinct lifetimes.
   const locked = () => feedbackLock.current !== null || pendingRef.current || intentRef.current !== null
     || (!!memberId && loadAgentIntent(memberId).kind !== "empty");
@@ -947,6 +952,20 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     scopeRef.current = initialScope ?? { kind: "all" }; setScope(scopeRef.current); setHistory([]); questionDraft.checkpoint({question: ""}); questionDraft.reset(); setLastQuestion("");
     setState({ kind: "cancelled" });
   };
+  const retryFeedback = () => {
+    const intent = feedbackIntent;
+    if (!alive.current || !memberId || !intent) return;
+    feedbackLock.current = intent.conversationId; setFeedbackBlocked(true); setFeedbackNotice(undefined);
+    void submitAgentFeedback(intent.conversationId, intent.rating, intent.citationIds).then(() => {
+      if (!alive.current || feedbackLock.current !== intent.conversationId) return;
+      if (!clearAgentFeedback(memberId, intent)) { setFeedbackNotice(frontendText(locale, "AGENT_FEEDBACK_RECORD_STUCK")); return; }
+      feedbackLock.current = null; setFeedbackBlocked(false); setFeedbackIntent(null);
+    }).catch(() => { if (alive.current) setFeedbackNotice(frontendText(locale, "AGENT_FEEDBACK_UNKNOWN")); });
+  };
+  const discardFeedback = () => {
+    if (!memberId || !feedbackRecordBlocked || !discardBlockedAgentFeedback(memberId)) return;
+    setFeedbackRecordBlocked(false); setFeedbackBlocked(false); setFeedbackNotice(undefined);
+  };
   const feedbackAdmission = {
     begin: (id: string) => {
       if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming()
@@ -966,10 +985,13 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     if (unconfirmed && intentRef.current) return <PageState kind="degraded" title={frontendText(locale, "AGENT_INTENT_UNKNOWN")} description={frontendText(locale, "AGENT_INTENT_UNKNOWN_DETAIL")}><p className="whitespace-pre-wrap">{intentRef.current.question}</p><p><code>{JSON.stringify(intentRef.current.scope)}</code></p><Button onClick={() => submit(intentRef.current!.question)}>{frontendText(locale, "AGENT_INTENT_RETRY")}</Button><Button variant="outline" onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
     if (recovery === "loading" && state.kind !== "loading") return <PageState kind="loading" title={frontendText(locale, "AGENT_RESTORING")} />;
     if (recovery === "error") return <PageState kind="error" title={frontendText(locale, "AGENT_RESTORE_FAILED")} description={frontendText(locale, "AGENT_RESTORE_FAILED_DETAIL")}><Button onClick={() => setRecoveryVersion((value) => value + 1)}>{frontendText(locale, "AGENT_RETRY")}</Button><a className="ml-4" href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
+    const visibleConversation = state.kind === "ready" ? state.conversationId : undefined;
     return <div className="space-y-6">
+      {feedbackRecordBlocked && <div role="alert" data-agent-feedback-record-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "AGENT_FEEDBACK_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RECORD_DISCARD")}</Button></div>}
+      {feedbackIntent && visibleConversation !== feedbackIntent.conversationId && <div role="alert" data-agent-feedback-unconfirmed className="space-y-2 rounded-md border p-4"><p>{feedbackNotice ?? frontendText(locale, "AGENT_FEEDBACK_UNKNOWN")}</p><Button type="button" variant="outline" onClick={retryFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RETRY")}</Button></div>}
       {history.length > 0 && <section aria-label={frontendText(locale, "AGENT_HISTORY")} className="space-y-3"><h2>{frontendText(locale, "AGENT_HISTORY")}</h2><p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_HISTORY_DETAIL")}</p>{history.map((message, index) => <article key={index} className="rounded-md border p-3"><h3 className="font-medium">{frontendText(locale, message.role === "user" ? "AGENT_QUESTION_LABEL" : "AGENT_HISTORY_ANSWER")}</h3><p className="whitespace-pre-wrap">{message.content}</p>{message.citations.map((citation) => <a key={citation.id} className="mr-3 underline" href={citation.href}>{citation.title ?? citation.id}</a>)}</article>)}</section>}
       {conversationIdRef.current && <a className="underline" href={`/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}`}>{frontendText(locale, "AGENT_RESTORE_LINK")}</a>}
-      <AgentPage locale={locale} scope={scope} state={state} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} isWriteBlocked={locked} sourceDraft={sourceDraft} feedbackAdmission={feedbackAdmission} feedbackBlocked={feedbackBlocked} />
+      <AgentPage locale={locale} memberId={memberId} scope={scope} state={state} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} isWriteBlocked={locked} sourceDraft={sourceDraft} feedbackAdmission={feedbackAdmission} feedbackBlocked={feedbackBlocked} />
       <AgentHistoryList locale={locale} />
     </div>;
   };

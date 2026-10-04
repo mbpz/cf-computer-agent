@@ -686,6 +686,61 @@ describe("agent request cancellation route", () => {
     expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
   });
 
+  it("keeps an unknown feedback rating after refresh and retries the same rating", async () => {
+    let feedback = 0; const bodies: unknown[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/feedback")) {
+        bodies.push(JSON.parse(String(init?.body ?? "{}")));
+        if (++feedback === 1) return new Response(null, { status: 503 });
+        return Response.json({ feedback: { conversationId: "conv-1", rating: "useful", citationIds: [] } });
+      }
+      const key = new Headers(init?.headers).get("idempotency-key");
+      return Response.json({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], ...(key ? { idempotencyKey: key } : {}) });
+    });
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-feedback" />)); await flush();
+    await question("Question"); await submit(); await click("Useful");
+    expect(browser.sessionStorage.getItem("memory-garden:agent-feedback:v1:member-feedback")).toContain("useful");
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-feedback" />)); await flush();
+    expect(feedback).toBe(1);
+    expect(container.textContent).toContain("Feedback delivery is not confirmed");
+    await act(async () => expect(leave()).toBe("blocked"));
+    await click("Retry the same feedback");
+    expect(feedback).toBe(2); expect(bodies[1]).toEqual({ rating: "useful", citationIds: [] });
+    expect(browser.sessionStorage.getItem("memory-garden:agent-feedback:v1:member-feedback")).toBeNull();
+  });
+  it("does not send feedback when the tab cannot record it", async () => {
+    let feedback = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/feedback")) { feedback++; return new Response(null, { status: 503 }); }
+      const key = new Headers(init?.headers).get("idempotency-key");
+      return Response.json({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], ...(key ? { idempotencyKey: key } : {}) });
+    });
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-feedback" />)); await flush();
+    await question("Question"); await submit();
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await click("Useful");
+    expect(feedback).toBe(0);
+    expect(container.textContent).toContain("could not record");
+  });
+  it("blocks feedback when its record cannot be read, and allows leave until it is discarded", async () => {
+    let feedback = 0;
+    browser.sessionStorage.setItem("memory-garden:agent-feedback:v1:member-feedback", "{");
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/feedback")) { feedback++; return Response.json({ feedback: { conversationId: "conv-1", rating: "useful", citationIds: [] } }); }
+      const key = new Headers(init?.headers).get("idempotency-key");
+      return Response.json({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], ...(key ? { idempotencyKey: key } : {}) });
+    });
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-feedback" />)); await flush();
+    expect(container.textContent).toContain("can't be read");
+    await act(async () => expect(leave()).toBe("committed"));
+    expect(feedback).toBe(0);
+    browser.history.replaceState({}, "", "/agent");
+    await click("Discard record");
+    await question("Question"); await submit(); await click("Useful");
+    expect(feedback).toBe(1);
+  });
   it("does not lock navigation for a read-only conversation restore", async () => {
     vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
     await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" search="?conversationId=conv-read" />));
