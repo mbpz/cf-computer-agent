@@ -132,7 +132,8 @@ function normalizeRecentResearchItem(value: unknown): RecentResearchItem | null 
     if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.question !== "string"
       || (entry.status !== "pending" && entry.status !== "completed" && entry.status !== "blocked")) return [];
     return [{ id: entry.id, question: entry.question, status: entry.status as "pending" | "completed" | "blocked" }];
-  }) : [];
+  }) : null;
+  if (!subquestions || subquestions.length < 1) throw new Error("RESEARCH_RUNS_INVALID");
   if (typeof checkpoint.nextStep !== "number" || !Number.isSafeInteger(checkpoint.nextStep) || checkpoint.nextStep < 0
     || !Array.isArray(checkpoint.completedSubquestionIds) || !checkpoint.completedSubquestionIds.every((id) => typeof id === "string")) return null;
   return {
