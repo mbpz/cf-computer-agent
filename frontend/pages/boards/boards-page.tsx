@@ -11,15 +11,17 @@ import type { TaskItem } from "../../lib/tasks-data";
 import { taskPriorityKey, taskStatusKey } from "../tasks/tasks-model";
 import { BOARD_STATUSES, boardStatusTargets, visibleBoardItems, type BoardColumnStates, type BoardStatus, type BoardTargetStatus } from "./board-model";
 
-export interface BoardUnknownMove { task: TaskItem; source: BoardStatus; target: BoardTargetStatus }
+export interface BoardUnknownMove { task: Pick<TaskItem, "id" | "title">; source: BoardStatus; target: BoardTargetStatus }
 
-export function BoardsPage({ locale, columns, actionError, actionNotice, actionPendingId = null, unknownMove = null, recovering = false, onRetry, onPageChange, onPageSizeChange, onStatusChange, onCheckMove, onRetryMove }: {
+export function BoardsPage({ locale, columns, actionError, actionNotice, actionPendingId = null, unknownMove = null, recovering = false, recordBlocked = false, onRetry, onPageChange, onPageSizeChange, onStatusChange, onCheckMove, onRetryMove, onDiscardRecord }: {
   locale: LocaleRuntime;
   columns: BoardColumnStates;
   actionError?: string;
   actionNotice?: string;
   actionPendingId?: string | null;
   unknownMove?: BoardUnknownMove | null;
+  recordBlocked?: boolean;
+  onDiscardRecord?: () => void;
   recovering?: boolean;
   onRetry: (status: BoardStatus) => void;
   onPageChange: (status: BoardStatus, page: number) => void;
@@ -28,9 +30,13 @@ export function BoardsPage({ locale, columns, actionError, actionNotice, actionP
   onCheckMove?: () => void;
   onRetryMove?: () => void;
 }) {
-  const movesLocked = Boolean(actionPendingId) || unknownMove !== null || recovering;
+  const movesLocked = Boolean(actionPendingId) || unknownMove !== null || recovering || recordBlocked;
   return <section className="space-y-5">
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "BOARDS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "BOARDS_DESCRIPTION")}</p></div>
+    {recordBlocked && <Alert variant="destructive" data-board-move-record-blocked="">
+      <AlertTitle>{frontendText(locale, "BOARDS_MOVE_RECORD_BLOCKED")}</AlertTitle>
+      <div className="mt-3"><Button variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "BOARDS_MOVE_RECORD_DISCARD")}</Button></div>
+    </Alert>}
     {unknownMove && <Alert variant="destructive" data-board-move-unknown="">
       <AlertTitle>{frontendText(locale, "BOARDS_MOVE_UNKNOWN").replace("{title}", unknownMove.task.title.trim() || unknownMove.task.id).replace("{status}", frontendText(locale, taskStatusKey(unknownMove.target)))}</AlertTitle>
       <div className="mt-3 flex flex-wrap gap-2">

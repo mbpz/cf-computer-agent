@@ -269,3 +269,8 @@ NotificationsRoute 在更新进行中和未知结果期间注册共享离页守�
 ### 图谱动作离页续行（基线2e5448b）
 
 GraphPage 的进行中/未确认动作改为页面所有（节点快照 + clientKey），仅锁定期间注册共享离页守卫；未确认可同身份重试，明确拒绝、deferred 与 401/403 分流解锁。见 `docs/product/navigation-graph-action-leave-evidence.md`。Task 4 整体及原生门禁仍开放；下一允许继续其余逐页所有者核对。
+
+
+### 看板未知移动跨刷新续行（基线ef7e933）
+
+BoardsRoute 未知移动改由标签页/成员记录承载，重新挂载即恢复锁与核对入口；记录写入失败不发请求，清除失败不解锁。见 `docs/product/navigation-board-move-refresh-evidence.md`。Task 4 整体及原生门禁仍开放；下一允许继续任务编辑器未知写入跨刷新恢复（C01）。

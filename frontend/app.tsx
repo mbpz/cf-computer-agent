@@ -47,6 +47,7 @@ import { TodayPage, type TodayPageState } from "./pages/today-page";
 import { FocusPage, type FocusPageState } from "./pages/focus-page";
 import { WorkbenchReviewPage, type WorkbenchReviewPageState } from "./pages/workbench-review-page";
 import { BoardsPage, type BoardUnknownMove } from "./pages/boards/boards-page";
+import { clearBoardMove, discardBlockedBoardMove, loadBoardMove, saveBoardMove, type BoardMoveIntent } from "./lib/board-move-intent";
 import { taskStatusKey } from "./pages/tasks/tasks-model";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
@@ -211,7 +212,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "today": return <TodayRoute key={session?.member.id} locale={locale} />;
     case "focus": return <FocusRoute key={session?.member.id} memberId={session?.member.id} locale={locale} />;
     case "review": return <WorkbenchReviewRoute locale={locale} />;
-    case "boards": return <BoardsRoute key={session?.member.id} locale={locale} search={search} />;
+    case "boards": return <BoardsRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
     case "message-thread": return <DiscussionThreadRoute memberId={session?.member.id} locale={locale} threadId={decodeRouteId(pathname)} search={search} />;
@@ -2468,15 +2469,20 @@ function sameNotificationQuery(left: NotificationQuery, right: NotificationQuery
     && left.filters.read === right.filters.read && left.filters.eventType === right.filters.eventType;
 }
 
-export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const initial = useMemo(() => parseBoardSearch(search), [search]);
+  // Without a member (preview) moves are not recorded; with one, an unknown move survives refresh in this tab.
+  const [stored] = useState(() => memberId ? loadBoardMove(memberId) : { kind: "empty" as const });
+  const restoredMove: BoardUnknownMove | null = stored.kind === "ready"
+    ? { task: { id: stored.intent.taskId, title: stored.intent.title }, source: stored.intent.source, target: stored.intent.target } : null;
   const [queries, setQueries] = useState<BoardPagination>(initial);
   const [columns, setColumns] = useState<BoardColumnStates>(initialBoardColumns);
   const [retryVersions, setRetryVersions] = useState<Record<BoardStatus, number>>(() => ({ todo: 0, doing: 0, blocked: 0, done: 0 }));
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | undefined>();
   const [actionNotice, setActionNotice] = useState<string | undefined>();
-  const [unknownMove, setUnknownMove] = useState<BoardUnknownMove | null>(null);
+  const [unknownMove, setUnknownMove] = useState<BoardUnknownMove | null>(restoredMove);
+  const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
   const [recovering, setRecovering] = useState(false);
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
@@ -2488,7 +2494,8 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   const actionGenerationRef = useRef(0);
   const activeRef = useRef(true);
   // A move whose write outcome is unknown stays here until an explicit GET or same-target retry settles it.
-  const unknownMoveRef = useRef<BoardUnknownMove | null>(null);
+  const unknownMoveRef = useRef<BoardUnknownMove | null>(restoredMove);
+  const recordBlockedRef = useRef(stored.kind === "blocked");
   const recoveringRef = useRef(false);
   const ownedQueryNavigationRef = useRef(false);
   const leaveGuardRef = useRef<(() => void) | null>(null);
@@ -2534,6 +2541,7 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
       if (actionPendingRef.current || recoveringRef.current || unknownMoveRef.current !== null) { event.preventDefault(); event.returnValue = ""; }
     };
     owner.addEventListener("beforeunload", warn);
+    syncLeaveGuard();
     return () => {
       unknownMoveRef.current = null; recoveringRef.current = false; actionPendingRef.current = false; syncLeaveGuard();
       owner.removeEventListener("beforeunload", warn);
@@ -2568,8 +2576,11 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
 
   const refreshAllColumns = () => setRetryVersions((current) => ({ todo: current.todo + 1, doing: current.doing + 1, blocked: current.blocked + 1, done: current.done + 1 }));
   const statusText = (status: TaskItem["status"]) => frontendText(locale, taskStatusKey(status));
+  const moveIntent = (pending: BoardUnknownMove): BoardMoveIntent => ({ taskId: pending.task.id, title: pending.task.title.slice(0, 500), source: pending.source, target: pending.target });
+  const clearMoveRecord = (pending: BoardUnknownMove) => !memberId || clearBoardMove(memberId, moveIntent(pending));
   const settleUnknownMove = (pending: BoardUnknownMove, notice: string | undefined, error?: string) => {
     if (unknownMoveRef.current !== pending) return;
+    if (!clearMoveRecord(pending)) { setActionNotice(undefined); setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK")); return; }
     unknownMoveRef.current = null; recoveringRef.current = false; syncLeaveGuard();
     setUnknownMove(null); setRecovering(false); setActionNotice(notice); setActionError(error);
     refreshAllColumns();
@@ -2600,12 +2611,17 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   };
 
   const move = async (task: TaskItem, target: BoardTargetStatus) => {
-    if (deniedRef.current || actionPendingRef.current || unknownMoveRef.current || recoveringRef.current
+    if (deniedRef.current || actionPendingRef.current || unknownMoveRef.current || recoveringRef.current || recordBlockedRef.current
       || task.status === target || !BOARD_STATUSES.includes(task.status as BoardStatus)) return;
     const source = task.status as BoardStatus;
     const before = columnsRef.current;
     const optimistic = moveTaskBetweenColumns(before, task, source, target);
     if (optimistic === before) return;
+    const pending: BoardUnknownMove = { task, source, target };
+    if (memberId && !saveBoardMove(memberId, moveIntent(pending))) {
+      setActionNotice(undefined); setActionError(frontendText(locale, "BOARDS_MOVE_NOT_RECORDED"));
+      return;
+    }
     const sourceQuery = { ...queriesRef.current[source] };
     const targetQuery = isBoardStatus(target) ? { ...queriesRef.current[target] } : undefined;
     const targetChanged = isBoardStatus(target) && optimistic[target] !== before[target];
@@ -2631,9 +2647,16 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
     setActionPendingId(task.id); setActionError(undefined); setActionNotice(undefined); setColumns(optimistic); columnsRef.current = optimistic;
     try {
       await setTaskStatus(task.id, target);
+      const cleared = clearMoveRecord(pending);
       if (!activeRef.current || generation !== actionGenerationRef.current) return;
+      if (!cleared) {
+        unknownMoveRef.current = pending; syncLeaveGuard(); setUnknownMove(pending);
+        setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK"));
+      }
       setRetryVersions((current) => ({ ...current, [source]: current[source] + 1, ...(isBoardStatus(target) ? { [target]: current[target] + 1 } : {}) }));
     } catch (error: unknown) {
+      const rejected = isDefiniteBoardMoveRejection(error);
+      const cleared = rejected && clearMoveRecord(pending);
       if (activeRef.current && generation === actionGenerationRef.current && !isAbort(error)) {
         if (clearDeniedBoard(error)) return;
         const sourceMatches = sameBoardQuery(queriesRef.current[source], delta.sourceQuery)
@@ -2655,11 +2678,12 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
           if (delta.target && targetMatches && (requestStatesRef.current[delta.target].pending || requestStatesRef.current[delta.target].superseded)) next[delta.target] += 1;
           return next;
         });
-        if (isDefiniteBoardMoveRejection(error)) setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
+        if (rejected && cleared) setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
         else {
           // The server may have applied the move; the rolled-back cards are not proof that it did not.
-          const pending: BoardUnknownMove = { task, source, target };
+          // A rejection whose record could not be cleared is reconciled the same way so the record is not orphaned.
           unknownMoveRef.current = pending; syncLeaveGuard(); setUnknownMove(pending);
+          if (rejected) setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK"));
         }
       }
     } finally {
@@ -2670,7 +2694,11 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   };
 
   return <BoardsPage locale={locale} columns={columns} actionError={actionError} actionNotice={actionNotice} actionPendingId={actionPendingId}
-    unknownMove={unknownMove} recovering={recovering}
+    unknownMove={unknownMove} recovering={recovering} recordBlocked={recordBlocked}
+    onDiscardRecord={() => {
+      if (!memberId || !discardBlockedBoardMove(memberId)) { setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK")); return; }
+      recordBlockedRef.current = false; setRecordBlocked(false); setActionError(undefined);
+    }}
     onCheckMove={() => void resolveUnknownMove("check")} onRetryMove={() => void resolveUnknownMove("retry")}
     onRetry={(status) => {
       if (deniedRef.current) {

@@ -757,8 +757,158 @@ describe("task-backed boards route", () => {
     expect([...container.querySelectorAll("[data-board-task]")].map((element) => element.getAttribute("data-board-task"))).toEqual(recoveredIds);
   });
 
-  async function renderBoard() {
-    await act(async () => root.render(<BoardsRoute locale={createLocaleRuntime()} search={browser.location.search} />));
+  describe("unknown move across refresh", () => {
+    const KEY = "memory-garden:board-move:v1:member-a";
+    const moveAlpha = () => change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+    async function leave() {
+      let result: string | undefined;
+      await act(async () => { result = writeWorkspaceHistory("push", "/tasks"); });
+      return result;
+    }
+    async function refresh(memberId = "member-a") {
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await renderBoard(memberId);
+    }
+
+    it("records the move before sending and clears it after a matching receipt", async () => {
+      const seenAtSend: Array<string | null> = [];
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") { seenAtSend.push(browser.sessionStorage.getItem(KEY)); return Response.json(task("doing", "Alpha", "todo-task")); }
+        return boardPage(String(input), { todoTitle: "Alpha" });
+      });
+      await renderBoard("member-a");
+      await moveAlpha(); await flush();
+      expect(seenAtSend).toHaveLength(1);
+      expect(JSON.parse(seenAtSend[0]!)).toEqual({ version: 1, memberId: "member-a", intent: { taskId: "todo-task", title: "Alpha", source: "todo", target: "doing" } });
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("restores an unknown move after refresh, keeps it locked, and settles it by checking", async () => {
+      let posts = 0;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") { posts += 1; return errorResponse(); }
+        if (url === "/api/tasks/todo-task") return detailResponse(task("doing", "Alpha", "todo-task"));
+        return boardPage(url, { todoTitle: "Alpha" });
+      });
+      await renderBoard("member-a");
+      await moveAlpha(); await flush();
+      expect(browser.sessionStorage.getItem(KEY)).not.toBeNull();
+
+      await refresh();
+      const alert = container.querySelector("[data-board-move-unknown]") as HTMLElement;
+      expect(alert.textContent).toContain("result of moving Alpha to Doing is unknown");
+      expect((column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement).disabled).toBe(true);
+      expect(await leave()).toBe("blocked");
+      const unload = new browser.Event("beforeunload", { cancelable: true });
+      browser.dispatchEvent(unload);
+      expect(unload.defaultPrevented).toBe(true);
+      expect(posts).toBe(1);
+
+      await act(async () => buttonByText(container, "Check the result").click()); await flush();
+      expect(posts).toBe(1);
+      expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+      expect(container.textContent).toContain("The move to Doing was saved.");
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+      expect(await leave()).toBe("committed");
+    });
+
+    it("retries the restored move with the same target after refresh", async () => {
+      const posts: string[] = []; let attempt = 0;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") { posts.push(`${url} ${String(init.body)}`); attempt += 1; return attempt === 1 ? errorResponse() : Response.json(task("doing", "Alpha", "todo-task")); }
+        return boardPage(url, { todoTitle: "Alpha" });
+      });
+      await renderBoard("member-a");
+      await moveAlpha(); await flush();
+      await refresh();
+      await act(async () => buttonByText(container, "Retry the same move").click()); await flush();
+      expect(new Set(posts)).toEqual(new Set([`/api/tasks/todo-task/status ${JSON.stringify({ status: "doing" })}`]));
+      expect(posts).toHaveLength(2);
+      expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("clears the record when the move is definitively rejected", async () => {
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST" ? rejectedResponse() : boardPage(String(input), { todoTitle: "Alpha" }));
+      await renderBoard("member-a");
+      await moveAlpha(); await flush();
+      expect(container.textContent).toContain("Unable to move the task.");
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+      await refresh();
+      expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+    });
+
+    it("does not show one member's unknown move to another member in the same tab", async () => {
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST" ? errorResponse() : boardPage(String(input), { todoTitle: "Alpha" }));
+      await renderBoard("member-a");
+      await moveAlpha(); await flush();
+      await refresh("member-b");
+      expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+      expect(await leave()).toBe("committed");
+      expect(browser.sessionStorage.getItem(KEY)).not.toBeNull();
+    });
+
+    it("blocks moves behind an unreadable record until the member discards it", async () => {
+      let posts = 0;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") { posts += 1; return Response.json(task("doing", "Alpha", "todo-task")); }
+        return boardPage(String(input), { todoTitle: "Alpha" });
+      });
+      browser.sessionStorage.setItem(KEY, "{not json");
+      await renderBoard("member-a");
+      const blocked = container.querySelector("[data-board-move-record-blocked]") as HTMLElement;
+      expect(blocked.textContent).toContain("can't be read");
+      expect((column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement).disabled).toBe(true);
+      await moveAlpha(); await flush();
+      expect(posts).toBe(0);
+
+      await act(async () => buttonByText(container, "Discard record").click()); await flush();
+      expect(container.querySelector("[data-board-move-record-blocked]")).toBeNull();
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+      await moveAlpha(); await flush();
+      expect(posts).toBe(1);
+    });
+
+    it("does not send a move it cannot record in this tab", async () => {
+      let posts = 0;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") { posts += 1; return Response.json(task("doing", "Alpha", "todo-task")); }
+        return boardPage(String(input), { todoTitle: "Alpha" });
+      });
+      await renderBoard("member-a");
+      vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+      await moveAlpha(); await flush();
+      expect(posts).toBe(0);
+      expect(container.textContent).toContain("was not sent");
+      expect(column("todo").textContent).toContain("Alpha");
+      expect(await leave()).toBe("committed");
+    });
+
+    it("keeps the move locked when a confirmed receipt cannot clear its record", async () => {
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") return Response.json(task("doing", "Alpha", "todo-task"));
+        if (url === "/api/tasks/todo-task") return detailResponse(task("doing", "Alpha", "todo-task"));
+        return boardPage(url, { todoTitle: "Alpha" });
+      });
+      await renderBoard("member-a");
+      const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementationOnce(() => { throw new Error("storage"); });
+      await moveAlpha(); await flush();
+      expect(container.querySelector("[data-board-move-unknown]")).toBeTruthy();
+      expect(await leave()).toBe("blocked");
+      remove.mockRestore();
+      await act(async () => buttonByText(container, "Check the result").click()); await flush();
+      expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+      expect(await leave()).toBe("committed");
+    });
+  });
+
+  async function renderBoard(memberId?: string) {
+    await act(async () => root.render(<BoardsRoute locale={createLocaleRuntime()} search={browser.location.search} {...(memberId ? { memberId } : {})} />));
     await flush();
   }
 
