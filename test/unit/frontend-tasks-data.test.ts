@@ -8,7 +8,7 @@ function fetchJson(payload: unknown, status = 200): typeof fetch {
 
 describe("tasks data layer", () => {
   it("loads a normalized page and summary", async () => {
-    const page = await loadTasks({}, { page: 1, pageSize: 20 }, fetchJson({ items: [{ id: "task-1", title: "Alpha", status: "doing", progress: 40, priority: "high", dueAt: "2026-08-26T00:00:00.000Z" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }));
+    const page = await loadTasks({}, { page: 1, pageSize: 20 }, fetchJson({ items: [{ id: "task-1", title: "Alpha", notes: "", status: "doing", progress: 40, priority: "high", dueAt: "2026-08-26T00:00:00.000Z" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }));
     expect(page.items[0]).toMatchObject({ id: "task-1", status: "doing", priority: "high", progress: 40 });
     expect(page.pagination.total).toBe(1);
     const summary = await loadTaskSummary(fetchJson({ todo: 1, doing: 2, blocked: 0, done: 3, canceled: 0, dueToday: 1, overdue: 0 }));

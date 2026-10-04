@@ -170,10 +170,10 @@ function normalizeTask(value: unknown): TaskItem | null {
   const status = record.status;
   const priority = record.priority;
   const progress = record.progress;
-  if (typeof record.id !== "string" || typeof record.title !== "string") return null;
+  if (typeof record.id !== "string" || typeof record.title !== "string" || typeof record.notes !== "string") return null;
   if (!isStatus(status) || !isPriority(priority) || typeof progress !== "number" || !Number.isSafeInteger(progress) || progress < 0 || progress > 100) return null;
   return {
-    id: record.id, title: record.title, notes: typeof record.notes === "string" ? record.notes : "",
+    id: record.id, title: record.title, notes: record.notes,
     status,
     progress,
     priority,
