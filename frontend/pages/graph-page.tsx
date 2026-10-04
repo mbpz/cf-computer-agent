@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GraphCanvas } from "../components/graph/graph-canvas";
 import { GraphEvidencePanel } from "../components/graph/graph-evidence-panel";
 import { GraphInspector } from "../components/graph/graph-inspector";
@@ -10,11 +10,15 @@ import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { loadGraph, type GraphQueryInput, type GraphSnapshot } from "../lib/graph-data";
 import { loadGraphSuggestions, type GraphSuggestion, type GraphSuggestionResult } from "../lib/graph-suggestions";
 import { createGraphActionClientKey, dispatchGraphAction } from "../lib/graph-actions";
+import { ApiRequestError } from "../lib/api";
+import { registerWorkspaceLeaveGuard } from "../lib/workspace-location";
+import type { GraphNode } from "../lib/graph-data";
 import type { GraphInspectorActionStatus } from "../components/graph/graph-inspector";
 
 export type GraphPageState =
   | { kind: "loading" }
   | { kind: "error" }
+  | { kind: "forbidden" }
   | { kind: "empty" }
   | { kind: "ready"; snapshot: GraphSnapshot }
   | { kind: "truncated"; snapshot: GraphSnapshot };
@@ -37,15 +41,36 @@ export interface GraphPageProps {
   suggestionsState?: GraphSuggestionsState;
   onGenerateSuggestions?: () => void;
   onRetry?: () => void;
+  onDenied?: () => void;
 }
+
+type GraphActionOwner = { node: GraphNode; clientKey: string; status: "running" | "unconfirmed" };
+type GraphActionOutcome = { nodeId: string; status: "success" } | { status: "rejected" | "not_sent" };
 
 export type GraphLoader = (query: GraphQueryInput, signal: AbortSignal) => Promise<GraphSnapshot>;
 
 const WORK_LENS_KINDS = new Set(["task", "project", "goal", "meeting", "decision", "action_item", "inbox", "calendar", "focus"]);
 
-export function GraphPage({ locale, state, query = "", lens = "workspace", temporalRange = "all", changeKind = "all", suggestionsState = { kind: "idle" }, onQueryChange, onLensChange, onTemporalRangeChange, onChangeKindChange, onGenerateSuggestions, onRetry }: GraphPageProps) {
+export function GraphPage({ locale, state, query = "", lens = "workspace", temporalRange = "all", changeKind = "all", suggestionsState = { kind: "idle" }, onQueryChange, onLensChange, onTemporalRangeChange, onChangeKindChange, onGenerateSuggestions, onRetry, onDenied }: GraphPageProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [actionState, setActionState] = useState<{ nodeId: string | null; clientKey: string | null; status: GraphInspectorActionStatus }>({ nodeId: null, clientKey: null, status: "idle" });
+  // The running or unconfirmed action belongs to the page, not to the current selection:
+  // changing node or lens must not drop its client key, and leaving waits for its result.
+  const [action, setAction] = useState<GraphActionOwner | null>(null);
+  const [outcome, setOutcome] = useState<GraphActionOutcome | null>(null);
+  const actionRef = useRef<GraphActionOwner | null>(null);
+  const aliveRef = useRef(true);
+  const leaveGuardRef = useRef<(() => void) | null>(null);
+  const syncLeaveGuard = useCallback(() => {
+    if (actionRef.current && !leaveGuardRef.current) leaveGuardRef.current = registerWorkspaceLeaveGuard(() => ({ kind: actionRef.current ? "block" : "allow" }));
+    else if (!actionRef.current && leaveGuardRef.current) { leaveGuardRef.current(); leaveGuardRef.current = null; }
+  }, []);
+  const publish = useCallback((next: GraphActionOwner | null) => { actionRef.current = next; syncLeaveGuard(); setAction(next); }, [syncLeaveGuard]);
+  useEffect(() => {
+    aliveRef.current = true;
+    const warn = (event: BeforeUnloadEvent) => { if (actionRef.current) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", warn);
+    return () => { aliveRef.current = false; actionRef.current = null; syncLeaveGuard(); window.removeEventListener("beforeunload", warn); };
+  }, [syncLeaveGuard]);
   const snapshot = state.kind === "ready" || state.kind === "truncated" ? state.snapshot : null;
   const filteredSnapshot = useMemo(() => snapshot ? filterSnapshot(snapshot, query, lens) : null, [lens, query, snapshot]);
   const selectedNode = filteredSnapshot?.nodes.find((node) => node.id === selectedId) ?? null;
@@ -64,26 +89,36 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", tempo
     }
     focusInspector();
   }, [selectedId]);
-  useEffect(() => {
-    setActionState((current) => current.nodeId === selectedNode?.id ? current : { nodeId: selectedNode?.id ?? null, clientKey: null, status: "idle" });
-  }, [selectedNode?.id]);
   if (state.kind === "loading") return <section data-graph-page-loading><p className="mb-3 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_LOADING")}</p><PageState kind="loading" title={frontendText(locale, "GRAPH_LOADING")} /></section>;
   if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "GRAPH_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>;
+  if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "GRAPH_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>;
   if (state.kind === "empty") return <PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")} />;
 
   if (!filteredSnapshot) return null;
-  const runGraphAction = () => {
-    if (!selectedNode) return;
-    const clientKey = actionState.nodeId === selectedNode.id && actionState.clientKey
-      ? actionState.clientKey
-      : createGraphActionClientKey(selectedNode);
-    setActionState({ nodeId: selectedNode.id, clientKey, status: "running" });
-    void dispatchGraphAction({ node: selectedNode, clientKey }).then((result) => {
-      setActionState((current) => ({ ...current, status: result.status === "completed" ? "success" : "error" }));
-    }).catch(() => {
-      setActionState((current) => ({ ...current, status: "error" }));
+  const runGraphAction = (retry?: GraphActionOwner) => {
+    const current = actionRef.current;
+    if (current?.status === "running") return;
+    if (current && current !== retry) return;
+    const node = retry?.node ?? selectedNode;
+    if (!node) return;
+    const owner: GraphActionOwner = { node, clientKey: retry?.clientKey ?? createGraphActionClientKey(node), status: "running" };
+    setOutcome(null); publish(owner);
+    const live = () => aliveRef.current && actionRef.current === owner;
+    void dispatchGraphAction({ node, clientKey: owner.clientKey }).then((result) => {
+      if (!live()) return;
+      publish(null);
+      setOutcome(result.status === "completed" ? { nodeId: node.id, status: "success" } : { status: "not_sent" });
+    }).catch((error: unknown) => {
+      if (!live()) return;
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) { publish(null); setOutcome(null); onDenied?.(); return; }
+      if (isDefiniteGraphActionRejection(error)) { publish(null); setOutcome({ status: "rejected" }); return; }
+      publish({ ...owner, status: "unconfirmed" });
     });
   };
+  const inspectorStatus: GraphInspectorActionStatus = !selectedNode ? "idle"
+    : action?.node.id === selectedNode.id ? (action.status === "running" ? "running" : "error")
+      : action ? "running"
+        : outcome?.status === "success" && outcome.nodeId === selectedNode.id ? "success" : "idle";
   return (
     <section className="space-y-5" data-graph-page>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -117,6 +152,11 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", tempo
           </select>
         </CardContent>
       </Card>
+      {action?.status === "unconfirmed" && <div data-graph-action-unconfirmed role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm">
+        <p>{frontendText(locale, "GRAPH_ACTION_UNCONFIRMED").replace("{label}", action.node.label)}</p>
+        <Button variant="outline" onClick={() => runGraphAction(action)}>{frontendText(locale, "GRAPH_ACTION_RETRY")}</Button>
+      </div>}
+      {outcome && outcome.status !== "success" && <p role="status" className="text-sm text-destructive">{frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : "GRAPH_ACTION_NOT_SENT")}</p>}
       <GraphSuggestionsPanel locale={locale} state={suggestionsState} onGenerate={onGenerateSuggestions} />
       {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -126,8 +166,8 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", tempo
             locale={locale}
             node={selectedNode}
             onClose={() => setSelectedId(null)}
-            onAction={selectedNode ? runGraphAction : undefined}
-            actionStatus={selectedNode && actionState.nodeId === selectedNode.id ? actionState.status : "idle"}
+            onAction={selectedNode && (!action || action.node.id === selectedNode.id) ? () => runGraphAction(action ?? undefined) : undefined}
+            actionStatus={inspectorStatus}
           />
           <GraphEvidencePanel locale={locale} citationIds={selectedNode ? selectedCitationIds : undefined} />
         </div>
@@ -160,8 +200,9 @@ export function GraphRoute({ locale, load = defaultGraphLoader }: { locale: Loca
     void load(input, controller.signal).then((snapshot) => {
       if (!active) return;
       setState(snapshot.nodes.length === 0 ? { kind: "empty" } : snapshot.truncated ? { kind: "truncated", snapshot } : { kind: "ready", snapshot });
-    }).catch(() => {
-      if (active && !controller.signal.aborted) setState({ kind: "error" });
+    }).catch((error: unknown) => {
+      if (!active || controller.signal.aborted) return;
+      setState(error instanceof ApiRequestError && (error.status === 401 || error.status === 403) ? { kind: "forbidden" } : { kind: "error" });
     });
     return () => { active = false; controller.abort(); };
   }, [changeKind, lens, load, retry, temporalRange]);
@@ -169,7 +210,7 @@ export function GraphRoute({ locale, load = defaultGraphLoader }: { locale: Loca
     setSuggestionsState({ kind: "loading" });
     void loadGraphSuggestions(fetch).then((result) => setSuggestionsState({ kind: "idle", result })).catch(() => setSuggestionsState({ kind: "error" }));
   };
-  return <GraphPage locale={locale} state={state} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
+  return <GraphPage locale={locale} state={state} onDenied={() => setState({ kind: "forbidden" })} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
 }
 
 function GraphSuggestionsPanel({ locale, state, onGenerate }: { locale: LocaleRuntime; state: GraphSuggestionsState; onGenerate?: () => void }) {
@@ -206,4 +247,9 @@ function filterSnapshot(snapshot: GraphSnapshot, query: string, lens: GraphLens)
   });
   const ids = new Set(nodes.map((node) => node.id));
   return { ...snapshot, nodes, edges: snapshot.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)) };
+}
+
+// Graph writes reject 4xx before saving; transport failures, 5xx, 408/429 and malformed receipts are unconfirmed.
+function isDefiniteGraphActionRejection(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
 }

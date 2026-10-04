@@ -282,30 +282,38 @@
         "frontend/components/ui/input.tsx:6:5",
         "frontend/components/ui/page-state.tsx:12:10",
         "frontend/components/ui/skeleton.tsx:4:92",
-        "frontend/pages/graph-page.tsx:71:106",
-        "frontend/pages/graph-page.tsx:99:11",
-        "frontend/pages/graph-page.tsx:100:11",
-        "frontend/pages/graph-page.tsx:101:13",
-        "frontend/pages/graph-page.tsx:102:13",
-        "frontend/pages/graph-page.tsx:103:13",
-        "frontend/pages/graph-page.tsx:105:11",
-        "frontend/pages/graph-page.tsx:106:13",
-        "frontend/pages/graph-page.tsx:107:13",
-        "frontend/pages/graph-page.tsx:108:13",
-        "frontend/pages/graph-page.tsx:109:13",
-        "frontend/pages/graph-page.tsx:111:11",
-        "frontend/pages/graph-page.tsx:112:13",
-        "frontend/pages/graph-page.tsx:113:13",
-        "frontend/pages/graph-page.tsx:114:13",
-        "frontend/pages/graph-page.tsx:115:13",
-        "frontend/pages/graph-page.tsx:116:13",
-        "frontend/pages/graph-page.tsx:120:7",
-        "frontend/pages/graph-page.tsx:121:38",
-        "frontend/pages/graph-page.tsx:123:9",
-        "frontend/pages/graph-page.tsx:125:11",
-        "frontend/pages/graph-page.tsx:172:10",
-        "frontend/pages/graph-page.tsx:178:269",
-        "frontend/pages/graph-page.tsx:180:34"
+        "frontend/lib/workspace-browser-history.ts:122:3",
+        "frontend/lib/workspace-browser-history.ts:123:3",
+        "frontend/lib/workspace-browser-history.ts:124:3",
+        "frontend/pages/graph-page.tsx:71:5",
+        "frontend/pages/graph-page.tsx:93:106",
+        "frontend/pages/graph-page.tsx:94:118",
+        "frontend/pages/graph-page.tsx:134:11",
+        "frontend/pages/graph-page.tsx:135:11",
+        "frontend/pages/graph-page.tsx:136:13",
+        "frontend/pages/graph-page.tsx:137:13",
+        "frontend/pages/graph-page.tsx:138:13",
+        "frontend/pages/graph-page.tsx:140:11",
+        "frontend/pages/graph-page.tsx:141:13",
+        "frontend/pages/graph-page.tsx:142:13",
+        "frontend/pages/graph-page.tsx:143:13",
+        "frontend/pages/graph-page.tsx:144:13",
+        "frontend/pages/graph-page.tsx:146:11",
+        "frontend/pages/graph-page.tsx:147:13",
+        "frontend/pages/graph-page.tsx:148:13",
+        "frontend/pages/graph-page.tsx:149:13",
+        "frontend/pages/graph-page.tsx:150:13",
+        "frontend/pages/graph-page.tsx:151:13",
+        "frontend/pages/graph-page.tsx:155:44",
+        "frontend/pages/graph-page.tsx:157:9",
+        "frontend/pages/graph-page.tsx:159:51",
+        "frontend/pages/graph-page.tsx:160:7",
+        "frontend/pages/graph-page.tsx:161:38",
+        "frontend/pages/graph-page.tsx:163:9",
+        "frontend/pages/graph-page.tsx:165:11",
+        "frontend/pages/graph-page.tsx:213:10",
+        "frontend/pages/graph-page.tsx:219:269",
+        "frontend/pages/graph-page.tsx:221:34"
       ],
       "unresolvedSymbols": []
     },
@@ -1539,8 +1547,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2495:5",
-        "frontend/app.tsx:2631:10",
+        "frontend/app.tsx:2536:5",
+        "frontend/app.tsx:2672:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1722,9 +1730,9 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2807:68",
-        "frontend/app.tsx:2830:5",
-        "frontend/app.tsx:2944:10",
+        "frontend/app.tsx:2848:68",
+        "frontend/app.tsx:2871:5",
+        "frontend/app.tsx:2985:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1810,8 +1818,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2978:5",
-        "frontend/app.tsx:3074:10",
+        "frontend/app.tsx:3019:5",
+        "frontend/app.tsx:3115:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1881,7 +1889,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3493:10",
+        "frontend/app.tsx:3534:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -1957,8 +1965,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3106:5",
-        "frontend/app.tsx:3204:10",
+        "frontend/app.tsx:3147:5",
+        "frontend/app.tsx:3245:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -2164,8 +2172,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3223:5",
-        "frontend/app.tsx:3305:10",
+        "frontend/app.tsx:3264:5",
+        "frontend/app.tsx:3346:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2239,7 +2247,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:3370:10",
+        "frontend/app.tsx:3411:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -2350,7 +2358,8 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2228:10",
+        "frontend/app.tsx:2213:5",
+        "frontend/app.tsx:2265:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -2405,7 +2414,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2311:10",
+        "frontend/app.tsx:2352:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2541,7 +2550,7 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/app.tsx:2411:10",
+        "frontend/app.tsx:2452:10",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -4627,10 +4636,30 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2228:10",
+      "id": "frontend/app.tsx:2213:5",
       "path": "frontend/app.tsx",
       "owner": "NotificationsRoute",
-      "line": 2228,
+      "line": 2213,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "\"beforeunload\"",
+      "arguments": [
+        "\"beforeunload\"",
+        "warn"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/app.tsx:2265:10",
+      "path": "frontend/app.tsx",
+      "owner": "NotificationsRoute",
+      "line": 2265,
       "column": 10,
       "kind": "jsx",
       "tag": "NotificationsPage",
@@ -4648,7 +4677,7 @@
         "onPageSizeChange": "(pageSize) => navigate({ page: 1, pageSize, filters: query.filters })",
         "onMarkRead": "(id) => void mutate(() => markNotificationRead(id))",
         "onMarkVisibleRead": "(ids) => void mutate(() => markVisibleNotificationsRead(ids))",
-        "onOpen": "(id) => {\n      const epoch = locationEpochRef.current;\n      void mutate(async () => {\n        const current = await markNotificationRead(id);\n        if (!activeRef.current || epoch !== locationEpochRef.current) return;\n        const href = notificationTargetHref(current, isAdmin);\n        if (href) writeWorkspaceHistory(\"push\", href);\n        else setActionError(frontendText(locale, \"NOTIFICATIONS_TARGET_UNAVAILABLE\"));\n      });\n    }"
+        "onOpen": "(id) => {\n      const epoch = locationEpochRef.current;\n      void mutate(async () => {\n        const current = await markNotificationRead(id);\n        if (!activeRef.current || epoch !== locationEpochRef.current) return;\n        const href = notificationTargetHref(current, isAdmin);\n        if (href) {\n          actionPendingRef.current = false;\n          syncLeaveGuard();\n          writeWorkspaceHistory(\"push\", href);\n        }\n        else setActionError(frontendText(locale, \"NOTIFICATIONS_TARGET_UNAVAILABLE\"));\n      });\n    }"
       },
       "handlers": {
         "onRetry": "() => { invalidateSnapshot({ kind: \"loading\" }); setRetryVersion((value) => value + 1); }",
@@ -4657,7 +4686,7 @@
         "onPageSizeChange": "(pageSize) => navigate({ page: 1, pageSize, filters: query.filters })",
         "onMarkRead": "(id) => void mutate(() => markNotificationRead(id))",
         "onMarkVisibleRead": "(ids) => void mutate(() => markVisibleNotificationsRead(ids))",
-        "onOpen": "(id) => {\n      const epoch = locationEpochRef.current;\n      void mutate(async () => {\n        const current = await markNotificationRead(id);\n        if (!activeRef.current || epoch !== locationEpochRef.current) return;\n        const href = notificationTargetHref(current, isAdmin);\n        if (href) writeWorkspaceHistory(\"push\", href);\n        else setActionError(frontendText(locale, \"NOTIFICATIONS_TARGET_UNAVAILABLE\"));\n      });\n    }"
+        "onOpen": "(id) => {\n      const epoch = locationEpochRef.current;\n      void mutate(async () => {\n        const current = await markNotificationRead(id);\n        if (!activeRef.current || epoch !== locationEpochRef.current) return;\n        const href = notificationTargetHref(current, isAdmin);\n        if (href) {\n          actionPendingRef.current = false;\n          syncLeaveGuard();\n          writeWorkspaceHistory(\"push\", href);\n        }\n        else setActionError(frontendText(locale, \"NOTIFICATIONS_TARGET_UNAVAILABLE\"));\n      });\n    }"
       },
       "spreads": [],
       "labels": [],
@@ -4665,10 +4694,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2311:10",
+      "id": "frontend/app.tsx:2352:10",
       "path": "frontend/app.tsx",
       "owner": "MessagesRoute",
-      "line": 2311,
+      "line": 2352,
       "column": 10,
       "kind": "jsx",
       "tag": "MessagesPage",
@@ -4695,10 +4724,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2411:10",
+      "id": "frontend/app.tsx:2452:10",
       "path": "frontend/app.tsx",
       "owner": "MemberDiscussionThreadRoute",
-      "line": 2411,
+      "line": 2452,
       "column": 10,
       "kind": "jsx",
       "tag": "ThreadPage",
@@ -4735,10 +4764,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2495:5",
+      "id": "frontend/app.tsx:2536:5",
       "path": "frontend/app.tsx",
       "owner": "BoardsRoute",
-      "line": 2495,
+      "line": 2536,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -4755,10 +4784,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2631:10",
+      "id": "frontend/app.tsx:2672:10",
       "path": "frontend/app.tsx",
       "owner": "BoardsRoute",
-      "line": 2631,
+      "line": 2672,
       "column": 10,
       "kind": "jsx",
       "tag": "BoardsPage",
@@ -4791,10 +4820,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2807:68",
+      "id": "frontend/app.tsx:2848:68",
       "path": "frontend/app.tsx",
       "owner": "ReviewQueueRoute",
-      "line": 2807,
+      "line": 2848,
       "column": 68,
       "kind": "jsx",
       "tag": "ReviewQueueSession",
@@ -4808,10 +4837,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2830:5",
+      "id": "frontend/app.tsx:2871:5",
       "path": "frontend/app.tsx",
       "owner": "ReviewQueueSession",
-      "line": 2830,
+      "line": 2871,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -4828,10 +4857,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2944:10",
+      "id": "frontend/app.tsx:2985:10",
       "path": "frontend/app.tsx",
       "owner": "ReviewQueueSession",
-      "line": 2944,
+      "line": 2985,
       "column": 10,
       "kind": "jsx",
       "tag": "ReviewQueuePage",
@@ -4866,10 +4895,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:2978:5",
+      "id": "frontend/app.tsx:3019:5",
       "path": "frontend/app.tsx",
       "owner": "AdminDuplicateRoute",
-      "line": 2978,
+      "line": 3019,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -4886,10 +4915,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3074:10",
+      "id": "frontend/app.tsx:3115:10",
       "path": "frontend/app.tsx",
       "owner": "AdminDuplicateRoute",
-      "line": 3074,
+      "line": 3115,
       "column": 10,
       "kind": "jsx",
       "tag": "DuplicateQueuePage",
@@ -4918,10 +4947,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3106:5",
+      "id": "frontend/app.tsx:3147:5",
       "path": "frontend/app.tsx",
       "owner": "AdminMembersRoute",
-      "line": 3106,
+      "line": 3147,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -4938,10 +4967,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3204:10",
+      "id": "frontend/app.tsx:3245:10",
       "path": "frontend/app.tsx",
       "owner": "AdminMembersRoute",
-      "line": 3204,
+      "line": 3245,
       "column": 10,
       "kind": "jsx",
       "tag": "MembersPage",
@@ -4977,10 +5006,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3223:5",
+      "id": "frontend/app.tsx:3264:5",
       "path": "frontend/app.tsx",
       "owner": "AdminSpacesRoute",
-      "line": 3223,
+      "line": 3264,
       "column": 5,
       "kind": "listener",
       "tag": "owner.addEventListener",
@@ -4997,10 +5026,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3305:10",
+      "id": "frontend/app.tsx:3346:10",
       "path": "frontend/app.tsx",
       "owner": "AdminSpacesRoute",
-      "line": 3305,
+      "line": 3346,
       "column": 10,
       "kind": "jsx",
       "tag": "SpacesPage",
@@ -5033,10 +5062,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3370:10",
+      "id": "frontend/app.tsx:3411:10",
       "path": "frontend/app.tsx",
       "owner": "AdminAuditRoute",
-      "line": 3370,
+      "line": 3411,
       "column": 10,
       "kind": "jsx",
       "tag": "AuditPage",
@@ -5063,10 +5092,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:3493:10",
+      "id": "frontend/app.tsx:3534:10",
       "path": "frontend/app.tsx",
       "owner": "AdminAssetsRoute",
-      "line": 3493,
+      "line": 3534,
       "column": 10,
       "kind": "jsx",
       "tag": "AssetQueuePage",
@@ -27528,10 +27557,30 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:71:106",
+      "id": "frontend/pages/graph-page.tsx:71:5",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
       "line": 71,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "\"beforeunload\"",
+      "arguments": [
+        "\"beforeunload\"",
+        "warn"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/graph-page.tsx:93:106",
+      "path": "frontend/pages/graph-page.tsx",
+      "owner": "GraphPage",
+      "line": 93,
       "column": 106,
       "kind": "jsx",
       "tag": "Button",
@@ -27562,10 +27611,48 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:99:11",
+      "id": "frontend/pages/graph-page.tsx:94:118",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 99,
+      "line": 94,
+      "column": 118,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "className": "\"mt-4\"",
+        "variant": "\"outline\"",
+        "onClick": "onRetry"
+      },
+      "handlers": {
+        "onClick": "onRetry"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"GRAPH_RETRY\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"forbidden\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <section data-graph-page-loading><p className=\"mb-3 text-sm text-muted-foreground\">{frontendText(locale, \"GRAPH_LOADING\")}</p><PageState kind=\"loading\" title={frontendText(locale, \"GRAPH_LOADING\")} /></section>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/graph-page.tsx:134:11",
+      "path": "frontend/pages/graph-page.tsx",
+      "owner": "GraphPage",
+      "line": 134,
       "column": 11,
       "kind": "jsx",
       "tag": "Input",
@@ -27592,6 +27679,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27602,10 +27693,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:100:11",
+      "id": "frontend/pages/graph-page.tsx:135:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 100,
+      "line": 135,
       "column": 11,
       "kind": "jsx",
       "tag": "select",
@@ -27632,6 +27723,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27642,10 +27737,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:101:13",
+      "id": "frontend/pages/graph-page.tsx:136:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 101,
+      "line": 136,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -27668,6 +27763,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27678,10 +27777,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:102:13",
+      "id": "frontend/pages/graph-page.tsx:137:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 102,
+      "line": 137,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -27704,6 +27803,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27714,10 +27817,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:103:13",
+      "id": "frontend/pages/graph-page.tsx:138:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 103,
+      "line": 138,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -27740,6 +27843,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27750,10 +27857,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:105:11",
+      "id": "frontend/pages/graph-page.tsx:140:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 105,
+      "line": 140,
       "column": 11,
       "kind": "jsx",
       "tag": "select",
@@ -27780,6 +27887,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27790,10 +27901,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:106:13",
+      "id": "frontend/pages/graph-page.tsx:141:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 106,
+      "line": 141,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -27816,6 +27927,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27826,10 +27941,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:107:13",
+      "id": "frontend/pages/graph-page.tsx:142:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 107,
+      "line": 142,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -27852,6 +27967,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27862,10 +27981,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:108:13",
+      "id": "frontend/pages/graph-page.tsx:143:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 108,
+      "line": 143,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -27888,6 +28007,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27898,10 +28021,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:109:13",
+      "id": "frontend/pages/graph-page.tsx:144:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 109,
+      "line": 144,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -27924,6 +28047,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27934,10 +28061,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:111:11",
+      "id": "frontend/pages/graph-page.tsx:146:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 111,
+      "line": 146,
       "column": 11,
       "kind": "jsx",
       "tag": "select",
@@ -27964,6 +28091,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -27974,10 +28105,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:112:13",
+      "id": "frontend/pages/graph-page.tsx:147:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 112,
+      "line": 147,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28000,6 +28131,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -28010,10 +28145,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:113:13",
+      "id": "frontend/pages/graph-page.tsx:148:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 113,
+      "line": 148,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28036,6 +28171,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -28046,10 +28185,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:114:13",
+      "id": "frontend/pages/graph-page.tsx:149:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 114,
+      "line": 149,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28072,6 +28211,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -28082,10 +28225,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:115:13",
+      "id": "frontend/pages/graph-page.tsx:150:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 115,
+      "line": 150,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28108,6 +28251,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -28118,10 +28265,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:116:13",
+      "id": "frontend/pages/graph-page.tsx:151:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 116,
+      "line": 151,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28144,6 +28291,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -28154,10 +28305,152 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:120:7",
+      "id": "frontend/pages/graph-page.tsx:155:44",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 120,
+      "line": 155,
+      "column": 44,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "data-graph-action-unconfirmed": "true",
+        "role": "\"alert\"",
+        "className": "\"space-y-2 rounded-md border border-destructive/40 p-3 text-sm\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "action?.status === \"unconfirmed\"",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <section data-graph-page-loading><p className=\"mb-3 text-sm text-muted-foreground\">{frontendText(locale, \"GRAPH_LOADING\")}</p><PageState kind=\"loading\" title={frontendText(locale, \"GRAPH_LOADING\")} /></section>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"empty\"",
+          "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
+        },
+        {
+          "condition": "!filteredSnapshot",
+          "source": "if (!filteredSnapshot) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/graph-page.tsx:157:9",
+      "path": "frontend/pages/graph-page.tsx",
+      "owner": "GraphPage",
+      "line": 157,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "variant": "\"outline\"",
+        "onClick": "() => runGraphAction(action)"
+      },
+      "handlers": {
+        "onClick": "() => runGraphAction(action)"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"GRAPH_ACTION_RETRY\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "action?.status === \"unconfirmed\"",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <section data-graph-page-loading><p className=\"mb-3 text-sm text-muted-foreground\">{frontendText(locale, \"GRAPH_LOADING\")}</p><PageState kind=\"loading\" title={frontendText(locale, \"GRAPH_LOADING\")} /></section>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"empty\"",
+          "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
+        },
+        {
+          "condition": "!filteredSnapshot",
+          "source": "if (!filteredSnapshot) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/graph-page.tsx:159:51",
+      "path": "frontend/pages/graph-page.tsx",
+      "owner": "GraphPage",
+      "line": 159,
+      "column": 51,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"status\"",
+        "className": "\"text-sm text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, outcome.status === \"rejected\" ? \"GRAPH_ACTION_REJECTED\" : \"GRAPH_ACTION_NOT_SENT\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "outcome && outcome.status !== \"success\"",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <section data-graph-page-loading><p className=\"mb-3 text-sm text-muted-foreground\">{frontendText(locale, \"GRAPH_LOADING\")}</p><PageState kind=\"loading\" title={frontendText(locale, \"GRAPH_LOADING\")} /></section>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"empty\"",
+          "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
+        },
+        {
+          "condition": "!filteredSnapshot",
+          "source": "if (!filteredSnapshot) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/graph-page.tsx:160:7",
+      "path": "frontend/pages/graph-page.tsx",
+      "owner": "GraphPage",
+      "line": 160,
       "column": 7,
       "kind": "jsx",
       "tag": "GraphSuggestionsPanel",
@@ -28182,6 +28475,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -28192,10 +28489,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:121:38",
+      "id": "frontend/pages/graph-page.tsx:161:38",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 121,
+      "line": 161,
       "column": 38,
       "kind": "jsx",
       "tag": "div",
@@ -28226,6 +28523,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -28236,10 +28537,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:123:9",
+      "id": "frontend/pages/graph-page.tsx:163:9",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 123,
+      "line": 163,
       "column": 9,
       "kind": "jsx",
       "tag": "GraphCanvas",
@@ -28268,6 +28569,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -28278,10 +28583,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:125:11",
+      "id": "frontend/pages/graph-page.tsx:165:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 125,
+      "line": 165,
       "column": 11,
       "kind": "jsx",
       "tag": "GraphInspector",
@@ -28289,12 +28594,12 @@
         "locale": "locale",
         "node": "selectedNode",
         "onClose": "() => setSelectedId(null)",
-        "onAction": "selectedNode ? runGraphAction : undefined",
-        "actionStatus": "selectedNode && actionState.nodeId === selectedNode.id ? actionState.status : \"idle\""
+        "onAction": "selectedNode && (!action || action.node.id === selectedNode.id) ? () => runGraphAction(action ?? undefined) : undefined",
+        "actionStatus": "inspectorStatus"
       },
       "handlers": {
         "onClose": "() => setSelectedId(null)",
-        "onAction": "selectedNode ? runGraphAction : undefined"
+        "onAction": "selectedNode && (!action || action.node.id === selectedNode.id) ? () => runGraphAction(action ?? undefined) : undefined"
       },
       "spreads": [],
       "labels": [],
@@ -28309,6 +28614,10 @@
           "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
           "condition": "state.kind === \"empty\"",
           "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
         },
@@ -28319,16 +28628,17 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:172:10",
+      "id": "frontend/pages/graph-page.tsx:213:10",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphRoute",
-      "line": 172,
+      "line": 213,
       "column": 10,
       "kind": "jsx",
       "tag": "GraphPage",
       "attributes": {
         "locale": "locale",
         "state": "state",
+        "onDenied": "() => setState({ kind: \"forbidden\" })",
         "query": "query",
         "lens": "lens",
         "temporalRange": "temporalRange",
@@ -28342,6 +28652,7 @@
         "onRetry": "() => { setState({ kind: \"loading\" }); setRetry((value) => value + 1); }"
       },
       "handlers": {
+        "onDenied": "() => setState({ kind: \"forbidden\" })",
         "onGenerateSuggestions": "generateSuggestions",
         "onQueryChange": "setQuery",
         "onLensChange": "setLens",
@@ -28355,10 +28666,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:178:269",
+      "id": "frontend/pages/graph-page.tsx:219:269",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphSuggestionsPanel",
-      "line": 178,
+      "line": 219,
       "column": 269,
       "kind": "jsx",
       "tag": "Button",
@@ -28378,10 +28689,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:180:34",
+      "id": "frontend/pages/graph-page.tsx:221:34",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphSuggestionsPanel",
-      "line": 180,
+      "line": 221,
       "column": 34,
       "kind": "jsx",
       "tag": "p",

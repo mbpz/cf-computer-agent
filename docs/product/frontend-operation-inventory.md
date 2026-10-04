@@ -7,12 +7,12 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：239；操作/转发候选：1035。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：239；操作/转发候选：1041。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
 | frontend/app-routes.ts | 0 |
-| frontend/app.tsx | 67 |
+| frontend/app.tsx | 68 |
 | frontend/asset-manifest.ts | 0 |
 | frontend/build-contract.ts | 0 |
 | frontend/components/agent/agent-feedback.tsx | 7 |
@@ -216,7 +216,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/coming-soon-page.tsx | 0 |
 | frontend/pages/focus-page.tsx | 11 |
 | frontend/pages/goals-page.tsx | 10 |
-| frontend/pages/graph-page.tsx | 24 |
+| frontend/pages/graph-page.tsx | 29 |
 | frontend/pages/home-page.tsx | 16 |
 | frontend/pages/inbox-page.tsx | 13 |
 | frontend/pages/knowledge-page.tsx | 16 |
@@ -257,7 +257,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 路由/入口 | root symbol | 候选数 | 未解析符号 |
 | --- | --- | ---: | --- |
-| /graph | frontend/pages/graph-page.tsx#GraphRoute; frontend/pages/graph-page.tsx#GraphPage | 47 | 无（不代表动态边界已核对） |
+| /graph | frontend/pages/graph-page.tsx#GraphRoute; frontend/pages/graph-page.tsx#GraphPage | 55 | 无（不代表动态边界已核对） |
 | /projects/:id/timeline | frontend/app.tsx#ProjectTimelineRoute | 93 | 无（不代表动态边界已核对） |
 | /inbox | frontend/app.tsx#InboxRoute | 115 | 无（不代表动态边界已核对） |
 | /goals | frontend/app.tsx#GoalsRoute | 81 | 无（不代表动态边界已核对） |
@@ -286,7 +286,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /admin/spaces | frontend/app.tsx#AdminSpacesRoute; frontend/lib/admin-spaces-data.ts#* | 61 | 无（不代表动态边界已核对） |
 | /admin/audit | frontend/app.tsx#AdminAuditRoute | 35 | 无（不代表动态边界已核对） |
 | /admin/analytics | frontend/app.tsx#AdminAnalyticsRoute | 43 | 无（不代表动态边界已核对） |
-| /notifications | frontend/app.tsx#NotificationsRoute; frontend/lib/notifications-data.ts#* | 41 | 无（不代表动态边界已核对） |
+| /notifications | frontend/app.tsx#NotificationsRoute; frontend/lib/notifications-data.ts#* | 42 | 无（不代表动态边界已核对） |
 | /messages | frontend/app.tsx#MessagesRoute | 22 | 无（不代表动态边界已核对） |
 | /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 70 | 无（不代表动态边界已核对） |
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 42 | 无（不代表动态边界已核对） |
@@ -352,22 +352,23 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 2075:10 FocusRoute | FocusPage  | onDenied=clearDenied; onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onStart=input =&gt; void mutate(epoch =&gt; sendStart(epoch, input)); onTransi… | earlier return: transitionRecovery.kind !== "empty" && state.kind === "ready"; earlier return: recovery.kind !== "empty" && state.kind === "ready" |
 | 2108:51 WorkbenchReviewRoute | WorkbenchReviewPage  | onOpen=setTarget; onPeriodChange=changePeriod; onRetry=() =&gt; { setState({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); } |  |
 | 2108:276 WorkbenchReviewRoute | SnapshotTargetDetail  | onClose=() =&gt; setTarget(null); onDenied=clearDenied | {"kind":"logical","expression":"target","operator":"&&"} |
-| 2228:10 NotificationsRoute | NotificationsPage  | onRetry=() =&gt; { invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onFilterChange=(filters: NotificationFilters) =&gt; … |  |
-| 2311:10 MessagesRoute | MessagesPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page: query.page + 1, limit: query.limit, cursor }); onPrevious=(… |  |
-| 2411:10 MemberDiscussionThreadRoute | ThreadPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRefresh=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page… |  |
-| 2495:5 BoardsRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 2631:10 BoardsRoute | BoardsPage  | onCheckMove=() =&gt; void resolveUnknownMove("check"); onRetryMove=() =&gt; void resolveUnknownMove("retry"); onRetry=(status) =&gt; { if (deniedRef.current)… |  |
-| 2807:68 ReviewQueueRoute | ReviewQueueSession  |  | spread: props |
-| 2830:5 ReviewQueueSession | owner.addEventListener  | "beforeunload", warn |  |
-| 2944:10 ReviewQueueSession | ReviewQueuePage  | onOpenDetail=(id) =&gt; writeWorkspaceHistory("push", &#96;/admin/submissions/${encodeURIComponent(id)}&#96;); onRetry=() =&gt; retryRead(); onReloadDecision… |  |
-| 2978:5 AdminDuplicateRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 3074:10 AdminDuplicateRoute | DuplicateQueuePage  | onLoadRetry=retryRead; onDecision=(id, decision) =&gt; void decide(id, decision); onPageChange=(next) =&gt; navigate({ page: next, pageSize }); onPageSizeCha… |  |
-| 3106:5 AdminMembersRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 3204:10 AdminMembersRoute | MembersPage  | onLoadRetry=retryRead; onStatusFilterChange=(next) =&gt; navigate({ page: 1, pageSize, status: next &#124;&#124; undefined }); onPageChange=(next) =&gt; navi… |  |
-| 3223:5 AdminSpacesRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 3305:10 AdminSpacesRoute | SpacesPage  | onLoadRetry=() =&gt; void read(); onLoadMore=() =&gt; void read("spaces"); onLoadCollections=id =&gt; void read("collections", id); onCreate=create; onManage… |  |
-| 3370:10 AdminAuditRoute | AuditPage  | onRetry=retry; onActionChange=changeFilter; onPageChange=(next) =&gt; navigate({ page: next, pageSize }); onPageSizeChange=(next) =&gt; navigate({ page: 1, p… |  |
-| 3493:10 AdminAssetsRoute | AssetQueuePage  | onLoadRetry=retryRead; onRetry=(id) =&gt; void retry(id); onPreview=(id) =&gt; void showPreview(id); onStatusChange=(next) =&gt; navigate({ page: 1, pageSize… |  |
+| 2213:5 NotificationsRoute | window.addEventListener  | "beforeunload", warn |  |
+| 2265:10 NotificationsRoute | NotificationsPage  | onRetry=() =&gt; { invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onFilterChange=(filters: NotificationFilters) =&gt; … |  |
+| 2352:10 MessagesRoute | MessagesPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page: query.page + 1, limit: query.limit, cursor }); onPrevious=(… |  |
+| 2452:10 MemberDiscussionThreadRoute | ThreadPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRefresh=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page… |  |
+| 2536:5 BoardsRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 2672:10 BoardsRoute | BoardsPage  | onCheckMove=() =&gt; void resolveUnknownMove("check"); onRetryMove=() =&gt; void resolveUnknownMove("retry"); onRetry=(status) =&gt; { if (deniedRef.current)… |  |
+| 2848:68 ReviewQueueRoute | ReviewQueueSession  |  | spread: props |
+| 2871:5 ReviewQueueSession | owner.addEventListener  | "beforeunload", warn |  |
+| 2985:10 ReviewQueueSession | ReviewQueuePage  | onOpenDetail=(id) =&gt; writeWorkspaceHistory("push", &#96;/admin/submissions/${encodeURIComponent(id)}&#96;); onRetry=() =&gt; retryRead(); onReloadDecision… |  |
+| 3019:5 AdminDuplicateRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 3115:10 AdminDuplicateRoute | DuplicateQueuePage  | onLoadRetry=retryRead; onDecision=(id, decision) =&gt; void decide(id, decision); onPageChange=(next) =&gt; navigate({ page: next, pageSize }); onPageSizeCha… |  |
+| 3147:5 AdminMembersRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 3245:10 AdminMembersRoute | MembersPage  | onLoadRetry=retryRead; onStatusFilterChange=(next) =&gt; navigate({ page: 1, pageSize, status: next &#124;&#124; undefined }); onPageChange=(next) =&gt; navi… |  |
+| 3264:5 AdminSpacesRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 3346:10 AdminSpacesRoute | SpacesPage  | onLoadRetry=() =&gt; void read(); onLoadMore=() =&gt; void read("spaces"); onLoadCollections=id =&gt; void read("collections", id); onCreate=create; onManage… |  |
+| 3411:10 AdminAuditRoute | AuditPage  | onRetry=retry; onActionChange=changeFilter; onPageChange=(next) =&gt; navigate({ page: next, pageSize }); onPageSizeChange=(next) =&gt; navigate({ page: 1, p… |  |
+| 3534:10 AdminAssetsRoute | AssetQueuePage  | onLoadRetry=retryRead; onRetry=(id) =&gt; void retry(id); onPreview=(id) =&gt; void showPreview(id); onStatusChange=(next) =&gt; navigate({ page: 1, pageSize… |  |
 
 ## frontend/components/agent/agent-feedback.tsx
 
@@ -1500,30 +1501,35 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 71:106 GraphPage | Button frontendText(locale, "GRAPH_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
-| 99:11 GraphPage | Input  | onChange=(event) =&gt; onQueryChange?.(event.currentTarget.value) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 100:11 GraphPage | select  | onChange=(event) =&gt; onLensChange?.(event.currentTarget.value as GraphLens) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 101:13 GraphPage | option frontendText(locale, "GRAPH_LENS_WORKSPACE") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 102:13 GraphPage | option frontendText(locale, "GRAPH_LENS_KNOWLEDGE") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 103:13 GraphPage | option frontendText(locale, "GRAPH_LENS_WORK") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 105:11 GraphPage | select  | onChange=(event) =&gt; onTemporalRangeChange?.(event.currentTarget.value as GraphTemporalRange) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 106:13 GraphPage | option frontendText(locale, "GRAPH_TIME_RANGE_ALL") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 107:13 GraphPage | option frontendText(locale, "GRAPH_TIME_RANGE_7D") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 108:13 GraphPage | option frontendText(locale, "GRAPH_TIME_RANGE_30D") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 109:13 GraphPage | option frontendText(locale, "GRAPH_TIME_RANGE_90D") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 111:11 GraphPage | select  | onChange=(event) =&gt; onChangeKindChange?.(event.currentTarget.value as NonNullable&lt;GraphPageProps["changeKind"]&gt;) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 112:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_ALL") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 113:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_ADDED") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 114:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_UPDATED") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 115:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_COMPLETED") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 116:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_ARCHIVED") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 120:7 GraphPage | GraphSuggestionsPanel  | onGenerate=onGenerateSuggestions | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 121:38 GraphPage | div frontendText(locale, "GRAPH_TRUNCATED") |  | {"kind":"logical","expression":"state.kind === \"truncated\"","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "err… |
-| 123:9 GraphPage | GraphCanvas  | onSelect=setSelectedId; onClearSelection=() =&gt; setSelectedId(null) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 125:11 GraphPage | GraphInspector  | onClose=() =&gt; setSelectedId(null); onAction=selectedNode ? runGraphAction : undefined | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "empty"; earlier return: !filteredSnapshot |
-| 172:10 GraphRoute | GraphPage  | onGenerateSuggestions=generateSuggestions; onQueryChange=setQuery; onLensChange=setLens; onTemporalRangeChange=setTemporalRange; onChangeKindChange=setChange… |  |
-| 178:269 GraphSuggestionsPanel | Button frontendText(locale, state.kind === "loading" ? "GRAPH_SUGGESTIONS_LOADING" : "GRAPH_SUGGESTIONS_GENERATE") | onClick=onGenerate | disabled=state.kind === "loading" |
-| 180:34 GraphSuggestionsPanel | p frontendText(locale, "GRAPH_SUGGESTIONS_ERROR") |  | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
+| 71:5 GraphPage | window.addEventListener  | "beforeunload", warn |  |
+| 93:106 GraphPage | Button frontendText(locale, "GRAPH_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 94:118 GraphPage | Button frontendText(locale, "GRAPH_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"forbidden\"","branch":"true"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 134:11 GraphPage | Input  | onChange=(event) =&gt; onQueryChange?.(event.currentTarget.value) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 135:11 GraphPage | select  | onChange=(event) =&gt; onLensChange?.(event.currentTarget.value as GraphLens) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 136:13 GraphPage | option frontendText(locale, "GRAPH_LENS_WORKSPACE") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 137:13 GraphPage | option frontendText(locale, "GRAPH_LENS_KNOWLEDGE") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 138:13 GraphPage | option frontendText(locale, "GRAPH_LENS_WORK") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 140:11 GraphPage | select  | onChange=(event) =&gt; onTemporalRangeChange?.(event.currentTarget.value as GraphTemporalRange) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 141:13 GraphPage | option frontendText(locale, "GRAPH_TIME_RANGE_ALL") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 142:13 GraphPage | option frontendText(locale, "GRAPH_TIME_RANGE_7D") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 143:13 GraphPage | option frontendText(locale, "GRAPH_TIME_RANGE_30D") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 144:13 GraphPage | option frontendText(locale, "GRAPH_TIME_RANGE_90D") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 146:11 GraphPage | select  | onChange=(event) =&gt; onChangeKindChange?.(event.currentTarget.value as NonNullable&lt;GraphPageProps["changeKind"]&gt;) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 147:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_ALL") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 148:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_ADDED") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 149:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_UPDATED") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 150:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_COMPLETED") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 151:13 GraphPage | option frontendText(locale, "GRAPH_CHANGE_KIND_ARCHIVED") |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 155:44 GraphPage | div  |  | {"kind":"logical","expression":"action?.status === \"unconfirmed\"","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind ==… |
+| 157:9 GraphPage | Button frontendText(locale, "GRAPH_ACTION_RETRY") | onClick=() =&gt; runGraphAction(action) | {"kind":"logical","expression":"action?.status === \"unconfirmed\"","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind ==… |
+| 159:51 GraphPage | p frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : "GRAPH_ACTION_NOT_SENT") |  | {"kind":"logical","expression":"outcome && outcome.status !== \"success\"","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.… |
+| 160:7 GraphPage | GraphSuggestionsPanel  | onGenerate=onGenerateSuggestions | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 161:38 GraphPage | div frontendText(locale, "GRAPH_TRUNCATED") |  | {"kind":"logical","expression":"state.kind === \"truncated\"","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "err… |
+| 163:9 GraphPage | GraphCanvas  | onSelect=setSelectedId; onClearSelection=() =&gt; setSelectedId(null) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 165:11 GraphPage | GraphInspector  | onClose=() =&gt; setSelectedId(null); onAction=selectedNode && (!action &#124;&#124; action.node.id === selectedNode.id) ? () =&gt; runGraphAction(action ?? … | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 213:10 GraphRoute | GraphPage  | onDenied=() =&gt; setState({ kind: "forbidden" }); onGenerateSuggestions=generateSuggestions; onQueryChange=setQuery; onLensChange=setLens; onTemporalRangeCh… |  |
+| 219:269 GraphSuggestionsPanel | Button frontendText(locale, state.kind === "loading" ? "GRAPH_SUGGESTIONS_LOADING" : "GRAPH_SUGGESTIONS_GENERATE") | onClick=onGenerate | disabled=state.kind === "loading" |
+| 221:34 GraphSuggestionsPanel | p frontendText(locale, "GRAPH_SUGGESTIONS_ERROR") |  | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
 
 ## frontend/pages/home-page.tsx
 

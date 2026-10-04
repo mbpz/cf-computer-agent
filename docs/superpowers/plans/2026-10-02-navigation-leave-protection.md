@@ -264,3 +264,8 @@ BoardsRoute 在途/未知移动接共享离页守卫（仅锁定期间注册，�
 ### 通知更新离页续行（基线8571747）
 
 NotificationsRoute 在更新进行中和未知结果期间注册共享离页守卫；本页筛选、分页和越界收敛以同步 owned 标记放行。401/403 解锁，其余失败直到读回成功才解锁。见 `docs/product/navigation-notification-update-leave-evidence.md`。Task 4 整体及原生门禁仍开放；下一允许继续图谱动作进行中/未确认结果的离页边界。
+
+
+### 图谱动作离页续行（基线2e5448b）
+
+GraphPage 的进行中/未确认动作改为页面所有（节点快照 + clientKey），仅锁定期间注册共享离页守卫；未确认可同身份重试，明确拒绝、deferred 与 401/403 分流解锁。见 `docs/product/navigation-graph-action-leave-evidence.md`。Task 4 整体及原生门禁仍开放；下一允许继续其余逐页所有者核对。
