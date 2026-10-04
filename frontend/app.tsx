@@ -49,6 +49,7 @@ import { FocusPage, type FocusPageState } from "./pages/focus-page";
 import { WorkbenchReviewPage, type WorkbenchReviewPageState } from "./pages/workbench-review-page";
 import { BoardsPage, type BoardUnknownMove } from "./pages/boards/boards-page";
 import { clearBoardMove, discardBlockedBoardMove, loadBoardMove, saveBoardMove, type BoardMoveIntent } from "./lib/board-move-intent";
+import { clearNotificationUpdate, discardBlockedNotificationUpdate, loadNotificationUpdate, saveNotificationUpdate, type NotificationUpdateIntent } from "./lib/notification-update-intent";
 import { checkTaskWrite, clearTaskWrite, discardBlockedTaskWrite, loadTaskWrite, runTaskWrite, saveTaskWrite, type TaskWriteIntent } from "./lib/task-write-intent";
 import { taskStatusKey } from "./pages/tasks/tasks-model";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
@@ -215,7 +216,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "focus": return <FocusRoute key={session?.member.id} memberId={session?.member.id} locale={locale} />;
     case "review": return <WorkbenchReviewRoute locale={locale} />;
     case "boards": return <BoardsRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
-    case "notifications": return <NotificationsRoute locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
+    case "notifications": return <NotificationsRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
     case "message-thread": return <DiscussionThreadRoute memberId={session?.member.id} locale={locale} threadId={decodeRouteId(pathname)} search={search} />;
     case "environments": return session ? <EnvironmentsPage key={session.member.id} locale={locale} session={session} /> : <NotFoundPage locale={locale} />;
@@ -2211,8 +2212,9 @@ export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {
   return <><div inert={target ? true : undefined}><WorkbenchReviewPage locale={locale} period={period} state={state} onOpen={setTarget} onPeriodChange={changePeriod} onRetry={() => { setState({ kind: "loading" }); setRetryVersion((value) => value + 1); }} /></div>{target && <SnapshotTargetDetail key={`${target.kind}:${target.id}`} target={target} locale={locale} title={frontendText(locale, "REVIEW_DETAIL_TITLE")} onClose={() => setTarget(null)} onDenied={clearDenied} />}</>;
 }
 
-export function NotificationsRoute({ locale, search, isAdmin = false }: { locale: LocaleRuntime; search: string; isAdmin?: boolean }) {
+export function NotificationsRoute({ locale, search, isAdmin = false, memberId }: { locale: LocaleRuntime; search: string; isAdmin?: boolean; memberId?: string }) {
   const initial = useMemo(() => parseNotificationSearch(search), [search]);
+  const [stored] = useState(() => memberId ? loadNotificationUpdate(memberId) : { kind: "empty" as const });
   const [query, setQuery] = useState<NotificationQuery>(initial);
   const [state, setState] = useState<NotificationsPageState>({ kind: "loading" });
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
@@ -2220,6 +2222,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   const [retryVersion, setRetryVersion] = useState(0);
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
+  const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
   const queryRef = useRef(query);
   queryRef.current = query;
   const controllerRef = useRef<ReturnType<typeof createNotificationsRequestController> | null>(null);
@@ -2228,7 +2231,10 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   const readyRef = useRef(false);
   const locationEpochRef = useRef(0);
   // An update whose response was lost stays locked until a later read shows the current list.
-  const unknownRef = useRef(false);
+  // With a member, that lock is restored from this tab after refresh.
+  const unknownRef = useRef(stored.kind === "ready");
+  const intentRef = useRef<NotificationUpdateIntent | null>(stored.kind === "ready" ? stored.intent : null);
+  const recordBlockedRef = useRef(stored.kind === "blocked");
   const ownedNavigationRef = useRef(false);
   const leaveGuardRef = useRef<(() => void) | null>(null);
   const syncLeaveGuard = useCallback(() => {
@@ -2258,7 +2264,12 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   };
 
   const clearRestrictedState = () => {
+    const intent = intentRef.current;
+    if (memberId && intent) clearNotificationUpdate(memberId, intent);
+    intentRef.current = null;
     unknownRef.current = false;
+    recordBlockedRef.current = false;
+    setRecordBlocked(false);
     setActionError(undefined);
     invalidateSnapshot({ kind: "forbidden" });
     syncLeaveGuard();
@@ -2282,6 +2293,16 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
         });
         return;
       }
+      if (intentRef.current && memberId && !clearNotificationUpdate(memberId, intentRef.current)) {
+        unknownRef.current = true;
+        syncLeaveGuard();
+        setActionError(frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_STUCK"));
+        setSummary(null);
+        setState({ kind: "recovery" });
+        setPending(false);
+        return;
+      }
+      intentRef.current = null;
       unknownRef.current = false;
       syncLeaveGuard();
       readyRef.current = true;
@@ -2314,8 +2335,9 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
       if (actionPendingRef.current || unknownRef.current) { event.preventDefault(); event.returnValue = ""; }
     };
     window.addEventListener("beforeunload", warn);
+    syncLeaveGuard();
     return () => window.removeEventListener("beforeunload", warn);
-  }, []);
+  }, [syncLeaveGuard]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -2338,8 +2360,13 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
     });
   };
 
-  const mutate = async (operation: () => Promise<unknown>) => {
-    if (actionPendingRef.current || unknownRef.current || !readyRef.current) return;
+  const mutate = async (intent: NotificationUpdateIntent, operation: () => Promise<unknown>) => {
+    if (actionPendingRef.current || unknownRef.current || recordBlockedRef.current || !readyRef.current) return;
+    if (memberId && !saveNotificationUpdate(memberId, intent)) {
+      setActionError(frontendText(locale, "NOTIFICATIONS_UPDATE_NOT_RECORDED"));
+      return;
+    }
+    if (memberId) intentRef.current = intent;
     actionPendingRef.current = true;
     syncLeaveGuard();
     setActionPending(true); setActionError(undefined);
@@ -2377,11 +2404,18 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
     onFilterChange={(filters: NotificationFilters) => navigate({ page: 1, pageSize: query.pageSize, filters })}
     onPageChange={(page) => navigate({ ...query, page })}
     onPageSizeChange={(pageSize) => navigate({ page: 1, pageSize, filters: query.filters })}
-    onMarkRead={(id) => void mutate(() => markNotificationRead(id))}
-    onMarkVisibleRead={(ids) => void mutate(() => markVisibleNotificationsRead(ids))}
+    recordBlocked={recordBlocked}
+    onDiscardRecord={() => {
+      if (!memberId || !discardBlockedNotificationUpdate(memberId)) return;
+      recordBlockedRef.current = false;
+      setRecordBlocked(false);
+      setActionError(undefined);
+    }}
+    onMarkRead={(id) => void mutate({ op: "read", id }, () => markNotificationRead(id))}
+    onMarkVisibleRead={(ids) => void mutate({ op: "bulk", ids: [...ids] }, () => markVisibleNotificationsRead(ids))}
     onOpen={(id) => {
       const epoch = locationEpochRef.current;
-      void mutate(async () => {
+      void mutate({ op: "open", id }, async () => {
         const current = await markNotificationRead(id);
         if (!activeRef.current || epoch !== locationEpochRef.current) return;
         const href = notificationTargetHref(current, isAdmin);

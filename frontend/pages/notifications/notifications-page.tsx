@@ -18,7 +18,7 @@ export type NotificationsPageState =
   | { kind: "forbidden" }
   | { kind: "ready"; items: readonly NotificationItem[]; pagination: Pagination };
 
-export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, onRetry, onFilterChange, onPageChange, onPageSizeChange, onMarkRead, onMarkVisibleRead, onOpen }: {
+export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, recordBlocked = false, onDiscardRecord, onRetry, onFilterChange, onPageChange, onPageSizeChange, onMarkRead, onMarkVisibleRead, onOpen }: {
   locale: LocaleRuntime;
   state: NotificationsPageState;
   summary: NotificationSummary | null;
@@ -26,6 +26,8 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   pending?: boolean;
   actionPending?: boolean;
   actionError?: string;
+  recordBlocked?: boolean;
+  onDiscardRecord?: () => void;
   onRetry: () => void;
   onFilterChange: (filters: NotificationFilters) => void;
   onPageChange: (page: number) => void;
@@ -54,17 +56,21 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
         <SelectOption value="">{frontendText(locale, "NOTIFICATIONS_FILTER_ALL")}</SelectOption>
         {NOTIFICATION_EVENT_TYPES.map((eventType) => <SelectOption key={eventType} value={eventType}>{frontendText(locale, notificationEventKey(eventType))}</SelectOption>)}
       </Select>
-      <Button variant="outline" disabled={pending || actionPending || visibleUnreadIds.length === 0} onClick={() => onMarkVisibleRead(visibleUnreadIds)}>{frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ")}</Button>
+      <Button variant="outline" disabled={pending || actionPending || recordBlocked || visibleUnreadIds.length === 0} onClick={() => onMarkVisibleRead(visibleUnreadIds)}>{frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ")}</Button>
     </div>
+    {recordBlocked && <Alert variant="destructive" data-notification-update-record-blocked="">
+      <AlertTitle>{frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_BLOCKED")}</AlertTitle>
+      <div className="mt-3"><Button variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_DISCARD")}</Button></div>
+    </Alert>}
     {actionError && <Alert variant="destructive"><AlertTitle>{actionError}</AlertTitle></Alert>}
     {state.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "NOTIFICATIONS_EMPTY")} /> : <div className="space-y-3" aria-busy={pending || actionPending || undefined}>
-      {state.items.map((item) => <NotificationCard key={item.id} item={item} locale={locale} disabled={actionPending || pending} onMarkRead={onMarkRead} onOpen={onOpen} />)}
+      {state.items.map((item) => <NotificationCard key={item.id} item={item} locale={locale} disabled={actionPending || pending} recordBlocked={recordBlocked} onMarkRead={onMarkRead} onOpen={onOpen} />)}
     </div>}
     <DataPagination {...state.pagination} visibleCount={state.items.length} locale={locale} pending={pending || actionPending} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} />
   </section>;
 }
 
-function NotificationCard({ item, locale, disabled, onMarkRead, onOpen }: { item: NotificationItem; locale: LocaleRuntime; disabled: boolean; onMarkRead: (id: string) => void; onOpen: (id: string) => void }) {
+function NotificationCard({ item, locale, disabled, recordBlocked = false, onMarkRead, onOpen }: { item: NotificationItem; locale: LocaleRuntime; disabled: boolean; recordBlocked?: boolean; onMarkRead: (id: string) => void; onOpen: (id: string) => void }) {
   const unread = item.readAt === null;
   const href = notificationTargetHref(item);
   const payloadTitle = typeof item.payload.title === "string" ? item.payload.title.trim() : "";
@@ -75,7 +81,7 @@ function NotificationCard({ item, locale, disabled, onMarkRead, onOpen }: { item
         <p className="text-sm text-muted-foreground">{frontendText(locale, notificationEventKey(item.eventType))}</p>
         <time className="block text-xs text-muted-foreground" dateTime={item.createdAt}>{item.createdAt}</time>
       </div>
-      <div className="flex flex-wrap gap-2">{href ? <Button variant="outline" disabled={disabled} onClick={() => onOpen(item.id)}>{frontendText(locale, "NOTIFICATIONS_OPEN")}</Button> : <p className="text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")}</p>}{unread && <Button variant="outline" disabled={disabled} onClick={() => onMarkRead(item.id)}>{frontendText(locale, "NOTIFICATIONS_MARK_READ")}</Button>}</div>
+      <div className="flex flex-wrap gap-2">{href ? <Button variant="outline" disabled={disabled || recordBlocked} onClick={() => onOpen(item.id)}>{frontendText(locale, "NOTIFICATIONS_OPEN")}</Button> : <p className="text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")}</p>}{unread && <Button variant="outline" disabled={disabled || recordBlocked} onClick={() => onMarkRead(item.id)}>{frontendText(locale, "NOTIFICATIONS_MARK_READ")}</Button>}</div>
     </CardContent>
   </Card>;
 }

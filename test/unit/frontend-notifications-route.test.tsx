@@ -444,6 +444,85 @@ describe("notification inbox route", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
 
+  it("restores an unknown notification update after remount and keeps leave blocked until the list reloads", async () => {
+    let hold = false;
+    const pending: Array<() => void> = [];
+    let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts += 1; throw new TypeError("lost response"); }
+      if (hold) return new Promise<Response>((resolve) => {
+        pending.push(() => resolve(String(input).endsWith("/summary") ? Response.json({ unread: 1 }) : pageResponse(String(input), "Restored")));
+      });
+      if (String(input).endsWith("/summary")) return Response.json({ unread: 1 });
+      return pageResponse(String(input), "Current");
+    });
+    await act(async () => root.render(<NotificationsRoute memberId="member-a" locale={createLocaleRuntime()} search="" />));
+    await flush();
+    await click("Mark as read");
+    await flush();
+    expect(posts).toBe(1);
+    expect(browser.sessionStorage.getItem("memory-garden:notification-update:v1:member-a")).toContain("notification-1");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+
+    hold = true;
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<NotificationsRoute memberId="member-a" locale={createLocaleRuntime()} search="" />));
+    await flush();
+    expect(posts).toBe(1);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    const unload = new browser.Event("beforeunload", { cancelable: true });
+    browser.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+
+    hold = false;
+    await act(async () => { for (const release of pending) release(); });
+    await waitForText("Restored");
+    expect(browser.sessionStorage.getItem("memory-garden:notification-update:v1:member-a")).toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("does not send a notification update when this tab cannot record it", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts += 1; return Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z" })); }
+      if (String(input).endsWith("/summary")) return Response.json({ unread: 1 });
+      return pageResponse(String(input), "Current");
+    });
+    await act(async () => root.render(<NotificationsRoute memberId="member-a" locale={createLocaleRuntime()} search="" />));
+    await flush();
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await click("Mark as read");
+    await flush();
+    expect(posts).toBe(0);
+    expect(container.textContent).toContain("could not record");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("blocks notification writes but not leave when the stored update cannot be read, until it is discarded", async () => {
+    browser.sessionStorage.setItem("memory-garden:notification-update:v1:member-a", "{");
+    let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts += 1; return Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z" })); }
+      if (String(input).endsWith("/summary")) return Response.json({ unread: 1 });
+      return pageResponse(String(input), "Current");
+    });
+    await act(async () => root.render(<NotificationsRoute memberId="member-a" locale={createLocaleRuntime()} search="" />));
+    await flush();
+    expect(container.textContent).toContain("can't be read");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+    const mark = [...container.querySelectorAll("button")].find((button) => button.textContent === "Mark as read") as HTMLButtonElement;
+    expect(mark.disabled).toBe(true);
+    await act(async () => mark.click());
+    expect(posts).toBe(0);
+    await click("Discard record");
+    await flush();
+    expect(container.textContent).not.toContain("can't be read");
+    await click("Mark as read");
+    await flush();
+    expect(posts).toBe(1);
+  });
+
   it.each([401, 403])("releases the leave lock when an in-flight update is denied with %s", async (status) => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") return Response.json({ error: { code: "FORBIDDEN", message: "Denied", retryable: false } }, { status });
