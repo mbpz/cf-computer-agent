@@ -125,6 +125,11 @@ export class AuditRepository {
            'submission.revision_requested', 'submission.resubmitted', 'knowledge.downloaded'
          ))
          OR (
+           a.actor_kind = 'member' AND a.actor_id = ? AND a.resource_type = 'task' AND a.action IN (
+             'task.status_changed', 'task.progress_changed', 'task.tags_replaced', 'task.linked', 'task.unlinked'
+           )
+         )
+         OR (
            a.resource_type = 'knowledge' AND a.action IN ('knowledge.published', 'knowledge.rolled_back', 'knowledge.restored')
            AND EXISTS (
              SELECT 1
@@ -142,7 +147,7 @@ export class AuditRepository {
        ORDER BY a.created_at DESC, a.id DESC
        LIMIT ?`,
     ).bind(
-      memberId, role,
+      memberId, memberId, role,
       ...(cursor === undefined ? [] : [new Date(cursor.sort).toISOString(), new Date(cursor.sort).toISOString(), cursor.id]),
       request.limit + 1,
     ).all<ActivityRow>();
@@ -162,7 +167,7 @@ function mapAuditRow(row: AuditRow): AuditEvent {
 }
 
 function mapActivityRow(row: ActivityRow): ActivityItem {
-  if (!isActivityAction(row.action) || (row.resource_type !== "submission" && row.resource_type !== "knowledge") || !row.resource_id) {
+  if (!isActivityAction(row.action) || (row.resource_type !== "submission" && row.resource_type !== "knowledge" && row.resource_type !== "task") || !row.resource_id) {
     throw new Error("Audit activity row is invalid");
   }
   return { id: row.id, action: row.action, resourceType: row.resource_type, resourceId: row.resource_id, createdAt: row.created_at };
@@ -171,5 +176,7 @@ function mapActivityRow(row: ActivityRow): ActivityItem {
 function isActivityAction(value: string): value is ActivityItem["action"] {
   return value === "submission.created" || value === "submission.draft_saved" || value === "submission.rejected"
     || value === "submission.revision_requested" || value === "submission.resubmitted" || value === "knowledge.published"
-    || value === "knowledge.rolled_back" || value === "knowledge.restored" || value === "knowledge.downloaded";
+    || value === "knowledge.rolled_back" || value === "knowledge.restored" || value === "knowledge.downloaded"
+    || value === "task.status_changed" || value === "task.progress_changed" || value === "task.tags_replaced"
+    || value === "task.linked" || value === "task.unlinked";
 }

@@ -126,12 +126,17 @@ export type ActivityAction =
   | "knowledge.published"
   | "knowledge.rolled_back"
   | "knowledge.restored"
-  | "knowledge.downloaded";
+  | "knowledge.downloaded"
+  | "task.status_changed"
+  | "task.progress_changed"
+  | "task.tags_replaced"
+  | "task.linked"
+  | "task.unlinked";
 
 export interface ActivityItem {
   id: string;
   action: ActivityAction;
-  resourceType: "submission" | "knowledge";
+  resourceType: "submission" | "knowledge" | "task";
   resourceId: string;
   createdAt: string;
 }

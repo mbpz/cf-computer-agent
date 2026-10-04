@@ -57,6 +57,7 @@ function countOverdueTasks(tasks: readonly TaskItem[], now: number): number {
 
 function activityHref(item: WorkspaceActivityItem): string | null {
   if (item.resourceType === "knowledge") return `/knowledge/${encodeURIComponent(item.resourceId)}`;
+  if (item.resourceType === "task") return "/tasks";
   if (item.resourceType === "submission") return "/my-submissions";
   return null;
 }

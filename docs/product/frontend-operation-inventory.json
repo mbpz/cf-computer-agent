@@ -1031,22 +1031,22 @@
         "frontend/components/ui/card.tsx:12:86",
         "frontend/components/ui/page-state.tsx:12:10",
         "frontend/components/ui/skeleton.tsx:4:92",
-        "frontend/pages/home-page.tsx:60:163",
-        "frontend/pages/home-page.tsx:66:18",
-        "frontend/pages/home-page.tsx:66:91",
-        "frontend/pages/home-page.tsx:76:9",
-        "frontend/pages/home-page.tsx:88:13",
-        "frontend/pages/home-page.tsx:89:13",
-        "frontend/pages/home-page.tsx:99:13",
-        "frontend/pages/home-page.tsx:112:13",
-        "frontend/pages/home-page.tsx:118:19",
-        "frontend/pages/home-page.tsx:136:38",
-        "frontend/pages/home-page.tsx:147:49",
-        "frontend/pages/home-page.tsx:155:409",
-        "frontend/pages/home-page.tsx:155:1410",
-        "frontend/pages/home-page.tsx:155:2022",
-        "frontend/pages/home-page.tsx:155:2156",
-        "frontend/pages/home-page.tsx:155:2284"
+        "frontend/pages/home-page.tsx:65:163",
+        "frontend/pages/home-page.tsx:71:18",
+        "frontend/pages/home-page.tsx:71:91",
+        "frontend/pages/home-page.tsx:81:9",
+        "frontend/pages/home-page.tsx:93:13",
+        "frontend/pages/home-page.tsx:94:13",
+        "frontend/pages/home-page.tsx:104:13",
+        "frontend/pages/home-page.tsx:117:13",
+        "frontend/pages/home-page.tsx:123:19",
+        "frontend/pages/home-page.tsx:141:38",
+        "frontend/pages/home-page.tsx:152:49",
+        "frontend/pages/home-page.tsx:160:409",
+        "frontend/pages/home-page.tsx:160:1410",
+        "frontend/pages/home-page.tsx:160:2022",
+        "frontend/pages/home-page.tsx:160:2156",
+        "frontend/pages/home-page.tsx:160:2284"
       ],
       "unresolvedSymbols": []
     },
@@ -1181,7 +1181,7 @@
         "frontend/pages/knowledge-page.tsx:25:754",
         "frontend/pages/knowledge-page.tsx:25:1251",
         "frontend/pages/knowledge-page.tsx:29:222",
-        "frontend/pages/knowledge-page.tsx:29:664",
+        "frontend/pages/knowledge-page.tsx:29:706",
         "frontend/pages/knowledge-page.tsx:33:234",
         "frontend/pages/knowledge-page.tsx:37:964",
         "frontend/pages/knowledge-page.tsx:41:433"
@@ -28893,10 +28893,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:60:163",
+      "id": "frontend/pages/home-page.tsx:65:163",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 60,
+      "line": 65,
       "column": 163,
       "kind": "jsx",
       "tag": "button",
@@ -28932,10 +28932,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:66:18",
+      "id": "frontend/pages/home-page.tsx:71:18",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 66,
+      "line": 71,
       "column": 18,
       "kind": "jsx",
       "tag": "div",
@@ -28962,10 +28962,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:66:91",
+      "id": "frontend/pages/home-page.tsx:71:91",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 66,
+      "line": 71,
       "column": 91,
       "kind": "jsx",
       "tag": "button",
@@ -28998,10 +28998,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:76:9",
+      "id": "frontend/pages/home-page.tsx:81:9",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 76,
+      "line": 81,
       "column": 9,
       "kind": "jsx",
       "tag": "a",
@@ -29031,10 +29031,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:88:13",
+      "id": "frontend/pages/home-page.tsx:93:13",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 88,
+      "line": 93,
       "column": 13,
       "kind": "jsx",
       "tag": "a",
@@ -29064,10 +29064,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:89:13",
+      "id": "frontend/pages/home-page.tsx:94:13",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 89,
+      "line": 94,
       "column": 13,
       "kind": "jsx",
       "tag": "a",
@@ -29097,10 +29097,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:99:13",
+      "id": "frontend/pages/home-page.tsx:104:13",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 99,
+      "line": 104,
       "column": 13,
       "kind": "jsx",
       "tag": "a",
@@ -29130,10 +29130,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:112:13",
+      "id": "frontend/pages/home-page.tsx:117:13",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 112,
+      "line": 117,
       "column": 13,
       "kind": "jsx",
       "tag": "a",
@@ -29163,10 +29163,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:118:19",
+      "id": "frontend/pages/home-page.tsx:123:19",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 118,
+      "line": 123,
       "column": 19,
       "kind": "jsx",
       "tag": "a",
@@ -29210,10 +29210,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:136:38",
+      "id": "frontend/pages/home-page.tsx:141:38",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 136,
+      "line": 141,
       "column": 38,
       "kind": "jsx",
       "tag": "a",
@@ -29264,10 +29264,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:147:49",
+      "id": "frontend/pages/home-page.tsx:152:49",
       "path": "frontend/pages/home-page.tsx",
       "owner": "HomePage",
-      "line": 147,
+      "line": 152,
       "column": 49,
       "kind": "jsx",
       "tag": "a",
@@ -29303,10 +29303,10 @@
       ]
     },
     {
-      "id": "frontend/pages/home-page.tsx:155:409",
+      "id": "frontend/pages/home-page.tsx:160:409",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 155,
+      "line": 160,
       "column": 409,
       "kind": "jsx",
       "tag": "a",
@@ -29323,10 +29323,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:155:1410",
+      "id": "frontend/pages/home-page.tsx:160:1410",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 155,
+      "line": 160,
       "column": 1410,
       "kind": "jsx",
       "tag": "a",
@@ -29352,10 +29352,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:155:2022",
+      "id": "frontend/pages/home-page.tsx:160:2022",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 155,
+      "line": 160,
       "column": 2022,
       "kind": "jsx",
       "tag": "a",
@@ -29372,10 +29372,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:155:2156",
+      "id": "frontend/pages/home-page.tsx:160:2156",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 155,
+      "line": 160,
       "column": 2156,
       "kind": "jsx",
       "tag": "a",
@@ -29392,10 +29392,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/home-page.tsx:155:2284",
+      "id": "frontend/pages/home-page.tsx:160:2284",
       "path": "frontend/pages/home-page.tsx",
       "owner": "LegacyHomePage",
-      "line": 155,
+      "line": 160,
       "column": 2284,
       "kind": "jsx",
       "tag": "a",
@@ -30270,7 +30270,7 @@
       "tag": "a",
       "attributes": {
         "key": "item.id",
-        "href": "item.resourceType === \"knowledge\" ? `/knowledge/${encodeURIComponent(item.resourceId)}` : \"/my-submissions\"",
+        "href": "item.resourceType === \"knowledge\" ? `/knowledge/${encodeURIComponent(item.resourceId)}` : item.resourceType === \"task\" ? \"/tasks\" : \"/my-submissions\"",
         "className": "\"flex items-center justify-between gap-3 rounded-md border p-3 text-sm transition hover:bg-accent\""
       },
       "handlers": {},
@@ -30285,11 +30285,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-page.tsx:29:664",
+      "id": "frontend/pages/knowledge-page.tsx:29:706",
       "path": "frontend/pages/knowledge-page.tsx",
       "owner": "ActivityPanel",
       "line": 29,
-      "column": 664,
+      "column": 706,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {

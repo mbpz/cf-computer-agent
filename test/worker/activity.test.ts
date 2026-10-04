@@ -57,6 +57,32 @@ describe("member activity feed", () => {
     }));
   });
 
+  it("shows the caller's task status, progress, tag, and link events without another member's tasks", async () => {
+    const rows = [
+      ["event-task-status", "member-contributor", "task.status_changed", "task-a", "2026-08-26T00:00:03.000Z"],
+      ["event-task-progress", "member-contributor", "task.progress_changed", "task-a", "2026-08-26T00:00:03.100Z"],
+      ["event-task-tags", "member-contributor", "task.tags_replaced", "task-a", "2026-08-26T00:00:03.200Z"],
+      ["event-task-link", "member-contributor", "task.linked", "task-a", "2026-08-26T00:00:03.300Z"],
+      ["event-task-unlink", "member-contributor", "task.unlinked", "task-a", "2026-08-26T00:00:03.400Z"],
+      ["event-task-other", "member-other", "task.status_changed", "task-secret", "2026-08-26T00:00:03.500Z"],
+      ["event-task-field", "member-contributor", "task.updated", "task-a", "2026-08-26T00:00:03.600Z"],
+    ] as const;
+    for (const [id, actorId, action, resourceId, createdAt] of rows) {
+      await env.DB.prepare("INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at) VALUES (?, 'member', ?, ?, 'task', ?, '{}', ?)")
+        .bind(id, actorId, action, resourceId, createdAt).run();
+    }
+    const response = await api("/api/activity?limit=20", contributor);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { items: Array<{ action: string; resourceId: string }> };
+    expect(body.items.map((item) => item.action)).toEqual([
+      "task.unlinked", "task.linked", "task.tags_replaced", "task.progress_changed", "task.status_changed",
+      "knowledge.published", "submission.created",
+    ]);
+    expect(body.items.map((item) => item.resourceId)).not.toContain("task-secret");
+    const otherFeed = await (await api("/api/activity?limit=20", other)).json() as { items: Array<{ resourceId: string }> };
+    expect(otherFeed.items.map((item) => item.resourceId)).not.toContain("task-a");
+  });
+
   it("rejects unknown query fields and requires the knowledge read capability", async () => {
     const unknownField = await api("/api/activity?limit=20&actorId=member-a", contributor);
     expect(unknownField.status).toBe(400);

@@ -29,6 +29,11 @@ const ACTIVITY_LABEL_KEYS: Record<string, string> = {
   "submission.rejected": "WORKBENCH_ACTIVITY_SUBMISSION_REJECTED",
   "submission.revision_requested": "WORKBENCH_ACTIVITY_SUBMISSION_REVISION_REQUESTED",
   "submission.resubmitted": "WORKBENCH_ACTIVITY_SUBMISSION_RESUBMITTED",
+  "task.status_changed": "WORKBENCH_ACTIVITY_TASK_STATUS_CHANGED",
+  "task.progress_changed": "WORKBENCH_ACTIVITY_TASK_PROGRESS_CHANGED",
+  "task.tags_replaced": "WORKBENCH_ACTIVITY_TASK_TAGS_REPLACED",
+  "task.linked": "WORKBENCH_ACTIVITY_TASK_LINKED",
+  "task.unlinked": "WORKBENCH_ACTIVITY_TASK_UNLINKED",
 };
 
 function textWithCount(locale: LocaleRuntime | undefined, key: string, count: number): string {
