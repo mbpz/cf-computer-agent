@@ -2693,7 +2693,7 @@
         "frontend/pages/knowledge-reader-page.tsx:84:5338",
         "frontend/pages/knowledge-reader-page.tsx:92:448",
         "frontend/pages/knowledge-reader-page.tsx:97:206",
-        "frontend/pages/knowledge-reader-page.tsx:99:362",
+        "frontend/pages/knowledge-reader-page.tsx:99:466",
         "frontend/pages/knowledge-reader-page.tsx:104:200",
         "frontend/pages/knowledge-reader-page.tsx:106:358",
         "frontend/pages/knowledge-reader-page.tsx:122:584",
@@ -34668,11 +34668,11 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:99:362",
+      "id": "frontend/pages/knowledge-reader-page.tsx:99:466",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "RelatedKnowledgePanel",
       "line": 99,
-      "column": 362,
+      "column": 466,
       "kind": "jsx",
       "tag": "a",
       "attributes": {
