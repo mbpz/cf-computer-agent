@@ -35,7 +35,7 @@ describe("review queue leave ownership", () => {
   async function dismissLeave(confirm=false) {const button=container.querySelector(confirm ? "[data-confirm-action]" : "[data-cancel-action]") as HTMLButtonElement;expect(button).toBeTruthy();await act(async()=>button.click());await flush();}
   it.each(["missing", "denied"])("retains an independent note after a %s refresh and restores it only to its own row", async outcome=>{
     let reads=0; let posts=0;
-    vi.stubGlobal("fetch",async (_:unknown,init?:RequestInit)=>{if(init?.method==="POST") {posts++;return json({});} reads++;return reads===2 ? (outcome==="denied" ? new Response(null,{status:403}) : queue([{id:"review-2",title:"Other",status:"review_pending"}])) : queue();});
+    vi.stubGlobal("fetch",async (_:unknown,init?:RequestInit)=>{if(init?.method==="POST") {posts++;return json({});} reads++;return reads===2 ? (outcome==="denied" ? new Response(null,{status:403}) : queue([{id:"review-2",title:"Other",submitterId:"member-1",status:"review_pending"}])) : queue();});
     await mount();await click("Reject");await typeNote("Private unsent note");await mount();
     expect(container.textContent).not.toContain("Private unsent note");expect(unload()).toBe(true);
     await leave();expect(browser.location.pathname).toBe("/admin/submissions");expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();
@@ -44,13 +44,13 @@ describe("review queue leave ownership", () => {
   });
   it("does not silently erase an unsent note when another reviewer makes its row terminal", async()=>{
     let reads=0;
-    vi.stubGlobal("fetch",async()=>++reads===1 ? queue() : queue([{id:"review-1",title:"Review",status:"rejected"}]));
+    vi.stubGlobal("fetch",async()=>++reads===1 ? queue() : queue([{id:"review-1",title:"Review",submitterId:"member-1",status:"rejected"}]));
     await mount();await click("Reject");await typeNote("Independent draft");await mount();expect(unload()).toBe(true);
     await leave();expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();expect(browser.location.pathname).toBe("/admin/submissions");
   });
   it("keeps another row's unsent note when a submitted row completes and the next list omits both", async()=>{
     let reads=0;let posts=0;
-    vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{if(init?.method==="POST"){posts++;return json({decision:{submissionId:"review-1",decision:"rejected"}});}return ++reads===1 ? queue([{id:"review-1",title:"One",status:"review_pending"},{id:"review-2",title:"Two",status:"review_pending"}]) : queue([]);});
+    vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{if(init?.method==="POST"){posts++;return json({decision:{submissionId:"review-1",decision:"rejected"}});}return ++reads===1 ? queue([{id:"review-1",title:"One",submitterId:"member-1",status:"review_pending"},{id:"review-2",title:"Two",submitterId:"member-2",status:"review_pending"}]) : queue([]);});
     await mount();const rejects=[...container.querySelectorAll("button")].filter(b=>b.textContent==="Reject");await act(async()=>rejects[1]!.click());await typeNote("Other row note");await decide();
     expect(posts).toBe(1);expect(unload()).toBe(true);await leave();expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();
   });
@@ -264,7 +264,7 @@ describe("review queue leave ownership", () => {
   });
 });
 function json(value:unknown) {return new Response(JSON.stringify(value),{headers:{"content-type":"application/json"}});}
-function queue(items=[{id:"review-1",title:"Review",status:"review_pending"}]) {return json({items,pagination:{page:1,pageSize:20,total:items.length,totalPages:items.length ? 1 : 0}});}
+function queue(items=[{id:"review-1",title:"Review",submitterId:"member-1",status:"review_pending"}]) {return json({items,pagination:{page:1,pageSize:20,total:items.length,totalPages:items.length ? 1 : 0}});}
 function preview(status:string,id="review-1") {return json({preview:{submissionId:id,title:"Review",status,requestedSpaceId:"default"}});}
 function deferred<T>() {let resolve!:(value:T)=>void; const promise=new Promise<T>(r=>{resolve=r;}); return {promise,resolve};}
 async function flush() {await act(async()=>{await new Promise(r=>setTimeout(r,0));});}

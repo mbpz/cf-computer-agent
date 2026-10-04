@@ -18,7 +18,7 @@ function page(metric: Metric, total: number) {
   return Response.json({
     items: Array.from({ length: Math.min(total, 20) }, (_, i) => metric === "assets"
       ? { asset: { id: `asset-${i}`, originalName: `asset-${i}.txt` }, job: { status: "succeeded" } }
-      : { id: `${metric}-${i}`, title: "Review item", email: "member@app.test", status: metric === "pending" ? "review_pending" : "active" }),
+      : { id: `${metric}-${i}`, title: "Review item", email: "member@app.test", ...(metric === "pending" ? { submitterId: "member-1" } : {}), status: metric === "pending" ? "review_pending" : "active" }),
     pagination: { page: 1, pageSize: 20, total, totalPages: Math.ceil(total / 20) },
   });
 }

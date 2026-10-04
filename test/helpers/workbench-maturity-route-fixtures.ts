@@ -222,7 +222,7 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
     case "settings":
       return null;
     case "admin":
-      if (pathname(path) === "/api/admin/submissions") return probeResponse(state, numbered([]), numbered([{ id: "dashboard-pending", title: "Pending", status: "review_pending" }]));
+      if (pathname(path) === "/api/admin/submissions") return probeResponse(state, numbered([]), numbered([{ id: "dashboard-pending", title: "Pending", submitterId: "member-route-audit", status: "review_pending" }]));
       if (pathname(path) === "/api/admin/assets") return probeResponse(state, numbered([]), numbered([{ asset: { id: "dashboard-asset", originalName: "asset.txt" }, job: { status: "succeeded" } }]));
       if (pathname(path) === "/api/admin/members") return probeResponse(state, numbered([]), numbered([{ id: "dashboard-member", email: "member@app.test", role: "contributor", status: "active" }]));
       return null;
