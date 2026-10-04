@@ -9,5 +9,17 @@ export type AdminAssetsPage = FrontendNumberedPage<AdminAsset>;
 export async function loadAdminAssets({ page, pageSize, status, requester = fetch, signal }: LoadAdminAssetsInput & { requester?: Fetcher }): Promise<AdminAssetsPage> { const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) }); if (status) params.set("status", status); return normalizeNumberedPage(await apiFetch(`/api/admin/assets?${params}`, { requester, signal }), normalize); }
 export async function retryAdminAsset(id: string, requester: Fetcher = fetch): Promise<void> { await apiFetch(`/api/admin/assets/${encodeURIComponent(id)}/retry`, { requester, method: "POST" }); }
 export async function loadAdminAssetPreview(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<AssetPreviewModel> { const data = await apiFetch<unknown>(`/api/admin/assets/${encodeURIComponent(id)}/preview`, { requester, signal }); const preview = assetPreviewModel(data); if (!preview || preview.assetId !== id) throw new Error("ASSET_PREVIEW_INVALID"); return preview; }
-function normalize(value: unknown): AdminAsset { if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("ASSET_RESPONSE_INVALID"); const record = value as Record<string, unknown>; const asset = record.asset; const job = record.job; if (!asset || typeof asset !== "object" || Array.isArray(asset) || !job || typeof job !== "object" || Array.isArray(job)) throw new Error("ASSET_RESPONSE_INVALID"); const a = asset as Record<string, unknown>; const j = job as Record<string, unknown>; if (typeof a.id !== "string" || !a.id) throw new Error("ASSET_RESPONSE_INVALID"); return { id: a.id, name: typeof a.originalName === "string" ? a.originalName : undefined, status: typeof j.status === "string" ? j.status : undefined, warnings: [] }; }
+const ASSET_STATUSES = new Set(["queued", "processing", "succeeded", "failed_retryable", "failed_terminal"]);
+function normalize(value: unknown): AdminAsset {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("ASSET_RESPONSE_INVALID");
+  const record = value as Record<string, unknown>;
+  const asset = record.asset;
+  const job = record.job;
+  if (!asset || typeof asset !== "object" || Array.isArray(asset) || !job || typeof job !== "object" || Array.isArray(job)) throw new Error("ASSET_RESPONSE_INVALID");
+  const a = asset as Record<string, unknown>;
+  const j = job as Record<string, unknown>;
+  const status = j.status;
+  if (typeof a.id !== "string" || !a.id || typeof a.originalName !== "string" || a.originalName.length === 0 || typeof status !== "string" || !ASSET_STATUSES.has(status)) throw new Error("ASSET_RESPONSE_INVALID");
+  return { id: a.id, name: a.originalName, status, warnings: [] };
+}
 export function createAdminAssetsRequestController(requester: Fetcher = fetch) { return createNumberedRequestController((input: Omit<LoadAdminAssetsInput, "signal">, signal) => loadAdminAssets({ ...input, requester, signal })); }
