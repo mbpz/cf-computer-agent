@@ -54,7 +54,7 @@ Files: modify `frontend/pages/tasks/task-editor.tsx`, `frontend/lib/i18n.ts`; te
 Files: shared location/history adapter, its tests, App subscription consumers where necessary, native evidence report.
 
 - [x] Verify official browser history/navigation semantics and supported runtime capabilities; record compatibility evidence before choosing adapter details.
-- [ ] Write RED covering accepted-position subscription, back/forward cancel/confirm, repeated traversal, unknown entries, reload/session boundaries and event deduplication.
+- [x] Write RED covering accepted-position subscription, back/forward cancel/confirm, repeated traversal, unknown entries, reload/session boundaries and event deduplication. Historical RED and supplemental local regression/mutation coverage reconciled on 2026-10-10; see `docs/product/navigation-history-local-matrix-evidence.md`. This does not close native acceptance.
 - [x] Implement traversal admission using verified entry identity/position; never infer unknown deltas, never silently accept dirty traversal.
 - [x] Re-run all navigation, shell, task/inbox/editor, notifications/messages, query pagination tests; typecheck, build:ui, test:i18n, verify:i18n and checklist audit.
 - [ ] Obtain actual native history/refresh/keyboard evidence or leave that gate explicitly open; update product checklist only to proven scope.
@@ -284,3 +284,8 @@ TaskEditor 意图可序列化、可只读核对并跨刷新恢复；TasksRoute �
 ### 任务列表快捷写入续行（基线c9b5abc）
 
 TasksRoute 列表写入进行中/未知时注册共享离页守卫（仅锁定期间），本页查询以同步 owned 标记放行；未知结果仅核对或同意图重试解锁。见 `docs/product/navigation-task-list-write-recovery-evidence.md`。Task 4 整体及原生门禁仍开放。
+
+
+## 2026-10-10 Task 4 本地覆盖收尾
+
+基线 `a2cd2234`：历史 RED 与当前测试逐项核对后关闭本地覆盖子项；新增 12 项方向/决策/完成时序回归，三种临时故障注入分别检测出身份、未获准位置和重复发布错误。恢复生产源码后导航 112/112、扩大 64 文件 1282/1282；类型/UI/双语/静态审计通过。详见 `docs/product/navigation-history-local-matrix-evidence.md`。新增测试初跑即绿，不伪称新产品缺陷 RED；Task 4 整体、原生门禁及 A05 仍开放。本地测试与证据允许原子提交，最终整体提交项仍待全部原生边界完成。

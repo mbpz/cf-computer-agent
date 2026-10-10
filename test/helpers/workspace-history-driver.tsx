@@ -35,8 +35,9 @@ export function installWorkspaceHistoryDriver(owner: Window & typeof globalThis,
   vi.spyOn(owner.history, "go").mockImplementation(delta => {
     requests.push({ index: position + (delta ?? 0), resolve() {}, reject() {} });
   });
-  function arrive(index: number) {
+  function arrive(index: number, emitEvents = true) {
     position = index; const entry = entries[index]; replace(entry.state, "", entry.url);
+    if (!emitEvents) return;
     if (native) changed.dispatchEvent(new owner.Event("currententrychange"));
     owner.dispatchEvent(new owner.PopStateEvent("popstate", { state: entry.state }));
   }

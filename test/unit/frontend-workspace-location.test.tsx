@@ -269,4 +269,86 @@ describe("workspace explicit navigation admission", () => {
     } finally { current.dispose(); }
   });
 
+  describe.each([true, false])("browser boundary matrix (native=%s)", native => {
+    it.each([
+      ["back", 1, "cancel"], ["back", 1, "accept"],
+      ["forward", 3, "cancel"], ["forward", 3, "accept"],
+    ] as const)("%s to index %s with %s consent publishes only the accepted entry", (_direction, target, answer) => {
+      const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis, native);
+      writeWorkspaceHistory("push", "/inbox");
+      writeWorkspaceHistory("push", "/tasks?page=2");
+      writeWorkspaceHistory("push", "/calendar");
+      driver.arrive(2);
+      const guard = dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
+      driver.arrive(target);
+      expect(readWorkspaceLocation()).toMatchObject({ pathname: "/tasks", search: "?page=2" });
+      expect(changed).not.toHaveBeenCalled();
+      expect(driver.requests.map(request => request.index)).toEqual([2]);
+      driver.arrive(2);
+      const decision = guard.decision;
+      decision[answer](); decision[answer]();
+      expect(changed).not.toHaveBeenCalled();
+      if (answer === "accept") {
+        expect(driver.requests.map(request => request.index)).toEqual([2, target]);
+        driver.arrive(target); driver.arrive(target);
+        browser.dispatchEvent(new browser.Event("hashchange"));
+        expect(readWorkspaceLocation().pathname).toBe(target === 1 ? "/inbox" : "/calendar");
+        expect(changed).toHaveBeenCalledOnce();
+      } else {
+        driver.arrive(2); browser.dispatchEvent(new browser.Event("hashchange"));
+        expect(driver.requests.map(request => request.index)).toEqual([2]);
+        expect(readWorkspaceLocation().pathname).toBe("/tasks");
+        expect(changed).not.toHaveBeenCalled();
+      }
+    });
+
+    it("invalidates consent if a second traversal arrives while the prompt is open", () => {
+      const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis, native);
+      writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+      const guard = dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
+      driver.arrive(1); driver.arrive(2);
+      const stale = guard.decision;
+      driver.arrive(0); stale.accept();
+      expect(driver.requests.map(request => request.index)).toEqual([2, 2]);
+      driver.arrive(2); stale.accept();
+      expect(changed).not.toHaveBeenCalled();
+      expect(readWorkspaceLocation().pathname).toBe("/tasks");
+      expect(guard.dismiss).toHaveBeenCalledOnce();
+      guard.unregister();
+      expect(writeWorkspaceHistory("push", "/calendar")).toBe("committed");
+    });
+  });
+
+  it("native finished can reconcile a verified arrival without events and deduplicates later events", async () => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    const guard = dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
+    driver.arrive(1);
+    driver.arrive(2, false); driver.requests[0].resolve();
+    await Promise.resolve(); await Promise.resolve();
+    expect(changed).not.toHaveBeenCalled();
+    guard.decision.accept();
+    expect(driver.requests).toHaveLength(2);
+    driver.arrive(1, false);
+    expect(readWorkspaceLocation().pathname).toBe("/tasks");
+    driver.requests[1].resolve();
+    await Promise.resolve(); await Promise.resolve();
+    expect(readWorkspaceLocation().pathname).toBe("/inbox");
+    expect(changed).toHaveBeenCalledOnce();
+    driver.arrive(1); browser.dispatchEvent(new browser.Event("hashchange"));
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it("native finished at the wrong identity cannot unlock or publish an unconfirmed location", async () => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
+    driver.arrive(1); driver.requests[0].resolve();
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    expect(readWorkspaceHistoryFault()).toBe("restore-failed");
+    expect(readWorkspaceLocation().pathname).toBe("/tasks");
+    expect(writeWorkspaceHistory("push", "/calendar")).toBe("blocked");
+    expect(changed).not.toHaveBeenCalled();
+  });
+
 });
