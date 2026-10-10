@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetTitle } from "../../components/ui/sheet";
 import { Input } from "../../components/ui/input";
 import { ApiRequestError } from "../../lib/api";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
-import { loadDependencies, loadSubtasks, loadTaskDetail, type TaskDependency, type TaskDetail, type TaskItem, type TaskSubtask } from "../../lib/tasks-data";
+import { loadDependencies, loadSubtasks, loadTaskDetail, nextSubtaskPosition, type TaskDependency, type TaskDetail, type TaskItem, type TaskSubtask } from "../../lib/tasks-data";
 import { clearTaskEditorDraft, loadTaskEditorDraft, persistTaskEditorDraft, type TaskEditorDraft } from "../../lib/task-editor-draft";
 import { checkTaskWrite, clearTaskWrite, runTaskWrite, saveTaskWrite, type TaskWriteIntent } from "../../lib/task-write-intent";
 import { registerWorkspaceLeaveGuard, WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
@@ -299,7 +299,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
           <Button type="submit" disabled={locked || detail.links.length >= 5}>{t("TASKS_LINK_ADD")}</Button>
         </form>
         <ul className="space-y-2">{detail.links.map((link) => <li key={link.id} className="break-words rounded border p-2"><p>{link.knowledgeTitle ?? t("TASKS_LINK_UNAVAILABLE")}</p><p className="text-xs text-muted-foreground">{link.knowledgeItemId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_LINK_REMOVE")}: ${link.id}`} onClick={() => void perform({ op: { op: "unlink", taskId, linkId: link.id, expectedUpdatedAt: detail.task.updatedAt } })}>{t("TASKS_LINK_REMOVE")}</Button></li>)}</ul>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); if (locked || !title || [...title].length > 240 || /[\u0000-\u001f\u007f-\u009f]/u.test(title)) { setError(true); return; } void perform({ clean: ["subtaskTitle"], op: { op: "subtask-create", taskId, subtaskId: crypto.randomUUID(), title, status: "todo", position: subtasks.length } }); }}>
+        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); const position = nextSubtaskPosition(subtasks); if (locked || position === null || !title || [...title].length > 240 || /[\u0000-\u001f\u007f-\u009f]/u.test(title)) { setError(true); return; } void perform({ clean: ["subtaskTitle"], op: { op: "subtask-create", taskId, subtaskId: crypto.randomUUID(), title, status: "todo", position } }); }}>
           <label>{t("TASKS_SUBTASK_TITLE")}<Input aria-label={t("TASKS_SUBTASK_TITLE")} value={subtaskTitle} maxLength={480} disabled={locked} onChange={(event) => edit("subtaskTitle", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SUBTASK_ADD")}</Button>
         </form>

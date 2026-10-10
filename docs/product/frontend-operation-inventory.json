@@ -39925,10 +39925,10 @@
       "tag": "form",
       "attributes": {
         "className": "\"space-y-2 border-t pt-3\"",
-        "onSubmit": "(event) => { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); if (locked || !title || [...title].length > 240 || /[\\u0000-\\u001f\\u007f-\\u009f]/u.test(title)) { setError(true); return; } void perform({ clean: [\"subtaskTitle\"], op: { op: \"subtask-create\", taskId, subtaskId: crypto.randomUUID(), title, status: \"todo\", position: subtasks.length } }); }"
+        "onSubmit": "(event) => { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); const position = nextSubtaskPosition(subtasks); if (locked || position === null || !title || [...title].length > 240 || /[\\u0000-\\u001f\\u007f-\\u009f]/u.test(title)) { setError(true); return; } void perform({ clean: [\"subtaskTitle\"], op: { op: \"subtask-create\", taskId, subtaskId: crypto.randomUUID(), title, status: \"todo\", position } }); }"
       },
       "handlers": {
-        "onSubmit": "(event) => { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); if (locked || !title || [...title].length > 240 || /[\\u0000-\\u001f\\u007f-\\u009f]/u.test(title)) { setError(true); return; } void perform({ clean: [\"subtaskTitle\"], op: { op: \"subtask-create\", taskId, subtaskId: crypto.randomUUID(), title, status: \"todo\", position: subtasks.length } }); }"
+        "onSubmit": "(event) => { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); const position = nextSubtaskPosition(subtasks); if (locked || position === null || !title || [...title].length > 240 || /[\\u0000-\\u001f\\u007f-\\u009f]/u.test(title)) { setError(true); return; } void perform({ clean: [\"subtaskTitle\"], op: { op: \"subtask-create\", taskId, subtaskId: crypto.randomUUID(), title, status: \"todo\", position } }); }"
       },
       "spreads": [],
       "labels": [],

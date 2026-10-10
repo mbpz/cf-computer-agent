@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTask, createTasksRequestController, deleteTask, loadTaskDetail, setTaskStatus, setTaskProgress, updateTask, addTaskLink, removeTaskLink, loadTaskSummary, loadTasks } from "../../frontend/lib/tasks-data";
+import { nextSubtaskPosition, createTask, createTasksRequestController, deleteTask, loadTaskDetail, setTaskStatus, setTaskProgress, updateTask, addTaskLink, removeTaskLink, loadTaskSummary, loadTasks } from "../../frontend/lib/tasks-data";
 import { dueInfo, taskPriorityKey, taskStatusKey } from "../../frontend/pages/tasks/tasks-model";
 
 function fetchJson(payload: unknown, status = 200): typeof fetch {
@@ -127,5 +127,28 @@ describe("tasks model", () => {
     expect(dueInfo("2026-08-27T23:00:00.000Z", "done", today).kind).toBe("none");
     expect(dueInfo(null, "todo", today).kind).toBe("none");
     expect(dueInfo("2026-09-01T00:00:00.000Z", "todo", today).kind).toBe("later");
+  });
+});
+
+describe("subtask position selection", () => {
+  it.each([
+    { positions: [], expected: 0 },
+    { positions: [0, 1], expected: 2 },
+    { positions: [1], expected: 2 },
+    { positions: [8, 2], expected: 9 },
+    { positions: [9999], expected: 10000 },
+    { positions: [10000], expected: 0 },
+    { positions: [10000, 0, 2], expected: 1 },
+  ])("uses a vacant bounded key without renumbering $positions", ({ positions, expected }) => {
+    const subtasks = positions.map((position) => Object.freeze({ position }));
+    expect(nextSubtaskPosition(Object.freeze(subtasks))).toBe(expected);
+    expect(subtasks.map((item) => item.position)).toEqual(positions);
+  });
+
+  it("returns no position only when every API-supported key is occupied", () => {
+    const subtasks = Array.from({ length: 10001 }, (_, position) => ({ position }));
+    expect(nextSubtaskPosition(subtasks)).toBeNull();
+    subtasks.splice(9999, 1);
+    expect(nextSubtaskPosition(subtasks)).toBe(9999);
   });
 });

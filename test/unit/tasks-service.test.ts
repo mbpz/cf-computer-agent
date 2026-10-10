@@ -468,7 +468,8 @@ class FakeTasksRepository implements TasksRepositoryPort {
   async countLinks(memberId: string, taskId: string) { return this.linkCount || [...this.links.values()].filter((link) => link.taskId === taskId).length; }
   async isKnowledgeVisible(memberId: string, knowledgeItemId: string) { return this.visibleKnowledge.has(knowledgeItemId); }
   async insertSubtask(input: { id: string; memberId: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; createdAt: number; updatedAt: number }) {
-    if (this.subtasks.has(input.id)) return false;
+    if (this.subtasks.has(input.id) || !await this.findOwned(input.memberId, input.taskId)
+      || (await this.listSubtasks(input.memberId, input.taskId)).some((item) => item.position === input.position)) return false;
     this.subtasks.set(input.id, { id: input.id, memberId: input.memberId, taskId: input.taskId, title: input.title, status: input.status, position: input.position, createdAt: new Date(input.createdAt).toISOString(), updatedAt: new Date(input.updatedAt).toISOString() });
     return true;
   }
@@ -480,6 +481,7 @@ class FakeTasksRepository implements TasksRepositoryPort {
   async updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }, expectedUpdatedAt?: number) {
     const item = await this.findSubtask(memberId, taskId, id);
     if (!item || (expectedUpdatedAt !== undefined && Date.parse(item.updatedAt) !== expectedUpdatedAt)) return null;
+    if ((await this.listSubtasks(memberId, taskId)).some((other) => other.id !== id && other.position === input.position)) return null;
     Object.assign(item, { title: input.title, status: input.status, position: input.position, updatedAt: new Date(input.updatedAt).toISOString() });
     return item;
   }

@@ -116,7 +116,13 @@ export class TasksService {
     const now = this.now().getTime();
     const created = await this.repository.insertSubtask({ ...normalized, memberId, taskId, createdAt: now, updatedAt: now });
     const subtask = await this.repository.findSubtask(memberId, taskId, normalized.id);
-    if (!subtask) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404, true);
+    if (!subtask) {
+      await this.requireOwned(memberId, taskId);
+      // A position claimed by another writer is a recoverable conflict, not a
+      // missing parent. Only inspect this member's subtasks in this task.
+      if ((await this.repository.listSubtasks(memberId, taskId)).some((item) => item.position === normalized.position)) throw versionConflict();
+      throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404, true);
+    }
     return { subtask, created };
   }
 
@@ -132,7 +138,7 @@ export class TasksService {
     const updatedAt = Math.max(this.now().getTime(), Date.parse(current.updatedAt) + 1);
     const updated = await this.repository.updateSubtask(memberId, taskId, subtaskId, { ...normalized, updatedAt }, expected);
     if (!updated) {
-      if (expected !== undefined && await this.repository.findSubtask(memberId, taskId, subtaskId)) throw versionConflict();
+      if (await this.repository.findSubtask(memberId, taskId, subtaskId)) throw versionConflict();
       throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
     }
     return updated;

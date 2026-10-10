@@ -338,8 +338,8 @@ export class TasksRepository implements TasksRepositoryPort {
   async insertSubtask(input: { id: string; memberId: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; createdAt: number; updatedAt: number }): Promise<boolean> {
     const result = await this.db.prepare(
       `INSERT OR IGNORE INTO task_subtasks (id, member_id, task_id, title, status, position, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(input.id, input.memberId, input.taskId, input.title, input.status, input.position, input.createdAt, input.updatedAt).run();
+       SELECT ?, ?, ?, ?, ?, ?, ?, ? FROM tasks WHERE member_id = ? AND id = ?`,
+    ).bind(input.id, input.memberId, input.taskId, input.title, input.status, input.position, input.createdAt, input.updatedAt, input.memberId, input.taskId).run();
     return result.meta.changes === 1;
   }
 
@@ -364,8 +364,9 @@ export class TasksRepository implements TasksRepositoryPort {
     const condition = expectedUpdatedAt === undefined ? "" : " AND updated_at = ?";
     const result = await this.db.prepare(
       `UPDATE task_subtasks SET title = ?, status = ?, position = ?, updated_at = ?
-       WHERE member_id = ? AND task_id = ? AND id = ?${condition}`,
-    ).bind(input.title, input.status, input.position, input.updatedAt, memberId, taskId, id, ...(expectedUpdatedAt === undefined ? [] : [expectedUpdatedAt])).run();
+       WHERE member_id = ? AND task_id = ? AND id = ?${condition}
+         AND NOT EXISTS (SELECT 1 FROM task_subtasks occupied WHERE occupied.member_id = ? AND occupied.task_id = ? AND occupied.position = ? AND occupied.id <> ?)`,
+    ).bind(input.title, input.status, input.position, input.updatedAt, memberId, taskId, id, ...(expectedUpdatedAt === undefined ? [] : [expectedUpdatedAt]), memberId, taskId, input.position, id).run();
     if (result.meta.changes !== 1) return null;
     return this.findSubtask(memberId, taskId, id);
   }

@@ -21,6 +21,17 @@ export type TaskPage = FrontendNumberedPage<TaskItem>;
 export interface TaskDetail { task: TaskItem; tags: string[]; links: TaskLinkItem[]; }
 export type TaskSubtaskStatus = "todo" | "doing" | "done" | "canceled";
 export interface TaskSubtask { id: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; updatedAt: string; }
+// Positions are stable ordering keys, not array indexes. Prefer appending; at
+// the API bound reuse a vacant key without renumbering any existing subtask.
+export function nextSubtaskPosition(subtasks: readonly Pick<TaskSubtask, "position">[]): number | null {
+  const occupied = new Set(subtasks.map((item) => item.position));
+  let next = 0;
+  for (const position of occupied) next = Math.max(next, position + 1);
+  if (next <= 10000) return next;
+  for (let position = 0; position <= 10000; position++) if (!occupied.has(position)) return position;
+  return null;
+}
+
 export interface TaskDependency { taskId: string; dependsOnTaskId: string; }
 export interface TaskCreateInput { id?: string; title: string; notes?: string; priority?: string; dueAt?: string | null; knowledgeItemId?: string; }
 
