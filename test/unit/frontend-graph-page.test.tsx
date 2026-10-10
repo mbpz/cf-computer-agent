@@ -13,7 +13,7 @@ import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 import { pageKindForPath } from "../../frontend/app-routes";
 import { routeCapability, WORKSPACE_ROUTE_CAPABILITIES } from "../../shared/workspace-route-capabilities";
-import type { GraphSnapshot } from "../../frontend/lib/graph-data";
+import type { GraphQueryInput, GraphSnapshot } from "../../frontend/lib/graph-data";
 
 vi.mock("../../frontend/components/graph/graph-canvas", () => ({
   GraphCanvas: ({ snapshot, fallbackLabel, onSelect }: { snapshot: GraphSnapshot; fallbackLabel?: string; onSelect?: (id: string) => void }) => (
@@ -622,12 +622,12 @@ describe("graph view refresh", () => {
     const key = Object.keys(el).find((name) => name.startsWith("__reactProps$"));
     await act(async () => { (el as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[key!].onChange({ currentTarget: { value } }); });
   }
-  async function render(load = vi.fn(async () => snapshot)) {
+  async function render(load = vi.fn(async (_input: GraphQueryInput) => snapshot)) {
     await act(async () => { root.render(<GraphRoute memberId="member-a" locale={createLocaleRuntime()} load={load} />); });
     await flush();
     return load;
   }
-  async function remount(load = vi.fn(async () => snapshot)) {
+  async function remount(load = vi.fn(async (_input: GraphQueryInput) => snapshot)) {
     act(() => root.unmount());
     root = createRoot(host);
     return render(load);
@@ -824,4 +824,145 @@ it.each([401, 403])("releases the restored lock when the graph read itself denie
   await clickButton("Check exact result"); await flush();
   expect(requester).toHaveBeenCalledTimes(1);
   expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+});
+
+
+describe("graph suggestion request ownership", () => {
+  const suggestions = { suggestions: [{ id: "private-suggestion", kind: "task_to_knowledge", title: "Private old suggestion", rationale: "Private old rationale", sourceNodeIds: ["task:t1"], targetNodeIds: [], citationIds: [], evidenceGap: true, promotionRequired: true }] };
+  const generate = () => clickButton("Generate suggestions");
+
+  it("reserves suggestion generation synchronously against same-event double clicks", async () => {
+    const pending = deferred<Response>();
+    const requester = vi.fn(() => pending.promise);
+    vi.stubGlobal("fetch", requester);
+    await renderMemberGraph();
+    const button = host.querySelector("[data-graph-suggestions] button") as HTMLButtonElement;
+    await act(async () => { button.click(); button.click(); });
+    expect(requester).toHaveBeenCalledTimes(1);
+    await act(async () => pending.resolve(Response.json(suggestions)));
+    await flush();
+    expect(host.textContent).toContain("Private old suggestion");
+  });
+
+  it.each([401, 403])("treats suggestion %i as revocation, not an ordinary panel error", async status => {
+    vi.stubGlobal("fetch", async () => Response.json({}, { status }));
+    await renderMemberGraph(); await generate(); await flush();
+    expect(host.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+    expect(host.querySelector("[data-graph-canvas]")).toBeNull();
+    expect(host.textContent).not.toContain("Draft brief");
+    await clickButton("Try the work graph again"); await flush();
+    expect(host.querySelector("[data-graph-page]")).not.toBeNull();
+    expect(host.querySelector("[data-graph-suggestions] [role=alert]")).toBeNull();
+  });
+
+  it.each(["settled", "pending"] as const)("does not resurrect %s suggestions after graph-read revocation and recovery", async phase => {
+    const pending = deferred<Response>();
+    let signal: AbortSignal | undefined;
+    const requester = vi.fn((_path: unknown, init?: RequestInit) => { signal = init?.signal ?? undefined; return pending.promise; });
+    vi.stubGlobal("fetch", requester);
+    let denied = false;
+    const load = vi.fn(async () => {
+      if (denied) throw new ApiRequestError("FORBIDDEN", "denied", 403, false);
+      return snapshot;
+    });
+    await act(async () => root.render(<GraphRoute memberId="member-a" locale={createLocaleRuntime()} load={load} />));
+    await flush(); await generate();
+    if (phase === "settled") {
+      await act(async () => pending.resolve(Response.json(suggestions))); await flush();
+      expect(host.textContent).toContain("Private old suggestion");
+    }
+    denied = true;
+    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d"); await flush();
+    expect(host.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+    denied = false;
+    await clickButton("Try the work graph again"); await flush();
+    if (phase === "pending") {
+      // The transport deliberately ignores abort: ownership must reject a late success too.
+      await act(async () => pending.resolve(Response.json(suggestions))); await flush();
+    }
+    expect(host.querySelector("[data-graph-page]")).not.toBeNull();
+    expect(host.textContent).not.toContain("Private old suggestion");
+    if (phase === "pending") expect(signal?.aborted).toBe(true);
+    expect(requester).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels suggestions on denied graph actions and ignores their late receipt", async () => {
+    const pending = deferred<Response>();
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", (path: string, init?: RequestInit) => {
+      if (path === "/api/graph/suggestions") { signal = init?.signal ?? undefined; return pending.promise; }
+      return Promise.resolve(Response.json({}, { status: 403 }));
+    });
+    await renderMemberGraph(); await generate();
+    await clickNode("task:t1"); await clickButton("Start focus"); await flush();
+    expect(host.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+    await clickButton("Try the work graph again"); await flush();
+    await act(async () => pending.resolve(Response.json(suggestions))); await flush();
+    expect(host.textContent).not.toContain("Private old suggestion");
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it.each(["success", "denied", "error"] as const)("invalidates an older suggestion %s when the graph scope changes", async outcome => {
+    const pending = deferred<Response>();
+    let signal: AbortSignal | undefined;
+    const requester = vi.fn((_path: unknown, init?: RequestInit) => { signal = init?.signal ?? undefined; return pending.promise; });
+    vi.stubGlobal("fetch", requester);
+    await renderMemberGraph(); await generate();
+    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d"); await flush();
+    await act(async () => pending.resolve(outcome === "success" ? Response.json(suggestions) : Response.json({}, { status: outcome === "denied" ? 403 : 503 })));
+    await flush();
+    expect(host.querySelector("[data-graph-page]")).not.toBeNull();
+    expect(host.textContent).not.toContain("Private old suggestion");
+    expect(host.querySelector("[data-graph-suggestions] [role=alert]")).toBeNull();
+    expect(signal?.aborted).toBe(true);
+    expect(requester).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["success", "denied", "error"] as const)("does not let an old %s release or overwrite the newer request", async outcome => {
+    const old = deferred<Response>();
+    const current = deferred<Response>();
+    const requester = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+    vi.stubGlobal("fetch", requester);
+    await renderMemberGraph(); await generate();
+    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d"); await flush();
+    await generate();
+    await act(async () => old.resolve(outcome === "success" ? Response.json(suggestions) : Response.json({}, { status: outcome === "denied" ? 403 : 503 })));
+    await flush();
+    const button = host.querySelector("[data-graph-suggestions] button") as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(host.textContent).not.toContain("Private old suggestion");
+    expect(host.querySelector("[data-graph-suggestions] [role=alert]")).toBeNull();
+    await act(async () => button.click());
+    expect(requester).toHaveBeenCalledTimes(2);
+    await act(async () => current.resolve(Response.json({ suggestions: [{ ...suggestions.suggestions[0], title: "Current suggestion" }] })));
+    await flush();
+    expect(host.textContent).toContain("Current suggestion");
+    expect(button.disabled).toBe(false);
+  });
+
+  it("aborts suggestion reads on unmount without replaying them on remount", async () => {
+    const pending = deferred<Response>();
+    let signal: AbortSignal | undefined;
+    const requester = vi.fn((_path: unknown, init?: RequestInit) => { signal = init?.signal ?? undefined; return pending.promise; });
+    vi.stubGlobal("fetch", requester);
+    await renderMemberGraph(); await generate();
+    await act(async () => root.render(null));
+    expect(signal?.aborted).toBe(true);
+    await renderMemberGraph();
+    await act(async () => pending.resolve(Response.json(suggestions))); await flush();
+    expect(host.textContent).not.toContain("Private old suggestion");
+    expect(requester).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps ordinary suggestion failure local and retries only on explicit request", async () => {
+    const requester = vi.fn().mockResolvedValueOnce(Response.json({}, { status: 503 })).mockResolvedValueOnce(Response.json(suggestions));
+    vi.stubGlobal("fetch", requester);
+    await renderMemberGraph(); await generate(); await flush();
+    expect(host.querySelector("[data-graph-page]")).not.toBeNull();
+    expect(host.querySelector("[data-graph-suggestions] [role=alert]")).not.toBeNull();
+    expect(requester).toHaveBeenCalledTimes(1);
+    await generate(); await flush();
+    expect(requester).toHaveBeenCalledTimes(2);
+    expect(host.textContent).toContain("Private old suggestion");
+  });
 });

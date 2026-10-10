@@ -280,16 +280,25 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
   const [retry, setRetry] = useState(0);
   const readGeneration = useRef(0);
   const readController = useRef<AbortController | null>(null);
+  const suggestionController = useRef<AbortController | null>(null);
+  const cancelSuggestions = useCallback(() => {
+    suggestionController.current?.abort();
+    suggestionController.current = null;
+  }, []);
   const denyRead = useCallback(() => {
     readGeneration.current++;
     readController.current?.abort();
+    cancelSuggestions();
+    setSuggestionsState({ kind: "idle" });
     setState({ kind: "forbidden" });
-  }, []);
+  }, [cancelSuggestions]);
   useEffect(() => {
     const controller = new AbortController();
     readController.current = controller;
     const generation = ++readGeneration.current;
     const live = () => generation === readGeneration.current && !controller.signal.aborted;
+    cancelSuggestions();
+    setSuggestionsState({ kind: "idle" });
     setState({ kind: "loading" });
     const input: GraphQueryInput = { scope: "workspace" };
     if (lens === "knowledge") input.scope = "knowledge";
@@ -305,13 +314,15 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
       setState(snapshot.nodes.length === 0 ? { kind: "empty" } : snapshot.truncated ? { kind: "truncated", snapshot } : { kind: "ready", snapshot });
     }).catch((error: unknown) => {
       if (!live()) return;
-      setState(error instanceof ApiRequestError && (error.status === 401 || error.status === 403) ? { kind: "forbidden" } : { kind: "error" });
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) denyRead();
+      else setState({ kind: "error" });
     });
     return () => {
       controller.abort();
+      cancelSuggestions();
       if (readController.current === controller) readController.current = null;
     };
-  }, [changeKind, lens, load, retry, temporalRange]);
+  }, [cancelSuggestions, changeKind, denyRead, lens, load, retry, temporalRange]);
   useEffect(() => {
     if (!memberId || viewBlocked) return;
     const saved = persistGraphView(memberId, { query, lens, temporalRange, changeKind });
@@ -319,8 +330,24 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
   }, [query, lens, temporalRange, changeKind, memberId, viewBlocked, locale]);
   const discardView = () => { if (!memberId || !viewBlocked || !discardBlockedGraphView(memberId)) return; setViewBlocked(false); setViewNotice(undefined); };
   const generateSuggestions = () => {
+    if ((state.kind !== "ready" && state.kind !== "truncated") || !readController.current
+      || readController.current.signal.aborted || suggestionController.current) return;
+    const controller = new AbortController();
+    const generation = readGeneration.current;
+    // Reserve synchronously; disabled button state alone cannot stop same-event clicks.
+    suggestionController.current = controller;
+    const live = () => suggestionController.current === controller
+      && generation === readGeneration.current && !controller.signal.aborted;
     setSuggestionsState({ kind: "loading" });
-    void loadGraphSuggestions(fetch).then((result) => setSuggestionsState({ kind: "idle", result })).catch(() => setSuggestionsState({ kind: "error" }));
+    void loadGraphSuggestions(fetch, controller.signal).then((result) => {
+      if (live()) setSuggestionsState({ kind: "idle", result });
+    }).catch((error: unknown) => {
+      if (!live()) return;
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) denyRead();
+      else setSuggestionsState({ kind: "error" });
+    }).finally(() => {
+      if (suggestionController.current === controller) suggestionController.current = null;
+    });
   };
   return <GraphPage memberId={memberId} locale={locale} state={state} onDenied={denyRead} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} viewBlocked={viewBlocked} viewNotice={viewNotice} onDiscardView={discardView} />;
 }
