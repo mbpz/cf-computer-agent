@@ -190,7 +190,9 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
       const rejected = !retry && cause instanceof ApiRequestError && cause.status >= 400 && cause.status < 500 && cause.status !== 408 && cause.status !== 429;
       const cleared = rejected && unrecord(next.op);
       if (!active.current) return;
-      if (cleared && denied(cause)) return;
+      // Revoked access clears private UI even on a replay. Its uncertain original
+      // intent remains persisted unless this was a definite first-attempt rejection.
+      if (denied(cause)) return;
       conflicted = cleared && cause instanceof ApiRequestError && cause.status === 409;
       if (conflicted) { intent.current = null; setUnknown(false); setNotice("TASKS_WRITE_CONFLICT"); }
       else if (cleared) { intent.current = null; setUnknown(false); setError(true); }

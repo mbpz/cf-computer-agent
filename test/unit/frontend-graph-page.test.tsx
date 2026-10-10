@@ -703,3 +703,36 @@ async function change(control: HTMLSelectElement, value: string) {
 async function flush() {
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); });
 }
+
+
+it.each([409, 500])("handles first task capacity response %s without confusing a server failure with rejection", async status => {
+  const graph: GraphSnapshot = { ...snapshot, nodes: [{ id: "knowledge:knowledge-1", kind: "knowledge", label: "Capacity knowledge", status: null, href: "/knowledge/knowledge-1", metadata: {} }], edges: [] };
+  vi.stubGlobal("fetch", async () => Response.json({ error: { code: "TASK_LIMIT_REACHED", message: "Capacity reached", retryable: status >= 500 } }, { status }));
+  await renderMemberGraph(graph); await clickNode("knowledge:knowledge-1");
+  await clickButton("Create task"); await flush();
+  expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a") === null).toBe(status === 409);
+  expect(host.querySelector("[data-graph-action-unconfirmed]") === null).toBe(status === 409);
+  await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe(status === 409 ? "committed" : "blocked"); });
+});
+
+it("preserves an unknown task creation when same-key replay reaches capacity", async () => {
+  const graph: GraphSnapshot = { ...snapshot, nodes: [{ id: "knowledge:knowledge-1", kind: "knowledge", label: "Capacity knowledge", status: null, href: "/knowledge/knowledge-1", metadata: {} }], edges: [] };
+  const bodies: string[] = [];
+  vi.stubGlobal("fetch", async (_path: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      bodies.push(String(init.body));
+      if (bodies.length === 1) throw new TypeError("Lost response");
+      return Response.json({ error: { code: "TASK_LIMIT_REACHED", message: "Capacity reached", retryable: false } }, { status: 409 });
+    }
+    return Response.json({ error: { code: "TASK_NOT_FOUND", message: "Missing", retryable: false } }, { status: 404 });
+  });
+  await renderMemberGraph(graph); await clickNode("knowledge:knowledge-1");
+  await clickButton("Create task"); await flush();
+  const original = browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a");
+  await clickButton("Retry action"); await flush();
+  expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]);
+  await clickButton("Check exact result"); await flush();
+  expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBe(original);
+  expect(host.querySelector("[data-graph-action-unconfirmed]")).not.toBeNull();
+  expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+});

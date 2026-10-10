@@ -6,10 +6,14 @@ import { forceRemountAppAt, mountApp, waitForApp, type MountedApp } from "../hel
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const version = "2026-09-28T00:00:00.000Z", next = "2026-09-28T00:00:00.001Z";
+const taskKey = "memory-garden:task-write:v1:alice";
+const taskIntent = { op: "subtask-create", taskId: "task-1", subtaskId: "child-1", title: "Pending child", status: "todo", position: 7 };
+const taskMarker = JSON.stringify({ version: 1, memberId: "alice", intent: taskIntent });
 const key = "memory-garden:planning-write:v1:alice:INBOX";
 const marker = JSON.stringify({ version: 1, memberId: "alice", module: "INBOX", record: { token: "request-1", id: "row", expectedUpdatedAt: version } });
 describe("inbox promotion recovery through App", () => {
   let app: MountedApp | undefined; let calls: string[] = []; let bodies: unknown[] = [];
+  let taskBodies: unknown[] = []; let subtaskRows: unknown[] = []; let taskWriteStatus = 503;
   let writeStatus = 200, detailStatus = 200, listStatus = 200; let wrongId = false, staleReceipt = false, malformedDetail = false; let detailVersion: string | undefined;
   let status = "inbox", updatedAt = version; let delay = false; let resolveWrite: (() => void) | undefined;
   const row = () => ({ id: "row", clientKey: "key", kind: "text", content: "Private row", sourceUrl: null, status, promotedTaskId: status === "promoted" ? "task-1" : null, promotedSubmissionId: null, createdAt: version, updatedAt });
@@ -23,16 +27,21 @@ describe("inbox promotion recovery through App", () => {
     await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
   };
   const navigate = async (path: string) => { await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("committed"); }); };
-  async function mount(raw: string | null = null, member = "alice") {
+  async function mount(raw: string | null = null, member = "alice", taskRaw: string | null = null) {
     app = await mountApp({ url: "https://app.test/inbox?page=2&status=inbox", configureBrowser(browser) {
       vi.stubGlobal("HTMLElement", browser.HTMLElement);
       if (raw !== null) browser.sessionStorage.setItem(key, raw);
+      if (taskRaw !== null) browser.sessionStorage.setItem(taskKey, taskRaw);
     }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"), path = url.pathname;
       if (path === "/api/session") return Response.json({ member: { id: member, email: `${member}@app.test`, role: "contributor" }, capabilities: ["knowledge:read", "submission:create", "submission:read-own"], permissionMask: "0x100000", logoutUrl: "/auth/logout" });
       if (path === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (path === "/api/telemetry/pageview") return new Response(null, { status: 204 });
-      if (path === "/api/tasks/task-1/subtasks" || path === "/api/tasks/task-1/dependencies") return Response.json([]);
+      if (path === "/api/tasks/task-1/subtasks" && init?.method === "POST") {
+        taskBodies.push(JSON.parse(String(init.body)));
+        return apiError(taskWriteStatus, taskWriteStatus === 409 ? "SUBTASK_POSITION_CONFLICT" : "UNAVAILABLE", taskWriteStatus >= 500);
+      }
+      if (path === "/api/tasks/task-1/subtasks" || path === "/api/tasks/task-1/dependencies") return detailStatus !== 200 ? apiError(detailStatus, "UNAVAILABLE", detailStatus >= 500) : Response.json(path.endsWith("/subtasks") ? subtaskRows : []);
       if (path === "/api/tasks/task-1") {
         calls.push(`GET ${path}`);
         if (detailStatus !== 200) return apiError(detailStatus, "TASK_NOT_FOUND");
@@ -56,9 +65,9 @@ describe("inbox promotion recovery through App", () => {
       if (listStatus !== 200) return apiError(listStatus, "UNAVAILABLE", listStatus >= 500);
       const matches = !url.searchParams.has("status") || url.searchParams.get("status") === status;
       return Response.json({ items: matches ? [row()] : [], pagination: { page: Number(url.searchParams.get("page") ?? 1), pageSize: 20, total: matches ? 21 : 20, totalPages: matches ? 2 : 1 } });
-    } }); await waitForApp(() => !!action());
+    } }); await waitForApp(() => listStatus === 200 ? !!action() : main().textContent!.includes("Unable to load"));
   }
-  afterEach(async () => { await app?.unmount(); app = undefined; calls = []; bodies = []; writeStatus = detailStatus = listStatus = 200; wrongId = staleReceipt = malformedDetail = delay = false; status = "inbox"; updatedAt = version; resolveWrite = undefined; detailVersion = undefined; });
+  afterEach(async () => { await app?.unmount(); app = undefined; calls = []; bodies = []; taskBodies = []; subtaskRows = []; taskWriteStatus = 503; writeStatus = detailStatus = listStatus = 200; wrongId = staleReceipt = malformedDetail = delay = false; status = "inbox"; updatedAt = version; resolveWrite = undefined; detailVersion = undefined; });
   it("query navigation invalidates an unsubmitted decision without a marker", async () => {
     await mount(); await click(action()); const stale = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await navigate("/inbox?page=2"); await waitForApp(() => !!action()); await click(stale);
@@ -141,6 +150,106 @@ describe("inbox promotion recovery through App", () => {
   it("blocks writes when session recovery storage is unavailable", async () => {
     await mount(); vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
     await confirmAction(); expect(bodies).toHaveLength(0); expect(action().disabled).toBe(true);
+  });
+
+  const unknownTask = () => app!.container.querySelector("[data-task-write-unknown]");
+  const taskButton = (label: string) => [...app!.browser.document.querySelectorAll("button")].find(button => button.textContent === label) as unknown as HTMLButtonElement;
+  it("restores an actual uncertain subtask write after refresh without automatically replaying", async () => {
+    await mount(); await confirmAction(); await waitForApp(() => !app!.browser.sessionStorage.getItem(key));
+    await navigate("/inbox?page=2&status=promoted"); await waitForApp(() => !!open()); await click(open()!);
+    await waitForApp(() => !!app!.browser.document.querySelector('[aria-label="Subtask title"]'));
+    const input = app!.browser.document.querySelector('[aria-label="Subtask title"]') as unknown as HTMLInputElement;
+    const propsKey = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
+    await act(async () => { input.value = "Pending child"; (input as any)[propsKey].onChange({ currentTarget: input }); });
+    await click(taskButton("Add subtask")); await waitForApp(() => !!unknownTask());
+    const original = app!.browser.sessionStorage.getItem(taskKey);
+    expect(original).toContain("Pending child"); expect(taskBodies).toHaveLength(1);
+    await forceRemountAppAt(app!, "/inbox?page=2&status=promoted");
+    await waitForApp(() => !!unknownTask());
+    expect(taskBodies).toHaveLength(1); expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(original);
+    taskWriteStatus = 409;
+    await click(taskButton("Retry same operation")); await waitForApp(() => taskBodies.length === 2);
+    expect(taskBodies[1]).toEqual(taskBodies[0]); expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(original);
+    expect(unknownTask()).not.toBeNull();
+  });
+  it("recovers a pending task outside the current Inbox filter using a read-only result check", async () => {
+    await mount(null, "alice", taskMarker); await waitForApp(() => !!unknownTask());
+    expect(taskBodies).toHaveLength(0); expect(open()).toBeUndefined();
+    await click(taskButton("Check the result"));
+    await waitForApp(() => !app!.browser.sessionStorage.getItem(taskKey));
+    expect(taskBodies).toHaveLength(0); expect(unknownTask()).toBeNull();
+  });
+  it("does not restore another member's task operation", async () => {
+    await mount(null, "bob", taskMarker);
+    expect(unknownTask()).toBeNull(); expect(calls).not.toContain("GET /api/tasks/task-1");
+    expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(taskMarker); expect(taskBodies).toHaveLength(0);
+  });
+  it.each([401, 403])("does not open pending private task content when Inbox access is denied with %s", async code => {
+    listStatus = code; await mount(null, "alice", taskMarker);
+    await waitForApp(() => main().textContent!.includes("Unable to load"));
+    expect(unknownTask()).toBeNull(); expect(calls).not.toContain("GET /api/tasks/task-1");
+    expect(app!.browser.document.body.textContent).not.toContain("Pending child");
+    expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(taskMarker); expect(taskBodies).toHaveLength(0);
+  });
+  it.each([401, 403])("clears the restored editor when its exact task check loses permission with %s", async code => {
+    await mount(null, "alice", taskMarker); await waitForApp(() => !!unknownTask());
+    await waitForApp(() => [...app!.browser.document.querySelectorAll("input")].some(node => node.value === "Target task"));
+    detailStatus = code; await click(taskButton("Check the result"));
+    await waitForApp(() => main().textContent!.includes("Unable to load"));
+    expect(unknownTask()).toBeNull(); expect(app!.browser.document.body.textContent).not.toContain("Private row");
+    expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(taskMarker); expect(taskBodies).toHaveLength(0);
+  });
+  it("exposes a corrupt task operation record for explicit discard rather than silently losing it", async () => {
+    await mount(null, "alice", "broken-record");
+    await waitForApp(() => !!app!.container.querySelector("[data-task-write-record-blocked]"));
+    expect(app!.browser.sessionStorage.getItem(taskKey)).toBe("broken-record"); expect(taskBodies).toHaveLength(0);
+    const discard = app!.container.querySelector<HTMLButtonElement>("[data-task-write-record-blocked] button")!;
+    await click(discard); expect(app!.browser.sessionStorage.getItem(taskKey)).toBeNull();
+    expect(app!.container.querySelector("[data-task-write-record-blocked]")).toBeNull();
+  });
+
+  it.each([401, 403])("clears private UI without forgetting the unknown operation when replay is denied with %s", async code => {
+    await mount(null, "alice", taskMarker); await waitForApp(() => !!unknownTask());
+    taskWriteStatus = code; await click(taskButton("Retry same operation"));
+    await waitForApp(() => main().textContent!.includes("Unable to load"));
+    expect(unknownTask()).toBeNull(); expect(main().textContent).not.toContain("Private row");
+    expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(taskMarker);
+    expect(taskBodies).toEqual([{ id: "child-1", title: "Pending child", status: "todo", position: 7 }]);
+    await navigate("/unknown");
+  });
+
+  it("does not turn a task-page creation marker into an Inbox create-task entry", async () => {
+    const creation = JSON.stringify({ version: 1, memberId: "alice", intent: { op: "create", taskId: "new-task", fields: { title: "Private unsaved task", notes: "", priority: "medium", dueAt: null } } });
+    await mount(null, "alice", creation);
+    expect(unknownTask()).toBeNull();
+    expect(app!.container.querySelector("[data-task-create-recovery] button")).not.toBeNull();
+    expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(creation);
+    expect(taskBodies).toHaveLength(0); expect(calls).not.toContain("GET /api/tasks/task-1");
+    expect(app!.browser.document.body.textContent).not.toContain("Private unsaved task");
+  });
+  it("checks the original subtask ID after response loss without another POST", async () => {
+    await mount(null, "alice", taskMarker); await waitForApp(() => !!unknownTask());
+    subtaskRows = [{ id: "child-1", taskId: "task-1", title: "Pending child", status: "todo", position: 7, updatedAt: next }];
+    await click(taskButton("Check the result"));
+    await waitForApp(() => !app!.browser.sessionStorage.getItem(taskKey));
+    expect(taskBodies).toHaveLength(0); expect(unknownTask()).toBeNull();
+  });
+  it("keeps the recovery lock when a confirmed read cannot remove the original marker", async () => {
+    await mount(null, "alice", taskMarker); await waitForApp(() => !!unknownTask());
+    const remove = vi.spyOn(app!.browser.sessionStorage, "removeItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
+    await click(taskButton("Check the result"));
+    expect(unknownTask()).not.toBeNull(); expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(taskMarker);
+    expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"); expect(taskBodies).toHaveLength(0);
+    remove.mockRestore();
+  });
+
+  it.each([401, 403, 503])("restores the preserved operation only after a failed Inbox read %s is explicitly retried", async code => {
+    listStatus = code; await mount(null, "alice", taskMarker);
+    expect(unknownTask()).toBeNull(); expect(calls).not.toContain("GET /api/tasks/task-1");
+    if (code === 503) expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked");
+    listStatus = 200; await click(taskButton("Try again"));
+    await waitForApp(() => !!unknownTask());
+    expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(taskMarker); expect(taskBodies).toHaveLength(0);
   });
 
 });

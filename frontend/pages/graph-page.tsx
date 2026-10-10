@@ -328,10 +328,10 @@ function filterSnapshot(snapshot: GraphSnapshot, query: string, lens: GraphLens)
 }
 
 // Used only for the first attempt: a replay rejection cannot settle an earlier write.
-// Most 404/409 responses may hide an existing result. FOCUS_ALREADY_OPEN is the
-// explicit exception: FocusService rejects it before inserting any session/calendar row.
+// Most 404/409 responses may hide an existing result. These precise capacity/busy
+// codes are exceptions: the first attempt is rejected before inserting any row.
 function isDefiniteGraphActionRejection(error: unknown): boolean {
   if (!(error instanceof ApiRequestError)) return false;
-  if (error.status === 409 && error.code === "FOCUS_ALREADY_OPEN") return true;
+  if (error.status === 409 && (error.code === "FOCUS_ALREADY_OPEN" || error.code === "TASK_LIMIT_REACHED")) return true;
   return error.status >= 400 && error.status < 500 && error.status !== 404 && error.status !== 408 && error.status !== 409 && error.status !== 429;
 }

@@ -5,6 +5,8 @@
 
 本记录保留原索引的全部 110 个未归属坐标，逐项记录条件与行为；不修改生成器的 root、不删除未归属项，也不把 source ID 当成业务操作编号。坐标会随代码移动变化，只用于审计。原索引仍为 270 文件 / 1165 候选 / 110 未归属。分类结果是人工追溯，不是引入了 110 个新功能。
 
+2026-10-10 收件箱恢复修复后重新审阅：`frontend/app.tsx` 的三个未归属外层坐标与行为均未变；新增的恢复导航、损坏记录丢弃及其提示候选归属 InboxRoute，不计入未归属项。更新该文件指纹；当前生成索引为 270 文件 / 1171 候选 / 110 未归属，不扩大本记录的运行验收结论。
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
@@ -292,7 +294,7 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `96f409ace80fe0586b649c758164166cab407506c69bdf560a48541d4f8edbfb`
+- `frontend/app.tsx`: `8b0bec385ec9eae90c28f56094c721ede809f890f9e23db9590fa5ae16870fc1`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
 - `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
 - `frontend/components/ui/card.tsx`: `bb7f77ce45ee3fec21e25739c61d547900498a0117d3e12101e8932eae204b41`

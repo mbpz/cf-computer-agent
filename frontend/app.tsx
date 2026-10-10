@@ -1471,7 +1471,22 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
   const query = { page, pageSize, status };
   const queryRef = useRef<InboxPageRequest>(query);
   queryRef.current = query;
-  const [taskTarget, setTaskTarget] = useState<string | null>(null);
+  const [storedTaskWrite] = useState(() => memberId ? loadTaskWrite(memberId) : { kind: "empty" as const });
+  const [taskTarget, setTaskTarget] = useState<{ taskId: string; restored?: TaskWriteIntent } | null>(() => storedTaskWrite.kind === "ready" && storedTaskWrite.intent.op !== "create"
+    ? { taskId: storedTaskWrite.intent.taskId, restored: storedTaskWrite.intent } : null);
+  const [taskCreatePending, setTaskCreatePending] = useState<string | null>(() => storedTaskWrite.kind === "ready" && storedTaskWrite.intent.op === "create" ? storedTaskWrite.intent.taskId : null);
+  const [taskRecordBlocked, setTaskRecordBlocked] = useState(storedTaskWrite.kind === "blocked");
+  // Do not display persisted private fields until this Inbox entry has passed its read gate.
+  // Subsequent list refreshes must not tear down an already-open editor or its recovery intent.
+  const [taskAccessReady, setTaskAccessReady] = useState(false);
+  useEffect(() => {
+    if (!taskTarget?.restored || taskAccessReady) return;
+    const owner = window;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: "block" }));
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    owner.addEventListener("beforeunload", warn);
+    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+  }, [taskTarget, taskAccessReady]);
   const [state, setState] = useState<InboxPageState>({ kind: "loading" });
   const [pending, setPending] = useState(true);
   const [captureLocked, setCaptureLocked] = useState(false);
@@ -1504,7 +1519,13 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
   }, [locale]);
   const clearDenied = useCallback((error: unknown) => {
     if (!(error instanceof ApiRequestError) || ![401, 403, 404].includes(error.status)) return false;
-    if (error.status === 401 || error.status === 403) writeRecovery.deny();
+    if (error.status === 401 || error.status === 403) {
+      writeRecovery.deny();
+      // Revoke both entry views and invalidate any list response still in flight.
+      generationRef.current++; controllerRef.current?.abort();
+      pendingRef.current = false; setPending(false);
+      setTaskTarget(null); setTaskAccessReady(false); setTaskCreatePending(null);
+    }
     clearReadFailure(); return true;
   }, [clearReadFailure, writeRecovery.deny]);
   const refresh = useCallback(async (): Promise<boolean> => {
@@ -1515,6 +1536,13 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
       const result = await loadInboxNumbered({ page, pageSize, status }, fetch, controller.signal);
       if (!activeRef.current || generation !== generationRef.current) return false;
       setState({ kind: "ready", items: result.items, pagination: result.pagination });
+      setTaskAccessReady(true);
+      const stored = memberId ? loadTaskWrite(memberId) : { kind: "empty" as const };
+      setTaskRecordBlocked(stored.kind === "blocked");
+      setTaskCreatePending(stored.kind === "ready" && stored.intent.op === "create" ? stored.intent.taskId : null);
+      if (stored.kind === "ready" && stored.intent.op !== "create") setTaskTarget(current => current ?? {
+        taskId: stored.intent.taskId, restored: stored.intent,
+      });
       return true;
     } catch (error: unknown) {
       if (!activeRef.current || generation !== generationRef.current || isAbort(error)) return false;
@@ -1523,7 +1551,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     } finally {
       if (activeRef.current && generation === generationRef.current) { pendingRef.current = false; setPending(false); }
     }
-  }, [page, pageSize, status, invalidate, clearDenied, clearReadFailure]);
+  }, [page, pageSize, status, memberId, invalidate, clearDenied, clearReadFailure]);
   useEffect(() => {
     activeRef.current = true; void refresh();
     return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
@@ -1569,7 +1597,13 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
       if (activeRef.current) setWriting(false);
     }
   };
-  return <><div inert={taskTarget ? true : undefined}><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || writing || captureLocked} refresh={refresh} onDenied={clearDenied} onReadFailure={clearReadFailure} /><InboxPage locale={locale} state={state} pending={pending || writing || captureLocked || writeRecovery.locked} capturePending={pending || writing || writeRecovery.locked} actionError={actionError} status={status}
+  return <><div inert={taskTarget && taskAccessReady ? true : undefined}>{taskRecordBlocked && <Alert variant="destructive" data-task-write-record-blocked="" className="mb-4">
+    <AlertTitle>{frontendText(locale, "TASKS_WRITE_RECORD_BLOCKED")}</AlertTitle>
+    <div className="mt-3"><Button variant="outline" onClick={() => { if (memberId && discardBlockedTaskWrite(memberId)) setTaskRecordBlocked(false); }}>{frontendText(locale, "TASKS_WRITE_RECORD_DISCARD")}</Button></div>
+  </Alert>}{taskCreatePending && taskAccessReady && <Alert data-task-create-recovery="" className="mb-4">
+    <AlertTitle>{frontendText(locale, "TASKS_LIST_WRITE_UNKNOWN").replace("{title}", taskCreatePending)}</AlertTitle>
+    <div className="mt-3"><Button variant="outline" onClick={() => writeWorkspaceHistory("push", "/tasks")}>{frontendText(locale, "NAV_TASKS")}</Button></div>
+  </Alert>}<PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || writing || captureLocked} refresh={refresh} onDenied={clearDenied} onReadFailure={clearReadFailure} /><InboxPage locale={locale} state={state} pending={pending || writing || captureLocked || writeRecovery.locked} capturePending={pending || writing || writeRecovery.locked} actionError={actionError} status={status}
     onRetry={() => setRetryVersion(value => value + 1)}
     createMemberId={memberId}
     onCreateLock={locked => { captureLockedRef.current = locked; setCaptureLocked(locked); }}
@@ -1591,10 +1625,18 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     onCreateDenied={() => { generationRef.current++; controllerRef.current?.abort(); setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }}
     onStatusChange={item => void changeItem(item, "status")}
     onPromoteTask={item => void changeItem(item, "task")}
-    onOpenTask={item => { if (!pendingRef.current && !writingRef.current && !captureLockedRef.current && !writeRecovery.locked && item.promotedTaskId) setTaskTarget(item.promotedTaskId); }}
+    onOpenTask={item => {
+      if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked || taskTarget || !item.promotedTaskId) return;
+      const stored = memberId ? loadTaskWrite(memberId) : { kind: "empty" as const };
+      setTaskRecordBlocked(stored.kind === "blocked");
+      if (stored.kind === "blocked") return;
+      // Inbox opens existing targets only. Recover task creation in its owning Tasks entry.
+      if (stored.kind === "ready" && stored.intent.op === "create") { setTaskCreatePending(stored.intent.taskId); return; }
+      setTaskTarget(stored.kind === "ready" ? { taskId: stored.intent.taskId, restored: stored.intent } : { taskId: item.promotedTaskId });
+    }}
     onPageChange={next => navigate({ ...query, page: next })}
     onPageSizeChange={next => navigate({ ...query, page: 1, pageSize: next })}
-    onFilterChange={next => navigate({ ...query, page: 1, status: next })} /></div>{taskTarget && <TaskEditor key={`${memberId}:${taskTarget}`} taskId={taskTarget} memberId={memberId} locale={locale} onClose={() => setTaskTarget(null)} onChanged={() => setRetryVersion(value => value + 1)} onDenied={error => { if (clearDenied(error)) setTaskTarget(null); }} />}</>;
+    onFilterChange={next => navigate({ ...query, page: 1, status: next })} /></div>{taskTarget && taskAccessReady && <TaskEditor key={`${memberId}:${taskTarget.taskId ?? "new"}`} taskId={taskTarget.taskId} {...(taskTarget.restored ? { restored: taskTarget.restored } : {})} memberId={memberId} locale={locale} onClose={() => setTaskTarget(null)} onChanged={() => setRetryVersion(value => value + 1)} onDenied={error => { if (clearDenied(error)) setTaskTarget(null); }} />}</>;
 }
 
 export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
