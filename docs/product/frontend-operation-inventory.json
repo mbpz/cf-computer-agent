@@ -296,7 +296,10 @@
         "frontend/components/graph/graph-canvas.tsx:271:7",
         "frontend/components/graph/graph-canvas.tsx:298:7",
         "frontend/components/graph/graph-canvas.tsx:330:15",
-        "frontend/components/graph/graph-evidence-panel.tsx:43:277",
+        "frontend/components/graph/graph-evidence-panel.tsx:71:42",
+        "frontend/components/graph/graph-evidence-panel.tsx:72:140",
+        "frontend/components/graph/graph-evidence-panel.tsx:72:206",
+        "frontend/components/graph/graph-evidence-panel.tsx:74:277",
         "frontend/components/graph/graph-inspector.tsx:33:5",
         "frontend/components/graph/graph-inspector.tsx:40:23",
         "frontend/components/graph/graph-inspector.tsx:50:21",
@@ -350,6 +353,7 @@
         "frontend/pages/graph-page.tsx:250:38",
         "frontend/pages/graph-page.tsx:252:9",
         "frontend/pages/graph-page.tsx:254:11",
+        "frontend/pages/graph-page.tsx:262:11",
         "frontend/pages/graph-page.tsx:352:10",
         "frontend/pages/graph-page.tsx:358:269",
         "frontend/pages/graph-page.tsx:360:34"
@@ -8423,10 +8427,126 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/graph/graph-evidence-panel.tsx:43:277",
+      "id": "frontend/components/graph/graph-evidence-panel.tsx:71:42",
       "path": "frontend/components/graph/graph-evidence-panel.tsx",
       "owner": "GraphEvidencePanel",
-      "line": 43,
+      "line": 71,
+      "column": 42,
+      "kind": "jsx",
+      "tag": "aside",
+      "attributes": {
+        "data-graph-evidence-forbidden": "true",
+        "role": "\"alert\"",
+        "className": "\"rounded-lg border bg-card p-5 text-sm\"",
+        "aria-label": "title"
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"GRAPH_FORBIDDEN\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"forbidden\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"idle\"",
+          "source": "if (state.kind === \"idle\") return <aside data-graph-evidence-idle className=\"rounded-lg border bg-card p-5 text-sm text-muted-foreground\" aria-label={title}><p className=\"font-medium text-foreground\">{title}</p><p className=\"mt-2\">{frontendText(locale, \"GRAPH_EVIDENCE_IDLE\")}</p></aside>;"
+        },
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <aside data-graph-evidence-loading className=\"rounded-lg border bg-card p-5 text-sm text-muted-foreground\" aria-label={title}><p className=\"font-medium text-foreground\">{title}</p><p className=\"mt-2\">{frontendText(locale, \"GRAPH_EVIDENCE_LOADING\")}</p></aside>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/graph/graph-evidence-panel.tsx:72:140",
+      "path": "frontend/components/graph/graph-evidence-panel.tsx",
+      "owner": "GraphEvidencePanel",
+      "line": 72,
+      "column": 140,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"GRAPH_EVIDENCE_ERROR\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"error\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"idle\"",
+          "source": "if (state.kind === \"idle\") return <aside data-graph-evidence-idle className=\"rounded-lg border bg-card p-5 text-sm text-muted-foreground\" aria-label={title}><p className=\"font-medium text-foreground\">{title}</p><p className=\"mt-2\">{frontendText(locale, \"GRAPH_EVIDENCE_IDLE\")}</p></aside>;"
+        },
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <aside data-graph-evidence-loading className=\"rounded-lg border bg-card p-5 text-sm text-muted-foreground\" aria-label={title}><p className=\"font-medium text-foreground\">{title}</p><p className=\"mt-2\">{frontendText(locale, \"GRAPH_EVIDENCE_LOADING\")}</p></aside>;"
+        },
+        {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <aside data-graph-evidence-forbidden role=\"alert\" className=\"rounded-lg border bg-card p-5 text-sm\" aria-label={title}>{frontendText(locale, \"GRAPH_FORBIDDEN\")}</aside>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/graph/graph-evidence-panel.tsx:72:206",
+      "path": "frontend/components/graph/graph-evidence-panel.tsx",
+      "owner": "GraphEvidencePanel",
+      "line": 72,
+      "column": 206,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "variant": "\"outline\"",
+        "onClick": "read"
+      },
+      "handlers": {
+        "onClick": "read"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"COMMON_RETRY\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"error\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"idle\"",
+          "source": "if (state.kind === \"idle\") return <aside data-graph-evidence-idle className=\"rounded-lg border bg-card p-5 text-sm text-muted-foreground\" aria-label={title}><p className=\"font-medium text-foreground\">{title}</p><p className=\"mt-2\">{frontendText(locale, \"GRAPH_EVIDENCE_IDLE\")}</p></aside>;"
+        },
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <aside data-graph-evidence-loading className=\"rounded-lg border bg-card p-5 text-sm text-muted-foreground\" aria-label={title}><p className=\"font-medium text-foreground\">{title}</p><p className=\"mt-2\">{frontendText(locale, \"GRAPH_EVIDENCE_LOADING\")}</p></aside>;"
+        },
+        {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <aside data-graph-evidence-forbidden role=\"alert\" className=\"rounded-lg border bg-card p-5 text-sm\" aria-label={title}>{frontendText(locale, \"GRAPH_FORBIDDEN\")}</aside>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/graph/graph-evidence-panel.tsx:74:277",
+      "path": "frontend/components/graph/graph-evidence-panel.tsx",
+      "owner": "GraphEvidencePanel",
+      "line": 74,
       "column": 277,
       "kind": "jsx",
       "tag": "a",
@@ -8455,8 +8575,16 @@
           "source": "if (state.kind === \"loading\") return <aside data-graph-evidence-loading className=\"rounded-lg border bg-card p-5 text-sm text-muted-foreground\" aria-label={title}><p className=\"font-medium text-foreground\">{title}</p><p className=\"mt-2\">{frontendText(locale, \"GRAPH_EVIDENCE_LOADING\")}</p></aside>;"
         },
         {
-          "condition": "state.kind === \"gap\" || state.kind === \"error\"",
-          "source": "if (state.kind === \"gap\" || state.kind === \"error\") return <aside data-graph-evidence-gap className=\"rounded-lg border bg-card p-5 text-sm text-muted-foreground\" aria-label={title}><p className=\"font-medium text-foreground\">{title}</p><p className=\"mt-2\">{frontendText(locale, \"GRAPH_EVIDENCE_GAP\")}</p></aside>;"
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <aside data-graph-evidence-forbidden role=\"alert\" className=\"rounded-lg border bg-card p-5 text-sm\" aria-label={title}>{frontendText(locale, \"GRAPH_FORBIDDEN\")}</aside>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <aside data-graph-evidence-error className=\"rounded-lg border bg-card p-5 text-sm\" aria-label={title}><p role=\"alert\">{frontendText(locale, \"GRAPH_EVIDENCE_ERROR\")}</p><Button variant=\"outline\" onClick={read}>{frontendText(locale, \"COMMON_RETRY\")}</Button></aside>;"
+        },
+        {
+          "condition": "state.kind === \"gap\"",
+          "source": "if (state.kind === \"gap\") return <aside data-graph-evidence-gap className=\"rounded-lg border bg-card p-5 text-sm text-muted-foreground\" aria-label={title}><p className=\"font-medium text-foreground\">{title}</p><p className=\"mt-2\">{frontendText(locale, \"GRAPH_EVIDENCE_GAP\")}</p></aside>;"
         }
       ]
     },
@@ -31732,6 +31860,48 @@
       "handlers": {
         "onClose": "() => setSelectedId(null)",
         "onAction": "selectedNode && (!action || action.node.id === selectedNode.id) ? () => runGraphAction(action ?? undefined) : undefined"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <>{actionRecovery}<section data-graph-page-loading><p className=\"mb-3 text-sm text-muted-foreground\">{frontendText(locale, \"GRAPH_LOADING\")}</p><PageState kind=\"loading\" title={frontendText(locale, \"GRAPH_LOADING\")} /></section></>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <>{actionRecovery}<PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState></>;"
+        },
+        {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"empty\"",
+          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
+        },
+        {
+          "condition": "!filteredSnapshot",
+          "source": "if (!filteredSnapshot) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/graph-page.tsx:262:11",
+      "path": "frontend/pages/graph-page.tsx",
+      "owner": "GraphPage",
+      "line": 262,
+      "column": 11,
+      "kind": "jsx",
+      "tag": "GraphEvidencePanel",
+      "attributes": {
+        "locale": "locale",
+        "citationIds": "selectedNode ? selectedCitationIds : undefined",
+        "onDenied": "onDenied"
+      },
+      "handlers": {
+        "onDenied": "onDenied"
       },
       "spreads": [],
       "labels": [],

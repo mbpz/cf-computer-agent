@@ -966,3 +966,13 @@ describe("graph suggestion request ownership", () => {
     expect(host.textContent).toContain("Private old suggestion");
   });
 });
+
+
+it.each([401, 403])("clears the graph when a selected citation returns %i", async status => {
+  vi.stubGlobal("fetch", async () => Response.json({}, { status }));
+  await renderMemberGraph({ ...snapshot, edges: snapshot.edges.map(edge => ({ ...edge, citationIds: ["c1"] })) });
+  await clickNode("task:t1"); await flush();
+  expect(host.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+  expect(host.querySelector("[data-graph-canvas]")).toBeNull();
+  expect(host.textContent).not.toContain("Draft brief");
+});

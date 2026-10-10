@@ -191,7 +191,8 @@ test("graph suggestions stay member-scoped, read-only, and manually promoted", a
   assert.match(route, /services\.graph\.get\(member\.memberId/u);
   assert.match(route, /services\.suggestions\.suggest\(snapshot\)/u);
   assert.doesNotMatch(route, /method === "POST"/u);
-  assert.match(page, /loadGraphSuggestions\(fetch\)/u);
+  // The request must stay cancelable when its graph scope is replaced or denied.
+  assert.match(page, /loadGraphSuggestions\(fetch, controller\.signal\)/u);
   assert.match(data, /promotionRequired/u);
   assert.doesNotMatch(page, /promoteSuggestion|POST.*graph\/suggestions/u);
 });

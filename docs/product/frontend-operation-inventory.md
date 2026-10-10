@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：270；操作/转发候选：1171。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：270；操作/转发候选：1175。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -34,7 +34,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/focus-task-picker.tsx | 9 |
 | frontend/components/goal-tasks-editor.tsx | 9 |
 | frontend/components/graph/graph-canvas.tsx | 6 |
-| frontend/components/graph/graph-evidence-panel.tsx | 1 |
+| frontend/components/graph/graph-evidence-panel.tsx | 4 |
 | frontend/components/graph/graph-inspector.tsx | 5 |
 | frontend/components/history-navigation-notice.tsx | 2 |
 | frontend/components/inbox-action-confirmation.tsx | 1 |
@@ -247,7 +247,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/coming-soon-page.tsx | 0 |
 | frontend/pages/focus-page.tsx | 15 |
 | frontend/pages/goals-page.tsx | 10 |
-| frontend/pages/graph-page.tsx | 37 |
+| frontend/pages/graph-page.tsx | 38 |
 | frontend/pages/home-page.tsx | 16 |
 | frontend/pages/inbox-page.tsx | 13 |
 | frontend/pages/knowledge-page.tsx | 26 |
@@ -288,7 +288,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 路由/入口 | root symbol | 候选数 | 未解析符号 |
 | --- | --- | ---: | --- |
-| /graph | frontend/pages/graph-page.tsx#GraphRoute; frontend/pages/graph-page.tsx#GraphPage | 63 | 无（不代表动态边界已核对） |
+| /graph | frontend/pages/graph-page.tsx#GraphRoute; frontend/pages/graph-page.tsx#GraphPage | 67 | 无（不代表动态边界已核对） |
 | /projects/:id/timeline | frontend/app.tsx#ProjectTimelineRoute | 97 | 无（不代表动态边界已核对） |
 | /inbox | frontend/app.tsx#InboxRoute | 138 | 无（不代表动态边界已核对） |
 | /goals | frontend/app.tsx#GoalsRoute | 85 | 无（不代表动态边界已核对） |
@@ -576,7 +576,10 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 43:277 GraphEvidencePanel | a citation.title | href=&#96;/knowledge/${encodeURIComponent(citation.knowledgeItemId)}#${encodeURIComponent(citation.citationId)}&#96; | {"kind":"repeat","expression":"state.citations"}; earlier return: state.kind === "idle"; earlier return: state.kind === "loading"; earlier return: state.kind… |
+| 71:42 GraphEvidencePanel | aside frontendText(locale, "GRAPH_FORBIDDEN") |  | {"kind":"branch","expression":"state.kind === \"forbidden\"","branch":"true"}; earlier return: state.kind === "idle"; earlier return: state.kind === "loading" |
+| 72:140 GraphEvidencePanel | p frontendText(locale, "GRAPH_EVIDENCE_ERROR") |  | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "idle"; earlier return: state.kind === "loading"; e… |
+| 72:206 GraphEvidencePanel | Button frontendText(locale, "COMMON_RETRY") | onClick=read | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "idle"; earlier return: state.kind === "loading"; e… |
+| 74:277 GraphEvidencePanel | a citation.title | href=&#96;/knowledge/${encodeURIComponent(citation.knowledgeItemId)}#${encodeURIComponent(citation.citationId)}&#96; | {"kind":"repeat","expression":"state.citations"}; earlier return: state.kind === "idle"; earlier return: state.kind === "loading"; earlier return: state.kind… |
 
 ## frontend/components/graph/graph-inspector.tsx
 
@@ -1652,6 +1655,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 250:38 GraphPage | div frontendText(locale, "GRAPH_TRUNCATED") |  | {"kind":"logical","expression":"state.kind === \"truncated\"","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "err… |
 | 252:9 GraphPage | GraphCanvas  | onSelect=setSelectedId; onClearSelection=() =&gt; setSelectedId(null) | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
 | 254:11 GraphPage | GraphInspector  | onClose=() =&gt; setSelectedId(null); onAction=selectedNode && (!action &#124;&#124; action.node.id === selectedNode.id) ? () =&gt; runGraphAction(action ?? … | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
+| 262:11 GraphPage | GraphEvidencePanel  | onDenied=onDenied | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: state.kind === "forbidden"; earlier return: state.kind === … |
 | 352:10 GraphRoute | GraphPage  | onDenied=denyRead; onGenerateSuggestions=generateSuggestions; onQueryChange=setQuery; onLensChange=setLens; onTemporalRangeChange=setTemporalRange; onChangeK… |  |
 | 358:269 GraphSuggestionsPanel | Button frontendText(locale, state.kind === "loading" ? "GRAPH_SUGGESTIONS_LOADING" : "GRAPH_SUGGESTIONS_GENERATE") | onClick=onGenerate | disabled=state.kind === "loading" |
 | 360:34 GraphSuggestionsPanel | p frontendText(locale, "GRAPH_SUGGESTIONS_ERROR") |  | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |

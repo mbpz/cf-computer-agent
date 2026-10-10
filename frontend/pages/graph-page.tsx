@@ -259,7 +259,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
             actionsDisabled={recordBlocked}
             actionStatus={inspectorStatus}
           />
-          <GraphEvidencePanel locale={locale} citationIds={selectedNode ? selectedCitationIds : undefined} />
+          <GraphEvidencePanel locale={locale} citationIds={selectedNode ? selectedCitationIds : undefined} onDenied={onDenied} />
         </div>
       </div>
     </section>
