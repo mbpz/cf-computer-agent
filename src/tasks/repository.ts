@@ -12,7 +12,8 @@ import {
 import type { TaskDependency, TaskSubtask, TaskSubtaskStatus } from "./structure";
 import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskStatus, TaskStatusNotificationIntent, TaskSummary, TaskUpdate } from "./types";
 
-export interface TaskDependencyVersion { expectedUpdatedAt: number; updatedAt: number; }
+export interface TaskRelationVersion { expectedUpdatedAt?: number; updatedAt: number; }
+export interface TaskDependencyVersion extends TaskRelationVersion { expectedUpdatedAt: number; }
 
 export interface TasksRepositoryPort {
   insert(input: TaskCreate): Promise<boolean>;
@@ -29,11 +30,11 @@ export interface TasksRepositoryPort {
   countByMember(memberId: string): Promise<number>;
   summary(memberId: string, now: Date): Promise<TaskSummary>;
   listTags(memberId: string, taskId: string): Promise<string[]>;
-  replaceTags(memberId: string, taskId: string, tags: readonly string[]): Promise<void>;
+  replaceTags(memberId: string, taskId: string, tags: readonly string[], version?: TaskRelationVersion): Promise<boolean>;
   listLinks(memberId: string, taskId: string): Promise<TaskLink[]>;
-  insertLink(link: TaskLinkInsert): Promise<boolean>;
+  insertLink(link: TaskLinkInsert, version?: TaskRelationVersion): Promise<boolean>;
   findLink(memberId: string, taskId: string, knowledgeItemId: string): Promise<TaskLink | null>;
-  deleteLink(memberId: string, taskId: string, linkId: string): Promise<boolean>;
+  deleteLink(memberId: string, taskId: string, linkId: string, version?: TaskRelationVersion): Promise<boolean>;
   countLinks(memberId: string, taskId: string): Promise<number>;
   isKnowledgeVisible(memberId: string, knowledgeItemId: string): Promise<boolean>;
   insertSubtask(input: { id: string; memberId: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; createdAt: number; updatedAt: number }): Promise<boolean>;
@@ -227,13 +228,21 @@ export class TasksRepository implements TasksRepositoryPort {
     return rows.results.map((row) => row.tag);
   }
 
-  async replaceTags(memberId: string, taskId: string, tags: readonly string[]): Promise<void> {
-    await this.db.batch([
-      this.db.prepare("DELETE FROM task_tags WHERE member_id = ? AND task_id = ?").bind(memberId, taskId),
+  async replaceTags(memberId: string, taskId: string, tags: readonly string[], version?: TaskRelationVersion): Promise<boolean> {
+    const guard = `member_id = ? AND id = ?${version?.expectedUpdatedAt === undefined ? "" : " AND updated_at = ?"}`;
+    const values = [memberId, taskId, ...(version?.expectedUpdatedAt === undefined ? [] : [version.expectedUpdatedAt])];
+    // Every statement checks the same parent version; it advances only after all
+    // tags have been replaced, including the empty-list case. The batch is atomic.
+    const results = await this.db.batch([
+      this.db.prepare(`DELETE FROM task_tags WHERE member_id = ? AND task_id = ? AND EXISTS (SELECT 1 FROM tasks WHERE ${guard})`)
+        .bind(memberId, taskId, ...values),
       ...tags.map((tag) => this.db.prepare(
-        "INSERT INTO task_tags (task_id, member_id, tag) VALUES (?, ?, ?)",
-      ).bind(taskId, memberId, tag)),
+        `INSERT INTO task_tags (task_id, member_id, tag) SELECT ?, ?, ? FROM tasks WHERE ${guard}`,
+      ).bind(taskId, memberId, tag, ...values)),
+      ...(version ? [this.db.prepare(`UPDATE tasks SET updated_at = MAX(updated_at + 1, ?) WHERE ${guard}`)
+        .bind(version.updatedAt, ...values)] : []),
     ]);
+    return version ? results.at(-1)!.meta.changes === 1 : true;
   }
 
   async listLinks(memberId: string, taskId: string): Promise<TaskLink[]> {
@@ -254,11 +263,30 @@ export class TasksRepository implements TasksRepositoryPort {
     return rows.results.map(mapLinkRow);
   }
 
-  async insertLink(link: TaskLinkInsert): Promise<boolean> {
-    const result = await this.db.prepare(
-      "INSERT OR IGNORE INTO task_links (id, task_id, member_id, knowledge_item_id, created_at) VALUES (?, ?, ?, ?, ?)",
-    ).bind(link.id, link.taskId, link.memberId, link.knowledgeItemId, link.createdAt).run();
-    return result.meta.changes === 1;
+  async insertLink(link: TaskLinkInsert, version?: TaskRelationVersion): Promise<boolean> {
+    if (!version) {
+      const result = await this.db.prepare(
+        "INSERT OR IGNORE INTO task_links (id, task_id, member_id, knowledge_item_id, created_at) VALUES (?, ?, ?, ?, ?)",
+      ).bind(link.id, link.taskId, link.memberId, link.knowledgeItemId, link.createdAt).run();
+      return result.meta.changes === 1;
+    }
+    // Link capacity and knowledge visibility can change after service preflight.
+    const statement = this.db.prepare(
+      `WITH ${authorizedKnowledgeMemberCteSql(false)}
+       INSERT INTO task_links (id, task_id, member_id, knowledge_item_id, created_at)
+       SELECT ?, ?, ?, ?, ? FROM tasks t
+       JOIN authorized_member am
+       JOIN knowledge_items k ON k.id = ?
+       JOIN revisions r ON r.id = k.current_revision_id
+       ${ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL}
+       WHERE t.member_id = ? AND t.id = ?${version.expectedUpdatedAt === undefined ? "" : " AND t.updated_at = ?"}
+         AND ${ACTIVE_KNOWLEDGE_ITEM_SQL} AND ${readableKnowledgeRevisionSql()}
+         AND (SELECT COUNT(*) FROM task_links WHERE member_id = ? AND task_id = ?) < ?
+       ON CONFLICT DO NOTHING`,
+    ).bind(link.memberId, link.id, link.taskId, link.memberId, link.knowledgeItemId, link.createdAt,
+      link.knowledgeItemId, link.memberId, link.taskId, ...(version.expectedUpdatedAt === undefined ? [] : [version.expectedUpdatedAt]),
+      link.memberId, link.taskId, APP_CONFIG.maxTaskLinksPerTask);
+    return this.mutateRelation(statement, link.memberId, link.taskId, version);
   }
 
   async findLink(memberId: string, taskId: string, knowledgeItemId: string): Promise<TaskLink | null> {
@@ -278,11 +306,12 @@ export class TasksRepository implements TasksRepositoryPort {
     return row ? mapLinkRow(row) : null;
   }
 
-  async deleteLink(memberId: string, taskId: string, linkId: string): Promise<boolean> {
-    const result = await this.db.prepare(
-      "DELETE FROM task_links WHERE member_id = ? AND task_id = ? AND id = ?",
-    ).bind(memberId, taskId, linkId).run();
-    return result.meta.changes === 1;
+  async deleteLink(memberId: string, taskId: string, linkId: string, version?: TaskRelationVersion): Promise<boolean> {
+    const statement = this.db.prepare(
+      `DELETE FROM task_links WHERE member_id = ? AND task_id = ? AND id = ?
+       ${version?.expectedUpdatedAt === undefined ? "" : "AND EXISTS (SELECT 1 FROM tasks WHERE member_id = ? AND id = ? AND updated_at = ?)"}`,
+    ).bind(memberId, taskId, linkId, ...(version?.expectedUpdatedAt === undefined ? [] : [memberId, taskId, version.expectedUpdatedAt]));
+    return this.mutateRelation(statement, memberId, taskId, version);
   }
 
   async countLinks(memberId: string, taskId: string): Promise<number> {
@@ -357,7 +386,7 @@ export class TasksRepository implements TasksRepositoryPort {
        ON CONFLICT(task_id, depends_on_task_id) DO NOTHING`,
     ).bind(input.memberId, input.taskId, input.dependsOnTaskId, input.createdAt,
       input.memberId, input.taskId, ...(version ? [version.expectedUpdatedAt] : []));
-    return this.mutateDependency(statement, input.memberId, input.taskId, version);
+    return this.mutateRelation(statement, input.memberId, input.taskId, version);
   }
 
   async listDependencies(memberId: string, taskId: string): Promise<TaskDependency[]> {
@@ -374,17 +403,17 @@ export class TasksRepository implements TasksRepositoryPort {
       `DELETE FROM task_dependencies WHERE member_id = ? AND task_id = ? AND depends_on_task_id = ?
        ${version ? "AND EXISTS (SELECT 1 FROM tasks WHERE member_id = ? AND id = ? AND updated_at = ?)" : ""}`,
     ).bind(memberId, taskId, dependsOnTaskId, ...(version ? [memberId, taskId, version.expectedUpdatedAt] : []));
-    return this.mutateDependency(statement, memberId, taskId, version);
+    return this.mutateRelation(statement, memberId, taskId, version);
   }
 
-  private async mutateDependency(statement: D1PreparedStatement, memberId: string, taskId: string, version?: TaskDependencyVersion): Promise<boolean> {
+  private async mutateRelation(statement: D1PreparedStatement, memberId: string, taskId: string, version?: TaskRelationVersion): Promise<boolean> {
     if (!version) return (await statement.run()).meta.changes === 1;
     // The relation CAS and its version advance must commit or roll back together.
     // A replay/no-op must not consume a version. D1 batch prevents another writer
     // from interleaving between the guarded mutation and this changes() check.
     const results = await this.db.batch([
       statement,
-      this.db.prepare("UPDATE tasks SET updated_at = ? WHERE member_id = ? AND id = ? AND changes() = 1")
+      this.db.prepare("UPDATE tasks SET updated_at = MAX(updated_at + 1, ?) WHERE member_id = ? AND id = ? AND changes() = 1")
         .bind(version.updatedAt, memberId, taskId),
     ]);
     return results[0]!.meta.changes === 1;

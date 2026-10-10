@@ -21,7 +21,7 @@
 | API 请求 | `frontend/lib/tasks-data.ts` 的 addDependency / removeDependency |
 | HTTP 路由 | `src/routes/tasks.ts` 的 POST `/api/tasks/:taskId/dependencies`、DELETE `/api/tasks/:taskId/dependencies/:dependsOnTaskId` |
 | 授权及业务 | `src/tasks/service.ts` 的会话成员归属检查及 addDependency / removeDependency |
-| 持久化 | `src/tasks/repository.ts` 的带版本条件关系写入与 mutateDependency 原子 batch |
+| 持久化 | `src/tasks/repository.ts` 的带版本条件关系写入与 mutateRelation 原子 batch（原名 mutateDependency） |
 | 读取核对 | 原有 GET `/api/tasks/:taskId/dependencies` 按成员和父任务读取，再匹配 dependsOnTaskId；不是不可变历史操作账本 |
 
 ## 测试证据
@@ -63,3 +63,7 @@ Worker + frontend 严格类型检查通过；操作清点保持 270 sources / 11
 - 未修复/验收标签和知识链接路径中独立版本声明与写入的其余原子性风险；下一步需分别复现、修复及验证，不能据此扩大结论。
 - 本次没有 schema 变更、SQL 迁移执行、push、merge、Cloudflare 发布或生产写入。
 - checklist 仍为纳入 29 / 完成 5 / 剩余 24；D08 按用户要求排除。
+
+## 后续关联修复
+
+2026-10-10 标签及知识链接三路径的原子性和链接写入时校验已补充本地实现与测试，见[后续证据](./task-related-writes-atomicity-evidence.md)。上文保留当时未关闭边界；此次补充不提升整体 A02/C01 或原生验收状态。

@@ -445,17 +445,26 @@ class FakeTasksRepository implements TasksRepositoryPort {
   async countByMember(memberId: string) { return this.count || [...this.tasks.values()].filter((task) => task.memberId === memberId).length; }
   async summary(): Promise<TaskSummary> { return { todo: 0, doing: 0, blocked: 0, done: 0, canceled: 0, dueToday: 0, overdue: 0 }; }
   async listTags(memberId: string, taskId: string) { return this.tags.get(taskId) ?? []; }
-  async replaceTags(memberId: string, taskId: string, tags: readonly string[]) { this.tags.set(taskId, [...tags]); }
+  async replaceTags(memberId: string, taskId: string, tags: readonly string[], version?: { expectedUpdatedAt?: number; updatedAt: number }) {
+    if (version && !await this.touch(memberId, taskId, version.updatedAt, version.expectedUpdatedAt)) return false;
+    this.tags.set(taskId, [...tags]);
+    return true;
+  }
   async listLinks(memberId: string, taskId: string) { return [...this.links.values()].filter((link) => link.taskId === taskId); }
-  async insertLink(link: TaskLinkInsert) {
+  async insertLink(link: TaskLinkInsert, version?: { expectedUpdatedAt?: number; updatedAt: number }) {
     if (this.links.has(link.id)) return false;
+    if (version && !await this.touch(link.memberId, link.taskId, version.updatedAt, version.expectedUpdatedAt)) return false;
     this.links.set(link.id, { id: link.id, taskId: link.taskId, knowledgeItemId: link.knowledgeItemId, knowledgeTitle: "Title", createdAt: new Date(link.createdAt).toISOString() });
     return true;
   }
   async findLink(memberId: string, taskId: string, knowledgeItemId: string) {
     return [...this.links.values()].find((link) => link.taskId === taskId && link.knowledgeItemId === knowledgeItemId) ?? null;
   }
-  async deleteLink(memberId: string, taskId: string, linkId: string) { return this.links.delete(linkId); }
+  async deleteLink(memberId: string, taskId: string, linkId: string, version?: { expectedUpdatedAt?: number; updatedAt: number }) {
+    if (!this.links.has(linkId)) return false;
+    if (version && !await this.touch(memberId, taskId, version.updatedAt, version.expectedUpdatedAt)) return false;
+    return this.links.delete(linkId);
+  }
   async countLinks(memberId: string, taskId: string) { return this.linkCount || [...this.links.values()].filter((link) => link.taskId === taskId).length; }
   async isKnowledgeVisible(memberId: string, knowledgeItemId: string) { return this.visibleKnowledge.has(knowledgeItemId); }
   async insertSubtask(input: { id: string; memberId: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; createdAt: number; updatedAt: number }) {

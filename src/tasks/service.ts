@@ -285,8 +285,14 @@ export class TasksService {
     const expected = parseExpectedVersion(expectedUpdatedAt);
     const current = await this.repository.listTags(memberId, task.id);
     if (current.length === normalized.length && current.every((tag, index) => tag === normalized[index])) return current;
-    await this.claimVersion(memberId, task, expected);
-    await this.repository.replaceTags(memberId, task.id, normalized);
+    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw versionConflict();
+    const replaced = await this.repository.replaceTags(memberId, task.id, normalized, { expectedUpdatedAt: expected, updatedAt: this.nextVersion(task) });
+    if (!replaced) {
+      await this.requireOwned(memberId, task.id);
+      const current = await this.repository.listTags(memberId, task.id);
+      if (current.length === normalized.length && current.every((tag, index) => tag === normalized[index])) return current;
+      throw versionConflict();
+    }
     await this.emitAudit("task.tags_replaced", memberId, task.id, { count: normalized.length });
     return normalized;
   }
@@ -304,8 +310,13 @@ export class TasksService {
     const links = await this.repository.listLinks(memberId, taskId);
     const target = links.find((item) => item.id === linkId);
     if (!target) throw notFound();
-    await this.claimVersion(memberId, task, parseExpectedVersion(expectedUpdatedAt));
-    if (!await this.repository.deleteLink(memberId, taskId, linkId)) throw notFound();
+    const expected = parseExpectedVersion(expectedUpdatedAt);
+    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw versionConflict();
+    if (!await this.repository.deleteLink(memberId, taskId, linkId, { expectedUpdatedAt: expected, updatedAt: this.nextVersion(task) })) {
+      await this.requireOwned(memberId, taskId);
+      if ((await this.repository.listLinks(memberId, taskId)).some((item) => item.id === linkId)) throw versionConflict();
+      throw notFound();
+    }
     await this.emitAudit("task.unlinked", memberId, taskId, { knowledgeItemId: target.knowledgeItemId });
   }
 
@@ -313,16 +324,7 @@ export class TasksService {
     return Math.max(this.now().getTime(), Date.parse(task.updatedAt) + 1);
   }
 
-  private async claimVersion(memberId: string, task: Task, expected: number | undefined): Promise<void> {
-    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw versionConflict();
-    const claimed = await this.repository.touch(memberId, task.id, this.nextVersion(task), expected);
-    if (!claimed) {
-      if (expected !== undefined && await this.repository.findOwned(memberId, task.id)) throw versionConflict();
-      throw notFound();
-    }
-  }
-
-  private async linkKnowledge(memberId: string, task: Task, knowledgeItemId: string, version?: { expectedUpdatedAt: unknown }): Promise<{ link: TaskLink; created: boolean }> {
+  private async linkKnowledge(memberId: string, task: Task, knowledgeItemId: string, version: { expectedUpdatedAt: unknown }): Promise<{ link: TaskLink; created: boolean }> {
     // Replays must authorize the current target, not rely on a past association.
     await this.requireKnowledgeVisible(memberId, knowledgeItemId);
     const existing = await this.repository.findLink(memberId, task.id, knowledgeItemId);
@@ -330,12 +332,21 @@ export class TasksService {
     if (await this.repository.countLinks(memberId, task.id) >= APP_CONFIG.maxTaskLinksPerTask) {
       throw new AppError("TASK_LINK_LIMIT", "Task link limit reached", 409);
     }
-    if (version) await this.claimVersion(memberId, task, parseExpectedVersion(version.expectedUpdatedAt));
+    const expected = parseExpectedVersion(version.expectedUpdatedAt);
+    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw versionConflict();
     const inserted = await this.repository.insertLink({
       id: this.id(), taskId: task.id, memberId, knowledgeItemId, createdAt: this.now().getTime(),
-    });
+    }, { expectedUpdatedAt: expected, updatedAt: this.nextVersion(task) });
     const link = await this.repository.findLink(memberId, task.id, knowledgeItemId);
-    if (!link) throw new AppError("TASK_NOT_FOUND", "Task not found", 404, true);
+    if (!link) {
+      await this.requireOwned(memberId, task.id);
+      await this.requireKnowledgeVisible(memberId, knowledgeItemId);
+      if (await this.repository.countLinks(memberId, task.id) >= APP_CONFIG.maxTaskLinksPerTask) {
+        throw new AppError("TASK_LINK_LIMIT", "Task link limit reached", 409);
+      }
+      if (expected !== undefined) throw versionConflict();
+      throw new AppError("TASK_NOT_FOUND", "Task not found", 404, true);
+    }
     if (inserted) await this.emitAudit("task.linked", memberId, task.id, { knowledgeItemId });
     return { link, created: inserted };
   }
