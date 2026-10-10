@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -139,3 +140,35 @@ test("retains single-quoted and computed role boundaries", () => fixture({
   const result = collectFrontendOperations({repositoryRoot:root});
   assert.equal(result.operations.length,2);
 }));
+
+// Human-reviewed dispositions complement, never replace, the conservative AST census.
+// Check coverage, recorded scope markers, and source drift; not the prose's semantic truth.
+test("manual unassigned review covers every current candidate exactly once with source-only scope markers", () => {
+  const root = resolve(import.meta.dirname, "..");
+  const inventory = collectFrontendOperations({repositoryRoot: root});
+  const review = readFileSync(resolve(root, "docs/product/frontend-operation-unassigned-review.md"), "utf8");
+  const rows = [...review.matchAll(/^\| `(frontend\/[^`]+:\d+:\d+)` \| ([a-z-]+) \| (.+) \| (.+) \|$/gm)];
+  assert.deepEqual(rows.map(row => row[1]).sort(), [...inventory.unassignedOperationIds].sort(), "missing, duplicate, or stale reviewed candidate");
+  const categories = new Set(["app-boundary", "public-dynamic", "background", "unmounted-ui", "vm-not-mounted"]);
+  for (const [,id,category,trigger,effect] of rows) {
+    assert.ok(categories.has(category), `unsupported disposition: ${id}`);
+    assert.ok(trigger.trim().length > 5 && effect.trim().length > 5, `missing trigger/effect: ${id}`);
+  }
+  assert.match(review, /范围：源码人工对账；不是运行时验收。/);
+  assert.match(review, /A01、A02、A05、D04 仍开放/);
+});
+
+test("manual review fingerprints cover every unassigned source and its recorded caller evidence", () => {
+  const root = resolve(import.meta.dirname, "..");
+  const inventory = collectFrontendOperations({repositoryRoot: root});
+  const review = readFileSync(resolve(root, "docs/product/frontend-operation-unassigned-review.md"), "utf8");
+  const fingerprints = [...review.matchAll(/^- `((?:frontend|tools)\/[^`]+)`: `([a-f0-9]{64})`$/gm)];
+  const paths = new Set(fingerprints.map(row => row[1]));
+  assert.equal(paths.size, fingerprints.length, "duplicate source fingerprint");
+  const unassigned = new Set(inventory.unassignedOperationIds);
+  for (const op of inventory.operations.filter(op => unassigned.has(op.id))) assert.ok(paths.has(op.path), `unfingerprinted source: ${op.path}`);
+  for (const [,path] of review.matchAll(/\[source:([^\]]+)\]/g)) assert.ok(paths.has(path), `unfingerprinted caller: ${path}`);
+  for (const [,path,expected] of fingerprints) {
+    assert.equal(createHash("sha256").update(readFileSync(resolve(root,path))).digest("hex"), expected, `re-review changed source: ${path}`);
+  }
+});
