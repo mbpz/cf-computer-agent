@@ -56,6 +56,7 @@ export async function dispatchGraphAction(
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: clientKey, title: node.label, notes: "", priority: "medium", dueAt: null, knowledgeItemId: id }),
     });
+    requireReceipt(data, "task", { id: clientKey });
     return { status: "completed", action: "create_task", clientKey, data };
   }
 
@@ -66,6 +67,7 @@ export async function dispatchGraphAction(
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: clientKey, clientKey, taskId: id, title: node.label, durationMinutes: 25 }),
     });
+    requireReceipt(data, "session", { id: clientKey, clientKey, taskId: id });
     return { status: "completed", action: "start_focus", clientKey, data };
   }
 
@@ -79,6 +81,7 @@ export async function dispatchGraphAction(
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: clientKey, clientKey, kind, title: node.label, body: "", startsAt: null, dueAt: null }),
     });
+    requireReceipt(data, "item", { id: clientKey, clientKey, projectId });
     return { status: "completed", action: node.kind === "decision" ? "create_action_item" : "append_timeline", clientKey, data };
   }
 
@@ -100,4 +103,19 @@ function projectIdFromHref(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const match = /^\/projects\/([^/]+)(?:\/|$)/u.exec(value);
   return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+// A successful transport is not proof that this operation completed. Only immutable
+// identity is compared: a replay may return an entity edited after its creation.
+function requireReceipt(value: unknown, field: "task" | "session" | "item", identity: Record<string, string>): void {
+  const receipt = record(value);
+  const entity = record(receipt?.[field]);
+  if (!receipt || typeof receipt.created !== "boolean" || !entity
+    || Object.entries(identity).some(([key, expected]) => entity[key] !== expected)) {
+    throw new Error("GRAPH_ACTION_RECEIPT_UNKNOWN");
+  }
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }

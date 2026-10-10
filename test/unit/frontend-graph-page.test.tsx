@@ -1,3 +1,4 @@
+import { focusReceipt } from "../helpers/graph-action-receipts";
 // @vitest-environment node
 import React from "react";
 import { act } from "react";
@@ -158,7 +159,7 @@ describe("GraphPage", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
     expect(posts).toHaveLength(1);
 
-    await act(async () => resolveAction(Response.json({ id: "focus-1" })));
+    await act(async () => resolveAction(Response.json(focusReceipt(JSON.parse(posts[0]!.body).id))));
     await flush();
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
@@ -171,7 +172,7 @@ describe("GraphPage", () => {
         posts.push(String(init.body));
         attempt += 1;
         if (attempt === 1) throw new TypeError("network down");
-        return Response.json({ id: "focus-1" });
+        return Response.json(focusReceipt(JSON.parse(String(init?.body ?? "{}")).id));
       }
       return Response.json({});
     });
@@ -201,7 +202,7 @@ describe("GraphPage", () => {
       if (init?.method === "POST") {
         posts.push(String(init.body));
         if (fail) throw new TypeError("network down");
-        return Response.json({ id: "focus-1" });
+        return Response.json(focusReceipt(JSON.parse(String(init?.body ?? "{}")).id));
       }
       return Response.json({});
     });
@@ -230,11 +231,47 @@ describe("GraphPage", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
 
+  it("retains an unknown successful-HTTP receipt across remount and only unlocks on the matching replay", async () => {
+    const posts: string[] = [];
+    let valid = false;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== "POST") return Response.json({});
+      posts.push(String(init.body));
+      const intent = JSON.parse(String(init.body));
+      return Response.json(valid ? { created: false, session: {
+        id: intent.id, clientKey: intent.clientKey, taskId: intent.taskId,
+        memberId: "member-a", calendarEventId: null, startTitle: "Draft brief", durationMinutes: 25,
+        status: "active", startedAt: "2026-10-10T00:00:00.000Z", pausedAt: null, endedAt: null,
+        elapsedMs: 0, createdAt: "2026-10-10T00:00:00.000Z", updatedAt: "2026-10-10T00:00:00.000Z",
+      } } : {});
+    });
+    await renderMemberGraph();
+    await clickNode("task:t1");
+    await clickButton("Start focus");
+    await flush();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).not.toBeNull();
+    const stored = browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a");
+    expect(stored).toContain(JSON.parse(posts[0]!).clientKey);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    act(() => root.unmount());
+    root = createRoot(host);
+    await renderMemberGraph();
+    expect(posts).toHaveLength(1);
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBe(stored);
+    valid = true;
+    await clickButton("Retry action");
+    await flush();
+    expect(posts).toEqual([posts[0], posts[0]]);
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
   it("does not send a graph action when this tab cannot record it", async () => {
     let posts = 0;
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") posts += 1;
-      return Response.json({ id: "focus-1" });
+      return Response.json(focusReceipt(JSON.parse(String(init?.body ?? "{}")).id));
     });
     await renderMemberGraph();
     await clickNode("task:t1");
@@ -251,7 +288,7 @@ describe("GraphPage", () => {
     let posts = 0;
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") posts += 1;
-      return Response.json({ id: "focus-1" });
+      return Response.json(focusReceipt(JSON.parse(String(init?.body ?? "{}")).id));
     });
     await renderMemberGraph();
     expect(host.textContent).toContain("can't be read");
@@ -278,7 +315,7 @@ describe("GraphPage", () => {
         keys.push(JSON.parse(String(init.body)).clientKey as string);
         return attempt === 1
           ? Response.json({ error: { code: "FOCUS_INVALID", message: "invalid", retryable: false } }, { status: 400 })
-          : Response.json({ id: "focus-1" });
+          : Response.json(focusReceipt(JSON.parse(String(init?.body ?? "{}")).id));
       }
       return Response.json({});
     });

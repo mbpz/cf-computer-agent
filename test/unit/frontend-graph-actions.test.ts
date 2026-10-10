@@ -1,3 +1,4 @@
+import { taskReceipt, focusReceipt, timelineReceipt } from "../helpers/graph-action-receipts";
 import { describe, expect, it } from "vitest";
 import {
   dispatchGraphAction,
@@ -19,7 +20,7 @@ function node(kind: GraphNode["kind"], id: string, overrides: Partial<GraphNode>
 }
 
 function requesterFor(
-  responses: unknown[] = [{ task: { id: "task-1" }, created: true }],
+  responses: unknown[] = [taskReceipt("graph-action-1")],
   calls: Array<{ url: string; init?: RequestInit }> = [],
 ): typeof fetch {
   let index = 0;
@@ -35,6 +36,20 @@ function request(nodeValue: GraphNode, clientKey = "graph-action-1"): GraphActio
 }
 
 describe("graph action dispatcher", () => {
+  it.each([
+    ["knowledge", "knowledge-1", {}],
+    ["knowledge", "knowledge-1", { task: { id: "another-operation" }, created: true }],
+    ["knowledge", "knowledge-1", { task: { id: "receipt-key" }, created: "true" }],
+    ["task", "task-1", { session: { id: "receipt-key", clientKey: "receipt-key", taskId: "another-task" }, created: true }],
+    ["task", "task-1", { session: { id: "receipt-key", clientKey: "another-key", taskId: "task-1" }, created: false }],
+    ["project", "project-1", { item: { id: "receipt-key", clientKey: "receipt-key", projectId: "another-project" }, created: true }],
+    ["decision", "decision-1", { item: { id: "receipt-key", clientKey: "another-key", projectId: "project-1" }, created: false }],
+  ] as const)("keeps a malformed or mismatched %s receipt unconfirmed (%#)", async (kind, id, payload) => {
+    await expect(dispatchGraphAction(request(node(kind, id, {
+      href: "/projects/project-1/timeline/decision-1",
+    }), "receipt-key"), requesterFor([payload]))).rejects.toThrow("GRAPH_ACTION_RECEIPT_UNKNOWN");
+  });
+
   it("maps a knowledge node to an idempotent task create without member scope input", async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const result = await dispatchGraphAction(
@@ -58,7 +73,7 @@ describe("graph action dispatcher", () => {
         label: "Choose the launch date",
         href: "/projects/project-1/timeline/decision-1",
       }), "decision-key"),
-      requesterFor([{ item: { id: "timeline-1" }, created: true }], calls),
+      requesterFor([timelineReceipt("decision-key", "action_item")], calls),
     );
 
     expect(result).toMatchObject({ status: "completed", action: "create_action_item", clientKey: "decision-key" });
@@ -74,7 +89,7 @@ describe("graph action dispatcher", () => {
   it("maps a task node to focus start and keeps the key stable for retries", async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const taskRequest = request(node("task", "task-1", { label: "Write release notes" }), "focus-key");
-    const requester = requesterFor([{ session: { id: "focus-1" }, created: true }], calls);
+    const requester = requesterFor([focusReceipt("focus-key", "task-1"), focusReceipt("focus-key", "task-1", false)], calls);
     const first = await dispatchGraphAction(taskRequest, requester);
     const second = await dispatchGraphAction(taskRequest, requester);
 
@@ -92,7 +107,7 @@ describe("graph action dispatcher", () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const result = await dispatchGraphAction(
       { ...request(node("project", "project-1", { label: "Q4 launch" }), "project-key"), timelineKind: "milestone" },
-      requesterFor([{ item: { id: "timeline-1" }, created: true }], calls),
+      requesterFor([timelineReceipt("project-key", "milestone")], calls),
     );
 
     expect(result).toMatchObject({ status: "completed", action: "append_timeline", clientKey: "project-key" });

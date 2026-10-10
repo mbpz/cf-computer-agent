@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
+import { dispatchGraphAction } from "../../frontend/lib/graph-actions";
+import type { GraphNode } from "../../src/graph/types";
 import { MIGRATIONS } from "../fixtures/d1";
 
 const NOW = new Date("2026-09-20T10:00:00.000Z");
@@ -45,6 +47,41 @@ describe("graph action worker contract", () => {
     const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => NOW });
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-graph-action-a"))!)).token;
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-graph-action-b"))!)).token;
+  });
+
+  it.each([
+    ["knowledge", "graph-knowledge-a", "create_task", "tasks", "task", "/api/tasks"],
+    ["task", "graph-source-task-a", "start_focus", "focus_sessions", "session", "/api/focus"],
+    ["project", "graph-project-a", "append_timeline", "project_timeline_items", "item", "/api/projects/graph-project-a/timeline"],
+    ["decision", "graph-decision-a", "create_action_item", "project_timeline_items", "item", "/api/projects/graph-project-a/timeline"],
+  ] as const)("recovers a committed %s action with its original ID and exact private result", async (kind, sourceId, action, table, field, path) => {
+    const clientKey = `graph-receipt-${kind}`;
+    const node: GraphNode = { id: `${kind}:${sourceId}`, kind, label: "Receipt test", status: null,
+      href: "/projects/graph-project-a/timeline/graph-decision-a", metadata: {} };
+    const sent: Array<{ url: string; body: string }> = [];
+    let loseReceipt = true;
+    const requester: typeof fetch = async (input, init) => {
+      sent.push({ url: String(input), body: String(init?.body) });
+      const response = await api(String(input), sessionA, init);
+      if (loseReceipt) {
+        expect(response.status).toBe(201);
+        loseReceipt = false;
+        return Response.json({}); // The database committed; the client cannot confirm its receipt.
+      }
+      expect(response.status).toBe(200);
+      return response;
+    };
+    await expect(dispatchGraphAction({ node, clientKey }, requester)).rejects.toThrow("GRAPH_ACTION_RECEIPT_UNKNOWN");
+    const exact = await api(`${path}/${clientKey}`, sessionA);
+    expect(exact.status).toBe(200);
+    const detail = await exact.json() as Record<string, unknown>;
+    expect(kind === "knowledge" ? detail.task : detail).toMatchObject({ id: clientKey, memberId: "graph-action-a" });
+    expect((await api(`${path}/${clientKey}`, sessionB)).status).toBe(404);
+    const replay = await dispatchGraphAction({ node, clientKey }, requester);
+    expect(replay).toMatchObject({ status: "completed", action, clientKey, data: { created: false, [field]: { id: clientKey } } });
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toEqual(sent[0]);
+    expect(await env.DB.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE member_id = ? AND id = ?`).bind("graph-action-a", clientKey).first("count")).toBe(1);
   });
 
   it("creates a knowledge-linked task idempotently and keeps it member-private", async () => {
