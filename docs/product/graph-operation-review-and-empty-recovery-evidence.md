@@ -158,3 +158,8 @@
 - `frontend/components/ui/skeleton.tsx` SHA256 `542864c96154ccdb4deff7796ba0b22120de0fe371394fbe9e1dc5af0d2d6d10`
 - `frontend/lib/workspace-browser-history.ts` SHA256 `288c5afb4f920a740387163bae628da0e622c63bfff983e7830bac68cab39d34`
 - `frontend/pages/graph-page.tsx` SHA256 `891da5534ca4c7a9e2637cdfd1baaefc41aa066718bc0872bcc3c0aeb083a52a`
+
+
+### 2026-10-10 后续审查纠正
+
+上述“loading/error保持原先隐私边界”只描述当时保留的行为，不能作为边界正确的证明。后续3项首次加载RED发现：已存意图在首次授权读取前展示私人标签/编号和操作按钮。本次新增独立授权展示门禁，保存原编号但首次授权成功前隐藏；已授权刷新可恢复、401/403再清屏。见[知识列表与图谱审查修复证据](./knowledge-list-operation-review-and-read-recovery-evidence.md)，不将旧批次绿色测试用于否认新增回归。

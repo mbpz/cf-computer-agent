@@ -65,6 +65,9 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
   // changing node or lens must not drop its client key, and leaving waits for its result.
   // With a member, an unconfirmed action survives refresh in this tab.
   const [action, setAction] = useState<GraphActionOwner | null>(restored);
+  // A stored intent is not current authorization. Keep its identity without
+  // revealing private fields until this mount has completed an authorized read.
+  const [recoveryAuthorized, setRecoveryAuthorized] = useState(false);
   const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
   const [outcome, setOutcome] = useState<GraphActionOutcome | null>(null);
   const actionRef = useRef<GraphActionOwner | null>(restored);
@@ -124,6 +127,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
   };
   useEffect(() => {
     if (state.kind === "forbidden") {
+      setRecoveryAuthorized(false);
       // The graph read can revoke access independently of the recovery request.
       // Invalidate in-flight callbacks and release UI/leave guards, not storage.
       queryControllerRef.current?.abort();
@@ -132,7 +136,9 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
     }
     // A successful explicit graph reload can restore recovery in this same mount.
     // After denial, loading/error/forbidden must not reveal or replay the intent.
-    if (!memberId || actionRef.current || !["ready", "truncated", "empty"].includes(state.kind)) return;
+    if (!["ready", "truncated", "empty"].includes(state.kind)) return;
+    setRecoveryAuthorized(true);
+    if (!memberId || actionRef.current) return;
     const pending = loadGraphAction(memberId);
     setRecordBlocked(pending.kind === "blocked");
     if (pending.kind === "ready") publish({ ...pending.intent, status: "unconfirmed" });
@@ -185,7 +191,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
       publish({ ...owner, status: "unconfirmed" }); setQueryUnconfirmed(true);
     }).finally(() => { if (queryControllerRef.current === controller) queryControllerRef.current = null; });
   };
-  const actionRecovery = <>
+  const actionRecovery = recoveryAuthorized ? <>
     {action && action.status !== "running" && <div data-graph-action-unconfirmed role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm" aria-busy={action.status === "checking"}>
       <p>{frontendText(locale, "GRAPH_ACTION_UNCONFIRMED").replace("{label}", action.node.label)}</p>
       <p>{frontendText(locale, "GRAPH_ACTION_OPERATION_ID")} <code data-graph-operation-id className="break-all">{action.clientKey}</code></p>
@@ -194,7 +200,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
       {queryUnconfirmed && <p role="status">{frontendText(locale, "GRAPH_ACTION_QUERY_UNCONFIRMED")}</p>}
     </div>}
     {outcome?.status === "success" && <p role="status">{frontendText(locale, "GRAPH_ACTION_CONFIRMED").replace("{id}", outcome.clientKey)}</p>}
-  </>;
+  </> : null;
   const inspectorStatus: GraphInspectorActionStatus = !selectedNode ? "idle"
     : action?.node.id === selectedNode.id ? (action.status !== "unconfirmed" ? "running" : "error")
       : action ? "running"

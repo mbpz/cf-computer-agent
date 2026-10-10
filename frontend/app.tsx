@@ -739,7 +739,11 @@ function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
   return <section className="mx-auto max-w-xl py-16"><h1 className="text-2xl font-semibold">{frontendText(locale, "PAGE_NOT_FOUND_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "PAGE_NOT_FOUND_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/">{frontendText(locale, "PAGE_RETURN_HOME")}</a></section>;
 }
 
-export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
+export function KnowledgeRoute(props: { locale: LocaleRuntime; search: string; memberId?: string }) {
+  return <MemberKnowledgeRoute key={props.memberId ?? "anonymous"} {...props} />;
+}
+
+function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const initial = useMemo(() => parsePageSearch(search), [search]);
   const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
   const [retryVersion, setRetryVersion] = useState(0);
@@ -747,6 +751,12 @@ export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRun
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: KnowledgePageResult["items"]; pagination: KnowledgePageResult["pagination"] } | { kind: "error"; message: string }>({ kind: "loading" });
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createKnowledgeRequestController> | null>(null);
+  const deniedRef = useRef(false);
+  const sectionsController = useRef<AbortController | null>(null);
+  const reviewController = useRef<AbortController | null>(null);
+  const activityController = useRef<AbortController | null>(null);
+  const [activityMoreError, setActivityMoreError] = useState(false);
+  const [reviewRetry, setReviewRetry] = useState(0);
   const [recent, setRecent] = useState<RecentKnowledgeItem[]>([]);
   const [favorites, setFavorites] = useState<FavoriteKnowledgeItem[]>([]);
   const [recentResearch, setRecentResearch] = useState<RecentResearchItem[]>([]);
@@ -766,25 +776,50 @@ export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRun
   const [reviewPeriod, setReviewPeriod] = useState<ReviewPeriod>(restoredPeriod);
   const [review, setReview] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewResult } | { kind: "error" }>({ kind: "loading" });
   const queryRef = useRef({ page, pageSize });
+  const denyRead = useCallback((error: unknown) => {
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    // All page reads share the member boundary. Revoke sibling reads before any
+    // late callback can put private data back, including transports ignoring abort.
+    deniedRef.current = true;
+    controllerRef.current?.dispose(); sectionsController.current?.abort();
+    reviewController.current?.abort(); activityController.current?.abort();
+    activityController.current = null;
+    setRecent([]); setFavorites([]); setRecentResearch([]); setNotes([]); setActivity([]);
+    setActivityNextCursor(null); setActivityMoreError(false); setReview({ kind: "error" });
+    setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") });
+    setPending(false); setLocalError(undefined);
+    return true;
+  }, [locale]);
   useEffect(() => {
-    let active = true;
-    void loadRecentKnowledge().then((items) => { if (active) { setRecent(items); setRecentError(false); } }).catch(() => { if (active) { setRecent([]); setRecentError(true); } });
-    void loadFavoriteKnowledge().then((items) => { if (active) { setFavorites(items); setFavoritesError(false); } }).catch(() => { if (active) { setFavorites([]); setFavoritesError(true); } });
-    void loadRecentResearch().then((items) => { if (active) { setRecentResearch(items); setResearchError(false); } }).catch(() => { if (active) { setRecentResearch([]); setResearchError(true); } });
-    void loadPrivateKnowledgeNotes().then((items) => { if (active) { setNotes(items); setNotesError(false); } }).catch(() => { if (active) { setNotes([]); setNotesError(true); } });
-    void loadWorkspaceActivity().then((page) => { if (active) { setActivity(page.items); setActivityNextCursor(page.nextCursor); setActivityError(false); } }).catch(() => { if (active) { setActivity([]); setActivityNextCursor(null); setActivityError(true); } });
-    return () => { active = false; };
-  }, [sectionRetry]);
+    if (deniedRef.current) return;
+    const controller = new AbortController(); sectionsController.current = controller;
+    activityController.current?.abort(); activityController.current = null;
+    setActivityNextCursor(null); setActivityMoreError(false);
+    const live = () => !deniedRef.current && !controller.signal.aborted;
+    const failed = (error: unknown, ordinary: () => void) => {
+      if (live() && !isAbort(error) && !denyRead(error)) ordinary();
+    };
+    void loadRecentKnowledge(fetch, controller.signal).then((items) => { if (live()) { setRecent(items); setRecentError(false); } }).catch(error => failed(error, () => { setRecent([]); setRecentError(true); }));
+    void loadFavoriteKnowledge(fetch, controller.signal).then((items) => { if (live()) { setFavorites(items); setFavoritesError(false); } }).catch(error => failed(error, () => { setFavorites([]); setFavoritesError(true); }));
+    void loadRecentResearch(fetch, controller.signal).then((items) => { if (live()) { setRecentResearch(items); setResearchError(false); } }).catch(error => failed(error, () => { setRecentResearch([]); setResearchError(true); }));
+    void loadPrivateKnowledgeNotes(fetch, controller.signal).then((items) => { if (live()) { setNotes(items); setNotesError(false); } }).catch(error => failed(error, () => { setNotes([]); setNotesError(true); }));
+    void loadWorkspaceActivity({ signal: controller.signal }).then((page) => { if (live()) { setActivity(page.items); setActivityNextCursor(page.nextCursor); setActivityError(false); } }).catch(error => failed(error, () => { setActivity([]); setActivityNextCursor(null); setActivityError(true); }));
+    return () => {
+      controller.abort(); activityController.current?.abort(); activityController.current = null;
+      if (sectionsController.current === controller) sectionsController.current = null;
+    };
+  }, [sectionRetry, retryVersion, denyRead]);
   useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
+    if (deniedRef.current) return;
+    const controller = new AbortController(); reviewController.current = controller;
+    const live = () => !deniedRef.current && !controller.signal.aborted;
     setReview({ kind: "loading" });
     void loadKnowledgeReview(reviewPeriod, fetch, controller.signal).then((data) => {
-      if (!active) return;
+      if (!live()) return;
       setReview(data.period === reviewPeriod ? { kind: "ready", data } : { kind: "error" });
-    }).catch((error: unknown) => { if (active && !isAbort(error)) setReview({ kind: "error" }); });
-    return () => { active = false; controller.abort(); };
-  }, [reviewPeriod]);
+    }).catch((error: unknown) => { if (live() && !isAbort(error) && !denyRead(error)) setReview({ kind: "error" }); });
+    return () => { controller.abort(); if (reviewController.current === controller) reviewController.current = null; };
+  }, [reviewPeriod, reviewRetry, retryVersion, denyRead]);
   useEffect(() => {
     if (!memberId || periodBlocked) return;
     const saved = persistReviewPeriod(memberId, "knowledge", reviewPeriod);
@@ -792,24 +827,32 @@ export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRun
   }, [reviewPeriod, memberId, periodBlocked, locale]);
   const discardPeriod = () => { if (!memberId || !periodBlocked || !discardBlockedReviewPeriod(memberId, "knowledge")) return; setPeriodBlocked(false); setPeriodNotice(undefined); };
   const loadMoreActivity = () => {
-    if (!activityNextCursor) return;
+    if (!activityNextCursor || activityController.current || deniedRef.current) return;
     const cursor = activityNextCursor;
-    setActivityNextCursor(null);
-    void loadWorkspaceActivity({ cursor }).then((page) => {
+    // Reserve before React renders so same-event clicks cannot issue two appends.
+    const controller = new AbortController(); activityController.current = controller;
+    const live = () => activityController.current === controller && !controller.signal.aborted && !deniedRef.current;
+    setActivityNextCursor(null); setActivityMoreError(false);
+    void loadWorkspaceActivity({ cursor, signal: controller.signal }).then((page) => {
+      if (!live()) return;
       setActivity((items) => [...items, ...page.items]);
       setActivityNextCursor(page.nextCursor);
-    }).catch(() => setActivityNextCursor(cursor));
+    }).catch((error: unknown) => {
+      if (!live() || isAbort(error) || denyRead(error)) return;
+      setActivityNextCursor(cursor); setActivityMoreError(true);
+    }).finally(() => { if (activityController.current === controller) activityController.current = null; });
   };
   useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(readWorkspaceLocation().search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); setUrlVersion((value) => value + 1); }), []);
   useEffect(() => {
+    if (deniedRef.current) return;
     const controller = createKnowledgeRequestController(); controllerRef.current = controller;
     const snapshot = { page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
     const request = controller.request({ ...snapshot, ...knowledgeFilters(readWorkspaceLocation().search) });
-    void request.promise.then((result) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") }); setLocalError(frontendText(locale, "KNOWLEDGE_ERROR")); setPending(false); } });
+    void request.promise.then((result) => { if (!deniedRef.current && controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); } }).catch((error: unknown) => { if (!deniedRef.current && controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error) && !denyRead(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") }); setLocalError(frontendText(locale, "KNOWLEDGE_ERROR")); setPending(false); } });
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [locale, page, pageSize, retryVersion, urlVersion]);
+  }, [locale, page, pageSize, retryVersion, urlVersion, denyRead]);
   const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
-  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} recentError={recentError} favoritesError={favoritesError} researchError={researchError} notesError={notesError} activityError={activityError} onRetrySections={() => setSectionRetry((value) => value + 1)} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
+  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => { if (deniedRef.current) { deniedRef.current = false; setState({ kind: "loading" }); } setRetryVersion((value) => value + 1); }} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} activityMoreError={activityMoreError} onLoadMoreActivity={loadMoreActivity} recentError={recentError} favoritesError={favoritesError} researchError={researchError} notesError={notesError} activityError={activityError} onRetrySections={() => setSectionRetry((value) => value + 1)} review={review} onRetryReview={() => setReviewRetry(value => value + 1)} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
 }
 
 export function SearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {

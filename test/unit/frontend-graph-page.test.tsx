@@ -841,7 +841,15 @@ describe("revoked graph recovery", () => {
     let readSignal: AbortSignal | undefined;
     vi.stubGlobal("fetch", async () => Response.json({}, { status }));
     const locale = createLocaleRuntime({ navigatorLanguage: "en-US" });
-    await act(async () => root.render(<GraphRoute locale={locale} memberId="member-a" load={(_query, signal) => { readSignal = signal; return pending.promise.then(value => { if (outcome === "error") throw new Error("late graph failure"); return value; }); }} />));
+    const load = vi.fn((_query: GraphQueryInput, signal: AbortSignal) => {
+      if (load.mock.calls.length === 1) return Promise.resolve(snapshot);
+      readSignal = signal;
+      return pending.promise.then(value => { if (outcome === "error") throw new Error("late graph failure"); return value; });
+    });
+    await act(async () => root.render(<GraphRoute locale={locale} memberId="member-a" load={load} />));
+    await flush();
+    // An already-authorized page keeps recovery reachable during a subsequent read.
+    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d");
     await clickButton("Check exact result"); await flush();
     expect(host.textContent).toContain("permission");
     expect(host.querySelector("[data-graph-canvas]")).toBeNull();
@@ -1070,4 +1078,35 @@ it.each([401, 403])("clears the graph when a selected citation returns %i", asyn
   expect(host.querySelector("[data-page-state='forbidden']")).not.toBeNull();
   expect(host.querySelector("[data-graph-canvas]")).toBeNull();
   expect(host.textContent).not.toContain("Draft brief");
+});
+
+
+it.each([500, 401, 403])("keeps restored private recovery behind the first read gate, including %i and explicit retry", async status => {
+  const clientKey = "first-read-private-operation";
+  expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey })).toBe(true);
+  const stored = browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a");
+  const first = deferred<GraphSnapshot>(); const retry = deferred<GraphSnapshot>();
+  const requester = vi.fn(async (_path: RequestInfo | URL, _init?: RequestInit) => Response.json(focusReceipt(clientKey).session));
+  vi.stubGlobal("fetch", requester);
+  const load = vi.fn().mockImplementationOnce(() => first.promise.then(() => { throw new ApiRequestError("READ_FAILED", "failed", status, false); }))
+    .mockImplementationOnce(() => retry.promise);
+  await act(async () => root.render(<GraphRoute memberId="member-a" locale={createLocaleRuntime({ navigatorLanguage: "en-US" })} load={load} />));
+  expect(host.querySelector("[data-graph-page-loading]")).not.toBeNull();
+  expect(host.textContent).not.toContain("Draft brief");
+  expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
+  await act(async () => first.resolve(snapshot)); await flush();
+  expect(host.textContent).not.toContain("Draft brief");
+  expect(host.querySelector("[data-graph-operation-id]")).toBeNull();
+  expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBe(stored);
+  await clickButton("Try the work graph again"); await flush();
+  expect(host.querySelector("[data-graph-page-loading]")).not.toBeNull();
+  expect(host.textContent).not.toContain("Draft brief");
+  expect(requester).not.toHaveBeenCalled();
+  await act(async () => retry.resolve(snapshot)); await flush();
+  expect(host.querySelector("[data-graph-operation-id]")?.textContent).toBe(clientKey);
+  expect(requester).not.toHaveBeenCalled();
+  await clickButton("Check exact result"); await flush();
+  expect(requester).toHaveBeenCalledTimes(1);
+  expect(requester.mock.calls[0]?.[0]).toBe(`/api/focus/${clientKey}`);
+  expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
 });

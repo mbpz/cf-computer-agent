@@ -294,7 +294,7 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `8b0bec385ec9eae90c28f56094c721ede809f890f9e23db9590fa5ae16870fc1`
+- `frontend/app.tsx`: `7bc161c72efc9b8bfef2129cd7a5c52ac7627322b34a246048e7acb16aacbb8c`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
 - `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
 - `frontend/components/ui/card.tsx`: `bb7f77ce45ee3fec21e25739c61d547900498a0117d3e12101e8932eae204b41`
@@ -324,3 +324,11 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 - `frontend/public/sw.js`: `082532f5be99a67e9d755f9407d59e46359f0b247de2473400c20c229f7080d5`
 - `tools/browser-vm/checkpoint-recovery-browser.mjs`: `06a498590a0c6e00c9cf5c91dff81de7a6aa3b01c4c9768aa718ebc0de3d9efe`
 - `tools/browser-vm/runtime-owner-browser.mjs`: `e5973069f711204d6ad79f011be6772e9243d403b6bb1ebd515ff361537c4c90`
+
+
+### 2026-10-10 知识页读取生命周期后重新审查
+
+- 已逐项比较当前索引与 `c5421f8e`：110 个未归属 ID 完全不变；`frontend/app.tsx` 的三个未归属边界（AppShell、SettingsPage、NotFoundPage）及 KnowledgeRoute 之前的源码逐字节一致。未归属表的行为和 caller 关系没有被新的知识页请求所有者替代。
+- `KnowledgeRoute` 现在是以成员为 key 的 `MemberKnowledgeRoute` 包装器；索引已沿包装器追踪到知识页、分页、分享和历史订阅，而非丢失原路由候选。新增的成员归属、共享撤权、区块取消、活动追加去重及显式复习重读均属于已归属的知识页。
+- 已检查实际 App 挂载、renderPage 身份/路径分支、KnowledgePage 回调和历史订阅；本次修改不扩大其他未归属组件的消费。更新上方 app 源码指纹及生成索引（270 源文件、1180 候选），不是仅改哈希绕过契约。
+- 本轮功能与源码映射见 [知识列表操作与读取恢复证据](./knowledge-list-operation-review-and-read-recovery-evidence.md)。本段仅更新源码审查，不增加父项完成数或声称原生验收。
