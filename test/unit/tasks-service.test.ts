@@ -479,12 +479,18 @@ class FakeTasksRepository implements TasksRepositoryPort {
     if (!item || (expectedUpdatedAt !== undefined && Date.parse(item.updatedAt) !== expectedUpdatedAt)) return false;
     return this.subtasks.delete(id);
   }
-  async insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }) {
+  async insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }, version?: { expectedUpdatedAt: number; updatedAt: number }) {
     const key = `${input.taskId}:${input.dependsOnTaskId}`;
     if (this.dependencies.has(key)) return false;
+    if (version && !await this.touch(input.memberId, input.taskId, version.updatedAt, version.expectedUpdatedAt)) return false;
     this.dependencies.set(key, { memberId: input.memberId, taskId: input.taskId, dependsOnTaskId: input.dependsOnTaskId, createdAt: new Date(input.createdAt).toISOString() });
     return true;
   }
   async listDependencies(memberId: string, taskId: string) { return [...this.dependencies.values()].filter((item) => item.memberId === memberId && item.taskId === taskId); }
-  async deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string) { return this.dependencies.delete(`${taskId}:${dependsOnTaskId}`); }
+  async deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string, version?: { expectedUpdatedAt: number; updatedAt: number }) {
+    const key = `${taskId}:${dependsOnTaskId}`;
+    if (!this.dependencies.has(key)) return false;
+    if (version && !await this.touch(memberId, taskId, version.updatedAt, version.expectedUpdatedAt)) return false;
+    return this.dependencies.delete(key);
+  }
 }

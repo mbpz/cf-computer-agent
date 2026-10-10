@@ -164,10 +164,17 @@ export class TasksService {
     await this.requireOwned(memberId, dependsOnTaskId);
     const existing = (await this.repository.listDependencies(memberId, taskId)).find((item) => item.dependsOnTaskId === dependsOnTaskId);
     if (existing) return { dependency: existing, created: false };
-    if (expectedUpdatedAt !== undefined) await this.claimVersion(memberId, task, parseExpectedVersion(expectedUpdatedAt));
-    const created = await this.repository.insertDependency({ memberId, taskId, dependsOnTaskId, createdAt: this.now().getTime() });
+    const expected = parseExpectedVersion(expectedUpdatedAt);
+    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw versionConflict();
+    const version = expected === undefined ? undefined : { expectedUpdatedAt: expected, updatedAt: this.nextVersion(task) };
+    const created = await this.repository.insertDependency({ memberId, taskId, dependsOnTaskId, createdAt: this.now().getTime() }, version);
     const dependency = (await this.repository.listDependencies(memberId, taskId)).find((item) => item.dependsOnTaskId === dependsOnTaskId);
-    if (!dependency) throw new AppError("TASK_NOT_FOUND", "Task dependency not found", 404, true);
+    if (!dependency) {
+      await this.requireOwned(memberId, taskId);
+      await this.requireOwned(memberId, dependsOnTaskId);
+      if (expected !== undefined) throw versionConflict();
+      throw new AppError("TASK_NOT_FOUND", "Task dependency not found", 404, true);
+    }
     return { dependency, created };
   }
 
@@ -175,8 +182,14 @@ export class TasksService {
     const task = await this.requireOwned(memberId, taskId);
     const existing = (await this.repository.listDependencies(memberId, taskId)).find((item) => item.dependsOnTaskId === dependsOnTaskId);
     if (!existing) throw new AppError("TASK_DEPENDENCY_NOT_FOUND", "Task dependency not found", 404);
-    if (expectedUpdatedAt !== undefined) await this.claimVersion(memberId, task, parseExpectedVersion(expectedUpdatedAt));
-    if (!await this.repository.deleteDependency(memberId, taskId, dependsOnTaskId)) throw new AppError("TASK_DEPENDENCY_NOT_FOUND", "Task dependency not found", 404);
+    const expected = parseExpectedVersion(expectedUpdatedAt);
+    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw versionConflict();
+    const version = expected === undefined ? undefined : { expectedUpdatedAt: expected, updatedAt: this.nextVersion(task) };
+    if (!await this.repository.deleteDependency(memberId, taskId, dependsOnTaskId, version)) {
+      await this.requireOwned(memberId, taskId);
+      if (expected !== undefined && (await this.repository.listDependencies(memberId, taskId)).some((item) => item.dependsOnTaskId === dependsOnTaskId)) throw versionConflict();
+      throw new AppError("TASK_DEPENDENCY_NOT_FOUND", "Task dependency not found", 404);
+    }
   }
 
   async update(memberId: string, id: string, input: TaskUpdateInput): Promise<Task> {

@@ -12,6 +12,8 @@ import {
 import type { TaskDependency, TaskSubtask, TaskSubtaskStatus } from "./structure";
 import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskStatus, TaskStatusNotificationIntent, TaskSummary, TaskUpdate } from "./types";
 
+export interface TaskDependencyVersion { expectedUpdatedAt: number; updatedAt: number; }
+
 export interface TasksRepositoryPort {
   insert(input: TaskCreate): Promise<boolean>;
   insertWithKnowledge(input: TaskCreate, knowledgeItemId: string, linkId: string, audits?: readonly CreateAuditEvent[]): Promise<boolean>;
@@ -39,9 +41,9 @@ export interface TasksRepositoryPort {
   listSubtasks(memberId: string, taskId: string): Promise<TaskSubtask[]>;
   updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }, expectedUpdatedAt?: number): Promise<TaskSubtask | null>;
   deleteSubtask(memberId: string, taskId: string, id: string, expectedUpdatedAt?: number): Promise<boolean>;
-  insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }): Promise<boolean>;
+  insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }, version?: TaskDependencyVersion): Promise<boolean>;
   listDependencies(memberId: string, taskId: string): Promise<TaskDependency[]>;
-  deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string): Promise<boolean>;
+  deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string, version?: TaskDependencyVersion): Promise<boolean>;
 }
 
 type TaskRow = {
@@ -347,12 +349,15 @@ export class TasksRepository implements TasksRepositoryPort {
     return result.meta.changes === 1;
   }
 
-  async insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }): Promise<boolean> {
-    const result = await this.db.prepare(
-      `INSERT OR IGNORE INTO task_dependencies (member_id, task_id, depends_on_task_id, created_at)
-       VALUES (?, ?, ?, ?)`,
-    ).bind(input.memberId, input.taskId, input.dependsOnTaskId, input.createdAt).run();
-    return result.meta.changes === 1;
+  async insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }, version?: TaskDependencyVersion): Promise<boolean> {
+    const statement = this.db.prepare(
+      `INSERT INTO task_dependencies (member_id, task_id, depends_on_task_id, created_at)
+       SELECT ?, ?, ?, ? FROM tasks
+       WHERE member_id = ? AND id = ?${version ? " AND updated_at = ?" : ""}
+       ON CONFLICT(task_id, depends_on_task_id) DO NOTHING`,
+    ).bind(input.memberId, input.taskId, input.dependsOnTaskId, input.createdAt,
+      input.memberId, input.taskId, ...(version ? [version.expectedUpdatedAt] : []));
+    return this.mutateDependency(statement, input.memberId, input.taskId, version);
   }
 
   async listDependencies(memberId: string, taskId: string): Promise<TaskDependency[]> {
@@ -364,11 +369,25 @@ export class TasksRepository implements TasksRepositoryPort {
     return rows.results.map(mapDependencyRow);
   }
 
-  async deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string): Promise<boolean> {
-    const result = await this.db.prepare(
-      "DELETE FROM task_dependencies WHERE member_id = ? AND task_id = ? AND depends_on_task_id = ?",
-    ).bind(memberId, taskId, dependsOnTaskId).run();
-    return result.meta.changes === 1;
+  async deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string, version?: TaskDependencyVersion): Promise<boolean> {
+    const statement = this.db.prepare(
+      `DELETE FROM task_dependencies WHERE member_id = ? AND task_id = ? AND depends_on_task_id = ?
+       ${version ? "AND EXISTS (SELECT 1 FROM tasks WHERE member_id = ? AND id = ? AND updated_at = ?)" : ""}`,
+    ).bind(memberId, taskId, dependsOnTaskId, ...(version ? [memberId, taskId, version.expectedUpdatedAt] : []));
+    return this.mutateDependency(statement, memberId, taskId, version);
+  }
+
+  private async mutateDependency(statement: D1PreparedStatement, memberId: string, taskId: string, version?: TaskDependencyVersion): Promise<boolean> {
+    if (!version) return (await statement.run()).meta.changes === 1;
+    // The relation CAS and its version advance must commit or roll back together.
+    // A replay/no-op must not consume a version. D1 batch prevents another writer
+    // from interleaving between the guarded mutation and this changes() check.
+    const results = await this.db.batch([
+      statement,
+      this.db.prepare("UPDATE tasks SET updated_at = ? WHERE member_id = ? AND id = ? AND changes() = 1")
+        .bind(version.updatedAt, memberId, taskId),
+    ]);
+    return results[0]!.meta.changes === 1;
   }
 }
 
