@@ -50,3 +50,17 @@ rtk proxy npx vitest run test/unit/publication-service.test.ts test/worker/m1-pu
 - D04：环境真实副本 adapter 和正式入口仍开放；不引入云端备份。
 - D03：继续版本/回收入口/导出恢复/研究产物对账，直接复用本表，不重复把已存在的知识后端称为未实现。
 - C07 关闭仅表示本表和独立缺口设计已交付。原生验收仍需解锁 Mac 与真实身份会话；本地其他步骤允许继续。
+
+
+## 2026-10-10 LC-02 / R4-010 当前契约复核
+
+本地源码基线 `0e7905dd`，分支 `codex/functional-checklist-completion`。本节是现有行为核对，不是软删除实施批准或功能完成证据。
+
+- `src/tasks/repository.ts` 的 `delete` 仍执行 `DELETE FROM tasks WHERE member_id = ? AND id = ?`；`src/tasks/service.ts` 在删除成功后单独调用 `task.deleted` 审计。此路径尚未成为带版本条件、收据和审计的原子软删除。
+- `migrations/0032_workspace_tasks.sql` 的 tags/links 使用删除级联。旧硬删数据不能靠新增恢复入口重建；现有 DELETE 的永久删除语义不能偷偷替换成保留语义。
+- 直接引用 tasks 表的源码涉及 tasks、discussions、environments、goal-tasks、graph、inbox、notifications、projects、workbench-review 九个目录。此结果仅是初步依赖定位，不是完整读取面穷尽证明；正式实施需同时核对服务调用方、计数、授权与前端入口，不能只过滤任务列表。
+- 新鲜执行 `rtk proxy npx vitest run test/worker/tasks.test.ts`：**1文件22/22，exit 0**。覆盖当前创建/编辑/状态、owner/IDOR、关联删除等既有契约；不覆盖尚不存在的 trash/restore/purge。诊断日志 `/private/tmp/task-lifecycle-baseline.log`。
+- 既有 LC-02 设计明确任务保留期限与旧客户端兼容策略尚待批准。下一步需要确认这些产品语义，再编写具体设计与实施计划；没有新增接口、迁移、保留期限、自动清理或删除真实数据。
+- 本轮检查到会话没有可用的浏览器控制工具，`rtk proxy orca status --json` 返回 executable not found。这只说明当前验收工具不可用，不是浏览器安全策略失败，也不允许改用绕过路径。D05/D06 等真实身份和原生交互验收仍开放。
+
+主清单仍原30 / 排除D08 / 范围29 / 完成5 / 剩余24；C01、R4-010、TSK-009 不关闭。没有推送、部署、远程迁移或生产验收。
