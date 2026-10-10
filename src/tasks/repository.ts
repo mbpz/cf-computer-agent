@@ -1,3 +1,6 @@
+import { APP_CONFIG } from "../config";
+import { AuditRepository } from "../audit/repository";
+import type { CreateAuditEvent } from "../audit/types";
 import { normalizeNumberedPageRequest, pageOffset } from "../pagination";
 import { queryNumberedPage } from "../pagination-d1";
 import {
@@ -11,6 +14,7 @@ import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskP
 
 export interface TasksRepositoryPort {
   insert(input: TaskCreate): Promise<boolean>;
+  insertWithKnowledge(input: TaskCreate, knowledgeItemId: string, linkId: string, audits?: readonly CreateAuditEvent[]): Promise<boolean>;
   findOwned(memberId: string, id: string): Promise<Task | null>;
   list(memberId: string, request: TaskListRequest): Promise<TaskPage>;
   update(memberId: string, id: string, input: TaskUpdate, expectedUpdatedAt?: number): Promise<Task | null>;
@@ -66,6 +70,34 @@ export class TasksRepository implements TasksRepositoryPort {
        VALUES (?, ?, ?, ?, 'todo', 0, ?, ?, ?, ?)`,
     ).bind(input.id, input.memberId, input.title, input.notes, input.priority, input.dueAt, input.createdAt, input.updatedAt).run();
     return result.meta.changes === 1;
+  }
+
+  async insertWithKnowledge(input: TaskCreate, knowledgeItemId: string, linkId: string, audits: readonly CreateAuditEvent[] = []): Promise<boolean> {
+    // Authorization and capacity belong to the write, not only the service preflight.
+    // A losing insert must never attach its link to a task created by another request.
+    const result = await this.db.batch([
+      this.db.prepare(
+        `WITH ${authorizedKnowledgeMemberCteSql(false)}
+         INSERT INTO tasks (id, member_id, title, notes, status, progress, priority, due_at, created_at, updated_at)
+         SELECT ?, ?, ?, ?, 'todo', 0, ?, ?, ?, ?
+         FROM authorized_member am
+         JOIN knowledge_items k
+         JOIN revisions r ON r.id = k.current_revision_id
+         ${ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL}
+         WHERE k.id = ? AND ${ACTIVE_KNOWLEDGE_ITEM_SQL} AND ${readableKnowledgeRevisionSql()}
+           AND (SELECT COUNT(*) FROM tasks WHERE member_id = ?) < ?
+         ON CONFLICT(id) DO NOTHING`,
+      ).bind(input.memberId, input.id, input.memberId, input.title, input.notes, input.priority,
+        input.dueAt, input.createdAt, input.updatedAt, knowledgeItemId, input.memberId, APP_CONFIG.maxTasksPerMember),
+      this.db.prepare(
+        `INSERT INTO task_links (id, task_id, member_id, knowledge_item_id, created_at)
+         SELECT ?, ?, ?, ?, ? WHERE changes() = 1`,
+      ).bind(linkId, input.id, input.memberId, knowledgeItemId, input.createdAt),
+      // Each successful insert changes exactly one row; a no-op propagates through
+      // the chain. Any link/audit failure rolls the entire D1 batch back.
+      ...audits.map((audit) => new AuditRepository(this.db).prepareChangedRowAudit(audit)),
+    ]);
+    return result[0]!.meta.changes === 1;
   }
 
   async findOwned(memberId: string, id: string): Promise<Task | null> {

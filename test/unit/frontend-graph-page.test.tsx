@@ -1,4 +1,4 @@
-import { focusReceipt } from "../helpers/graph-action-receipts";
+import { focusReceipt, taskReceipt } from "../helpers/graph-action-receipts";
 // @vitest-environment node
 import React from "react";
 import { act } from "react";
@@ -227,6 +227,37 @@ describe("GraphPage", () => {
     await flush();
     expect(posts).toHaveLength(2);
     expect(JSON.parse(posts[1]!).clientKey).toBe(clientKey);
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("keeps a knowledge action pending across remount until its link is confirmed", async () => {
+    const graph: GraphSnapshot = { ...snapshot, nodes: [{ id: "knowledge:knowledge-1", kind: "knowledge", label: "Review knowledge", status: null, href: "/knowledge/knowledge-1", metadata: {} }], edges: [] };
+    const posts: string[] = [];
+    let complete = false;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      posts.push(String(init?.body));
+      const receipt = taskReceipt(JSON.parse(String(init?.body)).id, false);
+      return Response.json(complete ? receipt : { task: receipt.task, created: false });
+    });
+    await renderMemberGraph(graph);
+    await clickNode("knowledge:knowledge-1");
+    await clickButton("Create task");
+    await flush();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).not.toBeNull();
+    const stored = browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a");
+    expect(stored).toContain(JSON.parse(posts[0]!).id);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    act(() => root.unmount());
+    root = createRoot(host);
+    await renderMemberGraph(graph);
+    expect(posts).toHaveLength(1);
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBe(stored);
+    complete = true;
+    await clickButton("Retry action");
+    await flush();
+    expect(posts).toEqual([posts[0], posts[0]]);
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
     expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });

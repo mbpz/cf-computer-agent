@@ -57,6 +57,7 @@ export async function dispatchGraphAction(
       body: JSON.stringify({ id: clientKey, title: node.label, notes: "", priority: "medium", dueAt: null, knowledgeItemId: id }),
     });
     requireReceipt(data, "task", { id: clientKey });
+    requireReceipt(data, "link", { taskId: clientKey, knowledgeItemId: id });
     return { status: "completed", action: "create_task", clientKey, data };
   }
 
@@ -107,7 +108,7 @@ function projectIdFromHref(value: unknown): string | null {
 
 // A successful transport is not proof that this operation completed. Only immutable
 // identity is compared: a replay may return an entity edited after its creation.
-function requireReceipt(value: unknown, field: "task" | "session" | "item", identity: Record<string, string>): void {
+function requireReceipt(value: unknown, field: "task" | "session" | "item" | "link", identity: Record<string, string>): void {
   const receipt = record(value);
   const entity = record(receipt?.[field]);
   if (!receipt || typeof receipt.created !== "boolean" || !entity

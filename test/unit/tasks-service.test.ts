@@ -323,6 +323,7 @@ describe("TasksService", () => {
 
 function createService(repository: FakeTasksRepository, audit?: FakeAudit, notifications?: FakeNotificationSink): TasksService {
   let next = 0;
+  repository.audit = audit;
   return new TasksService(repository, {
     id: () => `generated-${++next}`,
     now: () => NOW,
@@ -352,6 +353,7 @@ class FakeAudit {
 }
 
 class FakeTasksRepository implements TasksRepositoryPort {
+  audit?: FakeAudit;
   tasks = new Map<string, Task>();
   tags = new Map<string, string[]>();
   links = new Map<string, TaskLink>();
@@ -362,6 +364,14 @@ class FakeTasksRepository implements TasksRepositoryPort {
   linkCount = 0;
   subtasks = new Map<string, TaskSubtask>();
   dependencies = new Map<string, TaskDependency>();
+
+  async insertWithKnowledge(input: TaskCreate, knowledgeItemId: string, linkId: string, audits: readonly CreateAuditEvent[] = []): Promise<boolean> {
+    if (!this.visibleKnowledge.has(knowledgeItemId)) return false;
+    if (!await this.insert(input)) return false;
+    await this.insertLink({ id: linkId, taskId: input.id, memberId: input.memberId, knowledgeItemId, createdAt: input.createdAt });
+    for (const audit of audits) await this.audit?.writeAudit(audit);
+    return true;
+  }
 
   async insert(input: TaskCreate): Promise<boolean> {
     if (this.tasks.has(input.id)) return false;

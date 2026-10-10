@@ -40,24 +40,51 @@ export class TasksService {
 
   async create(memberId: string, input: TaskCreateInput): Promise<{ task: Task; created: boolean; link?: TaskLink }> {
     const normalized = normalizeTaskCreate(input);
+    if (normalized.knowledgeItemId) await this.requireKnowledgeVisible(memberId, normalized.knowledgeItemId);
     const existing = await this.repository.findOwned(memberId, normalized.id);
-    if (existing) return { task: existing, created: false };
+    if (existing) return this.creationReceipt(memberId, existing, false, normalized.knowledgeItemId);
     if (await this.repository.countByMember(memberId) >= APP_CONFIG.maxTasksPerMember) {
       throw new AppError("TASK_LIMIT_REACHED", "Task limit reached", 409);
     }
     const now = this.now().getTime();
-    const inserted = await this.repository.insert({
+    const record = {
       id: normalized.id, memberId, title: normalized.title, notes: normalized.notes,
       priority: normalized.priority, dueAt: normalized.dueAt, createdAt: now, updatedAt: now,
-    });
+    };
+    const inserted = normalized.knowledgeItemId
+      ? await this.repository.insertWithKnowledge(record, normalized.knowledgeItemId, this.id(), this.options.audit ? [
+        this.auditEvent("task.created", memberId, record.id, { status: "todo", priority: normalized.priority }),
+        this.auditEvent("task.linked", memberId, record.id, { knowledgeItemId: normalized.knowledgeItemId }),
+      ] : [])
+      : await this.repository.insert(record);
     const task = await this.repository.findOwned(memberId, normalized.id);
-    if (!task) throw new AppError("TASK_NOT_FOUND", "Task not found", 404, true);
-    if (inserted) await this.emitAudit("task.created", memberId, task.id, { status: "todo", priority: normalized.priority });
-    let link: TaskLink | undefined;
-    if (normalized.knowledgeItemId) {
-      link = (await this.linkKnowledge(memberId, task, normalized.knowledgeItemId)).link;
+    if (!task) {
+      if (normalized.knowledgeItemId) {
+        await this.requireKnowledgeVisible(memberId, normalized.knowledgeItemId);
+        if (await this.repository.countByMember(memberId) >= APP_CONFIG.maxTasksPerMember) {
+          throw new AppError("TASK_LIMIT_REACHED", "Task limit reached", 409);
+        }
+      }
+      throw new AppError("TASK_NOT_FOUND", "Task not found", 404, true);
     }
-    return { task, created: inserted, ...(link ? { link } : {}) };
+    if (inserted && !normalized.knowledgeItemId) await this.emitAudit("task.created", memberId, task.id, { status: "todo", priority: normalized.priority });
+    return this.creationReceipt(memberId, task, inserted, normalized.knowledgeItemId);
+  }
+
+  private async creationReceipt(memberId: string, task: Task, created: boolean, knowledgeItemId: string | null): Promise<{ task: Task; created: boolean; link?: TaskLink }> {
+    if (!knowledgeItemId) return { task, created };
+    await this.requireKnowledgeVisible(memberId, knowledgeItemId);
+    const link = await this.repository.findLink(memberId, task.id, knowledgeItemId);
+    // An old partial write and an intentional unlink are indistinguishable. Do not
+    // silently mutate either on replay or claim the requested operation completed.
+    if (!link) throw new AppError("TASK_CREATE_CONFLICT", "Task exists without the requested knowledge link", 409);
+    return { task, created, link };
+  }
+
+  private async requireKnowledgeVisible(memberId: string, knowledgeItemId: string): Promise<void> {
+    if (!await this.repository.isKnowledgeVisible(memberId, knowledgeItemId)) {
+      throw new AppError("TASK_KNOWLEDGE_NOT_FOUND", "Knowledge item is not visible", 404);
+    }
   }
 
   async get(memberId: string, id: string): Promise<TaskDetail> {
@@ -284,9 +311,7 @@ export class TasksService {
 
   private async linkKnowledge(memberId: string, task: Task, knowledgeItemId: string, version?: { expectedUpdatedAt: unknown }): Promise<{ link: TaskLink; created: boolean }> {
     // Replays must authorize the current target, not rely on a past association.
-    if (!await this.repository.isKnowledgeVisible(memberId, knowledgeItemId)) {
-      throw new AppError("TASK_KNOWLEDGE_NOT_FOUND", "Knowledge item is not visible", 404);
-    }
+    await this.requireKnowledgeVisible(memberId, knowledgeItemId);
     const existing = await this.repository.findLink(memberId, task.id, knowledgeItemId);
     if (existing) return { link: existing, created: false };
     if (await this.repository.countLinks(memberId, task.id) >= APP_CONFIG.maxTaskLinksPerTask) {
@@ -304,10 +329,14 @@ export class TasksService {
 
   private async emitAudit(action: AuditAction, memberId: string, taskId: string, metadata: CreateAuditEvent["metadata"]): Promise<void> {
     if (!this.options.audit) return;
-    await this.options.audit.writeAudit({
+    await this.options.audit.writeAudit(this.auditEvent(action, memberId, taskId, metadata));
+  }
+
+  private auditEvent(action: AuditAction, memberId: string, taskId: string, metadata: CreateAuditEvent["metadata"]): CreateAuditEvent {
+    return {
       id: this.id(), actorKind: "member", actorId: memberId, action,
       resourceType: "task", resourceId: taskId, metadata, createdAt: this.now().toISOString(),
-    } as CreateAuditEvent);
+    } as CreateAuditEvent;
   }
 
   private async deliverPendingStatusNotifications(memberId: string, taskId: string): Promise<void> {
