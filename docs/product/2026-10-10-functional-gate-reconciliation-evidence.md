@@ -18,7 +18,7 @@
 - `types:check` 使用 `config/types.env` 通过；Wrangler 生成类型与已提交文件一致。首次沙箱日志目录写入受限，随后原命令获准重跑通过。
 - Worker 与全前端严格类型、前端操作索引检查（270 文件/1168 候选）、领域快照检查、WCAG 静态检查通过。静态索引不是原生浏览器操作穷尽。
 - 最终完整 `npm test` **退出码0**：smoke Node **79/79**、i18n **13/13**、交付契约 **30/30**，unit **355 文件/4854 项全部通过**，Worker **66 文件/1112 项全部通过**；`pretest:worker` 的 UI 构建与 VM 静态隔离检查通过。最终日志 `/private/tmp/cf-d07-full-test-verified.log`。测试源码在此最终运行前固定；之后只补齐本文及父 checklist 的结果记录。
-- 日志仍有 `ReferenceError: window is not defined` 的后台 React 调度异常，以及 Worker 运行中的 missing-file/pending-journal 异常输出；本轮未逐条归因，不能将退出码0等同于无后台异常。UI 构建既有大 chunk 警告亦保留。这些是后续验证注意项，未删除错误输出、禁用检查或将真实浏览器验收替换为测试结果。
+- 初轮日志仍有 `ReferenceError: window is not defined` 的后台 React 调度异常，以及 Worker 运行中的 missing-file/pending-journal 异常输出；初轮未逐条归因，不能将退出码0等同于无后台异常；本页下方续行记录给出后续定位和修复。UI 构建既有大 chunk 警告亦保留。这些是后续验证注意项，未删除错误输出、禁用检查或将真实浏览器验收替换为测试结果。
 - 最终文档更新后的交付/成熟度/父清单契约 **54/54** 通过；不修改总账已有发布和验收状态。
 
 ## 重放命令
@@ -36,6 +36,22 @@ rtk proxy npm test
 
 ## 关闭边界
 
-原 30 父项、范围内 **29 / 已关闭 5 / 未关闭 24**；D08 排除。D07 保持开放，不把 smoke/单测或文档同步等同精确候选完整门禁。尚需完整门禁及正式验收证据；D05 真实 admin/contributor/第二成员旅程、D06 原生尺寸/语言/主题/输入矩阵、D04 正式 VM 生命周期 LC-011–015 均不由本次测试替代。LC-010 的 GitHub 网络限制是用户跳过，不标为通过。
+原 30 父项、范围内 **29 / 已关闭 5 / 未关闭 24**；D08 排除。D07 保持开放，不把 smoke/单测或文档同步等同精确候选完整门禁。尚需功能完成后的最终候选门禁及正式验收证据；D05 真实 admin/contributor/第二成员旅程、D06 原生尺寸/语言/主题/输入矩阵、D04 正式 VM 生命周期 LC-011–015 均不由本次测试替代。LC-010 的 GitHub 网络限制是用户跳过，不标为通过。
 
-未 push、merge、部署、远程迁移或操作生产数据；未读取/上传 SECRETS_FILE。测试运行器自动加载开发变量，AI 绑定提示不是线上执行证明。未运行含 secrets 生成的整个 `npm run check`/`npm run build`，因此不宣称这些聚合门禁通过。下一允许继续 D07 本地门禁和剩余功能验收；不以备份或加密增加阻塞。
+未 push、merge、部署、远程迁移或操作生产数据；未读取/上传 SECRETS_FILE。测试运行器自动加载开发变量，AI 绑定提示不是线上执行证明。初轮未运行整个 `npm run check`/`npm run build`，因此当时未宣称聚合门禁通过。后续复核确认 `build:secrets` 仅扫描 `frontend/dist` 中的凭据模式，不生成或同步 Secret；初轮对该命令的解释有误。完整构建和后续门禁结果见下方续行记录。下一允许继续 D07 本地门禁和剩余功能验收；不以备份或加密增加阻塞。
+
+
+## 2026-10-10 续行：后台异常归因与完整本地门禁
+
+基线 `6db8151a`，唯一测试改动为 `test/unit/frontend-notifications-route.test.tsx` 中两条 401/403 拒绝后的导航回归；业务源码、依赖、鉴权、迁移和发布配置均未修改。
+
+- 全量 verbose 单测仍为 355 文件、4854/4854，但复现 React Scheduler 的 `window is not defined`。日志相邻的成熟度路由独立运行151/151没有该异常，不能仅按并行日志相邻位置归因。
+- 随后串行执行通知/任务/看板/专注四文件，194/194通过但在通知401/403测试尾部稳定观察到同一异常。两项测试在 `act` 外调用 `writeWorkspaceHistory`，触发已挂载路由更新；DOM全局随后被清理，调度工作才继续运行。
+- 在导航调用处添加不吞日志的 `console.error` spy 与无 act 警告断言：两项均 RED（2失败/29筛选跳过）。再仅将导航包在异步 `act` 中，保留403/401禁用态、导航提交结果和真实 pathname 断言；四文件194/194 GREEN，日志不再有 `uncaught exception` 或 `window is not defined`。其他现有测试仍有 act 提示，本轮不声称全部测试日志零警告。
+- Worker 的三条 uncaught 输出另行用两项负向测试独立复现（2通过/117筛选跳过）：`app.test.ts` 人工损坏 journal 后检查精确错误、500和敏感字段不外泄；`m1-publication.test.ts` purge 后检查发布文件确实不存在。对应错误是既有负向用例预期路径，不是未归因的线上事故；没有拦截输出、关闭错误上报或改变业务异常处理。
+- 完整 `npm run build` 已退出0：UI/VM静态隔离、landing、公开产物凭据扫描、legacy审计和 Wrangler `deploy --dry-run` 全链通过。dry-run不是部署，未调用 Secret 同步脚本，也未读取/上传 `SECRETS_FILE`。
+- 完整 `npm run check` **退出码0**：vendor、生成类型一致性、Worker/全前端/landing类型、完整npm test（smoke79、i18n13、delivery30；unit355文件4854/4854；Worker66文件1112/1112）及完整构建（landing97/97、公开产物凭据扫描、legacy审计、Wrangler dry-run）通过。全量日志不再出现 `window is not defined`；三条Worker异常与上述独立负向复现一致。测试源码在本次check前固定，后续仅更新文档结果；另跑交付/成熟度/清单契约54/54验证记录。
+
+本地日志：`/private/tmp/cf-d07-unit-attribution.log`、`/private/tmp/cf-d07-maturity-attribution.log`、`/private/tmp/cf-d07-scheduler-isolation.log`、`/private/tmp/cf-d07-notification-act-red.log`、`/private/tmp/cf-d07-scheduler-green.log`、`/private/tmp/cf-d07-expected-worker-faults.log`、`/private/tmp/cf-d07-build-complete.log`、`/private/tmp/cf-d07-complete-check.log`。临时日志只用于诊断，长期审查依据为此记录及可复跑测试。
+
+D07 原关闭条件是**功能完成后的最终候选**门禁；当前候选门禁不是功能完成证明。D04/D05/D06等功能验收仍开放，29/5/24保持不变。原生交互工具预检显示本机 `orca` 命令不可用；不通过替代浏览器或模拟身份冒充验收，亦不据此停止仍可进行的本地功能工作。

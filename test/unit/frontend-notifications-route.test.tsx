@@ -532,7 +532,15 @@ describe("notification inbox route", () => {
     await click("Mark as read");
     await flush();
     expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
-    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+    const errors = vi.spyOn(console, "error");
+    try {
+      // Navigation notifies the mounted route; flush that update before DOM teardown.
+      await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed"); });
+      expect(browser.location.pathname).toBe("/tasks");
+      expect(errors.mock.calls.filter(args => String(args[0]).includes("not wrapped in act"))).toEqual([]);
+    } finally {
+      errors.mockRestore();
+    }
   });
 
   async function renderRoute() {

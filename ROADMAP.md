@@ -6,7 +6,7 @@
 
 2026-09-28 UTC 功能增量：D03 [知识版本/回收/导出恢复/研究产物专项对账](./docs/product/2026-09-28-knowledge-roadmap-reconciliation.md)已完成；原功能范围 **29 / 5 关闭 / 24 未关闭**，下一 D04。KB-011 依现有代码与新回归校正为 partial/partial，原 R3/R5/R6 未完成子项保留；本地 26 文件 361/361 不提升发布/验收。
 
-2026-10-10 本地 D07 门禁对账：迁移文件校验与历史发布清单分离；环境 atom 归属、共享编辑器 11 条证据 gap 和回归夹具已校正，见[审核与验证记录](./docs/product/2026-10-10-functional-gate-reconciliation-evidence.md)。原功能范围仍 **29 / 5 关闭 / 24 未关闭**；不以局部门禁替代真实身份、原生交互或 VM 正式生命周期验收。
+2026-10-10 本地 D07 门禁对账：完整本地 `npm run check` 通过（unit4854/4854、Worker1112/1112、landing97/97）；通知测试导航调度异常已修复，Worker负向日志已归因。迁移文件校验与历史发布清单分离；环境 atom 归属、共享编辑器 11 条证据 gap 和回归夹具已校正，见[审核与验证记录](./docs/product/2026-10-10-functional-gate-reconciliation-evidence.md)。原功能范围仍 **29 / 5 关闭 / 24 未关闭**；不以局部门禁替代真实身份、原生交互或 VM 正式生命周期验收。
 
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
