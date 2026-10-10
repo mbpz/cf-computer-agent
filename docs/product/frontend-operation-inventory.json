@@ -349,14 +349,15 @@
         "frontend/pages/graph-page.tsx:243:25",
         "frontend/pages/graph-page.tsx:245:9",
         "frontend/pages/graph-page.tsx:248:51",
-        "frontend/pages/graph-page.tsx:249:7",
-        "frontend/pages/graph-page.tsx:250:38",
-        "frontend/pages/graph-page.tsx:252:9",
-        "frontend/pages/graph-page.tsx:254:11",
-        "frontend/pages/graph-page.tsx:262:11",
-        "frontend/pages/graph-page.tsx:352:10",
-        "frontend/pages/graph-page.tsx:358:269",
-        "frontend/pages/graph-page.tsx:360:34"
+        "frontend/pages/graph-page.tsx:251:11",
+        "frontend/pages/graph-page.tsx:254:9",
+        "frontend/pages/graph-page.tsx:255:40",
+        "frontend/pages/graph-page.tsx:257:11",
+        "frontend/pages/graph-page.tsx:259:13",
+        "frontend/pages/graph-page.tsx:267:13",
+        "frontend/pages/graph-page.tsx:358:10",
+        "frontend/pages/graph-page.tsx:364:269",
+        "frontend/pages/graph-page.tsx:366:34"
       ],
       "unresolvedSymbols": []
     },
@@ -30800,12 +30801,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -30844,12 +30841,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -30884,12 +30877,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -30924,12 +30913,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -30964,12 +30949,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31008,12 +30989,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31048,12 +31025,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31088,12 +31061,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31128,12 +31097,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31168,12 +31133,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31212,12 +31173,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31252,12 +31209,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31292,12 +31245,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31332,12 +31281,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31372,12 +31317,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31412,12 +31353,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31458,12 +31395,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31507,12 +31440,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31554,12 +31483,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31600,12 +31525,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31649,12 +31570,8 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
@@ -31696,34 +31613,38 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:249:7",
+      "id": "frontend/pages/graph-page.tsx:251:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 249,
-      "column": 7,
+      "line": 251,
+      "column": 11,
       "kind": "jsx",
-      "tag": "GraphSuggestionsPanel",
+      "tag": "Button",
       "attributes": {
-        "locale": "locale",
-        "state": "suggestionsState",
-        "onGenerate": "onGenerateSuggestions"
+        "className": "\"mt-4\"",
+        "variant": "\"outline\"",
+        "onClick": "onRetry"
       },
       "handlers": {
-        "onGenerate": "onGenerateSuggestions"
+        "onClick": "onRetry"
       },
       "spreads": [],
-      "labels": [],
-      "context": [],
+      "labels": [
+        "frontendText(locale, \"GRAPH_RETRY\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"empty\"",
+          "branch": "true"
+        }
+      ],
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
@@ -31738,21 +31659,66 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:250:38",
+      "id": "frontend/pages/graph-page.tsx:254:9",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 250,
-      "column": 38,
+      "line": 254,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "GraphSuggestionsPanel",
+      "attributes": {
+        "locale": "locale",
+        "state": "suggestionsState",
+        "onGenerate": "onGenerateSuggestions"
+      },
+      "handlers": {
+        "onGenerate": "onGenerateSuggestions"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"empty\"",
+          "branch": "false"
+        },
+        {
+          "kind": "logical",
+          "expression": "filteredSnapshot",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <>{actionRecovery}<section data-graph-page-loading><p className=\"mb-3 text-sm text-muted-foreground\">{frontendText(locale, \"GRAPH_LOADING\")}</p><PageState kind=\"loading\" title={frontendText(locale, \"GRAPH_LOADING\")} /></section></>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <>{actionRecovery}<PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState></>;"
+        },
+        {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/graph-page.tsx:255:40",
+      "path": "frontend/pages/graph-page.tsx",
+      "owner": "GraphPage",
+      "line": 255,
+      "column": 40,
       "kind": "jsx",
       "tag": "div",
       "attributes": {
@@ -31766,6 +31732,16 @@
         "frontendText(locale, \"GRAPH_TRUNCATED\")"
       ],
       "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"empty\"",
+          "branch": "false"
+        },
+        {
+          "kind": "logical",
+          "expression": "filteredSnapshot",
+          "operator": "&&"
+        },
         {
           "kind": "logical",
           "expression": "state.kind === \"truncated\"",
@@ -31786,21 +31762,17 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:252:9",
+      "id": "frontend/pages/graph-page.tsx:257:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 252,
-      "column": 9,
+      "line": 257,
+      "column": 11,
       "kind": "jsx",
       "tag": "GraphCanvas",
       "attributes": {
@@ -31817,7 +31789,18 @@
       },
       "spreads": [],
       "labels": [],
-      "context": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"empty\"",
+          "branch": "false"
+        },
+        {
+          "kind": "logical",
+          "expression": "filteredSnapshot",
+          "operator": "&&"
+        }
+      ],
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
@@ -31832,21 +31815,17 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:254:11",
+      "id": "frontend/pages/graph-page.tsx:259:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 254,
-      "column": 11,
+      "line": 259,
+      "column": 13,
       "kind": "jsx",
       "tag": "GraphInspector",
       "attributes": {
@@ -31863,7 +31842,18 @@
       },
       "spreads": [],
       "labels": [],
-      "context": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"empty\"",
+          "branch": "false"
+        },
+        {
+          "kind": "logical",
+          "expression": "filteredSnapshot",
+          "operator": "&&"
+        }
+      ],
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
@@ -31878,21 +31868,17 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:262:11",
+      "id": "frontend/pages/graph-page.tsx:267:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 262,
-      "column": 11,
+      "line": 267,
+      "column": 13,
       "kind": "jsx",
       "tag": "GraphEvidencePanel",
       "attributes": {
@@ -31905,7 +31891,18 @@
       },
       "spreads": [],
       "labels": [],
-      "context": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"empty\"",
+          "branch": "false"
+        },
+        {
+          "kind": "logical",
+          "expression": "filteredSnapshot",
+          "operator": "&&"
+        }
+      ],
       "earlyReturns": [
         {
           "condition": "state.kind === \"loading\"",
@@ -31920,20 +31917,16 @@
           "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
         },
         {
-          "condition": "state.kind === \"empty\"",
-          "source": "if (state.kind === \"empty\") return <>{actionRecovery}<PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} /></>;"
-        },
-        {
-          "condition": "!filteredSnapshot",
-          "source": "if (!filteredSnapshot) return null;"
+          "condition": "!filteredSnapshot && state.kind !== \"empty\"",
+          "source": "if (!filteredSnapshot && state.kind !== \"empty\") return null;"
         }
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:352:10",
+      "id": "frontend/pages/graph-page.tsx:358:10",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphRoute",
-      "line": 352,
+      "line": 358,
       "column": 10,
       "kind": "jsx",
       "tag": "GraphPage",
@@ -31973,10 +31966,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:358:269",
+      "id": "frontend/pages/graph-page.tsx:364:269",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphSuggestionsPanel",
-      "line": 358,
+      "line": 364,
       "column": 269,
       "kind": "jsx",
       "tag": "Button",
@@ -31996,10 +31989,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:360:34",
+      "id": "frontend/pages/graph-page.tsx:366:34",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphSuggestionsPanel",
-      "line": 360,
+      "line": 366,
       "column": 34,
       "kind": "jsx",
       "tag": "p",

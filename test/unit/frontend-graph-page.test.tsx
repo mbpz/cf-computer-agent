@@ -673,6 +673,101 @@ describe("graph view refresh", () => {
   });
 });
 
+describe("graph empty-result recovery", () => {
+  const empty: GraphSnapshot = { ...snapshot, nodes: [], edges: [] };
+  const locale = createLocaleRuntime({ navigatorLanguage: "en-US" });
+  const viewKey = "memory-garden:graph-view:v1:member-a";
+
+  it.each([
+    ["lens", "knowledge", "workspace", (input: GraphQueryInput) => input.scope === "knowledge"],
+    ["time-range", "7d", "all", (input: GraphQueryInput) => !!input.from],
+    ["change-kind", "archived", "all", (input: GraphQueryInput) => input.changeKind === "archived"],
+  ] as const)("can broaden %s after the server returns no matching nodes", async (control, narrow, broad, matches) => {
+    const load = vi.fn(async (input: GraphQueryInput) => matches(input) ? empty : snapshot);
+    await act(async () => root.render(<GraphRoute memberId="member-a" locale={locale} load={load} />));
+    await flush();
+    await change(host.querySelector(`[data-graph-${control}]`) as HTMLSelectElement, narrow);
+    await flush();
+    expect(host.querySelector('[data-page-state="empty"]')).not.toBeNull();
+    expect(host.querySelector("[data-graph-node-id]")).toBeNull();
+    const selector = host.querySelector(`[data-graph-${control}]`) as HTMLSelectElement;
+    expect(selector).not.toBeNull();
+    expect(selector.value).toBe(narrow);
+    await change(selector, broad);
+    await flush();
+    expect(host.querySelector('[data-graph-node-id="project:p1"]')).not.toBeNull();
+    expect(load).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps restored empty filters editable after remount without resetting them silently", async () => {
+    const { persistGraphView } = await import("../../frontend/lib/graph-view");
+    persistGraphView("member-a", { query: "Launch", lens: "knowledge", temporalRange: "all", changeKind: "all" });
+    const load = vi.fn(async (input: GraphQueryInput) => input.scope === "knowledge" ? empty : snapshot);
+    await act(async () => root.render(<GraphRoute memberId="member-a" locale={locale} load={load} />));
+    await flush();
+    const selector = host.querySelector("[data-graph-lens]") as HTMLSelectElement;
+    expect(selector).not.toBeNull();
+    expect(selector.value).toBe("knowledge");
+    expect((host.querySelector("[data-graph-query]") as HTMLInputElement).value).toBe("Launch");
+    await change(selector, "workspace");
+    await flush();
+    expect(host.querySelector('[data-graph-node-id="project:p1"]')).not.toBeNull();
+    expect(window.sessionStorage.getItem(viewKey)).toContain('"lens":"workspace"');
+  });
+
+  it("can explicitly re-read an empty graph without generating suggestions or issuing writes", async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const load = vi.fn<(_: GraphQueryInput) => Promise<GraphSnapshot>>()
+      .mockResolvedValueOnce(empty).mockResolvedValueOnce(snapshot);
+    await act(async () => root.render(<GraphRoute locale={locale} load={load} />));
+    await flush();
+    expect(host.querySelector("[data-graph-suggestions]")).toBeNull();
+    expect(host.querySelector("[data-graph-canvas]")).toBeNull();
+    await clickButton(frontendText(locale, "GRAPH_RETRY"));
+    await flush();
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(host.querySelector('[data-graph-node-id="project:p1"]')).not.toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("exposes the unreadable view record and explicit discard in an empty graph", async () => {
+    window.sessionStorage.setItem(viewKey, "{");
+    const load = vi.fn(async () => empty);
+    await act(async () => root.render(<GraphRoute memberId="member-a" locale={locale} load={load} />));
+    await flush();
+    expect(host.querySelector("[data-graph-view-blocked]")).not.toBeNull();
+    expect(window.sessionStorage.getItem(viewKey)).toBe("{");
+    await clickButton(frontendText(locale, "GRAPH_VIEW_RECORD_DISCARD"));
+    await flush();
+    expect(host.querySelector("[data-graph-view-blocked]")).toBeNull();
+    // The default view is intentionally represented by no record.
+    expect(window.sessionStorage.getItem(viewKey)).toBeNull();
+    expect(load).toHaveBeenCalledTimes(1);
+    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d");
+    await flush();
+    expect(window.sessionStorage.getItem(viewKey)).toContain('"temporalRange":"7d"');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([401, 403])("does not expose restored filters if the empty-result re-read is denied with %s", async (status) => {
+    const { persistGraphView } = await import("../../frontend/lib/graph-view");
+    persistGraphView("member-a", { query: "private filter", lens: "workspace", temporalRange: "all", changeKind: "all" });
+    const load = vi.fn<(_: GraphQueryInput) => Promise<GraphSnapshot>>()
+      .mockResolvedValueOnce(empty)
+      .mockRejectedValueOnce(new ApiRequestError("FORBIDDEN", "denied", status, false));
+    await act(async () => root.render(<GraphRoute memberId="member-a" locale={locale} load={load} />));
+    await flush();
+    await clickButton(frontendText(locale, "GRAPH_RETRY"));
+    await flush();
+    expect(host.querySelector('[data-page-state="forbidden"]')).not.toBeNull();
+    expect(host.querySelector("[data-graph-query]")).toBeNull();
+    expect(host.querySelector("[data-graph-lens]")).toBeNull();
+    expect(host.textContent).not.toContain("private filter");
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+});
+
 async function renderReadyGraph(graph: GraphSnapshot = snapshot) {
   const load = vi.fn(async () => graph);
   await act(async () => { root.render(<GraphRoute locale={createLocaleRuntime()} load={load} />); });

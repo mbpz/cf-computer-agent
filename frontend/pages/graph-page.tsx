@@ -202,9 +202,9 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
   if (state.kind === "loading") return <>{actionRecovery}<section data-graph-page-loading><p className="mb-3 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_LOADING")}</p><PageState kind="loading" title={frontendText(locale, "GRAPH_LOADING")} /></section></>;
   if (state.kind === "error") return <>{actionRecovery}<PageState kind="error" title={frontendText(locale, "GRAPH_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState></>;
   if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "GRAPH_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>;
-  if (state.kind === "empty") return <>{actionRecovery}<PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")} /></>;
-
-  if (!filteredSnapshot) return null;
+  // Empty is an authorized read result, not a reason to hide the filters that produced it.
+  // Keep recovery controls reachable even when the persisted view returns no nodes.
+  if (!filteredSnapshot && state.kind !== "empty") return null;
   return (
     <section className="space-y-5" data-graph-page>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -212,7 +212,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
           <h1 className="text-2xl font-semibold">{frontendText(locale, "GRAPH_TITLE")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_DESCRIPTION")}</p>
         </div>
-        <span className="rounded-full border px-3 py-1 text-xs text-muted-foreground">{frontendText(locale, "GRAPH_NODE_COUNT").replace("{count}", String(filteredSnapshot.nodes.length))}</span>
+        <span className="rounded-full border px-3 py-1 text-xs text-muted-foreground">{frontendText(locale, "GRAPH_NODE_COUNT").replace("{count}", String(filteredSnapshot?.nodes.length ?? 0))}</span>
       </div>
       <Card>
         <CardHeader><CardTitle>{frontendText(locale, "GRAPH_LENS_TITLE")}</CardTitle></CardHeader>
@@ -246,22 +246,28 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
       </div>}
       {actionRecovery}
       {outcome && outcome.status !== "success" && <p role="status" className="text-sm text-destructive">{frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : outcome.status === "not_recorded" ? "GRAPH_ACTION_NOT_RECORDED" : "GRAPH_ACTION_NOT_SENT")}</p>}
-      <GraphSuggestionsPanel locale={locale} state={suggestionsState} onGenerate={onGenerateSuggestions} />
-      {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} onClearSelection={() => setSelectedId(null)} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
-        <div className="grid gap-5 self-start">
-          <GraphInspector
-            locale={locale}
-            node={selectedNode}
-            onClose={() => setSelectedId(null)}
-            onAction={selectedNode && (!action || action.node.id === selectedNode.id) ? () => runGraphAction(action ?? undefined) : undefined}
-            actionsDisabled={recordBlocked}
-            actionStatus={inspectorStatus}
-          />
-          <GraphEvidencePanel locale={locale} citationIds={selectedNode ? selectedCitationIds : undefined} onDenied={onDenied} />
+      {state.kind === "empty" ? (
+        <PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")}>
+          <Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button>
+        </PageState>
+      ) : filteredSnapshot && <>
+        <GraphSuggestionsPanel locale={locale} state={suggestionsState} onGenerate={onGenerateSuggestions} />
+        {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} onClearSelection={() => setSelectedId(null)} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
+          <div className="grid gap-5 self-start">
+            <GraphInspector
+              locale={locale}
+              node={selectedNode}
+              onClose={() => setSelectedId(null)}
+              onAction={selectedNode && (!action || action.node.id === selectedNode.id) ? () => runGraphAction(action ?? undefined) : undefined}
+              actionsDisabled={recordBlocked}
+              actionStatus={inspectorStatus}
+            />
+            <GraphEvidencePanel locale={locale} citationIds={selectedNode ? selectedCitationIds : undefined} onDenied={onDenied} />
+          </div>
         </div>
-      </div>
+      </>}
     </section>
   );
 }
