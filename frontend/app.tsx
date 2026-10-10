@@ -673,54 +673,72 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
   const [favorite, setFavorite] = useState<boolean | null>(null);
   const [favoriteError, setFavoriteError] = useState(false);
   const [retry, setRetry] = useState(0);
-  const diffGeneration = useRef(0);
+  const readOwner = useRef<{
+    primary: ReturnType<typeof createKnowledgeReaderRequestController>;
+    auxiliary: AbortController;
+    diff: AbortController | null;
+  } | null>(null);
+  type ReadOwner = NonNullable<typeof readOwner.current>;
+  const retire = (owner: ReadOwner) => {
+    if (readOwner.current === owner) readOwner.current = null;
+    owner.primary.cancel(); owner.auxiliary.abort(); owner.diff?.abort();
+  };
+  const denyRead = (error: unknown, owner: ReadOwner) => {
+    if (readOwner.current !== owner || !(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    // One denied member/knowledge read revokes the whole rendered reader. Retire
+    // before clearing UI, so even transports ignoring abort cannot restore it.
+    retire(owner);
+    setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_READER_ERROR") });
+    setDiffState({ kind: "idle" }); setRelatedState({ kind: "idle" }); setBacklinkState({ kind: "idle" });
+    setFavorite(null); setFavoriteError(false);
+    return true;
+  };
   useEffect(() => {
-    const controller = createKnowledgeReaderRequestController();
-    const routeGeneration = ++diffGeneration.current;
-    const request = controller.request(knowledgeItemId, citationHash);
+    const owner: ReadOwner = { primary: createKnowledgeReaderRequestController(), auxiliary: new AbortController(), diff: null };
+    readOwner.current = owner;
+    const request = owner.primary.request(knowledgeItemId, citationHash);
+    const live = () => readOwner.current === owner && !owner.auxiliary.signal.aborted;
+    const failed = (error: unknown, ordinary: () => void) => {
+      if (live() && !isAbort(error) && !denyRead(error, owner)) ordinary();
+    };
     setState({ kind: "loading" });
     setDiffState({ kind: "idle" });
     setRelatedState({ kind: "idle" });
     setBacklinkState({ kind: "idle" });
     setFavorite(null);
     setFavoriteError(false);
-    void request.promise.then(({ generation, revision }) => {
-      if (controller.isCurrent(generation)) {
-        setState({ kind: "ready", revision });
-        setRelatedState({ kind: "loading" });
-        setBacklinkState({ kind: "loading" });
-        void loadKnowledgeFavorite(knowledgeItemId).then((value) => {
-          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) { setFavoriteError(false); setFavorite(value); }
-        }).catch(() => {
-          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) { setFavorite(null); setFavoriteError(true); }
-        });
-        void loadRelatedKnowledge(knowledgeItemId).then((items) => {
-          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setRelatedState({ kind: "ready", items });
-        }).catch(() => {
-          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setRelatedState({ kind: "error" });
-        });
-        void loadKnowledgeBacklinks(knowledgeItemId).then((items) => {
-          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setBacklinkState({ kind: "ready", items });
-        }).catch(() => {
-          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setBacklinkState({ kind: "error" });
-        });
-      }
-    }).catch((error: unknown) => {
-      if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) {
-        setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_READER_ERROR") });
-      }
-    });
-    return () => { controller.cancel(); if (diffGeneration.current === routeGeneration) diffGeneration.current += 1; };
+    void request.promise.then(({ revision }) => {
+      if (!live()) return;
+      setState({ kind: "ready", revision });
+      setRelatedState({ kind: "loading" });
+      setBacklinkState({ kind: "loading" });
+      const signal = owner.auxiliary.signal;
+      void loadKnowledgeFavorite(knowledgeItemId, fetch, signal).then((value) => {
+        if (live()) { setFavoriteError(false); setFavorite(value); }
+      }).catch(error => failed(error, () => { setFavorite(null); setFavoriteError(true); }));
+      void loadRelatedKnowledge(knowledgeItemId, fetch, signal).then((items) => {
+        if (live()) setRelatedState({ kind: "ready", items });
+      }).catch(error => failed(error, () => setRelatedState({ kind: "error" })));
+      void loadKnowledgeBacklinks(knowledgeItemId, fetch, signal).then((items) => {
+        if (live()) setBacklinkState({ kind: "ready", items });
+      }).catch(error => failed(error, () => setBacklinkState({ kind: "error" })));
+    }).catch(error => failed(error, () => setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_READER_ERROR") })));
+    return () => retire(owner);
   }, [knowledgeItemId, citationHash, locale, retry]);
   const showDiff = async () => {
-    if (state.kind !== "ready" || !state.revision.previousRevisionId || diffState.kind === "loading") return;
-    const generation = diffGeneration.current;
+    const owner = readOwner.current;
+    if (!owner || owner.diff || state.kind !== "ready" || !state.revision.previousRevisionId) return;
+    // The ref, not the next render's loading flag, owns same-event clicks.
+    const controller = new AbortController(); owner.diff = controller;
+    const live = () => readOwner.current === owner && owner.diff === controller && !controller.signal.aborted;
     setDiffState({ kind: "loading" });
     try {
-      const diff = await loadKnowledgeRevisionDiff(knowledgeItemId, state.revision.previousRevisionId, state.revision.id);
-      if (diffGeneration.current === generation) setDiffState({ kind: "ready", diff });
-    } catch {
-      if (diffGeneration.current === generation) setDiffState({ kind: "error" });
+      const diff = await loadKnowledgeRevisionDiff(knowledgeItemId, state.revision.previousRevisionId, state.revision.id, fetch, controller.signal);
+      if (live()) setDiffState({ kind: "ready", diff });
+    } catch (error) {
+      if (live() && !isAbort(error) && !denyRead(error, owner)) setDiffState({ kind: "error" });
+    } finally {
+      if (owner.diff === controller) owner.diff = null;
     }
   };
   if (state.kind !== "ready") {
