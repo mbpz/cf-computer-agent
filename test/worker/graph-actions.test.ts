@@ -139,6 +139,28 @@ describe("graph action worker contract", () => {
     })).status).toBe(404);
   });
 
+  it.each(["active", "paused"])("rejects a fresh graph focus operation before writing when another session is %s", async (status) => {
+    const existing = await api("/api/focus", sessionA, {
+      method: "POST", body: JSON.stringify({ id: "existing-focus", clientKey: "existing-focus", taskId: "graph-source-task-a", title: "Existing focus", durationMinutes: 25 }),
+    });
+    expect(existing.status).toBe(201);
+    const receipt = await existing.json() as { session: { updatedAt: string } };
+    if (status === "paused") {
+      expect((await api("/api/focus/existing-focus/pause", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: receipt.session.updatedAt }) })).status).toBe(200);
+    }
+    const focusBefore = await env.DB.prepare("SELECT * FROM focus_sessions WHERE member_id = 'graph-action-a' ORDER BY id").all();
+    const calendarBefore = await env.DB.prepare("SELECT * FROM calendar_events WHERE member_id = 'graph-action-a' ORDER BY id").all();
+    expect(focusBefore.results).toHaveLength(1);
+    expect(calendarBefore.results).toHaveLength(1);
+    const node: GraphNode = { id: "task:graph-source-task-a", kind: "task", label: "New focus", status: "todo", href: "/tasks/graph-source-task-a", metadata: {} };
+    await expect(dispatchGraphAction({ node, clientKey: "new-graph-focus" }, (path, init) => api(String(path), sessionA, init)))
+      .rejects.toMatchObject({ code: "FOCUS_ALREADY_OPEN", status: 409 });
+    expect((await env.DB.prepare("SELECT * FROM focus_sessions WHERE member_id = 'graph-action-a' ORDER BY id").all()).results).toEqual(focusBefore.results);
+    expect((await env.DB.prepare("SELECT * FROM calendar_events WHERE member_id = 'graph-action-a' ORDER BY id").all()).results).toEqual(calendarBefore.results);
+    expect((await api("/api/focus/new-graph-focus", sessionA)).status).toBe(404);
+    expect(await (await api("/api/focus/existing-focus", sessionA)).json()).toMatchObject({ id: "existing-focus", status });
+  });
+
   it("creates a project action item idempotently and keeps project scope private", async () => {
     const first = await api("/api/projects/graph-project-a/timeline", sessionA, {
       method: "POST",

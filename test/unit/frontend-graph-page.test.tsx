@@ -471,6 +471,70 @@ describe("GraphPage", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
 
+  it("releases a first FOCUS_ALREADY_OPEN rejection so the existing session can be managed", async () => {
+    const requests: Array<{ path: string; method: string }> = [];
+    vi.stubGlobal("fetch", async (path: RequestInfo | URL, init?: RequestInit) => {
+      requests.push({ path: String(path), method: init?.method ?? "GET" });
+      return Response.json({ error: { code: "FOCUS_ALREADY_OPEN", message: "A focus session is already open", retryable: false } }, { status: 409 });
+    });
+    await renderMemberGraph();
+    await clickNode("task:t1");
+    await clickButton("Start focus"); await flush();
+    expect(requests).toEqual([{ path: "/api/focus", method: "POST" }]);
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
+    expect(host.textContent).toContain("The action was rejected and nothing was saved.");
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+    const unload = new window.Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(false);
+    await act(async () => { expect(writeWorkspaceHistory("push", "/focus")).toBe("committed"); });
+    expect(window.location.pathname).toBe("/focus");
+    act(() => root.unmount()); root = createRoot(host);
+    await renderMemberGraph();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
+    expect(requests).toHaveLength(1);
+  });
+
+  it("does not erase a previous unknown focus start when its retry returns FOCUS_ALREADY_OPEN", async () => {
+    const requests: Array<{ path: string; method: string; body?: string }> = [];
+    vi.stubGlobal("fetch", async (path: RequestInfo | URL, init?: RequestInit) => {
+      requests.push({ path: String(path), method: init?.method ?? "GET", body: init?.body as string | undefined });
+      if (requests.length === 1) throw new TypeError("start response lost");
+      if (init?.method === "POST") return Response.json({ error: { code: "FOCUS_ALREADY_OPEN", message: "A focus session is already open", retryable: false } }, { status: 409 });
+      const key = JSON.parse(requests[0]!.body!).id as string;
+      return Response.json({ ...focusReceipt(key).session, status: "completed", endedAt: "2026-10-10T00:25:00.000Z", elapsedMs: 1500000, updatedAt: "2026-10-10T00:25:00.000Z" });
+    });
+    await renderMemberGraph();
+    await clickNode("task:t1");
+    await clickButton("Start focus"); await flush();
+    const storageKey = "memory-garden:graph-action:v1:member-a";
+    const original = browser.sessionStorage.getItem(storageKey);
+    expect(original).not.toBeNull();
+    await clickButton("Retry action"); await flush();
+    expect(requests[1]!.body).toBe(requests[0]!.body);
+    expect(browser.sessionStorage.getItem(storageKey)).toBe(original);
+    expect(host.textContent).not.toContain("nothing was saved");
+    expect(writeWorkspaceHistory("push", "/focus")).toBe("blocked");
+    act(() => root.unmount()); root = createRoot(host);
+    await renderMemberGraph();
+    expect(requests).toHaveLength(2);
+    await clickButton("Check exact result"); await flush();
+    expect(requests[2]).toEqual({ path: `/api/focus/${encodeURIComponent(JSON.parse(requests[0]!.body!).id)}`, method: "GET", body: undefined });
+    expect(browser.sessionStorage.getItem(storageKey)).toBeNull();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
+    await act(async () => { expect(writeWorkspaceHistory("push", "/focus")).toBe("committed"); });
+  });
+
+  it("keeps a focus start uncertain when a server failure carries the already-open error code", async () => {
+    vi.stubGlobal("fetch", async () => Response.json({ error: { code: "FOCUS_ALREADY_OPEN", message: "Server failure", retryable: true } }, { status: 500 }));
+    await renderMemberGraph();
+    await clickNode("task:t1");
+    await clickButton("Start focus"); await flush();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).not.toBeNull();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).not.toBeNull();
+    expect(writeWorkspaceHistory("push", "/focus")).toBe("blocked");
+  });
+
   it.each([404, 409])("does not infer that an initial %s response proves no task was saved", async (status) => {
     vi.stubGlobal("fetch", async () => Response.json({ error: { code: status === 409 ? "TASK_CREATE_CONFLICT" : "TASK_KNOWLEDGE_NOT_FOUND", message: "Prior state cannot be confirmed", retryable: false } }, { status }));
     await renderMemberGraph();

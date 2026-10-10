@@ -327,8 +327,11 @@ function filterSnapshot(snapshot: GraphSnapshot, query: string, lens: GraphLens)
   return { ...snapshot, nodes, edges: snapshot.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)) };
 }
 
-// Only an initial validation rejection can establish that nothing was saved.
-// 404/409 may also arise when an existing result is hidden or missing its link.
+// Used only for the first attempt: a replay rejection cannot settle an earlier write.
+// Most 404/409 responses may hide an existing result. FOCUS_ALREADY_OPEN is the
+// explicit exception: FocusService rejects it before inserting any session/calendar row.
 function isDefiniteGraphActionRejection(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.status >= 400 && error.status < 500 && error.status !== 404 && error.status !== 408 && error.status !== 409 && error.status !== 429;
+  if (!(error instanceof ApiRequestError)) return false;
+  if (error.status === 409 && error.code === "FOCUS_ALREADY_OPEN") return true;
+  return error.status >= 400 && error.status < 500 && error.status !== 404 && error.status !== 408 && error.status !== 409 && error.status !== 429;
 }

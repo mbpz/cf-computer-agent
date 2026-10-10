@@ -43,3 +43,23 @@ rtk proxy npm run audit:frontend-operations
 这是一条可操作的本地恢复链，不是不可变历史操作账本。查询核对当前存活且有权读取的资源；已删除/隐藏或旧缺链任务无法据此证明原操作从未执行，也不会自动修复关联。sessionStorage 只保证当前标签页恢复，不承诺关闭浏览器后恢复。
 
 未执行原生浏览器/双真实身份/移动键盘验收，未 push、部署、迁移或读取上传 SECRETS_FILE。测试使用本地 Worker/D1；配置的开发变量自动加载与 AI 绑定警告不作为线上运行证据。原30 / 范围29 / 关闭5 / 开放24，D08排除。
+
+
+## 2026-10-10 后续审查：首次明确拒绝不能锁死导航
+
+基线 `87ac81c8`。审查复现：另有 active/paused 专注时，图谱首次启动收到 `409 FOCUS_ALREADY_OPEN`。此前统一保留 409，导致精确查询返回404、同编号重试继续409，用户又无法导航到 `/focus` 结束已有会话。
+
+- 仅为**首次请求**的精确 `409 + FOCUS_ALREADY_OPEN` 增加“未写入”例外。`FocusService.start` 在插入前返回此错误；本地 Worker/D1 两种 open 状态回归核对现有专注/日历行完全不变，新操作精确 GET 为404。
+- React 路由回归验证删除持久未决记录、解除 beforeunload 与工作区导航锁、实际进入 `/focus`，重挂载不恢复旧操作或自动重发。
+- 原请求结果已经未知时，即使同编号重试返回这个错误，也不推断原请求未落库。回归覆盖原载荷/编号与持久记录保留、重挂载无自动写、原 ID 精确 GET 匹配后才解锁。
+- 状态为500而仅携带同名错误码仍保留未决状态；其他首次404/409与已有不确定重试仍遵循先前的保守规则。本次没有把所有409重新解释成失败，也没有变更服务端语义。
+- 新增5项回归（页面3、真实Worker/D1 2）。修复前两文件 **1失败/47通过**，失败是首次明确拒绝仍显示未决操作；修复后 **48/48**。任务/图谱/专注/时间线扩大 **41文件673/673**，Worker及完整前端类型检查、前端操作清点与领域审计通过；清单/成熟度/交付/源码操作契约 **64/64**，UI构建和VM静态隔离检查通过。仍有运行器既有AI绑定及构建chunk警告；没有据此调用线上AI。
+
+复跑：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-graph-page.test.tsx test/worker/graph-actions.test.ts
+rtk proxy npx vitest run test/unit/*task*.test.ts test/unit/*task*.test.tsx test/unit/*graph*.test.ts test/unit/*graph*.test.tsx test/unit/*focus*.test.ts test/unit/*focus*.test.tsx test/worker/*task*.test.ts test/worker/graph-actions.test.ts test/worker/focus.test.ts test/unit/project-timeline-service.test.ts
+```
+
+诊断日志为 `/private/tmp/cf-graph-first-rejection-red.log`、`/private/tmp/cf-graph-first-rejection-green.log`、`/private/tmp/cf-graph-first-rejection-expanded.log`。这次是 A05/C04 局部回归修复，父项仍29/5/24；不复用此前完整check为本次全量通过证明，不代替真实身份与原生验收。无push/部署/远程迁移。
