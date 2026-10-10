@@ -102,15 +102,28 @@ describe("knowledge reader data boundary", () => {
     expect(requester).toHaveBeenCalledTimes(1);
   });
 
-  it("loads at most five related items and drops malformed fields", async () => {
+  it("loads valid related reasons and drops malformed identities", async () => {
     const requester = vi.fn().mockResolvedValue(new Response(JSON.stringify({ related: { items: [
-      { id: "knowledge-2", title: "Related", publishedAt: "2026-08-26", reasonFields: ["title", "body", 42] },
+      { id: "knowledge-2", title: "Related", publishedAt: "2026-08-26", reasonFields: ["title", "body"] },
       { id: "broken", title: 42, publishedAt: "2026-08-26" },
     ] } }), { status: 200, headers: { "content-type": "application/json" } }));
     await expect(loadRelatedKnowledge("knowledge-1", requester)).resolves.toEqual([
       { id: "knowledge-2", title: "Related", publishedAt: "2026-08-26", reasonFields: ["title", "body"] },
     ]);
     expect(requester).toHaveBeenCalledWith("/api/knowledge/knowledge-1/related", expect.objectContaining({ credentials: "same-origin" }));
+  });
+
+  it("rejects a mixed reason array instead of returning partial reasons", async () => {
+    const requester = vi.fn(async () => Response.json({ related: { items: [
+      { id: "knowledge-2", title: "Related", publishedAt: "2026-08-26", reasonFields: ["title", "body", 42] },
+    ] } }));
+    await expect(loadRelatedKnowledge("knowledge-1", requester)).rejects.toThrow("KNOWLEDGE_RELATED_INVALID");
+  });
+
+  it("keeps the five-item related knowledge limit", async () => {
+    const items = Array.from({ length: 7 }, (_, index) => ({ id: `knowledge-${index + 2}`, title: "Related", publishedAt: "2026-08-26", reasonFields: ["title"] }));
+    const requester = vi.fn(async () => Response.json({ related: { items } }));
+    await expect(loadRelatedKnowledge("knowledge-1", requester)).resolves.toEqual(items.slice(0, 5));
   });
 
   it("loads bounded backlink locations and rejects malformed rows", async () => {

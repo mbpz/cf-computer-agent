@@ -13,7 +13,7 @@ vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (te
 const { Window } = await import("happy-dom");
 
 const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", title: "Readable entry", markdown: "Hello", publishedAt: "2026-10-04T00:00:00.000Z", isCurrent: true, sourceVersionId: "source-a", indexStatus: "indexed", chunks: [] };
-const relatedItem: { id: string; title: string; publishedAt: string; reasonFields?: string[] } = {
+const relatedItem: { id: string; title: string; publishedAt: string; reasonFields?: unknown } = {
   id: "knowledge-b",
   title: "Related guide",
   publishedAt: "2026-10-04T00:00:00.000Z",
@@ -37,6 +37,21 @@ describe("related knowledge reason read", () => {
     expect(related).toContain("Related knowledge could not be read. This is not an empty list.");
     expect(related).not.toContain("Related guide");
     expect(related).not.toContain("Not provided");
+  });
+
+  it.each([null, "title", [42], ["not-a-field"], ["title", 42], ["title", "not-a-field"]].map((value) => [value]))("rejects invalid reasonFields: %j", async (value) => {
+    relatedItem.reasonFields = value;
+    await mount();
+    expect(text()).toContain("Related knowledge could not be read. This is not an empty list.");
+    expect(text()).not.toContain("Related guide");
+  });
+
+  it("preserves every supported matched field", async () => {
+    relatedItem.reasonFields = ["title", "summary", "tags", "body", "code"];
+    await mount();
+    expect(text()).toContain("Related guide");
+    for (const field of relatedItem.reasonFields as string[]) expect(text()).toContain(field);
+    expect(text()).not.toContain("could not be read");
   });
 
   it("shows an explicit empty reason list without calling it unavailable", async () => {

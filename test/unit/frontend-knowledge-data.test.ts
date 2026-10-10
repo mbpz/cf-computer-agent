@@ -8,11 +8,16 @@ describe("knowledge data pagination", () => {
       expect(String(input)).toBe("/api/knowledge?page=2&pageSize=20&spaceId=space-a&kind=markdown");
       expect(init?.credentials).toBe("same-origin");
       expect(init?.signal).toBeInstanceOf(AbortSignal);
-      return Response.json({ items: [{ id: "k1", title: "Guide", publishedAt: "2026-08-25", tags: ["cf", 1] }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } });
+      return Response.json({ items: [{ id: "k1", title: "Guide", publishedAt: "2026-08-25", tagIds: ["cf"] }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } });
     });
     await expect(loadKnowledgePage({ page: 2, pageSize: 20, spaceId: "space-a", kind: "markdown", requester, signal: new AbortController().signal })).resolves.toEqual({
       items: [{ id: "k1", title: "Guide", publishedAt: "2026-08-25", tags: ["cf"] }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 },
     });
+  });
+
+  it("rejects a mixed tag array instead of returning a partial list", async () => {
+    const requester = vi.fn(async () => Response.json({ items: [{ id: "k1", title: "Guide", publishedAt: "2026-08-25", tags: ["cf", 1] }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }));
+    await expect(loadKnowledgePage({ page: 1, pageSize: 20, requester })).rejects.toThrow("NUMBERED_PAGE_RESPONSE_INVALID");
   });
 
   it("cancels the prior numbered request and marks its generation stale", () => {

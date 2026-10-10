@@ -187,8 +187,8 @@ export async function loadRelatedKnowledge(
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const record = item as Record<string, unknown>;
     if (typeof record.id !== "string" || !record.id || typeof record.title !== "string" || typeof record.publishedAt !== "string") return [];
-    if (!Array.isArray(record.reasonFields)) throw new Error("KNOWLEDGE_RELATED_INVALID");
-    const reasonFields = record.reasonFields.filter((field): field is string => typeof field === "string" && RELATED_REASON_FIELDS.has(field)).slice(0, 5);
+    if (!Array.isArray(record.reasonFields) || !record.reasonFields.every((field): field is string => typeof field === "string" && RELATED_REASON_FIELDS.has(field))) throw new Error("KNOWLEDGE_RELATED_INVALID");
+    const reasonFields = record.reasonFields.slice(0, 5);
     return [{ id: record.id, title: record.title, publishedAt: record.publishedAt, reasonFields }];
   }).slice(0, 5);
 }

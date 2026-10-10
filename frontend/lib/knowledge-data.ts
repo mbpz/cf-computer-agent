@@ -53,13 +53,14 @@ function normalizeItem(value: unknown): KnowledgeListItem {
   const item = value as Record<string, unknown>;
   if (typeof item.id !== "string" || item.id.length === 0) throw new Error("KNOWLEDGE_RESPONSE_INVALID");
   if (typeof item.title !== "string" || typeof item.publishedAt !== "string") throw new Error("KNOWLEDGE_RESPONSE_INVALID");
-  const rawTags = Array.isArray(item.tags) ? item.tags : item.tagIds;
+  const rawTags = item.tags === undefined ? item.tagIds : item.tags;
+  if (!Array.isArray(rawTags) || !rawTags.every((tag): tag is string => typeof tag === "string")) throw new Error("KNOWLEDGE_RESPONSE_INVALID");
   return {
     id: item.id,
     title: item.title,
     summary: typeof item.summary === "string" ? item.summary : undefined,
     publishedAt: item.publishedAt,
-    tags: Array.isArray(rawTags) ? rawTags.filter((tag): tag is string => typeof tag === "string") : [],
+    tags: [...rawTags],
   };
 }
 
