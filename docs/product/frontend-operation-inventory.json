@@ -1225,10 +1225,10 @@
         "frontend/components/data-pagination.tsx:43:70",
         "frontend/components/data-pagination.tsx:45:9",
         "frontend/components/data-pagination.tsx:47:9",
-        "frontend/components/knowledge/knowledge-card.tsx:19:39",
-        "frontend/components/knowledge/knowledge-card.tsx:19:534",
-        "frontend/components/knowledge/knowledge-card.tsx:19:731",
-        "frontend/components/knowledge/knowledge-card.tsx:19:880",
+        "frontend/components/knowledge/knowledge-card.tsx:29:39",
+        "frontend/components/knowledge/knowledge-card.tsx:29:534",
+        "frontend/components/knowledge/knowledge-card.tsx:29:859",
+        "frontend/components/knowledge/knowledge-card.tsx:29:1008",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -9461,10 +9461,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/knowledge/knowledge-card.tsx:19:39",
+      "id": "frontend/components/knowledge/knowledge-card.tsx:29:39",
       "path": "frontend/components/knowledge/knowledge-card.tsx",
       "owner": "KnowledgeCard",
-      "line": 19,
+      "line": 29,
       "column": 39,
       "kind": "jsx",
       "tag": "a",
@@ -9481,16 +9481,18 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/knowledge/knowledge-card.tsx:19:534",
+      "id": "frontend/components/knowledge/knowledge-card.tsx:29:534",
       "path": "frontend/components/knowledge/knowledge-card.tsx",
       "owner": "KnowledgeCard",
-      "line": 19,
+      "line": 29,
       "column": 534,
       "kind": "jsx",
       "tag": "button",
       "attributes": {
         "type": "\"button\"",
         "className": "\"text-xs font-medium text-primary hover:underline\"",
+        "disabled": "shareState === \"pending\"",
+        "aria-busy": "shareState === \"pending\"",
         "onClick": "() => void share()"
       },
       "handlers": {
@@ -9498,17 +9500,17 @@
       },
       "spreads": [],
       "labels": [
-        "frontendText(locale, \"KNOWLEDGE_SHARE_ACTION\")"
+        "frontendText(locale, shareState === \"pending\" ? \"KNOWLEDGE_SHARE_PENDING\" : \"KNOWLEDGE_SHARE_ACTION\")"
       ],
       "context": [],
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/knowledge/knowledge-card.tsx:19:731",
+      "id": "frontend/components/knowledge/knowledge-card.tsx:29:859",
       "path": "frontend/components/knowledge/knowledge-card.tsx",
       "owner": "KnowledgeCard",
-      "line": 19,
-      "column": 731,
+      "line": 29,
+      "column": 859,
       "kind": "jsx",
       "tag": "span",
       "attributes": {
@@ -9530,11 +9532,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/knowledge/knowledge-card.tsx:19:880",
+      "id": "frontend/components/knowledge/knowledge-card.tsx:29:1008",
       "path": "frontend/components/knowledge/knowledge-card.tsx",
       "owner": "KnowledgeCard",
-      "line": 19,
-      "column": 880,
+      "line": 29,
+      "column": 1008,
       "kind": "jsx",
       "tag": "span",
       "attributes": {

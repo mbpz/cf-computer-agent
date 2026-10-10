@@ -631,10 +631,10 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 19:39 KnowledgeCard | a title | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; |  |
-| 19:534 KnowledgeCard | button frontendText(locale, "KNOWLEDGE_SHARE_ACTION") | onClick=() =&gt; void share(); type="button" |  |
-| 19:731 KnowledgeCard | span frontendText(locale, "KNOWLEDGE_SHARE_DONE") |  | {"kind":"logical","expression":"shareState === \"shared\"","operator":"&&"} |
-| 19:880 KnowledgeCard | span frontendText(locale, "KNOWLEDGE_SHARE_UNAVAILABLE") |  | {"kind":"logical","expression":"shareState === \"unavailable\"","operator":"&&"} |
+| 29:39 KnowledgeCard | a title | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; |  |
+| 29:534 KnowledgeCard | button frontendText(locale, shareState === "pending" ? "KNOWLEDGE_SHARE_PENDING" : "KNOWLEDGE_SHARE_ACTION") | onClick=() =&gt; void share(); type="button" | disabled=shareState === "pending"; aria-busy=shareState === "pending" |
+| 29:859 KnowledgeCard | span frontendText(locale, "KNOWLEDGE_SHARE_DONE") |  | {"kind":"logical","expression":"shareState === \"shared\"","operator":"&&"} |
+| 29:1008 KnowledgeCard | span frontendText(locale, "KNOWLEDGE_SHARE_UNAVAILABLE") |  | {"kind":"logical","expression":"shareState === \"unavailable\"","operator":"&&"} |
 
 ## frontend/components/planning-create-form.tsx
 

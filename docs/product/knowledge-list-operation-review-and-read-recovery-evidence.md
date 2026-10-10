@@ -226,3 +226,6 @@
 
 - `frontend/pages/knowledge-page.tsx:45:433`
 
+## 2026-10-10 分享生命周期后续
+
+上文分享pending/重复点击的“下一步”是本证据基线时的缺口。后续在 `f8cc71d7` 基础上完成本地组件修复和验证，详见[分享生命周期证据](./knowledge-card-share-lifecycle-evidence.md)。真实系统面板仍待验，不能将此续行解释为A05/B07整体关闭。上文候选坐标保留为当时快照，KnowledgeCard的4个当前坐标见后续证据及生成索引；其他列表候选未因本修复改变。
