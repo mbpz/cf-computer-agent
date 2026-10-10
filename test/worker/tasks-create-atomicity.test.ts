@@ -6,7 +6,7 @@ import { APP_CONFIG } from "../../src/config";
 import { createApp } from "../../src/app";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
-import { dispatchGraphAction } from "../../frontend/lib/graph-actions";
+import { dispatchGraphAction, queryGraphAction } from "../../frontend/lib/graph-actions";
 import { TasksRepository } from "../../src/tasks/repository";
 import { TasksService } from "../../src/tasks/service";
 import { MIGRATIONS } from "../fixtures/d1";
@@ -180,6 +180,15 @@ describe("knowledge task creation atomicity", () => {
     await expect(service.create("graph-action-a", input)).rejects.toThrow();
     expect(await counts()).toEqual({ tasks: 0, links: 0, audits: 0 });
     expect((await api("/api/tasks/other-task", sessionA)).status).toBe(200);
+  });
+
+  it("does not confirm a revoked knowledge relation through exact task lookup", async () => {
+    expect((await post(sessionA)).status).toBe(201);
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only' WHERE id = 'graph-revision-a'").run();
+    const request = { node: { id: `knowledge:${input.knowledgeItemId}`, kind: "knowledge" as const, label: input.title, status: null, href: `/knowledge/${input.knowledgeItemId}`, metadata: {} }, clientKey: input.id };
+    const requester: typeof fetch = (path, init) => api(String(path), sessionA, init);
+    await expect(queryGraphAction(request, requester)).rejects.toThrow("GRAPH_ACTION_RECEIPT_UNKNOWN");
+    expect(await counts()).toEqual({ tasks: 1, links: 1, audits: 2 });
   });
 
   it("recovers a failed link write through the real graph dispatcher and exact GET", async () => {

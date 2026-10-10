@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
-import { dispatchGraphAction } from "../../frontend/lib/graph-actions";
+import { dispatchGraphAction, queryGraphAction } from "../../frontend/lib/graph-actions";
 import type { GraphNode } from "../../src/graph/types";
 import { MIGRATIONS } from "../fixtures/d1";
 
@@ -77,6 +77,14 @@ describe("graph action worker contract", () => {
     const detail = await exact.json() as Record<string, unknown>;
     expect(kind === "knowledge" ? detail.task : detail).toMatchObject({ id: clientKey, memberId: "graph-action-a" });
     expect((await api(`${path}/${clientKey}`, sessionB)).status).toBe(404);
+    const lookups: string[] = [];
+    const queryRequester: typeof fetch = async (input, init) => {
+      expect(init?.method).toBe("GET"); expect(init?.body).toBeUndefined();
+      lookups.push(String(input)); return api(String(input), sessionA, init);
+    };
+    expect(await queryGraphAction({ node, clientKey }, queryRequester)).toMatchObject({ status: "completed", action, clientKey });
+    expect(lookups).toEqual([`${path}/${encodeURIComponent(clientKey)}`]);
+    await expect(queryGraphAction({ node, clientKey }, (input, init) => api(String(input), sessionB, init))).rejects.toMatchObject({ status: 404 });
     const replay = await dispatchGraphAction({ node, clientKey }, requester);
     expect(replay).toMatchObject({ status: "completed", action, clientKey, data: { created: false, [field]: { id: clientKey } } });
     expect(sent).toHaveLength(2);

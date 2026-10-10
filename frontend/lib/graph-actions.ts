@@ -89,6 +89,53 @@ export async function dispatchGraphAction(
   return { status: "deferred", action: null, clientKey, reason: "unsupported" };
 }
 
+// Resolve only the persisted operation's exact ID. Never scan a collection or
+// infer success from the current active focus session, and never write on lookup.
+export async function queryGraphAction(
+  request: GraphActionRequest,
+  requester: Fetcher = fetch,
+  signal?: AbortSignal,
+): Promise<GraphActionResult> {
+  const clientKey = requireClientKey(request?.clientKey);
+  const node = request?.node;
+  const action = graphActionForNode(node)?.action;
+  if (!action) return { status: "deferred", action: null, clientKey, reason: "unsupported" };
+  const id = graphObjectId(node.id);
+  if (!id) return { status: "deferred", action: null, clientKey, reason: "missing_context" };
+  const get = (path: string) => apiFetch<unknown>(path, { requester, method: "GET", cache: "no-store", signal });
+  const key = encodeURIComponent(clientKey);
+  let data: unknown;
+  if (node.kind === "knowledge") {
+    data = await get(`/api/tasks/${key}`);
+    const detail = record(data);
+    requireIdentity(detail?.task, { id: clientKey });
+    const links = detail?.links;
+    if (!Array.isArray(links) || !links.some((value) => {
+      const link = record(value);
+      // A null title is the server's current-authorization projection. A past
+      // relation alone is not proof of a currently readable knowledge target.
+      return link?.taskId === clientKey && link.knowledgeItemId === id
+        && typeof link.id === "string" && link.id.length > 0 && typeof link.knowledgeTitle === "string";
+    })) throw new Error("GRAPH_ACTION_RECEIPT_UNKNOWN");
+  } else if (node.kind === "task") {
+    data = await get(`/api/focus/${key}`);
+    requireIdentity(data, { id: clientKey, clientKey, taskId: id });
+  } else {
+    const projectId = node.kind === "project" ? id : projectIdFromHref(node.href);
+    if (!projectId) return { status: "deferred", action: null, clientKey, reason: "missing_context" };
+    data = await get(`/api/projects/${encodeURIComponent(projectId)}/timeline/${key}`);
+    requireIdentity(data, { id: clientKey, clientKey, projectId });
+  }
+  return { status: "completed", action, clientKey, data };
+}
+
+function requireIdentity(value: unknown, identity: Record<string, string>): void {
+  const entity = record(value);
+  if (!entity || Object.entries(identity).some(([key, expected]) => entity[key] !== expected)) {
+    throw new Error("GRAPH_ACTION_RECEIPT_UNKNOWN");
+  }
+}
+
 function requireClientKey(value: unknown): string {
   if (typeof value !== "string" || value.trim().length === 0) throw new Error("GRAPH_ACTION_CLIENT_KEY_REQUIRED");
   return value;

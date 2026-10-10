@@ -44,3 +44,7 @@ rtk proxy npm run audit:functional-checklist
 ## 2026-10-10 后续：知识任务事务与完整回放
 
 上述基线中的任务插入/关联失败缺口已在后续本地修复：任务、关联与成功审计同批提交，回放重新授权并返回 link，前端同时核对 task/link。33 文件 507/507，见[原子性证据](./navigation-knowledge-task-atomicity-evidence.md)。此前段落保留为历史边界；图谱页面只读查询入口仍未实现，不将精确 API GET 替代页面验收。
+
+## 后续增量：2026-10-10 精确查询入口
+
+上述基线后已本地挂载查询入口，并修复未决重试404/409误清编号；不再以这类拒绝推断原写入未保存。新鲜验证与边界见 [精确查询证据](./navigation-graph-exact-result-evidence.md)。保留本文原批次数字，不将增量视作原生或生产验收。

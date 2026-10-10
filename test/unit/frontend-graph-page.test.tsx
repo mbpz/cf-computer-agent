@@ -1,3 +1,4 @@
+import { saveGraphAction } from "../../frontend/lib/graph-action-intent";
 import { focusReceipt, taskReceipt } from "../helpers/graph-action-receipts";
 // @vitest-environment node
 import React from "react";
@@ -231,6 +232,106 @@ describe("GraphPage", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
 
+  it("shows the original operation ID and confirms it with GET only while blocking retries", async () => {
+    const clientKey = "graph-action:t1:query-key";
+    const intent = { node: snapshot.nodes[1]!, clientKey };
+    expect(saveGraphAction("member-a", intent)).toBe(true);
+    const pending = deferred<Response>();
+    const calls: Array<{ path: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", (path: RequestInfo | URL, init?: RequestInit) => { calls.push({ path: String(path), init }); return pending.promise; });
+    await renderMemberGraph();
+    expect(host.querySelector("[data-graph-operation-id]")?.textContent).toContain(clientKey);
+    await clickButton("Check exact result");
+    await clickButton("Check exact result");
+    await clickButton("Retry action");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ path: `/api/focus/${encodeURIComponent(clientKey)}`, init: { method: "GET", cache: "no-store" } });
+    expect(calls[0]!.init!.body).toBeUndefined();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    await act(async () => pending.resolve(Response.json(focusReceipt(clientKey).session)));
+    await flush();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it.each([404, 500, "wrong-target"] as const)("keeps the original intent when exact lookup cannot confirm (%s)", async (failure) => {
+    const clientKey = "query-failed";
+    expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey })).toBe(true);
+    const stored = browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a");
+    const calls: Array<{ path: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", async (path: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ path: String(path), init });
+      if (init?.method === "POST") return Response.json(focusReceipt(clientKey, "t1", false));
+      return typeof failure === "number" ? Response.json({}, { status: failure }) : Response.json(focusReceipt(clientKey, "other-task").session);
+    });
+    await renderMemberGraph();
+    await clickButton("Check exact result"); await flush();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).not.toBeNull();
+    expect(host.textContent).toContain("could not confirm");
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBe(stored);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    await clickButton("Retry action"); await flush();
+    expect(calls.map((c) => c.init?.method)).toEqual(["GET", "POST"]);
+    expect(JSON.parse(String(calls[1]!.init?.body))).toMatchObject({ id: clientKey, clientKey, taskId: "t1" });
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
+  });
+
+  it("allows exact lookup of a restored intent even when the graph is empty", async () => {
+    const clientKey = "query-empty";
+    expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey })).toBe(true);
+    vi.stubGlobal("fetch", async () => Response.json(focusReceipt(clientKey).session));
+    const locale = createLocaleRuntime({ navigatorLanguage: "en-US" });
+    await act(async () => root.render(<GraphPage locale={locale} memberId="member-a" state={{ kind: "empty" }} />));
+    await clickButton("Check exact result"); await flush();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("aborts an exact lookup on unmount and ignores its late success", async () => {
+    const clientKey = "query-aborted";
+    expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey })).toBe(true);
+    const pending = deferred<Response>(); let signal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", (_path: RequestInfo | URL, init?: RequestInit) => { signal = init?.signal ?? undefined; return pending.promise; });
+    await renderMemberGraph();
+    await clickButton("Check exact result");
+    act(() => root.unmount()); root = createRoot(host);
+    expect(signal?.aborted).toBe(true);
+    await renderMemberGraph();
+    await act(async () => pending.resolve(Response.json(focusReceipt(clientKey).session)));
+    await flush();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).not.toBeNull();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toContain(clientKey);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+  });
+
+  it.each([401, 403])("clears protected recovery UI when exact lookup denies access (%i)", async (status) => {
+    expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey: "query-denied" })).toBe(true);
+    vi.stubGlobal("fetch", async () => Response.json({}, { status }));
+    await renderMemberGraph();
+    await clickButton("Check exact result"); await flush();
+    expect(host.textContent).toContain("permission");
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("keeps the operation locked if clearing its confirmed record fails", async () => {
+    const clientKey = "query-storage-failed";
+    expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey })).toBe(true);
+    vi.stubGlobal("fetch", async () => Response.json(focusReceipt(clientKey).session));
+    await renderMemberGraph();
+    const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementation(() => { throw new Error("storage unavailable"); });
+    await clickButton("Check exact result"); await flush();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).not.toBeNull();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toContain(clientKey);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    remove.mockRestore();
+    await clickButton("Check exact result"); await flush();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
   it("keeps a knowledge action pending across remount until its link is confirmed", async () => {
     const graph: GraphSnapshot = { ...snapshot, nodes: [{ id: "knowledge:knowledge-1", kind: "knowledge", label: "Review knowledge", status: null, href: "/knowledge/knowledge-1", metadata: {} }], edges: [] };
     const posts: string[] = [];
@@ -335,6 +436,50 @@ describe("GraphPage", () => {
     await clickButton("Start focus");
     await flush();
     expect(posts).toBe(1);
+  });
+
+  it.each([400, 404, 409, 422])("preserves an unresolved operation after replay is rejected with %s", async (status) => {
+    const graph: GraphSnapshot = { ...snapshot, nodes: [{ id: "knowledge:knowledge-1", kind: "knowledge", label: "Review knowledge", status: null, href: "/knowledge/knowledge-1", metadata: {} }], edges: [] };
+    const requests: Array<{ path: string; method: string; body?: string }> = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push({ path: String(input), method: init?.method ?? "GET", body: init?.body as string | undefined });
+      if (requests.length === 1) throw new TypeError("response lost after commit");
+      if (init?.method === "POST") return Response.json({ error: { code: status === 409 ? "TASK_CREATE_CONFLICT" : "TASK_KNOWLEDGE_NOT_FOUND", message: "Cannot confirm prior operation", retryable: false } }, { status });
+      const key = JSON.parse(requests[0]!.body!).id as string;
+      const receipt = taskReceipt(key, false);
+      return Response.json({ task: receipt.task, links: [{ ...receipt.link, knowledgeTitle: "Review knowledge" }] });
+    });
+    await renderMemberGraph(graph);
+    await clickNode("knowledge:knowledge-1");
+    await clickButton("Create task"); await flush();
+    const storageKey = "memory-garden:graph-action:v1:member-a";
+    const original = browser.sessionStorage.getItem(storageKey);
+    expect(original).not.toBeNull();
+    await clickButton("Retry action"); await flush();
+    expect(requests[1]!.body).toBe(requests[0]!.body);
+    expect(browser.sessionStorage.getItem(storageKey)).toBe(original);
+    expect(host.textContent).not.toContain("nothing was saved");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    act(() => root.unmount()); root = createRoot(host);
+    await renderMemberGraph(graph);
+    expect(requests).toHaveLength(2);
+    expect(host.querySelector("[data-graph-operation-id]")?.textContent).toBe(JSON.parse(requests[0]!.body!).id);
+    await clickButton("Check exact result"); await flush();
+    expect(requests).toHaveLength(3);
+    expect(requests[2]).toEqual({ path: `/api/tasks/${encodeURIComponent(JSON.parse(requests[0]!.body!).id)}`, method: "GET", body: undefined });
+    expect(browser.sessionStorage.getItem(storageKey)).toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it.each([404, 409])("does not infer that an initial %s response proves no task was saved", async (status) => {
+    vi.stubGlobal("fetch", async () => Response.json({ error: { code: status === 409 ? "TASK_CREATE_CONFLICT" : "TASK_KNOWLEDGE_NOT_FOUND", message: "Prior state cannot be confirmed", retryable: false } }, { status }));
+    await renderMemberGraph();
+    await clickNode("task:t1");
+    await clickButton("Start focus"); await flush();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).not.toBeNull();
+    expect(host.querySelector("[data-graph-action-unconfirmed]")).not.toBeNull();
+    expect(host.textContent).not.toContain("nothing was saved");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
   });
 
   it("releases the leave lock when a graph action is rejected before it is saved", async () => {

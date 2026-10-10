@@ -2,6 +2,7 @@ import { taskReceipt, focusReceipt, timelineReceipt } from "../helpers/graph-act
 import { describe, expect, it } from "vitest";
 import {
   dispatchGraphAction,
+  queryGraphAction,
   type GraphActionRequest,
   type GraphActionResult,
 } from "../../frontend/lib/graph-actions";
@@ -142,5 +143,47 @@ describe("graph action dispatcher", () => {
 
   it("rejects a blank caller key instead of inventing retry identity", async () => {
     await expect(dispatchGraphAction(request(node("task", "task-1"), "   "))).rejects.toThrow("GRAPH_ACTION_CLIENT_KEY_REQUIRED");
+  });
+});
+
+
+describe("graph exact-result query", () => {
+  const key = "graph-action:exact:one";
+  const task = taskReceipt(key);
+  const detail = { task: task.task, tags: [], links: [task.link] };
+  it.each([
+    ["knowledge", "knowledge-1", detail, `/api/tasks/${encodeURIComponent(key)}`],
+    ["task", "task-1", focusReceipt(key, "task-1").session, `/api/focus/${encodeURIComponent(key)}`],
+    ["project", "project-1", timelineReceipt(key, "milestone").item, `/api/projects/project-1/timeline/${encodeURIComponent(key)}`],
+    ["decision", "decision-1", timelineReceipt(key, "action_item").item, `/api/projects/project-1/timeline/${encodeURIComponent(key)}`],
+  ] as const)("queries the exact %s operation without issuing a write", async (kind, id, payload, path) => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const controller = new AbortController();
+    const result = await queryGraphAction(request(node(kind, id, { href: "/projects/project-1/timeline/decision-1" }), key), requesterFor([payload], calls), controller.signal);
+    expect(result).toMatchObject({ status: "completed", clientKey: key });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ url: path, init: { method: "GET", cache: "no-store", credentials: "same-origin", signal: controller.signal } });
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+  it.each([
+    ["knowledge", "knowledge-1", { ...detail, task: { ...task.task, id: "other" } }],
+    ["knowledge", "knowledge-1", { ...detail, links: [] }],
+    ["knowledge", "knowledge-1", { ...detail, links: [{ ...task.link, knowledgeItemId: "other" }] }],
+    ["knowledge", "knowledge-1", { ...detail, links: [{ ...task.link, taskId: "other" }] }],
+    ["knowledge", "knowledge-1", { ...detail, links: [{ ...task.link, knowledgeTitle: null }] }],
+    ["knowledge", "knowledge-1", { ...detail, links: [{ ...task.link, id: "" }] }],
+    ["task", "task-1", { ...focusReceipt(key, "task-1").session, id: "other" }],
+    ["task", "task-1", { ...focusReceipt(key, "task-1").session, clientKey: "other" }],
+    ["task", "task-1", focusReceipt(key, "other-task").session],
+    ["project", "project-1", { ...timelineReceipt(key, "milestone").item, projectId: "other" }],
+    ["project", "project-1", { ...timelineReceipt(key, "milestone").item, clientKey: "other" }],
+    ["decision", "decision-1", { ...timelineReceipt(key, "action_item").item, id: "other" }],
+  ] as const)("does not confirm an incomplete, unauthorized or mismatched %s result (%#)", async (kind, id, payload) => {
+    await expect(queryGraphAction(request(node(kind, id, { href: "/projects/project-1/timeline/decision-1" }), key), requesterFor([payload]))).rejects.toThrow("GRAPH_ACTION_RECEIPT_UNKNOWN");
+  });
+  it("does not guess a project or fall back to a collection query", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    expect(await queryGraphAction(request(node("decision", "decision-1"), key), requesterFor([], calls))).toMatchObject({ status: "deferred", reason: "missing_context" });
+    expect(calls).toHaveLength(0);
   });
 });

@@ -9,7 +9,7 @@ import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { loadGraph, type GraphQueryInput, type GraphSnapshot } from "../lib/graph-data";
 import { loadGraphSuggestions, type GraphSuggestion, type GraphSuggestionResult } from "../lib/graph-suggestions";
-import { createGraphActionClientKey, dispatchGraphAction } from "../lib/graph-actions";
+import { createGraphActionClientKey, dispatchGraphAction, queryGraphAction } from "../lib/graph-actions";
 import { clearGraphAction, discardBlockedGraphAction, loadGraphAction, saveGraphAction, type GraphActionIntent } from "../lib/graph-action-intent";
 import { discardBlockedGraphView, loadGraphView, persistGraphView } from "../lib/graph-view";
 import { ApiRequestError } from "../lib/api";
@@ -49,8 +49,8 @@ export interface GraphPageProps {
   onDiscardView?: () => void;
 }
 
-type GraphActionOwner = { node: GraphNode; clientKey: string; status: "running" | "unconfirmed" };
-type GraphActionOutcome = { nodeId: string; status: "success" } | { status: "rejected" | "not_sent" | "not_recorded" };
+type GraphActionOwner = { node: GraphNode; clientKey: string; status: "running" | "checking" | "unconfirmed" };
+type GraphActionOutcome = { nodeId: string; status: "success"; clientKey: string } | { status: "rejected" | "not_sent" | "not_recorded" };
 
 export type GraphLoader = (query: GraphQueryInput, signal: AbortSignal) => Promise<GraphSnapshot>;
 
@@ -69,6 +69,8 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
   const [outcome, setOutcome] = useState<GraphActionOutcome | null>(null);
   const actionRef = useRef<GraphActionOwner | null>(restored);
   const aliveRef = useRef(true);
+  const queryControllerRef = useRef<AbortController | null>(null);
+  const [queryUnconfirmed, setQueryUnconfirmed] = useState(false);
   const leaveGuardRef = useRef<(() => void) | null>(null);
   const syncLeaveGuard = useCallback(() => {
     if (actionRef.current && !leaveGuardRef.current) leaveGuardRef.current = registerWorkspaceLeaveGuard(() => ({ kind: actionRef.current ? "block" : "allow" }));
@@ -80,7 +82,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
     syncLeaveGuard();
     const warn = (event: BeforeUnloadEvent) => { if (actionRef.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
-    return () => { aliveRef.current = false; actionRef.current = null; syncLeaveGuard(); window.removeEventListener("beforeunload", warn); };
+    return () => { aliveRef.current = false; queryControllerRef.current?.abort(); actionRef.current = null; syncLeaveGuard(); window.removeEventListener("beforeunload", warn); };
   }, [syncLeaveGuard]);
   const snapshot = state.kind === "ready" || state.kind === "truncated" ? state.snapshot : null;
   const filteredSnapshot = useMemo(() => snapshot ? filterSnapshot(snapshot, query, lens) : null, [lens, query, snapshot]);
@@ -100,12 +102,6 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
     }
     focusInspector();
   }, [selectedId]);
-  if (state.kind === "loading") return <section data-graph-page-loading><p className="mb-3 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_LOADING")}</p><PageState kind="loading" title={frontendText(locale, "GRAPH_LOADING")} /></section>;
-  if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "GRAPH_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>;
-  if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "GRAPH_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>;
-  if (state.kind === "empty") return <PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")} />;
-
-  if (!filteredSnapshot) return null;
   const graphIntent = (owner: GraphActionOwner): GraphActionIntent => ({
     clientKey: owner.clientKey,
     node: { id: owner.node.id, kind: owner.node.kind, label: owner.node.label, status: owner.node.status, href: owner.node.href, metadata: {} },
@@ -122,7 +118,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
   const runGraphAction = (retry?: GraphActionOwner) => {
     if (recordBlocked) return;
     const current = actionRef.current;
-    if (current?.status === "running") return;
+    if (current && current.status !== "unconfirmed") return;
     if (current && current !== retry) return;
     const node = retry?.node ?? selectedNode;
     if (!node) return;
@@ -131,22 +127,62 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
       setOutcome({ status: "not_recorded" });
       return;
     }
-    setOutcome(null); publish(owner);
+    setQueryUnconfirmed(false); setOutcome(null); publish(owner);
     const live = () => aliveRef.current && actionRef.current === owner;
     void dispatchGraphAction({ node, clientKey: owner.clientKey }).then((result) => {
       if (!live()) return;
-      releaseAction(owner, null, result.status === "completed" ? { nodeId: node.id, status: "success" } : { status: "not_sent" });
+      releaseAction(owner, null, result.status === "completed" ? { nodeId: node.id, status: "success", clientKey: owner.clientKey } : { status: "not_sent" });
     }).catch((error: unknown) => {
       if (!live()) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) { releaseAction(owner, null, null); onDenied?.(); return; }
-      if (isDefiniteGraphActionRejection(error)) { releaseAction(owner, null, { status: "rejected" }); return; }
+      // A replay rejection describes this attempt, not the outcome of the earlier write.
+      if (!retry && isDefiniteGraphActionRejection(error)) { releaseAction(owner, null, { status: "rejected" }); return; }
       publish({ ...owner, status: "unconfirmed" });
     });
   };
+  const checkGraphAction = () => {
+    const current = actionRef.current;
+    if (!current || current.status !== "unconfirmed" || recordBlocked) return;
+    const owner: GraphActionOwner = { ...current, status: "checking" };
+    const controller = new AbortController();
+    queryControllerRef.current = controller;
+    setQueryUnconfirmed(false); setOutcome(null); publish(owner);
+    const live = () => aliveRef.current && actionRef.current === owner && !controller.signal.aborted;
+    void queryGraphAction(graphIntent(owner), fetch, controller.signal).then((result) => {
+      if (!live()) return;
+      if (result.status === "completed") {
+        releaseAction(owner, null, { nodeId: owner.node.id, status: "success", clientKey: owner.clientKey });
+      } else { publish({ ...owner, status: "unconfirmed" }); setQueryUnconfirmed(true); }
+    }).catch((error: unknown) => {
+      if (!live()) return;
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
+        releaseAction(owner, null, null); onDenied?.(); return;
+      }
+      // A 404 may mean a hidden/deleted target or an earlier write still in flight.
+      // It is not proof that it is safe to forget this ID or submit a new operation.
+      publish({ ...owner, status: "unconfirmed" }); setQueryUnconfirmed(true);
+    }).finally(() => { if (queryControllerRef.current === controller) queryControllerRef.current = null; });
+  };
+  const actionRecovery = <>
+    {action && action.status !== "running" && <div data-graph-action-unconfirmed role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm" aria-busy={action.status === "checking"}>
+      <p>{frontendText(locale, "GRAPH_ACTION_UNCONFIRMED").replace("{label}", action.node.label)}</p>
+      <p>{frontendText(locale, "GRAPH_ACTION_OPERATION_ID")} <code data-graph-operation-id className="break-all">{action.clientKey}</code></p>
+      <Button variant="outline" disabled={action.status === "checking"} onClick={checkGraphAction}>{frontendText(locale, "GRAPH_ACTION_CHECK_RESULT")}</Button>
+      <Button variant="outline" disabled={action.status === "checking"} onClick={() => runGraphAction(action)}>{frontendText(locale, "GRAPH_ACTION_RETRY")}</Button>
+      {queryUnconfirmed && <p role="status">{frontendText(locale, "GRAPH_ACTION_QUERY_UNCONFIRMED")}</p>}
+    </div>}
+    {outcome?.status === "success" && <p role="status">{frontendText(locale, "GRAPH_ACTION_CONFIRMED").replace("{id}", outcome.clientKey)}</p>}
+  </>;
   const inspectorStatus: GraphInspectorActionStatus = !selectedNode ? "idle"
-    : action?.node.id === selectedNode.id ? (action.status === "running" ? "running" : "error")
+    : action?.node.id === selectedNode.id ? (action.status !== "unconfirmed" ? "running" : "error")
       : action ? "running"
         : outcome?.status === "success" && outcome.nodeId === selectedNode.id ? "success" : "idle";
+  if (state.kind === "loading") return <>{actionRecovery}<section data-graph-page-loading><p className="mb-3 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_LOADING")}</p><PageState kind="loading" title={frontendText(locale, "GRAPH_LOADING")} /></section></>;
+  if (state.kind === "error") return <>{actionRecovery}<PageState kind="error" title={frontendText(locale, "GRAPH_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState></>;
+  if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "GRAPH_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>;
+  if (state.kind === "empty") return <>{actionRecovery}<PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")} /></>;
+
+  if (!filteredSnapshot) return null;
   return (
     <section className="space-y-5" data-graph-page>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -186,10 +222,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
         <p>{frontendText(locale, "GRAPH_ACTION_RECORD_BLOCKED")}</p>
         <Button variant="outline" onClick={() => { if (memberId && discardBlockedGraphAction(memberId)) setRecordBlocked(false); }}>{frontendText(locale, "GRAPH_ACTION_RECORD_DISCARD")}</Button>
       </div>}
-      {action?.status === "unconfirmed" && <div data-graph-action-unconfirmed role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm">
-        <p>{frontendText(locale, "GRAPH_ACTION_UNCONFIRMED").replace("{label}", action.node.label)}</p>
-        <Button variant="outline" onClick={() => runGraphAction(action)}>{frontendText(locale, "GRAPH_ACTION_RETRY")}</Button>
-      </div>}
+      {actionRecovery}
       {outcome && outcome.status !== "success" && <p role="status" className="text-sm text-destructive">{frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : outcome.status === "not_recorded" ? "GRAPH_ACTION_NOT_RECORDED" : "GRAPH_ACTION_NOT_SENT")}</p>}
       <GraphSuggestionsPanel locale={locale} state={suggestionsState} onGenerate={onGenerateSuggestions} />
       {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
@@ -294,7 +327,8 @@ function filterSnapshot(snapshot: GraphSnapshot, query: string, lens: GraphLens)
   return { ...snapshot, nodes, edges: snapshot.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)) };
 }
 
-// Graph writes reject 4xx before saving; transport failures, 5xx, 408/429 and malformed receipts are unconfirmed.
+// Only an initial validation rejection can establish that nothing was saved.
+// 404/409 may also arise when an existing result is hidden or missing its link.
 function isDefiniteGraphActionRejection(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
+  return error instanceof ApiRequestError && error.status >= 400 && error.status < 500 && error.status !== 404 && error.status !== 408 && error.status !== 409 && error.status !== 429;
 }
