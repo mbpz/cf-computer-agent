@@ -1,3 +1,4 @@
+import { ApiRequestError } from "../../frontend/lib/api";
 import { saveGraphAction } from "../../frontend/lib/graph-action-intent";
 import { focusReceipt, taskReceipt } from "../helpers/graph-action-receipts";
 // @vitest-environment node
@@ -305,14 +306,14 @@ describe("GraphPage", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
   });
 
-  it.each([401, 403])("clears protected recovery UI when exact lookup denies access (%i)", async (status) => {
+  it.each([401, 403])("preserves unresolved operation identity when exact lookup denies access (%i)", async (status) => {
     expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey: "query-denied" })).toBe(true);
     vi.stubGlobal("fetch", async () => Response.json({}, { status }));
     await renderMemberGraph();
     await clickButton("Check exact result"); await flush();
     expect(host.textContent).toContain("permission");
     expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
-    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toContain("query-denied");
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
 
@@ -735,4 +736,92 @@ it("preserves an unknown task creation when same-key replay reaches capacity", a
   expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBe(original);
   expect(host.querySelector("[data-graph-action-unconfirmed]")).not.toBeNull();
   expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+});
+
+
+describe("revoked graph recovery", () => {
+  it.each([[401, "success"], [403, "success"], [401, "error"], [403, "error"]] as const)("preserves denial against an older graph response (%i, %s)", async (status, outcome) => {
+    expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey: "query-denied-late" })).toBe(true);
+    const pending = deferred<GraphSnapshot>();
+    let readSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", async () => Response.json({}, { status }));
+    const locale = createLocaleRuntime({ navigatorLanguage: "en-US" });
+    await act(async () => root.render(<GraphRoute locale={locale} memberId="member-a" load={(_query, signal) => { readSignal = signal; return pending.promise.then(value => { if (outcome === "error") throw new Error("late graph failure"); return value; }); }} />));
+    await clickButton("Check exact result"); await flush();
+    expect(host.textContent).toContain("permission");
+    expect(host.querySelector("[data-graph-canvas]")).toBeNull();
+    expect(readSignal?.aborted).toBe(true);
+    await act(async () => pending.resolve(snapshot));
+    await flush();
+    expect(host.querySelector("[data-graph-canvas]")).toBeNull();
+    expect(host.textContent).toContain("permission");
+  });
+});
+
+
+it.each([401, 403])("restores the same operation after a denied retry and a fresh authorized read (%i)", async status => {
+  const clientKey = "retry-denied-restore";
+  expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey })).toBe(true);
+  const stored = browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a");
+  const calls: { path: string; init?: RequestInit }[] = [];
+  let denied = true;
+  vi.stubGlobal("fetch", async (path: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ path: String(path), init });
+    return denied ? Response.json({}, { status }) : Response.json(focusReceipt(clientKey).session);
+  });
+  await renderMemberGraph();
+  await clickButton("Retry action"); await flush();
+  expect(host.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+  expect(host.textContent).not.toContain("Draft brief");
+  expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBe(stored);
+  // The leave guard is gone, but the unresolved intent must survive authentication recovery.
+  await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed"); });
+  denied = false;
+  await clickButton("Try the work graph again"); await flush();
+  expect(host.querySelector("[data-graph-operation-id]")?.textContent).toBe(clientKey);
+  expect(calls.map(call => call.init?.method)).toEqual(["POST"]);
+  await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked"); });
+  await clickButton("Check exact result"); await flush();
+  expect(calls.map(call => call.init?.method)).toEqual(["POST", "GET"]);
+  expect(calls[1]?.path).toBe(`/api/focus/${clientKey}`);
+  expect(JSON.parse(String(calls[0]?.init?.body))).toMatchObject({ id: clientKey, clientKey, taskId: "t1" });
+  expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+});
+
+it.each([401, 403])("clears a definite first rejection without blocking the member's next graph action (%i)", async status => {
+  vi.stubGlobal("fetch", async () => Response.json({}, { status }));
+  await renderMemberGraph(); await clickNode("task:t1"); await clickButton("Start focus"); await flush();
+  expect(host.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+  expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+  await clickButton("Try the work graph again"); await flush();
+  expect(host.querySelector("[data-graph-action-unconfirmed]")).toBeNull();
+  await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed"); });
+});
+
+
+it.each([401, 403])("releases the restored lock when the graph read itself denies access (%i)", async status => {
+  const clientKey = "graph-read-denied";
+  expect(saveGraphAction("member-a", { node: snapshot.nodes[1]!, clientKey })).toBe(true);
+  const stored = browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a");
+  let denied = true;
+  const load = async () => {
+    if (denied) throw new ApiRequestError("FORBIDDEN", "denied", status, false);
+    return snapshot;
+  };
+  const requester = vi.fn(async () => Response.json(focusReceipt(clientKey).session));
+  vi.stubGlobal("fetch", requester);
+  await act(async () => root.render(<GraphRoute memberId="member-a" locale={createLocaleRuntime()} load={load} />));
+  await flush();
+  expect(host.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+  expect(host.textContent).not.toContain("Draft brief");
+  expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBe(stored);
+  await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed"); });
+  denied = false;
+  await clickButton("Try the work graph again"); await flush();
+  expect(host.querySelector("[data-graph-operation-id]")?.textContent).toBe(clientKey);
+  expect(requester).not.toHaveBeenCalled();
+  await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked"); });
+  await clickButton("Check exact result"); await flush();
+  expect(requester).toHaveBeenCalledTimes(1);
+  expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
 });

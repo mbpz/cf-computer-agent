@@ -63,3 +63,37 @@ rtk proxy npx vitest run test/unit/*task*.test.ts test/unit/*task*.test.tsx test
 ```
 
 诊断日志为 `/private/tmp/cf-graph-first-rejection-red.log`、`/private/tmp/cf-graph-first-rejection-green.log`、`/private/tmp/cf-graph-first-rejection-expanded.log`。这次是 A05/C04 局部回归修复，父项仍29/5/24；不复用此前完整check为本次全量通过证明，不代替真实身份与原生验收。无push/部署/远程迁移。
+
+
+## 2026-10-10 后续审查：撤权不丢未决编号、旧响应不能恢复私有图谱
+
+基线 `9587036f`。本轮沿用现有恢复要求，修复代码审查已复现的两项 P2，不新增 API、迁移或永久操作账本。
+
+- **未决查询/重试的 401/403**：只撤销私有页面状态并解除离页锁，原成员的 sessionStorage 意图逐字保留。此前 `releaseAction` 会连同编号一起删除；原写入可能已成功，后一次撤权不是其失败证明。
+- **首次明确拒绝**仍清理该次未写入记录。记录清理失败也不阻止撤权清屏，不将它误报为写入完成。
+- **重新授权后在同一组件恢复**：只有显式重试图谱且读取成功，才恢复原编号和操作锁；不自动 POST。随后只读核对仍使用原精确 ID。
+- **旧图谱响应**：动作撤权时推进读取代次并 abort 当前请求。迟到成功或失败均不能覆盖 forbidden；测试使用不主动响应 abort 的延迟 loader，仍验证旧结果被丢弃。
+- **图谱读取本身撤权**：追加两项反例发现恢复操作会留下不可解除的离页锁。现在 forbidden 同步清除内存中的动作/选择/回执、中止结果查询并释放锁，但不删除未决记录；重新读取授权通过后仍可恢复。
+
+测试与结果：
+
+1. 将上轮审查反例变为正式回归，纠正原有两条“撤权应删除未决记录”的错误断言。初轮 **6失败 / 42通过**；仅修复意图清理与重新授权恢复后 **2失败 / 46通过**，余下恰为迟到图谱响应；隔离读取后 **48/48**。
+2. 追加图谱读取本身撤权：**2失败 / 48筛选跳过**，实际失败为导航仍 blocked；修复后扩大验证。另覆盖旧请求迟到失败分支，并验证请求 AbortSignal。
+3. 最终页面 **52 项**（新增10项、修正既有2项）。图谱/收件箱/真实Worker任务原子性扩大 **19文件365/365**，Worker与前端类型检查通过；扩大日志没有 uncaught、Unhandled、window is not defined 或 act 警告。
+4. 前端操作清点因源码位置/handler变化出现预期漂移，已明确重新生成并复查：**270源码 / 1171候选**，未增加API操作；领域审计与diff检查通过。静态清点不冒充运行时穷尽验收。
+5. 本次完整 `npm run check` **exit 0**：单元 **356文件5011/5011**，Worker **69文件1161/1161**，类型、smoke/i18n/delivery、落地页校验、前端构建、产物秘密扫描及 Wrangler **dry-run** 均通过。Worker日志含3条负例异常，分别对应 publication purge 后不存在文件、损坏 pending note journal（两条）；相关测试通过，不能称日志零异常。此命令没有真实部署。
+6. 清单/成熟度/交付状态/操作清点契约 **64/64**。完整门禁日志 `/private/tmp/graph-denial-full-check.log`，契约日志 `/private/tmp/graph-denial-contracts.log`。
+
+复跑：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-graph-page.test.tsx
+rtk proxy sh -c 'npx vitest run test/unit/*graph*.test.ts test/unit/*graph*.test.tsx test/unit/frontend-inbox-task-operation-matrix.test.tsx test/unit/frontend-inbox-promotion-recovery.test.tsx test/worker/graph-actions.test.ts test/worker/tasks-create-atomicity.test.ts test/worker/task-dependency-atomicity.test.ts test/worker/task-related-writes-atomicity.test.ts test/worker/task-subtask-ordering.test.ts'
+rtk proxy npm run typecheck
+rtk proxy npm run audit:frontend-operations
+rtk proxy npm run audit:workbench-domain
+```
+
+本地诊断日志：`/private/tmp/graph-denial-red.log`、`/private/tmp/graph-denial-identity-step.log`、`/private/tmp/graph-denial-read-red.log`、`/private/tmp/graph-denial-regression.log`、`/private/tmp/graph-denial-types.log`。长期证据以此说明和可复跑测试为准。
+
+父清单仍为原30、排除D08、范围29 / 完成5 / 剩余24；A02/A05/C04不因此整体关闭。真实身份原生旅程、其他领域功能和最终候选验收仍需完成。不推送、合并、部署或执行远程迁移；未读取/上传 SECRETS_FILE。

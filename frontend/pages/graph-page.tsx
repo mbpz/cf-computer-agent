@@ -115,6 +115,28 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
     publish(next);
     setOutcome(nextOutcome);
   };
+  // Revoking the view is not a receipt for an earlier, uncertain mutation.
+  // Release navigation without deleting that mutation's persisted retry identity.
+  const denyAction = (owner: GraphActionOwner, preserveIntent: boolean) => {
+    if (!preserveIntent && memberId) clearGraphAction(memberId, graphIntent(owner));
+    publish(null); setOutcome(null); setQueryUnconfirmed(false);
+    onDenied?.();
+  };
+  useEffect(() => {
+    if (state.kind === "forbidden") {
+      // The graph read can revoke access independently of the recovery request.
+      // Invalidate in-flight callbacks and release UI/leave guards, not storage.
+      queryControllerRef.current?.abort();
+      publish(null); setOutcome(null); setSelectedId(null);
+      return;
+    }
+    // A successful explicit graph reload can restore recovery in this same mount.
+    // After denial, loading/error/forbidden must not reveal or replay the intent.
+    if (!memberId || actionRef.current || !["ready", "truncated", "empty"].includes(state.kind)) return;
+    const pending = loadGraphAction(memberId);
+    setRecordBlocked(pending.kind === "blocked");
+    if (pending.kind === "ready") publish({ ...pending.intent, status: "unconfirmed" });
+  }, [memberId, state.kind, publish]);
   const runGraphAction = (retry?: GraphActionOwner) => {
     if (recordBlocked) return;
     const current = actionRef.current;
@@ -134,7 +156,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
       releaseAction(owner, null, result.status === "completed" ? { nodeId: node.id, status: "success", clientKey: owner.clientKey } : { status: "not_sent" });
     }).catch((error: unknown) => {
       if (!live()) return;
-      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) { releaseAction(owner, null, null); onDenied?.(); return; }
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) { denyAction(owner, !!retry); return; }
       // A replay rejection describes this attempt, not the outcome of the earlier write.
       if (!retry && isDefiniteGraphActionRejection(error)) { releaseAction(owner, null, { status: "rejected" }); return; }
       publish({ ...owner, status: "unconfirmed" });
@@ -156,7 +178,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
     }).catch((error: unknown) => {
       if (!live()) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
-        releaseAction(owner, null, null); onDenied?.(); return;
+        denyAction(owner, true); return;
       }
       // A 404 may mean a hidden/deleted target or an earlier write still in flight.
       // It is not proof that it is safe to forget this ID or submit a new operation.
@@ -256,9 +278,18 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
   const [changeKind, setChangeKind] = useState<NonNullable<GraphPageProps["changeKind"]>>(restored?.changeKind ?? "all");
   const [suggestionsState, setSuggestionsState] = useState<GraphSuggestionsState>({ kind: "idle" });
   const [retry, setRetry] = useState(0);
+  const readGeneration = useRef(0);
+  const readController = useRef<AbortController | null>(null);
+  const denyRead = useCallback(() => {
+    readGeneration.current++;
+    readController.current?.abort();
+    setState({ kind: "forbidden" });
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
-    let active = true;
+    readController.current = controller;
+    const generation = ++readGeneration.current;
+    const live = () => generation === readGeneration.current && !controller.signal.aborted;
     setState({ kind: "loading" });
     const input: GraphQueryInput = { scope: "workspace" };
     if (lens === "knowledge") input.scope = "knowledge";
@@ -270,13 +301,16 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
     }
     if (changeKind !== "all") input.changeKind = changeKind;
     void load(input, controller.signal).then((snapshot) => {
-      if (!active) return;
+      if (!live()) return;
       setState(snapshot.nodes.length === 0 ? { kind: "empty" } : snapshot.truncated ? { kind: "truncated", snapshot } : { kind: "ready", snapshot });
     }).catch((error: unknown) => {
-      if (!active || controller.signal.aborted) return;
+      if (!live()) return;
       setState(error instanceof ApiRequestError && (error.status === 401 || error.status === 403) ? { kind: "forbidden" } : { kind: "error" });
     });
-    return () => { active = false; controller.abort(); };
+    return () => {
+      controller.abort();
+      if (readController.current === controller) readController.current = null;
+    };
   }, [changeKind, lens, load, retry, temporalRange]);
   useEffect(() => {
     if (!memberId || viewBlocked) return;
@@ -288,7 +322,7 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
     setSuggestionsState({ kind: "loading" });
     void loadGraphSuggestions(fetch).then((result) => setSuggestionsState({ kind: "idle", result })).catch(() => setSuggestionsState({ kind: "error" }));
   };
-  return <GraphPage memberId={memberId} locale={locale} state={state} onDenied={() => setState({ kind: "forbidden" })} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} viewBlocked={viewBlocked} viewNotice={viewNotice} onDiscardView={discardView} />;
+  return <GraphPage memberId={memberId} locale={locale} state={state} onDenied={denyRead} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} viewBlocked={viewBlocked} viewNotice={viewNotice} onDiscardView={discardView} />;
 }
 
 function GraphSuggestionsPanel({ locale, state, onGenerate }: { locale: LocaleRuntime; state: GraphSuggestionsState; onGenerate?: () => void }) {
