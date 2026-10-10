@@ -155,10 +155,9 @@ export async function removeDependency(taskId: string, dependsOnTaskId: string, 
 }
 export async function removeTaskLink(taskId: string, linkId: string, requester: Fetcher = fetch, expectedUpdatedAt?: string): Promise<void> {
   try {
-    const init = expectedUpdatedAt === undefined
+    await apiFetch<void>(`/api/tasks/${encodeURIComponent(taskId)}/links/${encodeURIComponent(linkId)}`, expectedUpdatedAt === undefined
       ? { requester, method: "DELETE" }
-      : { requester, method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }) };
-    await apiFetch<void>(`/api/tasks/${encodeURIComponent(taskId)}/links/${encodeURIComponent(linkId)}`, init);
+      : { requester, method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }) });
   } catch (error) {
     if (!(error instanceof ApiRequestError) || error.status !== 404) throw error;
   }

@@ -3,6 +3,8 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { loadCalendarIntent } from "../../frontend/lib/calendar-create-intent";
+import { loadCalendarDraft } from "../../frontend/lib/calendar-draft";
 import { CalendarPage } from "../../frontend/pages/calendar-page";
 
 
@@ -65,8 +67,10 @@ describe("calendar cancellation confirmation", () => {
   });
   it("retains a draft and blocks same-tick creation before storing an intent", async () => {
     const create = vi.fn(); await mount({ onCreate: create }); await input("Event title", "Unsubmitted event"); await input("Starts", "2026-10-01T10:00"); await input("Ends", "2026-10-01T11:00");
+    const expectedDraft = { kind: "ready", draft: { title: "Unsubmitted event", startsAt: "2026-10-01T10:00", endsAt: "2026-10-01T11:00" } };
+    expect(loadCalendarDraft("alice")).toEqual(expectedDraft); expect(loadCalendarIntent("alice")).toEqual({ kind: "empty" });
     const cancel = trigger(); const add = action("Add event"); expect(add.disabled).toBe(false);
-    await act(async () => { cancel.click(); add.click(); }); expect(create).not.toHaveBeenCalled(); expect(browser.sessionStorage.length).toBe(0);
+    await act(async () => { cancel.click(); add.click(); }); expect(create).not.toHaveBeenCalled(); expect(loadCalendarIntent("alice")).toEqual({ kind: "empty" }); expect(loadCalendarDraft("alice")).toEqual(expectedDraft); expect(browser.sessionStorage.length).toBe(1);
     await click(action("Keep event")); expect(container.querySelector<HTMLInputElement>('input[aria-label="Event title"]')?.value).toBe("Unsubmitted event");
   });
   it("survives equal range rerenders but not unmount", async () => {

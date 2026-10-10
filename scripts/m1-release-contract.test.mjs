@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -75,6 +75,18 @@ const expectedMigrations = [
   ["0050_admin_review_notifications.sql", "1fe5cf8ffe42237804fb82a75efa509a70aa2862b1ab2c5403cc9b9ff13e9716"],
   ["0051_calendar_reference_detach.sql", "30b4c77fc4e3198a1c6937adc0d95ba0c8bf142e707d670f0b12a233db47058d"],
 ];
+// Local file pins are separate from the historical release receipt manifest.
+const expectedLocalMigrations = [...expectedMigrations,
+  ["0052_chat_turn_requests.sql", "daea880bcf91f4379e370a86e70e9514541172a68be6b99eaeba02de547da47b"],
+  ["0053_goal_tasks.sql", "d0a723b18cf248b039f4d878fc1d884dd45339ebf7d405daa49f6567262fa9d1"],
+  ["0054_focus_start_payload.sql", "9e0c8cdc0a42403f0cb49c141c58b7ac390e753980213c7221ac414cad986539"],
+  ["0055_focus_calendar_terminal_repair.sql", "c445dfb647df41c657fb57991bbe1d6055575c9ca322630c65ce402d275d4bd3"],
+  ["0056_admin_collection_creation_requests.sql", "9e5ac6a336924a7d4fcb44291b5061ddf65f047a4368fac5b76a0029608e5b12"],
+  ["0057_connector_authorizations.sql", "582e337e7d37203234e32c1c47a9559991087953459aa15f7e33eaed14ae79af"],
+  ["0058_connector_leases.sql", "62f2960ac2fca05f301da4ffb3af36212ece58640edcc45e2d0803ec9270099f"],
+  ["0059_admin_workbench_permissions.sql", "b0fa4064ae7149f3436894b56956966b5e901462f06d91e95539002b3e74b97b"],
+];
+
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
   ["pre-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
@@ -221,13 +233,13 @@ ${postUpload}
 }
 
 test("pins the reviewed bytes of all forward migrations", async () => {
-  for (const [name, expectedHash] of expectedMigrations) {
+  for (const [name, expectedHash] of expectedLocalMigrations) {
     const bytes = await readFile(new URL(`../migrations/${name}`, import.meta.url));
     assert.equal(createHash("sha256").update(bytes).digest("hex"), expectedHash, name);
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^\[pass\] migration-files count=51$/mu);
+  assert.match(result.output, /^\[pass\] migration-files count=59$/mu);
 });
 
 test("keeps asset pairing migration compatible with remote D1 statement execution", async () => {
@@ -236,15 +248,47 @@ test("keeps asset pairing migration compatible with remote D1 statement executio
   assert.match(migration, /submissions_asset_id_unique/u);
 });
 
-test("fails closed when an unexpected local migration file is present", async () => {
-  const extraMigration = new URL("../migrations/0005_unreviewed.sql", import.meta.url);
+test("rejects missing, extra and changed migration bytes in an isolated checkout", async () => {
+  const root = await mkdtemp(join(tmpdir(), "migration-file-contract-"));
   try {
-    await writeFile(extraMigration, "SELECT 1;\n", { mode: 0o600 });
-    const result = await runVerifier(["--files"]);
-    assert.equal(result.code, 1, result.output);
-    assert.match(result.output, /^\[fail\] migration-files$/mu);
+    await mkdir(join(root, "scripts"));
+    await cp(verifierPath, join(root, "scripts/verify-m1-migrations.mjs"));
+    await cp(new URL("../migrations/", import.meta.url), join(root, "migrations"), { recursive: true });
+    const run = () => spawnSync(process.execPath, [join(root, "scripts/verify-m1-migrations.mjs"), "--files"], { encoding: "utf8" });
+    const baseline = run();
+    assert.equal(baseline.status, 0, baseline.stderr);
+    const extra = join(root, "migrations/0060_unreviewed.sql");
+    await writeFile(extra, "SELECT 1;\n");
+    assert.equal(run().status, 1, "unreviewed file must fail");
+    await rm(extra);
+    for (const [name] of [expectedLocalMigrations[0], ...expectedLocalMigrations.slice(51)]) {
+      const path = join(root, "migrations", name);
+      const original = await readFile(path);
+      await rm(path);
+      assert.equal(run().status, 1, `missing ${name}`);
+      await writeFile(path, Buffer.concat([original, Buffer.from("\n-- changed\n")]));
+      const changed = run();
+      assert.equal(changed.status, 1, `changed ${name}`);
+      assert.match(changed.stderr, /^\[fail\] migration-files$/mu);
+      await writeFile(path, original);
+    }
+    assert.equal(run().status, 0, "restored fixture must pass");
   } finally {
-    await rm(extraMigration, { force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("local forward pins do not expand the historical release manifest or approved ledgers", async () => {
+  const manifest = await runVerifier(["--manifest-json"]);
+  assert.equal(manifest.code, 0, manifest.output);
+  assert.deepEqual(JSON.parse(manifest.output), expectedMigrations.map(([name, sha256]) => ({ name, sha256 })));
+  for (const count of [52, 59]) {
+    await withLedger(ledger(expectedLocalMigrations.slice(0, count).map(([name]) => name)), async (path) => {
+      for (const mode of ["--ledger-before", "--ledger-after", "--ledger-catchup-before", "--ledger-catchup-after"]) {
+        const result = await runVerifier([mode, path]);
+        assert.equal(result.code, 1, `${mode} must not authorize ${count} from local file pins`);
+      }
+    });
   }
 });
 

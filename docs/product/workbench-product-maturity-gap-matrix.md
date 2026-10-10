@@ -71,6 +71,17 @@
 | workbench-focus:query_or_idempotency:abandon-focus | domain:POST /api/focus/:id/abandon | workbench-focus | 专注放弃的版本意图、终态回读与日历失败回滚已有本地证据，唯一所属终态历史可修复；歧义历史及原生验收仍待闭环。 | query_or_idempotency | R4-034 | R4-001 | frontend/lib/focus-data.ts<br>src/focus/service.ts<br>src/focus/repository.ts | test/worker/focus.test.ts | 完成与放弃竞争时仅接受一次合法迁移，重试不改变终态且其他成员不可操作。 | P0 |
 | workbench-project-timeline:query_or_idempotency:create-timeline-item | domain:POST /api/projects/:id/timeline | workbench-project-timeline | 时间线创建缺少前端稳定意图键和断线重试去重证明。 | query_or_idempotency | R4-037 | R4-001 | frontend/lib/projects-data.ts<br>src/project-timeline/repository.ts | test/worker/project-timeline.test.ts | 双击创建与断线重试只产生一个条目，跨项目复用键被拒绝且不同成员隔离。 | P0 |
 | workbench-project-timeline:query_or_idempotency:transition-timeline-status | domain:POST /api/projects/:id/timeline/:id/status | workbench-project-timeline | 时间线状态变更缺少预期版本条件及并发重放收敛证明。 | query_or_idempotency | R4-038 | R4-001 | frontend/lib/projects-data.ts<br>src/project-timeline/repository.ts | test/worker/project-timeline.test.ts | 两个会话同时更新条目时旧版本不能覆盖新状态，重试收敛且其他成员无法修改。 | P0 |
+| workbench-inbox:query_or_idempotency:target-delete-task | domain:DELETE /api/tasks/:id | workbench-inbox | 从收集箱打开的共享任务编辑器，删除任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-010 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/tasks.test.ts | 从该入口执行删除任务，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-inbox:query_or_idempotency:target-delete-dependency | domain:DELETE /api/tasks/:id/dependencies/:id | workbench-inbox | 从收集箱打开的共享任务编辑器，解除任务依赖已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行解除任务依赖，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-inbox:query_or_idempotency:target-delete-subtask | domain:DELETE /api/tasks/:id/subtasks/:id | workbench-inbox | 从收集箱打开的共享任务编辑器，删除子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行删除子任务，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-inbox:query_or_idempotency:target-update-subtask | domain:PATCH /api/tasks/:id/subtasks/:id | workbench-inbox | 从收集箱打开的共享任务编辑器，编辑子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行编辑子任务，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-inbox:query_or_idempotency:target-create-dependency | domain:POST /api/tasks/:id/dependencies | workbench-inbox | 从收集箱打开的共享任务编辑器，新增任务依赖已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行新增任务依赖，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-inbox:query_or_idempotency:target-create-subtask | domain:POST /api/tasks/:id/subtasks | workbench-inbox | 从收集箱打开的共享任务编辑器，创建子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行创建子任务，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-tasks:query_or_idempotency:delete-dependency | domain:DELETE /api/tasks/:id/dependencies/:id | workbench-tasks | 任务编辑器解除任务依赖已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行解除任务依赖，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-tasks:query_or_idempotency:delete-subtask | domain:DELETE /api/tasks/:id/subtasks/:id | workbench-tasks | 任务编辑器删除子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行删除子任务，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-tasks:query_or_idempotency:update-subtask | domain:PATCH /api/tasks/:id/subtasks/:id | workbench-tasks | 任务编辑器编辑子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行编辑子任务，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-tasks:query_or_idempotency:create-dependency | domain:POST /api/tasks/:id/dependencies | workbench-tasks | 任务编辑器新增任务依赖已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行新增任务依赖，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
+| workbench-tasks:query_or_idempotency:create-subtask | domain:POST /api/tasks/:id/subtasks | workbench-tasks | 任务编辑器创建子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。 | query_or_idempotency | R4-012 | R4-001 | frontend/lib/tasks-data.ts<br>src/routes/tasks.ts<br>src/tasks/repository.ts | test/worker/task-structure.test.ts | 从该入口执行创建子任务，模拟响应丢失、旧版本并发及跨成员拒绝；原意图回读或显式重试后不重复写入、不覆盖较新版本。 | P0 |
 | workbench-settings:states:persisted-settings-boundary | manifest:0@5e57e601f4cd | workbench-settings | 设置页没有路由级异步状态、持久化或保存 pending 边界。 | states | R1-012 | R1-005<br>R1-013 | frontend/pages/settings-page.tsx<br>src/identity/session.ts | test/unit/settings-page.test.tsx | 用户修改主题或语言时可见 pending、失败恢复和持久化结果，退出后 session 正确关闭。 | P1 |
 | workbench-knowledge:states:auxiliary-data-recovery | manifest:0@edac5a3b202d | workbench-knowledge | 知识页辅助 recent、favorite、note、activity、review 请求失败仍被折叠或彼此割裂。 | states | R2-010 | R2-004<br>R2-005 | frontend/pages/knowledge-page.tsx<br>src/routes/library.ts | test/unit/frontend-user-read-pages.test.tsx | 主列表成功但任一辅助请求失败时保留已加载内容并提供独立重试和明确状态。 | P1 |
 | workbench-search:journey:filter-restore-and-result-open | manifest:0@425b859782bc | workbench-search | 搜索降级、筛选恢复和打开结果的端到端旅程仍不完整。 | journey | R3-014 | R2-011<br>R3-013 | frontend/pages/search-page.tsx<br>src/knowledge/search.ts | test/unit/search.test.ts | 过滤搜索后刷新、后退、FTS5 降级并打开结果，条件和高亮保持一致。 | P1 |
@@ -129,9 +140,9 @@
 | 维度 | 数量 |
 | --- | ---: |
 | manifest 聚合 gap | 34 |
-| domain mutation-safety gap | 71 |
-| 总计 | 105 |
-| P0 | 54 |
+| domain mutation-safety gap | 82 |
+| 总计 | 116 |
+| P0 | 65 |
 | P1 | 50 |
 | P2 | 1 |
 
@@ -146,3 +157,5 @@
 2026-10-02 环境入口增量：补齐已可见 `/environments` 的成熟度记录，保守登记为 partial，归属已有 R8-009；当前 102 gap（54 P0 / 47 P1 / 1 P2）。不新增实施原子、不关闭 VM 功能项，历史快照不回填。领域审计的动态请求解析仍单独开放，不把本次入口清单通过当作领域审计通过。
 
 操作协议审计增量：当前领域快照已按显式环境请求与评论PUT requests协议重生成并通过源码一致性检查。矩阵当前105（34 manifest / 71 domain；54 P0 / 50 P1 / 1 P2），环境3条mutation缺口补登记归现有R8-005。此前102与解析阻塞记录是历史状态，不回填；编号/重试的本地通过不关闭跨刷新、运行时或发布验收。
+
+2026-10-10 D07 对账：补登记任务/收集箱共享任务编辑器 11 条遗漏的源码可达写操作，归属既有 R4-010/R4-012，不新增功能父项。当前 116 gap（34 manifest / 82 domain；65 P0 / 50 P1 / 1 P2）；这些是源代码审计的未闭环证据，不是本轮新发现 11 个可利用缺陷，也不代表已完成真实浏览器验收。历史快照保留。

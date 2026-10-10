@@ -54,22 +54,34 @@ const migrations = [
   ["0050_admin_review_notifications.sql", "1fe5cf8ffe42237804fb82a75efa509a70aa2862b1ab2c5403cc9b9ff13e9716"],
   ["0051_calendar_reference_detach.sql", "30b4c77fc4e3198a1c6937adc0d95ba0c8bf142e707d670f0b12a233db47058d"],
 ];
+// Local source verification only: these pins do not extend the historical release
+// manifest, approve a deployment, or authorize the 32 -> 51 catch-up batch.
+const localMigrations = [...migrations,
+  ["0052_chat_turn_requests.sql", "daea880bcf91f4379e370a86e70e9514541172a68be6b99eaeba02de547da47b"],
+  ["0053_goal_tasks.sql", "d0a723b18cf248b039f4d878fc1d884dd45339ebf7d405daa49f6567262fa9d1"],
+  ["0054_focus_start_payload.sql", "9e0c8cdc0a42403f0cb49c141c58b7ac390e753980213c7221ac414cad986539"],
+  ["0055_focus_calendar_terminal_repair.sql", "c445dfb647df41c657fb57991bbe1d6055575c9ca322630c65ce402d275d4bd3"],
+  ["0056_admin_collection_creation_requests.sql", "9e5ac6a336924a7d4fcb44291b5061ddf65f047a4368fac5b76a0029608e5b12"],
+  ["0057_connector_authorizations.sql", "582e337e7d37203234e32c1c47a9559991087953459aa15f7e33eaed14ae79af"],
+  ["0058_connector_leases.sql", "62f2960ac2fca05f301da4ffb3af36212ece58640edcc45e2d0803ec9270099f"],
+  ["0059_admin_workbench_permissions.sql", "b0fa4064ae7149f3436894b56956966b5e901462f06d91e95539002b3e74b97b"],
+];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;
 
 async function verifyFiles() {
-  const expectedNames = migrations.map(([name]) => name);
+  const expectedNames = localMigrations.map(([name]) => name);
   const actualNames = (await readdir(new URL("migrations/", repositoryRoot))).sort();
   if (actualNames.length !== expectedNames.length
     || actualNames.some((name, index) => name !== expectedNames[index])) {
     throw new Error("Local migration files do not match the reviewed state");
   }
-  for (const [name, expectedHash] of migrations) {
+  for (const [name, expectedHash] of localMigrations) {
     const bytes = await readFile(new URL(`migrations/${name}`, repositoryRoot));
     const actualHash = createHash("sha256").update(bytes).digest("hex");
     if (actualHash !== expectedHash) throw new Error("Migration checksum mismatch");
   }
-  console.log(`[pass] migration-files count=${migrations.length}`);
+  console.log(`[pass] migration-files count=${localMigrations.length}`);
 }
 
 function printManifest() {

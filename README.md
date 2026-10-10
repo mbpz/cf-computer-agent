@@ -19,6 +19,7 @@ The ledger records implementation, verification, release, and acceptance separat
 - [Production environment handbook](./docs/operations/production-environment-handbook.md)
 - [Current evidence index](./docs/operations/evidence/)
 - [Current completion audit and atomic checklist](./docs/product/2026-09-12-personal-workbench-completion-audit.md)
+- [2026-10-10 local functional gate reconciliation](./docs/product/2026-10-10-functional-gate-reconciliation-evidence.md) — 29 in scope, 5 closed, 24 open; not production or signed-browser acceptance.
 - [32-route implementation inventory and known blockers](./docs/product/2026-09-12-personal-workbench-route-inventory.md)
 - [First repair batch: member-scoped submission drafts](./docs/superpowers/plans/2026-09-12-member-scoped-submission-drafts.md)
 

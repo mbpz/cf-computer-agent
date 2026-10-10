@@ -3,6 +3,8 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { loadInboxIntent } from "../../frontend/lib/inbox-create-intent";
+import { loadInboxDraft } from "../../frontend/lib/inbox-draft";
 import { InboxPage } from "../../frontend/pages/inbox-page";
 
 
@@ -61,8 +63,10 @@ describe("inbox action confirmation", () => {
     const create = vi.fn(); await mount({ onCreate: create }); const input = container.querySelector('textarea')!;
     const prop = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
     await act(async () => { (input as any)[prop].onChange({ currentTarget: { value: "Unsaved draft" } }); });
+    const expectedDraft = { kind: "ready", draft: { kind: "text", content: "Unsaved draft", sourceUrl: "" } };
+    expect(loadInboxDraft("alice")).toEqual(expectedDraft); expect(loadInboxIntent("alice")).toEqual({ kind: "empty" });
     const capture = action("Add to inbox"); const archive = action("Archive");
-    await act(async () => { archive.click(); capture.click(); }); expect(create).not.toHaveBeenCalled(); expect(browser.localStorage.length).toBe(0); expect(browser.sessionStorage.length).toBe(0);
+    await act(async () => { archive.click(); capture.click(); }); expect(create).not.toHaveBeenCalled(); expect(browser.localStorage.length).toBe(0); expect(loadInboxIntent("alice")).toEqual({ kind: "empty" }); expect(loadInboxDraft("alice")).toEqual(expectedDraft); expect(browser.sessionStorage.length).toBe(1);
     await click(container.querySelector<HTMLButtonElement>("[data-cancel-action]")!); expect(input.value).toBe("Unsaved draft");
   });
   it("revokes on unmount and gives Chinese promotion impact", async () => {

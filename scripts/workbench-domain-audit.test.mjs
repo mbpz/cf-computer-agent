@@ -43,6 +43,16 @@ test("review replay targets resolve to three bounded decisions alongside detail 
   }
 });
 
+test("task link removal stays discoverable through inline conditional request options", () => {
+  const facts = runtimeEvidenceSnapshot({ repositoryRoot });
+  for (const [capability, linkId] of [["workbench-tasks", ":linkId"], ["workbench-inbox", ":id"]]) {
+    assert.ok(facts.mutations[capability][`DELETE /api/tasks/:id/links/${linkId}`]);
+    for (const operation of ["DELETE /api/tasks/:id/dependencies/:id", "DELETE /api/tasks/:id/subtasks/:id", "PATCH /api/tasks/:id/subtasks/:id", "POST /api/tasks/:id/dependencies", "POST /api/tasks/:id/subtasks"]) {
+      assert.equal(facts.mutations[capability][operation].strategy, "gap", "discovery alone is not recovery proof");
+    }
+  }
+});
+
 test("environment lifecycle wrapper exposes all three explicit mutation methods", () => {
   const facts = runtimeEvidenceSnapshot({ repositoryRoot });
   assert.deepEqual(Object.keys(facts.mutations["workbench-environments"]).sort(), [
@@ -327,9 +337,9 @@ test("validation rejects collection methods borrowed by the role detail branch",
 test("current frontend ownership discovers the required visible mutation minimum", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
   const expected = {
-    "workbench-inbox": ["DELETE /api/tasks/:id/links/:id", "PATCH /api/inbox/:id", "PATCH /api/tasks/:id", "POST /api/inbox", "POST /api/inbox/:id/promote/task", "POST /api/tasks", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "PUT /api/tasks/:id/tags"],
+    "workbench-inbox": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/dependencies/:id", "DELETE /api/tasks/:id/links/:id", "DELETE /api/tasks/:id/subtasks/:id", "PATCH /api/inbox/:id", "PATCH /api/tasks/:id", "PATCH /api/tasks/:id/subtasks/:id", "POST /api/inbox", "POST /api/inbox/:id/promote/task", "POST /api/tasks", "POST /api/tasks/:id/dependencies", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "POST /api/tasks/:id/subtasks", "PUT /api/tasks/:id/tags"],
     "workbench-agent": ["PATCH /api/knowledge/chat/conversations/:id/scope", "POST /api/knowledge/chat", "POST /api/knowledge/chat/conversations/:id/cancel", "POST /api/knowledge/chat/conversations/:id/feedback"],
-    "workbench-tasks": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/links/:linkId", "PATCH /api/tasks/:id", "POST /api/tasks", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "PUT /api/tasks/:id/tags"],
+    "workbench-tasks": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/dependencies/:id", "DELETE /api/tasks/:id/links/:linkId", "DELETE /api/tasks/:id/subtasks/:id", "PATCH /api/tasks/:id", "PATCH /api/tasks/:id/subtasks/:id", "POST /api/tasks", "POST /api/tasks/:id/dependencies", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "POST /api/tasks/:id/subtasks", "PUT /api/tasks/:id/tags"],
     "workbench-admin-duplicates": ["POST /api/admin/duplicates/:submissionId/decision"],
     "workbench-admin-members": ["PATCH /api/admin/members/:id/status"],
     "workbench-admin-roles": ["DELETE /api/admin/roles/:id/members", "PATCH /api/admin/roles/:id", "POST /api/admin/roles", "POST /api/admin/roles/:id/members"],

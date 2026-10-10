@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
 import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
@@ -17,6 +17,7 @@ describe("graph suggestions worker contract", () => {
   beforeEach(async () => {
     await reset();
     await applyD1Migrations(env.DB, MIGRATIONS);
+    vi.useFakeTimers({ now: NOW });
     await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, 'contributor', 'active', ?, ?), (?, ?, ?, 'contributor', 'active', ?, ?)").bind(
       "suggest-a", "subject-suggest-a", "suggest-a@example.test", NOW.toISOString(), NOW.toISOString(),
       "suggest-b", "subject-suggest-b", "suggest-b@example.test", NOW.toISOString(), NOW.toISOString(),
@@ -34,6 +35,8 @@ describe("graph suggestions worker contract", () => {
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-suggest-a"))!)).token;
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-suggest-b"))!)).token;
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it("returns only the signed-in member's graph suggestions and does not write promotions", async () => {
     const response = await api("/api/graph/suggestions", sessionA);

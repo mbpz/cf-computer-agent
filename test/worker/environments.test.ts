@@ -23,7 +23,7 @@ describe("private browser environment metadata HTTP/D1 contract", () => {
         "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, 'contributor', 'active', ?, ?)",
       ).bind(`member-${id}`, `subject-${id}`, `${id}@example.test`, now, now).run();
     }
-    // An explicit test-only grant: existing tasks/default roles must not grant VM access.
+    // Contributors need an explicit VM grant; migration 0059 grants the default administrator.
     await env.DB.prepare(
       "INSERT INTO roles (id, key, name, allow_bits, status, is_system, created_at, updated_at) VALUES ('test-vm', 'test-vm', 'VM', '0x200000', 'active', 0, ?, ?)",
     ).bind(now, now).run();
@@ -181,10 +181,14 @@ describe("private browser environment metadata HTTP/D1 contract", () => {
     expect((await create(a, { type: "temporary" })).status).toBe(409);
   });
 
-  it("requires an explicit VM grant even for an existing task user or administrator", async () => {
+  it("requires contributor VM grants and honors admin demotion and custom-role revocation", async () => {
     expect((await api("/api/environments", "")).status).toBe(401);
     expect((await api("/api/environments", denied)).status).toBe(403);
     await env.DB.prepare("UPDATE members SET role = 'admin' WHERE id = 'member-denied'").run();
+    expect((await api("/api/environments", denied)).status).toBe(200);
+    // Admin VM access is an existing built-in role baseline, not only a roles-table grant.
+    // Demotion must recalculate that baseline on the next request with the same session.
+    await env.DB.prepare("UPDATE members SET role = 'contributor' WHERE id = 'member-denied'").run();
     expect((await api("/api/environments", denied)).status).toBe(403);
     await env.DB.prepare("UPDATE roles SET status = 'disabled' WHERE id = 'test-vm'").run();
     expect((await api("/api/environments", a)).status).toBe(403);

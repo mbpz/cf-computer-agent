@@ -83,6 +83,24 @@ describe("tasks data layer", () => {
     await expect(updateTask("owned", { title: "Alpha", notes: "", priority: "medium", dueAt: null }, wrong)).rejects.toThrow();
   });
 
+  it.each([undefined, "2026-10-10T00:00:00.000Z"])("preserves link DELETE payload and identity for version %s", async (version) => {
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const requester = (async (url, init) => {
+      calls.push({ url: String(url), init });
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    await removeTaskLink("task/a", "link/b", requester, version);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("/api/tasks/task%2Fa/links/link%2Fb");
+    expect(calls[0]!.init?.method).toBe("DELETE");
+    expect(calls[0]!.init?.body).toBe(version === undefined ? undefined : JSON.stringify({ expectedUpdatedAt: version }));
+    expect(new Headers(calls[0]!.init?.headers).get("content-type")).toBe(version === undefined ? null : "application/json");
+  });
+
+  it("does not turn a stale link deletion into success", async () => {
+    await expect(removeTaskLink("owned", "link", fetchJson({}, 409), "old-version")).rejects.toMatchObject({ status: 409 });
+  });
+
   it("treats an already removed association as a successful removal", async () => {
     await expect(removeTaskLink("owned", "link-gone", fetchJson({}, 404))).resolves.toBeUndefined();
   });
