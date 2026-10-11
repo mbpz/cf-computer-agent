@@ -59,3 +59,34 @@
 ### 明确非声明
 - 未执行任何远程迁移或部署；未做任何生产写入；未记录回滚点。
 - 不构成 D08 验收：迁移/部署与真实登录验收的完整证据需在授权后单独记录（回滚点建议：D1 Time Travel bookmark 或导出快照 + 已合并的 `main` 提交）。
+
+## 授权执行：远程迁移 0051–0061 与迁移后复验（2026-10-11）
+
+用户在确认"生产库落后 11 个迁移"后**明确授权立即执行**（并选择不推送本地 docs 提交）。
+
+### 回滚点
+- **D1 Time Travel bookmark（迁移前）**：`0000015a-00000000-00005101-602a6f5e08b1fbb7233d7e2fafa8d39e`（取自 `wrangler d1 time-travel info memory-garden-control-plane --json`）。恢复命令：`wrangler d1 time-travel restore memory-garden-control-plane --bookmark 0000015a-00000000-00005101-602a6f5e08b1fbb7233d7e2fafa8d39e --remote`。
+- `wrangler d1 export --remote` **不可用**：报 `D1 Export error: cannot export databases with virtual tables (like FTS5)`。故 SQL 快照不可得，回滚依赖 Time Travel；另将变更前的 `menus`（26 行）与 `roles`（2 行）逐行读入本地临时文件作对照（未入库）。
+
+### 台账
+| 时点 | `d1_migrations` 行数 | 末条 |
+| --- | --- | --- |
+| 迁移前 | 50 | `0050_admin_review_notifications.sql` |
+| 迁移后 | **61** | `0061_knowledge_favorite_operations.sql` |
+
+应用命令：`wrangler d1 migrations apply memory-garden-control-plane --remote`；`0051`–`0061` 共 11 条全部 ✅（`0051_calendar_reference_detach`、`0052_chat_turn_requests`、`0053_goal_tasks`、`0054_focus_start_payload`、`0055_focus_calendar_terminal_repair`、`0056_admin_collection_creation_requests`、`0057_connector_authorizations`、`0058_connector_leases`、`0059_admin_workbench_permissions`、`0060_workbench_route_menu_registration`、`0061_knowledge_favorite_operations`）。
+
+### 迁移后复验（真实管理员会话）
+- `/api/admin/menus`：**32 行**（迁移前 26），6 个新 id 全部存在；两个组根均 `0x0`；工作区 `position` `0`–`18` 唯一；`menu-boards`/`menu-inbox` = `0x100000`；`menu-environments` = `0x200000`，与本地已迁移库逐行一致。
+- `/api/navigation`：**29 条 path**（迁移前 23），包含 `/graph`、`/calendar`、`/today`、`/focus`、`/review`、`/environments`。
+- 真实侧栏（页面 reload 后）出现 `/calendar`、`/today`、`/focus`、`/review`、`/environments` 与 admin 子树；`/today` 页面在真实标签页正常渲染。
+- 只读回归全部 `200`：`/api/tasks`、`/api/goals`、`/api/projects`、`/api/inbox`、`/api/notifications`、`/api/discussions`、`/api/environments`、`/api/graph`、`/api/admin/menus`、`/api/knowledge/<id>/favorite`、`/api/calendar/events?from=&to=`。`/api/boards` 的 `404` 属预期：代码中不存在该服务端路由（看板由 `/api/tasks` 提供）。
+
+### 观察到一处数据状态分歧（未处理，待决策）
+- 生产 `role-contributor.allow_bits = 0x600c3`（**无** bit20 `workspace.tasks`），而迁移重建的意图与本地库均为 `0x1600c3`。`0032_workspace_tasks.sql` 的补挂语句是条件更新（`WHERE allow_bits='0x600c3'`）且早已记录为已应用，故在生产**无法再次生效**。
+- 影响（由掩码推断，未取得 contributor 会话）：`0060` 将 `menu-boards`/`menu-inbox` 收紧为 `0x100000`，叠加既有 `0x100000` 的 `tasks/goals/projects/graph/calendar/today/focus/review`，生产 contributor 侧栏将**不显示**这些入口，而本地 contributor（`0x1600c3`）仍显示。
+- 处置需用户决策：新增前向迁移（如 `0062`）把 `role-contributor` 由 `0x600c3` 对齐到 `0x1600c3`，或确认生产上有意不给 contributor `workspace.tasks`。
+
+### 非声明
+- 回滚点已记录但**未演练**；本轮只应用远程 D1 迁移，未做任何部署。
+- 不构成 D05 双身份验收（无第二个真实身份）与 D06 完整矩阵；contributor 侧效果为掩码推断而非实测。
