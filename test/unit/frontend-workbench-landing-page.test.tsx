@@ -176,4 +176,24 @@ describe("public knowledge studio", () => {
     expect(document.body.style.overflow).toBe("");
   });
 
+  it("sets the document language from a stored non-default locale when the landing mounts", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en", storedLocale: "zh-CN" });
+    act(() => root.render(<PublicWorkbenchPage locale={locale} />));
+    expect(document.documentElement.lang).toBe("zh-CN");
+    expect(host.querySelector("main")?.lang).toBe("zh-CN");
+    expect(locale.locale).toBe("zh-CN");
+  });
+
+  it("updates the document language when the landing language selector switches locale", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    act(() => root.render(<PublicWorkbenchPage locale={locale} />));
+    expect(document.documentElement.lang).toBe("en");
+    const select = host.querySelector<HTMLSelectElement>("select")!;
+    act(() => { select.value = "zh-CN"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(document.documentElement.lang).toBe("zh-CN");
+    expect(locale.locale).toBe("zh-CN");
+    act(() => { select.value = "en"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(document.documentElement.lang).toBe("en");
+  });
+
 });

@@ -1,7 +1,7 @@
 import { ArrowRight, Bell, Books, ChatCircleText, GithubLogo, SquaresFour, Tray } from "@phosphor-icons/react";
 import { useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
 import { Button } from "../../components/ui/button";
-import { frontendText, type LocaleRuntime } from "../../lib/i18n";
+import { frontendText, syncDocumentLanguage, type LocaleRuntime } from "../../lib/i18n";
 import { readTheme, type ThemeMode } from "../../lib/theme";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
 import { demoReducer, initialDemoState, type DemoEvent, type DemoState, type DemoStep, type FeatureId } from "./workbench-demo-state";
@@ -43,6 +43,7 @@ export function PublicWorkbenchPage({ locale, githubEnabled = true }: { locale: 
     media?.addEventListener?.("change", apply);
     return () => media?.removeEventListener?.("change", apply);
   }, []);
+  useEffect(() => syncDocumentLanguage(locale, document), [locale]);
   const text = (key: LandingCopyKey) => landingText(locale, key);
   const gated = (state.step === "capture" && !state.captured) || (state.step === "action" && !state.taskDone);
   const login = githubEnabled

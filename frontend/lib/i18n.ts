@@ -2967,6 +2967,35 @@ export function createLocaleRuntime(options: LocaleOptions = {}) {
   });
 }
 
+export interface DocumentLanguageTarget {
+  documentElement?: { lang: string } | null;
+}
+
+/** Maps the internal locale to the BCP-47 value written to `document.documentElement.lang`; any non-string/foreign input fails safe to `en`. */
+export function documentLanguageForLocale(locale: unknown): FrontendLocale {
+  return typeof locale === "string" && locale.toLowerCase() === "zh-cn" ? "zh-CN" : "en";
+}
+
+/** Writes the active locale to the document language; any missing or throwing document is a silent no-op (`false`), never a throw. */
+export function applyDocumentLanguage(locale: string, documentRef?: DocumentLanguageTarget | null): boolean {
+  try {
+    const element = documentRef?.documentElement;
+    if (!element) return false;
+    const language = documentLanguageForLocale(locale);
+    if (element.lang !== language) element.lang = language;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Applies the current locale to the document, then re-applies it on every locale change. Returns the unsubscribe. */
+export function syncDocumentLanguage(runtime: Pick<LocaleRuntime, "locale" | "subscribe">, documentRef?: DocumentLanguageTarget | null): () => void {
+  applyDocumentLanguage(runtime.locale, documentRef);
+  const unsubscribe = runtime.subscribe((next) => { applyDocumentLanguage(next, documentRef); });
+  return () => { unsubscribe(); };
+}
+
 export function frontendText(locale: Pick<LocaleRuntime, "t"> | undefined, key: string): string {
   return locale?.t(key) ?? catalogs.en[key] ?? key;
 }

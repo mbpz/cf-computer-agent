@@ -124,7 +124,7 @@ import { logoutAccount } from "./lib/logout-account";
 import { EnvironmentsPage } from "./features/environments/environments-page";
 import { AccountNetworkBoundary } from "./features/environments/account-network-boundary";
 import type { AccountNetworkOwner } from "./features/environments/account-network-owner.mjs";
-import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
+import { createLocaleRuntime, frontendText, syncDocumentLanguage, type LocaleRuntime } from "./lib/i18n";
 import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
@@ -144,6 +144,7 @@ export function App() {
   const [localeTick, setLocaleTick] = useState(0);
   const locale = useMemo(() => createLocaleRuntime({ navigatorLanguage: navigator.language, storage: window.localStorage }), []);
   useEffect(() => { const unsubscribe = locale.subscribe(() => setLocaleTick((tick) => tick + 1)); return () => { unsubscribe(); }; }, [locale]);
+  useEffect(() => syncDocumentLanguage(locale, document), [locale]);
   void localeTick;
 
   useEffect(() => {
