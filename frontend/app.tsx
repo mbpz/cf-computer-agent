@@ -61,7 +61,7 @@ import { SettingsPage } from "./pages/settings-page";
 import { GraphRoute } from "./pages/graph-page";
 import { ComingSoonPage } from "./pages/coming-soon-page";
 import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type LoadKnowledgePageInput, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
-import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
+import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeFavoriteOperation, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type LoadSearchPageInput, type SearchPageResult } from "./lib/search-data";
 import { type SavedViewItem } from "./lib/saved-views-data";
@@ -666,6 +666,9 @@ export function KnowledgeReaderRoute({ locale, knowledgeItemId, memberId = "" }:
   return <KnowledgeReaderSession key={`${memberId}:${knowledgeItemId}:${citationHash}`} memberId={memberId} locale={locale} knowledgeItemId={knowledgeItemId} citationHash={citationHash} />;
 }
 
+/** One independently retryable auxiliary read: a fresh attempt token plus its own abort. */
+type ReaderSection = { token: object; controller: AbortController; settled: boolean };
+
 function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberId }: { memberId: string; locale: LocaleRuntime; knowledgeItemId: string; citationHash: string }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; revision: KnowledgeRevision } | { kind: "error"; message: string }>({ kind: "loading" });
   const [diffState, setDiffState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; diff: KnowledgeRevisionDiff } | { kind: "error" }>({ kind: "idle" });
@@ -676,7 +679,9 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
   const [retry, setRetry] = useState(0);
   const readOwner = useRef<{
     primary: ReturnType<typeof createKnowledgeReaderRequestController>;
-    auxiliary: AbortController;
+    favorite: ReaderSection | null;
+    related: ReaderSection | null;
+    backlinks: ReaderSection | null;
     diff: AbortController | null;
   } | null>(null);
   type ReadOwner = NonNullable<typeof readOwner.current>;
@@ -693,9 +698,25 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     owner.addEventListener("beforeunload", warn);
     return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
   }, []);
+  // Reserving a section synchronously (token + abort) lets a same-event double
+  // click start one read, and lets a superseded attempt never apply its result.
+  // A settled section stays reachable so revocation still aborts its transport.
+  const startSection = (owner: ReadOwner, key: "favorite" | "related" | "backlinks") => {
+    const previous = owner[key];
+    const section: ReaderSection = { token: {}, controller: new AbortController(), settled: false };
+    owner[key] = section;
+    previous?.controller.abort();
+    return section;
+  };
+  const sectionLive = (owner: ReadOwner, current: ReaderSection | null, section: ReaderSection) =>
+    readOwner.current === owner && current === section && !section.settled && !section.controller.signal.aborted;
   const retire = (owner: ReadOwner) => {
     if (readOwner.current === owner) readOwner.current = null;
-    owner.primary.cancel(); owner.auxiliary.abort(); owner.diff?.abort();
+    owner.primary.cancel();
+    owner.favorite?.controller.abort();
+    owner.related?.controller.abort();
+    owner.backlinks?.controller.abort();
+    owner.diff?.abort();
   };
   const denyRead = (error: unknown, owner: ReadOwner) => {
     if (readOwner.current !== owner || !(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
@@ -707,15 +728,58 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     setFavorite(null); setFavoriteError(false);
     return true;
   };
+  // Each auxiliary read owns its own attempt and abort, so retrying one section
+  // never re-issues, blocks or cancels the body, the favorite, or its sibling.
+  const loadFavorite = async (owner: ReadOwner) => {
+    if (owner.favorite && !owner.favorite.settled) return;
+    const section = startSection(owner, "favorite");
+    const live = () => sectionLive(owner, owner.favorite, section);
+    try {
+      const value = await loadKnowledgeFavorite(knowledgeItemId, fetch, section.controller.signal);
+      if (live()) { setFavoriteError(false); setFavorite(value); }
+    } catch (error) {
+      if (live() && !isAbort(error) && !denyRead(error, owner)) { setFavorite(null); setFavoriteError(true); }
+    } finally {
+      section.settled = true;
+    }
+  };
+  const loadRelated = async (owner: ReadOwner) => {
+    if (owner.related && !owner.related.settled) return;
+    const section = startSection(owner, "related");
+    const live = () => sectionLive(owner, owner.related, section);
+    setRelatedState({ kind: "loading" });
+    try {
+      const items = await loadRelatedKnowledge(knowledgeItemId, fetch, section.controller.signal);
+      if (live()) setRelatedState({ kind: "ready", items });
+    } catch (error) {
+      if (live() && !isAbort(error) && !denyRead(error, owner)) setRelatedState({ kind: "error" });
+    } finally {
+      section.settled = true;
+    }
+  };
+  const loadBacklinks = async (owner: ReadOwner) => {
+    if (owner.backlinks && !owner.backlinks.settled) return;
+    const section = startSection(owner, "backlinks");
+    const live = () => sectionLive(owner, owner.backlinks, section);
+    setBacklinkState({ kind: "loading" });
+    try {
+      const items = await loadKnowledgeBacklinks(knowledgeItemId, fetch, section.controller.signal);
+      if (live()) setBacklinkState({ kind: "ready", items });
+    } catch (error) {
+      if (live() && !isAbort(error) && !denyRead(error, owner)) setBacklinkState({ kind: "error" });
+    } finally {
+      section.settled = true;
+    }
+  };
   useEffect(() => {
-    const owner: ReadOwner = { primary: createKnowledgeReaderRequestController(), auxiliary: new AbortController(), diff: null };
+    const owner: ReadOwner = { primary: createKnowledgeReaderRequestController(), favorite: null, related: null, backlinks: null, diff: null };
     readOwner.current = owner;
     favoriteAttempt.current = null;
     const stored = loadFavoriteIntent(memberId, knowledgeItemId);
     if (stored.kind === "ready") favoriteIntent.current = stored.intent;
     transitionFavorite(stored.kind === "blocked" ? "blocked" : favoriteIntent.current ? "unknown" : "idle");
     const request = owner.primary.request(knowledgeItemId, citationHash);
-    const live = () => readOwner.current === owner && !owner.auxiliary.signal.aborted;
+    const live = () => readOwner.current === owner;
     const failed = (error: unknown, ordinary: () => void) => {
       if (live() && !isAbort(error) && !denyRead(error, owner)) ordinary();
     };
@@ -728,21 +792,20 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     void request.promise.then(({ revision }) => {
       if (!live()) return;
       setState({ kind: "ready", revision });
-      setRelatedState({ kind: "loading" });
-      setBacklinkState({ kind: "loading" });
-      const signal = owner.auxiliary.signal;
-      void loadKnowledgeFavorite(knowledgeItemId, fetch, signal).then((value) => {
-        if (live()) { setFavoriteError(false); setFavorite(value); }
-      }).catch(error => failed(error, () => { setFavorite(null); setFavoriteError(true); }));
-      void loadRelatedKnowledge(knowledgeItemId, fetch, signal).then((items) => {
-        if (live()) setRelatedState({ kind: "ready", items });
-      }).catch(error => failed(error, () => setRelatedState({ kind: "error" })));
-      void loadKnowledgeBacklinks(knowledgeItemId, fetch, signal).then((items) => {
-        if (live()) setBacklinkState({ kind: "ready", items });
-      }).catch(error => failed(error, () => setBacklinkState({ kind: "error" })));
+      void loadFavorite(owner);
+      void loadRelated(owner);
+      void loadBacklinks(owner);
     }).catch(error => failed(error, () => setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_READER_ERROR") })));
     return () => retire(owner);
   }, [knowledgeItemId, citationHash, locale, retry]);
+  const retryRelated = () => {
+    const owner = readOwner.current;
+    if (owner) void loadRelated(owner);
+  };
+  const retryBacklinks = () => {
+    const owner = readOwner.current;
+    if (owner) void loadBacklinks(owner);
+  };
   const showDiff = async () => {
     const owner = readOwner.current;
     if (!owner || owner.diff || state.kind !== "ready" || !state.revision.previousRevisionId) return;
@@ -777,10 +840,12 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     } catch { transitionFavorite("blocked"); return; }
     const live = () => readOwner.current === owner && favoriteAttempt.current === attempt;
     try {
-      const result = await setKnowledgeFavorite(knowledgeItemId, intent.desired);
+      // The local intent id is the server operation number: a lost response is
+      // resolved by querying that exact number, never by resending a new write.
+      const receipt = await setKnowledgeFavorite(knowledgeItemId, intent.desired, intent.id);
       if (!live()) return;
       finishFavoriteIntent(memberId, knowledgeItemId, intent);
-      favoriteIntent.current = null; setFavorite(result); setFavoriteError(false); transitionFavorite("idle");
+      favoriteIntent.current = null; setFavorite(receipt.operation.favorited); setFavoriteError(false); transitionFavorite("idle");
     } catch (error) {
       if (!live()) return;
       setFavorite(null); transitionFavorite("unknown"); denyRead(error, owner);
@@ -794,20 +859,30 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     if (stored.kind === "ready") favoriteIntent.current = stored.intent;
     const intent = favoriteIntent.current;
     const attempt = {}; favoriteAttempt.current = attempt; transitionFavorite("checking");
-    const live = () => readOwner.current === owner && favoriteAttempt.current === attempt;
+    const section = startSection(owner, "favorite");
+    const live = () => favoriteAttempt.current === attempt && sectionLive(owner, owner.favorite, section);
     try {
-      const value = await loadKnowledgeFavorite(knowledgeItemId, fetch, owner.auxiliary.signal);
+      if (intent) {
+        // The server's record of this operation number, not the current boolean
+        // state: a coincidental match cannot prove what this write did.
+        const receipt = await loadKnowledgeFavoriteOperation(intent.id, fetch, section.controller.signal);
+        if (!live()) return;
+        if (receipt.knowledgeItemId !== knowledgeItemId || receipt.favorited !== intent.desired) { setFavorite(null); transitionFavorite("unknown"); return; }
+        finishFavoriteIntent(memberId, knowledgeItemId, intent);
+        favoriteIntent.current = null; setFavorite(receipt.favorited); setFavoriteError(false); transitionFavorite("idle");
+        return;
+      }
+      const value = await loadKnowledgeFavorite(knowledgeItemId, fetch, section.controller.signal);
       if (!live()) return;
-      if (intent && value !== intent.desired) { setFavorite(null); transitionFavorite("unknown"); return; }
-      // This confirms current state, not the outcome of a server operation ID.
-      if (intent) finishFavoriteIntent(memberId, knowledgeItemId, intent);
-      favoriteIntent.current = null; setFavorite(value); setFavoriteError(false); transitionFavorite("idle");
+      setFavorite(value); setFavoriteError(false); transitionFavorite("idle");
     } catch (error) {
       if (!live()) return;
       setFavorite(null); setFavoriteError(true); transitionFavorite(intent ? "unknown" : "idle"); denyRead(error, owner);
+    } finally {
+      section.settled = true;
     }
   };
-  return <KnowledgeReaderPage memberId={memberId} locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} favorite={favorite} favoriteError={favoriteError} favoritePhase={favoritePhase} onCheckFavorite={checkFavorite} onToggleFavorite={toggleFavorite} />;
+  return <KnowledgeReaderPage memberId={memberId} locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} onRetryRelated={retryRelated} onRetryBacklinks={retryBacklinks} favorite={favorite} favoriteError={favoriteError} favoritePhase={favoritePhase} onCheckFavorite={checkFavorite} onToggleFavorite={toggleFavorite} />;
 }
 
 function NotFoundPage({ locale }: { locale: LocaleRuntime }) {

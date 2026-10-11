@@ -1,4 +1,9 @@
-/** Tab/member/item scoped intent, not a server operation receipt or cross-tab lock. */
+/**
+ * Tab/member/item scoped intent. Its `id` is transmitted to the server as the
+ * operation number: the same number is retried without a second effect, and the
+ * exact recorded result is queried back by number. The stored record is still
+ * tab-scoped, so it is not a cross-tab lock.
+ */
 export interface ReaderFavoriteIntent { id: string; desired: boolean }
 export type StoredFavoriteIntent = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intent: ReaderFavoriteIntent };
 export type FavoriteWritePhase = "idle" | "saving" | "checking" | "unknown" | "blocked";
@@ -26,7 +31,7 @@ export function prepareFavoriteIntent(member: string, item: string, intent: Read
   const saved = loadFavoriteIntent(member, item);
   if (saved.kind !== "ready" || !same(saved.intent, intent)) throw new Error("FAVORITE_INTENT_STORAGE_FAILED");
 }
-/** Caller must have a validated success or a fresh read equal to the desired state. */
+/** Caller must hold the server's receipt for this exact operation number. */
 export function finishFavoriteIntent(member: string, item: string, intent: ReaderFavoriteIntent) {
   const saved = loadFavoriteIntent(member, item);
   // A prior successful removal's verification may have thrown. Fresh proof is

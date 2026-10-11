@@ -113,6 +113,119 @@ describe("knowledge reader composite read ownership", () => {
     expect(requests.filter(request => request.url.pathname === prefix)).toHaveLength(1);
   });
 
+  it.each(["related", "backlinks"] as const)("retries only the failed %s panel and never re-issues the body, favorite, or diff", async name => {
+    let attempts = 0;
+    respond = url => {
+      if (url.pathname === `${prefix}/${name}`) { attempts += 1; if (attempts === 1) return deny(500); }
+      return reply(url);
+    };
+    await mount(); await compare();
+    expect(container.textContent).toContain("Private body knowledge-a");
+    expect(container.querySelector(panelSelector[name])!.textContent).toContain("could not be read");
+    const sibling = name === "related" ? "backlinks" : "related";
+    const siblingBefore = count(`${prefix}/${sibling}`);
+    await act(async () => panelRetry(name).click()); await flush();
+    expect(attempts).toBe(2);
+    expect(container.querySelector(panelSelector[name])!.textContent).toContain(name === "related" ? "Private related" : "Private backlink");
+    expect(count(`${prefix}/${name}`)).toBe(2);
+    expect(count(`${prefix}/${sibling}`)).toBe(siblingBefore);
+    expect(container.querySelector(panelSelector[sibling])!.textContent).toContain(sibling === "related" ? "Private related" : "Private backlink");
+    expect(count(prefix)).toBe(1);
+    expect(count(`${prefix}/favorite`)).toBe(1);
+    expect(count(diffPath)).toBe(1);
+  });
+
+  it.each(["related", "backlinks"] as const)("reserves one %s panel retry against two clicks in one event", async name => {
+    const pending = deferred<Response>();
+    let attempts = 0;
+    respond = url => {
+      if (url.pathname === `${prefix}/${name}`) { attempts += 1; return attempts === 1 ? deny(500) : pending.promise; }
+      return reply(url);
+    };
+    await mount();
+    const target = panelRetry(name);
+    await act(async () => { target.click(); target.click(); });
+    expect(attempts).toBe(2);
+    await act(async () => pending.resolve(reply(new URL(`${prefix}/${name}`, "https://app.test")))); await flush();
+    expect(container.querySelector(panelSelector[name])!.textContent).toContain(name === "related" ? "Private related" : "Private backlink");
+  });
+
+  it.each(["related", "backlinks"] as const)("hides the %s retry control while only that panel is loading again", async name => {
+    const pending = deferred<Response>();
+    let attempts = 0;
+    respond = url => {
+      if (url.pathname === `${prefix}/${name}`) { attempts += 1; return attempts === 1 ? deny(500) : pending.promise; }
+      return reply(url);
+    };
+    await mount();
+    const sibling = name === "related" ? "backlinks" : "related";
+    await act(async () => panelRetry(name).click());
+    const controls = [...container.querySelector(panelSelector[name])!.querySelectorAll("button")].map(candidate => candidate.textContent);
+    expect(controls).not.toContain(retryLabel[name]);
+    expect(container.querySelector(panelSelector[name])!.textContent).toContain(name === "related" ? "Finding related knowledge" : "Finding backlinks");
+    expect(container.querySelector(panelSelector[sibling])!.textContent).toContain(sibling === "related" ? "Private related" : "Private backlink");
+    expect(container.textContent).toContain("Private body knowledge-a");
+    await act(async () => pending.resolve(reply(new URL(`${prefix}/${name}`, "https://app.test")))); await flush();
+    expect(container.querySelector(panelSelector[name])!.textContent).toContain(name === "related" ? "Private related" : "Private backlink");
+  });
+
+  it("retries a failed panel without cancelling a still-pending sibling read", async () => {
+    const backlinks = deferred<Response>();
+    let attempts = 0;
+    respond = url => {
+      if (url.pathname === `${prefix}/related`) { attempts += 1; return attempts === 1 ? deny(500) : reply(url); }
+      if (url.pathname === `${prefix}/backlinks`) return backlinks.promise;
+      return reply(url);
+    };
+    await mount();
+    const siblingRequest = requests.filter(request => request.url.pathname === `${prefix}/backlinks`).at(-1)!;
+    expect(container.querySelector(panelSelector.backlinks)!.textContent).toContain("Finding backlinks");
+    await act(async () => panelRetry("related").click()); await flush();
+    expect(attempts).toBe(2);
+    expect(container.querySelector(panelSelector.related)!.textContent).toContain("Private related");
+    expect(siblingRequest.init?.signal?.aborted).toBe(false);
+    await act(async () => backlinks.resolve(reply(new URL(`${prefix}/backlinks`, "https://app.test")))); await flush();
+    expect(container.querySelector(panelSelector.backlinks)!.textContent).toContain("Private backlink");
+  });
+
+  it.each([401, 403])("revokes the whole reader when a panel retry is denied with %s", async status => {
+    let attempts = 0;
+    respond = url => {
+      if (url.pathname === `${prefix}/related`) { attempts += 1; return attempts === 1 ? deny(500) : deny(status); }
+      return reply(url);
+    };
+    await mount();
+    await act(async () => panelRetry("related").click()); await flush();
+    expectCleared();
+    expect(count(prefix)).toBe(1);
+    expect(count(`${prefix}/favorite`)).toBe(1);
+  });
+
+  it("ignores a superseded panel retry response and never lets it repaint the current reader", async () => {
+    const stale = deferred<Response>();
+    let attempts = 0;
+    let held = false;
+    respond = url => {
+      if (url.pathname === `${prefix}/related`) {
+        attempts += 1;
+        if (attempts === 1) return deny(500);
+        if (held) return stale.promise;
+      }
+      return reply(url);
+    };
+    await mount();
+    held = true;
+    await act(async () => panelRetry("related").click());
+    const retryRequest = requests.filter(request => request.url.pathname === `${prefix}/related`).at(-1)!;
+    held = false;
+    await mount("member-b");
+    expect(retryRequest.init?.signal?.aborted).toBe(true);
+    await act(async () => stale.resolve(Response.json({ related: { items: [{ id: "related-stale", title: "Stale related", publishedAt: stamp, reasonFields: ["title"] }] } }))); await flush();
+    expect(container.textContent).toContain("Private body knowledge-a");
+    expect(container.querySelector(panelSelector.related)!.textContent).toContain("Private related");
+    expect(container.textContent).not.toContain("Stale related");
+  });
+
   it("recovers only by explicit reauthorization and ignores a prior epoch failure", async () => {
     const related = deferred<Response>(); const backlink = deferred<Response>();
     respond = url => url.pathname.endsWith("/related") ? related.promise : url.pathname.endsWith("/backlinks") ? backlink.promise : reply(url);
@@ -125,7 +238,39 @@ describe("knowledge reader composite read ownership", () => {
   });
   const mutations = () => requests.filter(r => ["PUT", "DELETE"].includes(r.init?.method ?? ""));
   const favoriteReads = () => requests.filter(r => r.url.pathname.endsWith("/favorite") && !r.init?.method);
-  const mutationReply = () => Response.json({ favorite: { knowledgeItemId: "knowledge-a" } });
+  const operationPrefix = "/api/knowledge/favorites/operations/";
+  const panelSelector = { related: "[data-related-knowledge]", backlinks: "[data-backlinks]" } as const;
+  const retryLabel = { related: "Retry related knowledge", backlinks: "Retry backlinks" } as const;
+  const operationReads = () => requests.filter(r => r.url.pathname.startsWith(operationPrefix));
+  const count = (pathname: string) => requests.filter(r => r.url.pathname === pathname).length;
+  function panelRetry(name: "related" | "backlinks"): HTMLButtonElement {
+    const target = [...container.querySelector(panelSelector[name])!.querySelectorAll<HTMLButtonElement>("button")]
+      .find(candidate => candidate.textContent === retryLabel[name]);
+    expect(target, `${name} retry control`).toBeDefined();
+    return target!;
+  }
+  function mutationOperationId(method: "PUT" | "DELETE" = "PUT"): string {
+    const request = requests.find(r => r.init?.method === method);
+    expect(request, `${method} request`).toBeDefined();
+    const body: unknown = JSON.parse(String(request!.init?.body));
+    if (!body || typeof body !== "object" || !("operationId" in body) || typeof body.operationId !== "string") {
+      throw new Error(`the ${method} request body has no operation id`);
+    }
+    return body.operationId;
+  }
+  // Mirror the server: the receipt carries the operation number the client sent,
+  // so a client cannot pass by accepting an unrelated or reused receipt.
+  function operationReceipt(operationId: string, favorited: boolean) {
+    return {
+      operationId,
+      kind: favorited ? "knowledge.favorite.add" : "knowledge.favorite.remove",
+      knowledgeItemId: "knowledge-a",
+      favorited,
+      createdAt: stamp,
+    };
+  }
+  const addReply = () => Response.json({ favorite: { knowledgeItemId: "knowledge-a" }, operation: operationReceipt(mutationOperationId("PUT"), true) });
+  const receiptReply = (favorited: boolean) => Response.json({ operation: operationReceipt(mutationOperationId(favorited ? "PUT" : "DELETE"), favorited) });
   async function addFavorite() { await act(async () => button("Add to favorites").click()); await flush(); }
   async function checkFavorite() { await act(async () => button("Read current favorite").click()); await flush(); }
   function noFavoriteAction() { expect([...container.querySelectorAll("button")].some(b => ["Add to favorites", "Remove from favorites"].includes(b.textContent ?? "") && !b.disabled)).toBe(false); }
@@ -138,26 +283,32 @@ describe("knowledge reader composite read ownership", () => {
     await act(async () => { writeWorkspaceHistory("push", "/knowledge"); });
     expect(browser.location.pathname).toBe("/knowledge/knowledge-a");
     const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); expect(event.defaultPrevented).toBe(true);
-    await act(async () => pending.resolve(mutationReply())); await flush();
+    await act(async () => pending.resolve(addReply())); await flush();
     expect(button("Remove from favorites").getAttribute("aria-pressed")).toBe("true");
     await act(async () => { writeWorkspaceHistory("push", "/knowledge"); }); expect(browser.location.pathname).toBe("/knowledge");
   });
 
-  it.each(["lost", "invalid", "server"])("keeps %s favorite results unknown until an explicit matching read, without replay", async kind => {
+  it.each(["lost", "invalid", "server"])("keeps %s favorite results unknown until an exact operation receipt, without replay", async kind => {
     respond = (url, init) => init?.method === "PUT" ? kind === "lost" ? Promise.reject(new TypeError("Failed to fetch")) : kind === "invalid" ? Response.json({ favorite: { knowledgeItemId: "other" } }) : deny(503) : reply(url);
     await mount(); await addFavorite(); noFavoriteAction();
     expect(container.textContent).toContain("Favorite result is unconfirmed");
     expect(favoriteReads()).toHaveLength(1); expect(mutations()).toHaveLength(1);
-    await checkFavorite(); noFavoriteAction(); // false cannot prove the original PUT failed
-    respond = url => url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
+    // A boolean read that happens to match the intent is not the server's record
+    // of this operation, so it is not requested and cannot settle anything.
+    await checkFavorite(); noFavoriteAction();
+    expect(favoriteReads()).toHaveLength(1); expect(operationReads()).toHaveLength(1);
+    expect(container.textContent).toContain("Favorite result is unconfirmed");
+    respond = url => url.pathname.startsWith(operationPrefix) ? receiptReply(true) : reply(url);
     await checkFavorite(); expect(button("Remove from favorites").getAttribute("aria-pressed")).toBe("true"); expect(mutations()).toHaveLength(1);
   });
 
-  it("keeps a failed removal unknown and resolves only a false read", async () => {
+  it("keeps a failed removal unknown and resolves only the recorded removal receipt", async () => {
     respond = (url, init) => init?.method === "DELETE" ? Promise.reject(new TypeError("lost")) : url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
     await mount(); await act(async () => button("Remove from favorites").click()); await flush(); noFavoriteAction();
-    await checkFavorite(); noFavoriteAction();
-    respond = reply; await checkFavorite(); expect(button("Add to favorites").getAttribute("aria-pressed")).toBe("false"); expect(mutations().map(r => r.init?.method)).toEqual(["DELETE"]);
+    // The still-true boolean read is not evidence that the lost DELETE did or did not happen.
+    await checkFavorite(); noFavoriteAction(); expect(favoriteReads()).toHaveLength(1);
+    respond = url => url.pathname.startsWith(operationPrefix) ? receiptReply(false) : reply(url);
+    await checkFavorite(); expect(button("Add to favorites").getAttribute("aria-pressed")).toBe("false"); expect(mutations().map(r => r.init?.method)).toEqual(["DELETE"]);
   });
 
   it("keeps unknown intent through remount, isolates members, and never replays on mount", async () => {
@@ -165,8 +316,9 @@ describe("knowledge reader composite read ownership", () => {
     await mount(); await addFavorite(); await act(async () => root.render(<div>Replacement</div>));
     await mount("member-b"); expect(button("Add to favorites").disabled).toBe(false);
     await mount(); noFavoriteAction(); expect(container.textContent).toContain("Favorite result is unconfirmed"); expect(mutations()).toHaveLength(1);
-    respond = url => url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
+    respond = url => url.pathname.startsWith(operationPrefix) ? receiptReply(true) : reply(url);
     await checkFavorite(); expect(button("Remove from favorites").disabled).toBe(false);
+    expect(operationReads()).toHaveLength(1);
   });
 
   it.each([401, 403])("revokes private content on favorite write %s and preserves the unresolved intent", async status => {
@@ -181,24 +333,25 @@ describe("knowledge reader composite read ownership", () => {
     respond = (url, init) => init?.method === "PUT" ? pending.promise : url.pathname.endsWith("/related") ? related.promise : reply(url);
     await mount(); await addFavorite(); await act(async () => related.resolve(deny(403))); await flush(); expectCleared();
     respond = reply; await act(async () => button("Try again").click()); await flush();
-    await act(async () => pending.resolve(mutationReply())); await flush(); noFavoriteAction();
+    await act(async () => pending.resolve(addReply())); await flush(); noFavoriteAction();
     expect(container.textContent).toContain("Favorite result is unconfirmed"); expect(mutations()).toHaveLength(1);
   });
 
   it("deduplicates recovery reads, keeps read errors locked, and cancels recovery on unmount", async () => {
     respond = (url, init) => init?.method === "PUT" ? deny(503) : reply(url);
     await mount(); await addFavorite();
-    const pending = deferred<Response>(); respond = url => url.pathname.endsWith("/favorite") ? pending.promise : reply(url);
+    const pending = deferred<Response>(); respond = url => url.pathname.startsWith(operationPrefix) ? pending.promise : reply(url);
     const check = button("Read current favorite"); await act(async () => { check.click(); check.click(); });
-    expect(favoriteReads()).toHaveLength(2); noFavoriteAction();
-    const read = favoriteReads().at(-1)!; await act(async () => root.render(<div>Replacement</div>)); expect(read.init?.signal?.aborted).toBe(true);
-    await act(async () => pending.resolve(Response.json({ favorite: true }))); await flush(); expect(container.textContent).toBe("Replacement");
+    expect(favoriteReads()).toHaveLength(1); expect(operationReads()).toHaveLength(1); noFavoriteAction();
+    const read = operationReads().at(-1)!; await act(async () => root.render(<div>Replacement</div>)); expect(read.init?.signal?.aborted).toBe(true);
+    await act(async () => pending.resolve(receiptReply(true))); await flush(); expect(container.textContent).toBe("Replacement");
   });
 
-  it("recovers an initial favorite GET failure without a write or a full reader reload", async () => {
+  it("recovers an initial favorite GET failure without a write, an operation query, or a full reader reload", async () => {
     respond = url => url.pathname.endsWith("/favorite") ? deny(503) : reply(url);
     await mount(); noFavoriteAction(); respond = reply; await checkFavorite();
     expect(button("Add to favorites").disabled).toBe(false); expect(mutations()).toHaveLength(0);
+    expect(operationReads()).toHaveLength(0);
     expect(requests.filter(r => r.url.pathname === prefix)).toHaveLength(1);
   });
 
@@ -210,25 +363,25 @@ describe("knowledge reader composite read ownership", () => {
   it.each([401, 403])("revokes the entire reader on favorite recovery %s without replay", async status => {
     respond = (url, init) => init?.method === "PUT" ? deny(503) : reply(url);
     await mount(); await addFavorite();
-    respond = url => url.pathname.endsWith("/favorite") ? deny(status) : reply(url);
+    respond = url => url.pathname.startsWith(operationPrefix) ? deny(status) : reply(url);
     await checkFavorite(); expectCleared(); expect(mutations()).toHaveLength(1);
   });
 
-  it("retains an unknown write when recovery fails ordinarily, then permits another read", async () => {
+  it("retains an unknown write when recovery fails ordinarily, then permits another receipt read", async () => {
     respond = (url, init) => init?.method === "PUT" ? deny(503) : reply(url);
     await mount(); await addFavorite();
-    respond = url => url.pathname.endsWith("/favorite") ? deny(503) : reply(url);
+    respond = url => url.pathname.startsWith(operationPrefix) ? deny(503) : reply(url);
     await checkFavorite(); noFavoriteAction(); expect(container.textContent).toContain("Private body");
     await act(async () => { writeWorkspaceHistory("push", "/knowledge"); }); expect(browser.location.pathname).toBe("/knowledge/knowledge-a");
-    respond = url => url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
+    respond = url => url.pathname.startsWith(operationPrefix) ? receiptReply(true) : reply(url);
     await checkFavorite(); expect(button("Remove from favorites").disabled).toBe(false); expect(mutations()).toHaveLength(1);
   });
 
-  it("does not settle a record if successful write cleanup fails; a matching read retries cleanup only", async () => {
+  it("does not settle a record if successful write cleanup fails; a matching receipt retries cleanup only", async () => {
     await mount(); const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementation(() => { throw new Error("storage"); });
-    respond = (url, init) => init?.method === "PUT" ? mutationReply() : reply(url);
+    respond = (url, init) => init?.method === "PUT" ? addReply() : reply(url);
     await addFavorite(); noFavoriteAction();
-    remove.mockRestore(); respond = url => url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
+    remove.mockRestore(); respond = url => url.pathname.startsWith(operationPrefix) ? receiptReply(true) : url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
     await checkFavorite(); expect(button("Remove from favorites").disabled).toBe(false); expect(mutations()).toHaveLength(1);
     await act(async () => root.render(<div>Other</div>)); await mount(); expect(button("Remove from favorites").disabled).toBe(false);
   });
@@ -239,7 +392,7 @@ describe("knowledge reader composite read ownership", () => {
     const key = "memory-garden:reader-favorite-intent:v1:member-a:knowledge-a";
     const replacement = JSON.stringify({ v: 1, member: "member-a", item: "knowledge-a", intent: { id: "other-op", desired: false } });
     browser.sessionStorage.setItem(key, replacement);
-    await act(async () => pending.resolve(mutationReply())); await flush(); noFavoriteAction(); expect(browser.sessionStorage.getItem(key)).toBe(replacement);
+    await act(async () => pending.resolve(addReply())); await flush(); noFavoriteAction(); expect(browser.sessionStorage.getItem(key)).toBe(replacement);
   });
 
   it("leaves an unresolved record intact and ignores write denial after changing members", async () => {

@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadKnowledgeBacklinks, loadKnowledgeRevision, loadKnowledgeRevisionDiff, loadRelatedKnowledge } from "../../frontend/lib/knowledge-reader-data";
+import {
+  loadKnowledgeBacklinks,
+  loadKnowledgeFavoriteOperation,
+  loadKnowledgeRevision,
+  loadKnowledgeRevisionDiff,
+  loadRelatedKnowledge,
+  setKnowledgeFavorite,
+} from "../../frontend/lib/knowledge-reader-data";
 
 describe("knowledge reader data boundary", () => {
   it("loads only the authorized current revision and normalizes malformed chunks", async () => {
@@ -146,7 +153,82 @@ describe("knowledge reader data boundary", () => {
     ]);
     expect(requester).toHaveBeenCalledWith("/api/knowledge/knowledge-1/backlinks", expect.objectContaining({ credentials: "same-origin" }));
   });
+
+  it("sends the caller's operation number with a favorite write and returns its receipt", async () => {
+    const receipt = operationReceipt("operation-1", true);
+    const requester = vi.fn().mockResolvedValue(json({ favorite: { knowledgeItemId: "knowledge-1" }, operation: receipt }));
+    await expect(setKnowledgeFavorite("knowledge-1", true, "operation-1", requester)).resolves.toEqual({ favorite: true, operation: receipt });
+    expect(requester).toHaveBeenCalledWith("/api/knowledge/knowledge-1/favorite", expect.objectContaining({
+      method: "PUT", body: JSON.stringify({ operationId: "operation-1" }), credentials: "same-origin",
+    }));
+  });
+
+  it("sends the operation number with a removal and returns the recorded removal receipt", async () => {
+    const receipt = operationReceipt("operation-2", false);
+    const requester = vi.fn().mockResolvedValue(json({ operation: receipt }));
+    await expect(setKnowledgeFavorite("knowledge-1", false, "operation-2", requester)).resolves.toEqual({ favorite: false, operation: receipt });
+    expect(requester).toHaveBeenCalledWith("/api/knowledge/knowledge-1/favorite", expect.objectContaining({
+      method: "DELETE", body: JSON.stringify({ operationId: "operation-2" }),
+    }));
+  });
+
+  it.each([
+    ["a 204 removal without a receipt", () => new Response(null, { status: 204 })],
+    ["a receipt for another operation number", () => json({ operation: operationReceipt("someone-else", false) })],
+    ["a receipt for another knowledge item", () => json({ operation: { ...operationReceipt("operation-2", false), knowledgeItemId: "knowledge-9" } })],
+    ["a receipt whose result contradicts the request", () => json({ operation: operationReceipt("operation-2", true) })],
+    ["a receipt with an unknown kind", () => json({ operation: { ...operationReceipt("operation-2", false), kind: "knowledge.favorite.other" } })],
+    ["a receipt with a non-string createdAt", () => json({ operation: { ...operationReceipt("operation-2", false), createdAt: 4 } })],
+    ["a receipt with extra fields", () => json({ operation: { ...operationReceipt("operation-2", false), favoritedAt: "2026-08-26" } })],
+    ["a bare boolean", () => json({ favorite: false })],
+    ["a non-boolean favorite", () => json({ favorite: "yes", operation: operationReceipt("operation-1", true) })],
+  ])("fails closed on %s", async (_label, buildResponse) => {
+    await expect(setKnowledgeFavorite("knowledge-1", false, "operation-2", vi.fn().mockResolvedValue(buildResponse()))).rejects.toThrow();
+  });
+
+  it("accepts a replay receipt only, and still validates a present live favorite", async () => {
+    const receipt = operationReceipt("operation-1", true);
+    const replay = vi.fn().mockResolvedValue(json({ operation: receipt }));
+    await expect(setKnowledgeFavorite("knowledge-1", true, "operation-1", replay)).resolves.toEqual({ favorite: true, operation: receipt });
+    const mismatched = vi.fn().mockResolvedValue(json({ favorite: { knowledgeItemId: "knowledge-9" }, operation: receipt }));
+    await expect(setKnowledgeFavorite("knowledge-1", true, "operation-1", mismatched)).rejects.toThrow("KNOWLEDGE_FAVORITE_INVALID");
+    const malformedReplay = vi.fn().mockResolvedValue(json({ operation: { ...receipt, favorited: false } }));
+    await expect(setKnowledgeFavorite("knowledge-1", true, "operation-1", malformedReplay)).rejects.toThrow();
+  });
+
+  it("resolves an operation number through the exact receipt query, not a boolean read", async () => {
+    const receipt = operationReceipt("operation-3", true);
+    const requester = vi.fn().mockResolvedValue(json({ operation: receipt }));
+    await expect(loadKnowledgeFavoriteOperation("operation-3", requester)).resolves.toEqual(receipt);
+    expect(requester).toHaveBeenCalledWith("/api/knowledge/favorites/operations/operation-3", expect.objectContaining({ credentials: "same-origin" }));
+  });
+
+  it.each([
+    ["a missing operation", () => json({})],
+    ["another operation number", () => json({ operation: operationReceipt("operation-9", true) })],
+    ["a malformed receipt", () => json({ operation: { operationId: "operation-3", favorited: true } })],
+    ["a non-object operation", () => json({ operation: true })],
+  ])("fails closed on the exact query returning %s", async (_label, buildResponse) => {
+    await expect(loadKnowledgeFavoriteOperation("operation-3", vi.fn().mockResolvedValue(buildResponse()))).rejects.toThrow();
+  });
+
+  it("rejects an unsafe operation number without any request", async () => {
+    const requester = vi.fn();
+    await expect(loadKnowledgeFavoriteOperation("../secret", requester)).rejects.toThrow();
+    await expect(setKnowledgeFavorite("knowledge-1", true, "not a valid id", requester)).rejects.toThrow();
+    expect(requester).not.toHaveBeenCalled();
+  });
 });
+
+function operationReceipt(operationId: string, favorited: boolean) {
+  return {
+    operationId,
+    kind: favorited ? "knowledge.favorite.add" : "knowledge.favorite.remove",
+    knowledgeItemId: "knowledge-1",
+    favorited,
+    createdAt: "2026-08-26T00:00:00.000Z",
+  };
+}
 
 function json(value: unknown) { return new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } }); }
 function citation() { return { knowledgeItemId: "knowledge-1", title: "Historical", revisionId: "revision-old", chunkId: "chunk-old", headingPath: [], startLine: 1, endLine: 2 }; }

@@ -66,6 +66,7 @@ const localMigrations = [...migrations,
   ["0058_connector_leases.sql", "62f2960ac2fca05f301da4ffb3af36212ece58640edcc45e2d0803ec9270099f"],
   ["0059_admin_workbench_permissions.sql", "b0fa4064ae7149f3436894b56956966b5e901462f06d91e95539002b3e74b97b"],
   ["0060_workbench_route_menu_registration.sql", "5e08342b4f3da3954b1d80c8014dcb96251f3bc1622b07769756d3ee60cc344a"],
+  ["0061_knowledge_favorite_operations.sql", "bf6d72c6558cced59e57e5dd17c01fc0c7a63a84ad705593b6056b36ee9b5b8f"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

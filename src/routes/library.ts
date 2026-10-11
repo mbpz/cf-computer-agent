@@ -134,6 +134,13 @@ export async function routeLibraryApi(
     return methodNotAllowed("DELETE, GET, POST", context);
   }
 
+  const favoriteOperation = /^\/api\/knowledge\/favorites\/operations\/([^/]+)$/.exec(url.pathname);
+  if (favoriteOperation) {
+    requireNoQuery(url);
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    return jsonResponse({ operation: await services.favorites.operationResult(scope.memberId, decodePathId(favoriteOperation[1]!)) }, 200, context.requestId);
+  }
+
   const favorite = /^\/api\/knowledge\/([^/]+)\/favorite$/.exec(url.pathname);
   if (favorite) {
     requireNoQuery(url);
@@ -142,11 +149,12 @@ export async function routeLibraryApi(
       return jsonResponse(await services.favorites.get(scope, knowledgeItemId), 200, context.requestId);
     }
     if (request.method === "PUT") {
-      return jsonResponse({ favorite: await services.favorites.add(scope, knowledgeItemId) }, 201, context.requestId);
+      const operationId = await favoriteOperationId(request);
+      return jsonResponse(await services.favorites.add(scope, knowledgeItemId, operationId), 201, context.requestId);
     }
     if (request.method === "DELETE") {
-      await services.favorites.remove(scope, knowledgeItemId);
-      return new Response(null, { status: 204, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff", "x-request-id": context.requestId } });
+      const operationId = await favoriteOperationId(request);
+      return jsonResponse(await services.favorites.remove(scope, knowledgeItemId, operationId), 200, context.requestId);
     }
     return methodNotAllowed("DELETE, GET, PUT", context);
   }
@@ -646,6 +654,20 @@ function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
 function isChatResourceId(value: unknown): value is string {
   return typeof value === "string"
     && /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u.test(value);
+}
+
+// A favorite write carries the caller's frozen operation number; the number is
+// what makes a retry safe and its result exactly queryable.
+async function favoriteOperationId(request: Request): Promise<string> {
+  const input = strictRecord(
+    await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+    ["operationId"],
+    "FAVORITE_REQUEST_INVALID",
+  );
+  if (!hasExactKeys(input, ["operationId"]) || typeof input.operationId !== "string") {
+    throw new AppError("FAVORITE_REQUEST_INVALID", "Request body is invalid", 400);
+  }
+  return input.operationId;
 }
 
 function invalidChatRequest(): AppError {

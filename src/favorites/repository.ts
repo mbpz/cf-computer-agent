@@ -1,6 +1,16 @@
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, type PageRequest } from "../pagination";
-import type { FavoritePage, FavoriteScope, FavoritesRepositoryPort, KnowledgeFavorite } from "./types";
+import type {
+  FavoritePage,
+  FavoriteScope,
+  FavoritesRepositoryPort,
+  KnowledgeFavorite,
+  KnowledgeFavoriteOperation,
+  KnowledgeFavoriteOperationResult,
+  KnowledgeFavoriteWriteResult,
+} from "./types";
+
+type ReceiptRow = { request_hash: string; response_json: string; claim_id: string };
 
 type FavoriteRow = {
   knowledge_item_id: string;
@@ -52,20 +62,68 @@ export class FavoritesRepository implements FavoritesRepositoryPort {
     };
   }
 
-  async add(scope: FavoriteScope, knowledgeItemId: string, createdAt: string): Promise<KnowledgeFavorite> {
-    await this.db.prepare(
-      `INSERT INTO knowledge_favorites (member_id, knowledge_item_id, created_at)
-       VALUES (?, ?, ?) ON CONFLICT(member_id, knowledge_item_id) DO NOTHING`,
-    ).bind(scope.memberId, knowledgeItemId, createdAt).run();
+  async add(scope: FavoriteScope, knowledgeItemId: string, operationId: string, requestHash: string, createdAt: string): Promise<KnowledgeFavoriteWriteResult> {
+    const claimId = crypto.randomUUID();
+    const receipt: KnowledgeFavoriteOperation = { operationId, kind: "knowledge.favorite.add", knowledgeItemId, favorited: true, createdAt };
+    // One batch claims the operation, applies its effect only for the claim owner,
+    // and reads the winning receipt: a retry never repeats or rewrites the effect.
+    const results = await this.db.batch<ReceiptRow>([
+      this.db.prepare(`INSERT INTO knowledge_favorite_operation_receipts
+        (member_id, operation_id, kind, request_hash, knowledge_item_id, claim_id, response_json, created_at)
+        VALUES (?, ?, 'knowledge.favorite.add', ?, ?, ?, ?, ?)
+        ON CONFLICT(member_id, operation_id) DO NOTHING`).bind(
+        scope.memberId, operationId, requestHash, knowledgeItemId, claimId, JSON.stringify(receipt), createdAt,
+      ),
+      this.db.prepare(`INSERT INTO knowledge_favorites (member_id, knowledge_item_id, created_at)
+        SELECT ?, ?, ? WHERE EXISTS
+          (SELECT 1 FROM knowledge_favorite_operation_receipts WHERE member_id = ? AND operation_id = ? AND claim_id = ?)
+        ON CONFLICT(member_id, knowledge_item_id) DO NOTHING`).bind(
+        scope.memberId, knowledgeItemId, createdAt, scope.memberId, operationId, claimId,
+      ),
+      this.db.prepare("SELECT request_hash, response_json, claim_id FROM knowledge_favorite_operation_receipts WHERE member_id = ? AND operation_id = ?").bind(scope.memberId, operationId),
+    ]);
+    const { operation, claimed } = readRecordedOperation(results[2]?.results[0], requestHash, claimId);
     const favorite = await this.get(scope, knowledgeItemId);
-    if (!favorite) throw new AppError("FAVORITE_UNAVAILABLE", "Favorite is unavailable", 503, true);
-    return favorite;
+    // Only the attempt that actually claimed the number needs a live edge to have
+    // been created; a replay returns the recorded receipt even when a later
+    // operation already removed it (never 503, never an invented live value).
+    if (!favorite) {
+      if (claimed) throw new AppError("FAVORITE_UNAVAILABLE", "Favorite is unavailable", 503, true);
+      return { operation };
+    }
+    return { favorite, operation };
   }
 
-  async remove(scope: FavoriteScope, knowledgeItemId: string): Promise<boolean> {
-    const result = await this.db.prepare("DELETE FROM knowledge_favorites WHERE member_id = ? AND knowledge_item_id = ?")
-      .bind(scope.memberId, knowledgeItemId).run();
-    return result.meta.changes === 1;
+  async remove(scope: FavoriteScope, knowledgeItemId: string, operationId: string, requestHash: string, createdAt: string): Promise<KnowledgeFavoriteOperationResult> {
+    const claimId = crypto.randomUUID();
+    const receipt: KnowledgeFavoriteOperation = { operationId, kind: "knowledge.favorite.remove", knowledgeItemId, favorited: false, createdAt };
+    const results = await this.db.batch<ReceiptRow>([
+      this.db.prepare(`INSERT INTO knowledge_favorite_operation_receipts
+        (member_id, operation_id, kind, request_hash, knowledge_item_id, claim_id, response_json, created_at)
+        VALUES (?, ?, 'knowledge.favorite.remove', ?, ?, ?, ?, ?)
+        ON CONFLICT(member_id, operation_id) DO NOTHING`).bind(
+        scope.memberId, operationId, requestHash, knowledgeItemId, claimId, JSON.stringify(receipt), createdAt,
+      ),
+      this.db.prepare(`DELETE FROM knowledge_favorites WHERE member_id = ? AND knowledge_item_id = ? AND EXISTS
+        (SELECT 1 FROM knowledge_favorite_operation_receipts WHERE member_id = ? AND operation_id = ? AND claim_id = ?)`).bind(
+        scope.memberId, knowledgeItemId, scope.memberId, operationId, claimId,
+      ),
+      this.db.prepare("SELECT request_hash, response_json, claim_id FROM knowledge_favorite_operation_receipts WHERE member_id = ? AND operation_id = ?").bind(scope.memberId, operationId),
+    ]);
+    // No live-state read at all: a repeated removal number always replays its
+    // recorded receipt, including after a later re-add.
+    return { operation: readRecordedOperation(results[2]?.results[0], requestHash, claimId).operation };
+  }
+
+  async operationResult(memberId: string, operationId: string): Promise<KnowledgeFavoriteOperation> {
+    // Deliberately independent of the live favorite edge: a removed favorite must
+    // still resolve the receipt of the write that removed it. Membership comes
+    // only from the authenticated caller, never from the request.
+    const row = await this.db.prepare(`SELECT response_json FROM knowledge_favorite_operation_receipts
+      WHERE member_id = ? AND operation_id = ? AND kind IN ('knowledge.favorite.add', 'knowledge.favorite.remove')`)
+      .bind(memberId, operationId).first<{ response_json: string }>();
+    if (!row) throw new AppError("FAVORITE_OPERATION_NOT_FOUND", "Operation result not found", 404);
+    return JSON.parse(row.response_json) as KnowledgeFavoriteOperation;
   }
 }
 
@@ -104,6 +162,18 @@ function mapRowRequired(row: FavoriteRow): KnowledgeFavorite {
     createdAt: row.created_at,
     completed: typeof row.last_visited_at === "string" && row.last_visited_at >= row.created_at,
   };
+}
+
+/**
+ * Reads the receipt inside the same batch as the effect, so a retried operation
+ * number replays the frozen result and a reused number with a different intent is
+ * refused instead of silently changing meaning. `claimed` distinguishes the
+ * attempt that recorded the receipt from every later replay.
+ */
+function readRecordedOperation(row: ReceiptRow | undefined, requestHash: string, claimId: string): { operation: KnowledgeFavoriteOperation; claimed: boolean } {
+  if (!row) throw new AppError("FAVORITE_UNAVAILABLE", "Favorite is unavailable", 503, true);
+  if (row.request_hash !== requestHash) throw new AppError("FAVORITE_OPERATION_CONFLICT", "Operation ID was already used for a different request", 409);
+  return { operation: JSON.parse(row.response_json) as KnowledgeFavoriteOperation, claimed: row.claim_id === claimId };
 }
 
 function decodeCursor(value: string): FavoriteCursor {

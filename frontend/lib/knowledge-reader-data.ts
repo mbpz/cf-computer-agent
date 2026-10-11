@@ -56,17 +56,81 @@ export async function loadKnowledgeFavorite(knowledgeItemId: string, requester: 
   return (data as { favorite: boolean }).favorite;
 }
 
-export async function setKnowledgeFavorite(knowledgeItemId: string, favorite: boolean, requester: Fetcher = fetch): Promise<boolean> {
+/** The server's frozen record of one favorite write, addressed by operation number. */
+export interface KnowledgeFavoriteOperationReceipt {
+  operationId: string;
+  kind: "knowledge.favorite.add" | "knowledge.favorite.remove";
+  knowledgeItemId: string;
+  favorited: boolean;
+  createdAt: string;
+}
+
+export interface KnowledgeFavoriteWriteReceipt {
+  favorite: boolean;
+  operation: KnowledgeFavoriteOperationReceipt;
+}
+
+const OPERATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+
+/**
+ * Sends the caller's frozen operation number. The server replays the original
+ * receipt for a repeated number, so a lost response is resolved by that receipt
+ * and never by resending a new write.
+ */
+export async function setKnowledgeFavorite(knowledgeItemId: string, favorite: boolean, operationId: string, requester: Fetcher = fetch): Promise<KnowledgeFavoriteWriteReceipt> {
   assertKnowledgeId(knowledgeItemId);
-  if (!favorite) {
-    await apiFetch<void>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/favorite`, { requester, method: "DELETE" });
-    return false;
-  }
-  const data = await apiFetch<{ favorite?: { knowledgeItemId?: unknown } }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/favorite`, {
-    requester, method: "PUT", headers: { "content-type": "application/json" },
+  assertOperationId(operationId);
+  const expectedKind = favorite ? "knowledge.favorite.add" : "knowledge.favorite.remove";
+  const data = await apiFetch<unknown>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/favorite`, {
+    requester,
+    method: favorite ? "PUT" : "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ operationId }),
   });
-  if (!data.favorite || data.favorite.knowledgeItemId !== knowledgeItemId) throw new Error("KNOWLEDGE_FAVORITE_INVALID");
-  return true;
+  const record = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : undefined;
+  const operation = normalizeFavoriteOperation(record?.operation);
+  if (!record || !operation || operation.operationId !== operationId || operation.knowledgeItemId !== knowledgeItemId
+    || operation.kind !== expectedKind || operation.favorited !== favorite) {
+    throw new Error("KNOWLEDGE_FAVORITE_INVALID");
+  }
+  // A replayed number may omit the live edge (a later operation removed it); the
+  // recorded result above is what settles the write. A value that IS present must
+  // still match, so a mismatched live edge is never accepted.
+  if (record.favorite !== undefined) {
+    const live = record.favorite;
+    if (!live || typeof live !== "object" || Array.isArray(live) || (live as Record<string, unknown>).knowledgeItemId !== knowledgeItemId) {
+      throw new Error("KNOWLEDGE_FAVORITE_INVALID");
+    }
+  }
+  return { favorite: operation.favorited, operation };
+}
+
+/** Exact operation query: the recorded result, never a coincidental current state. */
+export async function loadKnowledgeFavoriteOperation(operationId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<KnowledgeFavoriteOperationReceipt> {
+  assertOperationId(operationId);
+  const data = await apiFetch<{ operation?: unknown }>(
+    `/api/knowledge/favorites/operations/${encodeURIComponent(operationId)}`,
+    { requester, signal },
+  );
+  const operation = normalizeFavoriteOperation(data?.operation);
+  if (!operation || operation.operationId !== operationId) throw new Error("KNOWLEDGE_FAVORITE_OPERATION_INVALID");
+  return operation;
+}
+
+function normalizeFavoriteOperation(value: unknown): KnowledgeFavoriteOperationReceipt | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (Object.keys(record).length !== 5) return null;
+  const { operationId, kind, knowledgeItemId, favorited, createdAt } = record;
+  if (typeof operationId !== "string" || !OPERATION_ID.test(operationId)) return null;
+  if (kind !== "knowledge.favorite.add" && kind !== "knowledge.favorite.remove") return null;
+  if (typeof knowledgeItemId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(knowledgeItemId)) return null;
+  if (typeof favorited !== "boolean" || typeof createdAt !== "string" || createdAt.length === 0) return null;
+  return { operationId, kind, knowledgeItemId, favorited, createdAt };
+}
+
+function assertOperationId(operationId: string): void {
+  if (!OPERATION_ID.test(operationId)) throw new Error("KNOWLEDGE_FAVORITE_OPERATION_INVALID");
 }
 
 export interface RelatedKnowledgeItem {

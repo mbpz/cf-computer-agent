@@ -145,6 +145,44 @@ async function expectUniqueConstraints(
   expect(actual.sort(), `${table} unique constraints`).toEqual([...expected].sort());
 }
 
+/**
+ * Exercises the append-only claim SQL the favorites repository relies on: one row
+ * per member+operation number, an original receipt that a retry cannot rewrite,
+ * and a member cascade that does not depend on the live favorite edge.
+ */
+async function seedFavoriteOperationReceipts(): Promise<void> {
+  const timestamp = "2026-08-26T00:00:00.000Z";
+  const hash = "a".repeat(64);
+  const receipt = JSON.stringify({ operationId: "favorite-op-1", kind: "knowledge.favorite.add", knowledgeItemId: "favorite-op-knowledge", favorited: true, createdAt: timestamp });
+  await env.DB.prepare(
+    "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('favorite-op-owner', 'github:favorite-op-owner', 'favorite-op-owner@example.test', 'contributor', 'active', ?, ?)",
+  ).bind(timestamp, timestamp).run();
+  const claim = (requestHash: string, claimId: string, body: string) => env.DB.prepare(
+    `INSERT INTO knowledge_favorite_operation_receipts
+     (member_id, operation_id, kind, request_hash, knowledge_item_id, claim_id, response_json, created_at)
+     VALUES ('favorite-op-owner', 'favorite-op-1', 'knowledge.favorite.add', ?, 'favorite-op-knowledge', ?, ?, ?)
+     ON CONFLICT(member_id, operation_id) DO NOTHING`,
+  ).bind(requestHash, claimId, body, timestamp).run();
+  await claim(hash, "claim-1", receipt);
+  await claim("b".repeat(64), "claim-2", JSON.stringify({ operationId: "favorite-op-1", kind: "knowledge.favorite.add", knowledgeItemId: "favorite-op-knowledge", favorited: false, createdAt: timestamp }));
+  await expect(env.DB.prepare("SELECT request_hash, claim_id, response_json FROM knowledge_favorite_operation_receipts").all()).resolves.toMatchObject({
+    results: [{ request_hash: hash, claim_id: "claim-1", response_json: receipt }],
+  });
+  // The member-scoped key refuses an incompatible second row for the same number.
+  const insert = (operationId: string, kind: string, requestHash: string, claimId: string, body: string) => env.DB.prepare(
+    `INSERT INTO knowledge_favorite_operation_receipts
+     (member_id, operation_id, kind, request_hash, knowledge_item_id, claim_id, response_json, created_at)
+     VALUES ('favorite-op-owner', ?, ?, ?, 'favorite-op-knowledge', ?, ?, ?)`,
+  ).bind(operationId, kind, requestHash, claimId, body, timestamp).run();
+  await expect(insert("favorite-op-1", "knowledge.favorite.remove", "d".repeat(64), "claim-4", receipt)).rejects.toThrow();
+  await expect(insert("favorite-op-2", "knowledge.favorite.other", hash, "claim-5", receipt)).rejects.toThrow();
+  await expect(insert("favorite-op-3", "knowledge.favorite.add", hash, "claim-6", "not json")).rejects.toThrow();
+  await expect(insert("favorite-op-4", "knowledge.favorite.add", "short", "claim-7", receipt)).rejects.toThrow();
+  await expect(insert("favorite-op-5", "knowledge.favorite.add", hash, "claim-1", receipt)).rejects.toThrow();
+  await env.DB.prepare("DELETE FROM members WHERE id = 'favorite-op-owner'").run();
+  await expect(env.DB.prepare("SELECT count(*) AS count FROM knowledge_favorite_operation_receipts").first()).resolves.toEqual({ count: 0 });
+}
+
 describe("Phase 1 control-plane migrations", () => {
   beforeEach(async () => {
     await reset();
@@ -1390,14 +1428,14 @@ describe("Phase 1 control-plane migrations", () => {
   });
 
   it("applies 0060 idempotently without overriding managed system fields", async () => {
-    const registration = MIGRATIONS[MIGRATIONS.length - 1]!;
-    expect(registration.name).toBe("0060_workbench_route_menu_registration.sql");
+    const registration = MIGRATIONS.find((migration) => migration.name === "0060_workbench_route_menu_registration.sql")!;
+    expect(registration).toBeDefined();
     // The migration harness splits the pinned file into statements; run them
     // verbatim so this test never rewrites the migration text.
     const statements = registration.queries;
     expect(statements).toHaveLength(9);
     expect(statements.filter((statement) => /^INSERT INTO menus/u.test(statement.trim()))).toHaveLength(6);
-    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, -1));
+    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, MIGRATIONS.indexOf(registration)));
 
     // A value the 0060 guards must NOT touch: menu-boards keeps an
     // administrator-managed mask/status/visibility because the conditional
@@ -1429,6 +1467,28 @@ describe("Phase 1 control-plane migrations", () => {
       `SELECT COUNT(*) AS count, COUNT(DISTINCT position) AS distinct_positions FROM menus
        WHERE parent_id = 'menu-workspace' AND group_name = 'workspace' AND is_system = 1`,
     ).first()).resolves.toEqual({ count: 17, distinct_positions: 17 });
+  });
+
+  it("creates a member-scoped favorite operation receipt store that outlives the live favorite", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await expectTableSchema("knowledge_favorite_operation_receipts", [
+      "member_id:TEXT:1:NULL:1",
+      "operation_id:TEXT:1:NULL:2",
+      "kind:TEXT:1:NULL:0",
+      "request_hash:TEXT:1:NULL:0",
+      "knowledge_item_id:TEXT:1:NULL:0",
+      "claim_id:TEXT:1:NULL:0",
+      "response_json:TEXT:1:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+    ], [
+      "CHECK(kind IN ('knowledge.favorite.add', 'knowledge.favorite.remove'))",
+      "CHECK(length(operation_id) BETWEEN 1 AND 128)",
+      "CHECK(length(request_hash) = 64)",
+      "CHECK(json_valid(response_json) AND length(response_json) <= 4096)",
+    ]);
+    await expectForeignKeys("knowledge_favorite_operation_receipts", [{ from: "member_id", table: "members", to: "id" }]);
+    await expectUniqueConstraints("knowledge_favorite_operation_receipts", ["claim_id|partial=0"]);
+    await seedFavoriteOperationReceipts();
   });
 
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {

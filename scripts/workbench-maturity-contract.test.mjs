@@ -209,7 +209,7 @@ const DOMAIN_GAP_POLICIES = new Map(Object.entries({
   "workbench-admin-spaces|POST /api/admin/collections": { slug: "create-collection", symptom: "集合创建已有同编辑器稳定键及持久化回执；刷新或卸载后的意图恢复及无键旧客户端策略仍缺。", owner: "R6-008" },
   "workbench-admin-spaces|PATCH /api/admin/collections/:id": { slug: "update-collection", symptom: "集合编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。", owner: "R6-008" },
   "workbench-admin-spaces|POST /api/admin/spaces": { slug: "create-space", symptom: "创建 Space 缺少稳定幂等键和重放策略。", owner: "R6-008" },
-  "workbench-knowledge-reader|DELETE /api/knowledge/:id/favorite": { slug: "remove-favorite", symptom: "取消收藏缺少重复请求与响应丢失后的收敛证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|DELETE /api/knowledge/:id/favorite": { slug: "remove-favorite", symptom: "取消收藏已有同编号重放回执与不重复副作用的本地证据；跨刷新未知结果恢复与真实身份验收仍未证明。", owner: "R3-011" },
   "workbench-admin-submission-detail|PUT /api/admin/submissions/:id/comments/requests/:id": { slug: "add-review-comment", symptom: "审核评论唯一编号、同编号重试和精确回执已有本地会话证据；跨刷新恢复及发布验收仍开放。", owner: "R6-003" },
   "workbench-admin-submission-detail|POST /api/admin/submissions/:id/publish": { slug: "publish-submission", symptom: "发布决策缺少不可变 Revision 的重放收敛证明。", owner: "R6-003" },
   "workbench-admin-submission-detail|POST /api/admin/submissions/:id/reject": { slug: "reject-submission", symptom: "拒绝决策缺少幂等重放与并发冲突策略。", owner: "R6-003" },
