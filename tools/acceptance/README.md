@@ -203,6 +203,29 @@ page:
 - Landing page: drive the native control `select[aria-label="切换语言"]`; `lang` follows the
   selected option in both directions.
 
+## (iii-quater) User-gated: G0 desktop admission matrix (preparation only)
+
+The G0 first-connection admission matrix lives in
+[`G0-desktop-matrix.md`](G0-desktop-matrix.md): the step-by-step desktop Chrome/Edge runbook
+for the handshake / allow / deny / revoke / stop matrix under default security settings, using
+only the repo's existing handshake-only probe (`npm run dev:browser-vm:connector`, the published
+`https://40b8e0aa.memory-garden-vm-connector-probe.pages.dev/probe` page) and the automated
+`npm run test:browser-vm:connector` regression.
+
+The page/deployment id above is **as recorded in
+[`design/browser-vm/local-connector-probe-evidence.md`](../../design/browser-vm/local-connector-probe-evidence.md)**
+(preview published 2026-09-12, desktop admission matrix 2026-09-29); **this kit did not
+re-verify it**, so re-check that the preview still exists/points at the expected deployment
+before treating the matrix as runnable — and if it is gone, Step 0 of the runbook must use
+whatever valid HTTPS page the user's environment provides, per the G0 requirement.
+Re-publishing a preview is a deploy and is out of scope here.
+
+**It cannot be executed from this environment** — there is no unlocked target desktop and no
+relay/resource authorization here — so the file is **preparation only**: it documents the
+commands and the expected observations, and does not itself produce G0 evidence. Running it
+does not close D04/G0 (LC-010–015 and the production relay authorization remain open), does not
+authorize D08, and changes no checklist counts.
+
 ## Notes on scope
 
 - Seed/check/cleanup only touch the **local** D1 and a locally running `wrangler dev`.
