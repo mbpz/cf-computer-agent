@@ -6,7 +6,8 @@
  * isolation sweep (which first failed with SQLITE_CONSTRAINT_FOREIGNKEY):
  *
  *   private_note_shares -> private_notes -> knowledge_favorite_operation_receipts ->
- *   knowledge_favorites -> (knowledge_items.current_revision_id = NULL) -> chunks ->
+ *   knowledge_favorites -> task_links -> task_subtasks -> task_dependencies -> task_tags ->
+ *   tasks -> inbox_items -> (knowledge_items.current_revision_id = NULL) -> chunks ->
  *   revisions -> knowledge_items -> source_versions -> sources -> submissions ->
  *   probe menus -> role_members -> auth_sessions -> members
  *
@@ -99,6 +100,28 @@ function main() {
     ["knowledge_favorites",
       `DELETE FROM knowledge_favorites WHERE member_id IN ${seedIds} OR knowledge_item_id IN ${items}`,
       `member_id IN ${seedIds} OR knowledge_item_id IN ${items}`],
+    // Contributor-journey writes. task_links references knowledge_items, so it must be
+    // deleted before the knowledge_items delete below; the rest reference tasks(id) and
+    // members(id). inbox_items references members/tasks/submissions, so it goes before
+    // submissions too.
+    ["task_links",
+      `DELETE FROM task_links WHERE member_id IN ${seedIds}`,
+      `member_id IN ${seedIds}`],
+    ["task_subtasks",
+      `DELETE FROM task_subtasks WHERE member_id IN ${seedIds}`,
+      `member_id IN ${seedIds}`],
+    ["task_dependencies",
+      `DELETE FROM task_dependencies WHERE member_id IN ${seedIds}`,
+      `member_id IN ${seedIds}`],
+    ["task_tags",
+      `DELETE FROM task_tags WHERE member_id IN ${seedIds}`,
+      `member_id IN ${seedIds}`],
+    ["tasks",
+      `DELETE FROM tasks WHERE member_id IN ${seedIds}`,
+      `member_id IN ${seedIds}`],
+    ["inbox_items",
+      `DELETE FROM inbox_items WHERE member_id IN ${seedIds}`,
+      `member_id IN ${seedIds}`],
     ["knowledge_items.current_revision_id=NULL",
       `UPDATE knowledge_items SET current_revision_id = NULL WHERE id IN ${items}`,
       null],

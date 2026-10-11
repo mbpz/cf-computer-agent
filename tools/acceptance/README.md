@@ -41,6 +41,7 @@ journeys), **D06** (real desktop-browser matrix), **D04/G0** (VM + release) and 
 | --- | --- |
 | `seed-local-members.mjs` | Idempotently seeds 1 synthetic admin + 2 synthetic contributors and `auth_sessions` into the **local** D1; prints each 43-char token and its `Cookie:` string; persists token/hash pairs to `.wrangler/acceptance-sessions.json` (gitignored). |
 | `check-local-authorization.mjs` | Drives the HTTP authorization / isolation matrix against a locally running `wrangler dev` for the seeded members; asserts expected statuses; exits non-zero on any mismatch. |
+| `check-local-contributor-journey.mjs` | Drives the contributor's **allowed** create/read journeys (submission draft, inbox item, task) against a locally running `wrangler dev`; asserts the write succeeds, the owner can read it back, and a **second** member cannot; exits non-zero on any mismatch. |
 | `cleanup-local-members.mjs` | Removes the synthetic rows in a foreign-key-safe order and prints a residual-count check (all zero). |
 | `README.md` | This runbook. |
 
@@ -108,6 +109,55 @@ It prints a compact PASS/FAIL table and a final `PASS`/`FAIL` verdict.
 
 Then stop `wrangler dev` and clean up (see (iii)).
 
+## (ii-bis) Positive-path contributor journey
+
+`check-local-authorization.mjs` proves the **denial** side (contributor `403` on admin
+surfaces, cross-member reads isolated). `check-local-contributor-journey.mjs` proves the
+other half: for the flows a `role-contributor` mask (`0x1600c3` = bits `0,1,6,7,17,18,20`)
+actually permits, the write **succeeds** *and* a second member (`acceptance-contributor-2`)
+**cannot read it back** — allowed-and-isolated, not just allowed. Run it against the same
+running `wrangler dev` (no extra setup):
+
+```bash
+# terminal B, with `npx wrangler dev --port 8787` still running
+node tools/acceptance/check-local-contributor-journey.mjs
+```
+
+Every unsafe method is sent with the canonical `Origin: https://memory.crgmhrc.asia`
+(`src/config.ts`), because `src/app.ts:204-206` runs `requireSameOrigin` for member
+principals on unsafe methods — without it every write is a CSRF `403` and the check would be
+meaningless. The script first discovers an active writable space via `GET /api/spaces` (the
+draft write requires `kind != 'legacy' AND read_only = 0 AND status = 'active'`,
+`src/submissions/repository.ts:95-117`), so it does not hard-code a fixture id.
+
+| Flow | Request (method path — body) | Contributor-1 expected | Contributor-2 expected |
+| --- | --- | --- | --- |
+| Submission draft | `POST /api/submissions/drafts` — `{ requestedSpaceId, kind: "text", title, content }` | `201` | — |
+| Submission draft | `GET /api/submissions/drafts/:id` | `200`, body `id` equals created id | `404` |
+| Submission draft | `GET /api/submissions/mine` | `200`, list contains the draft id | `200`, list excludes it |
+| Inbox item | `POST /api/inbox` — `{ clientKey, kind: "text", content }` | `201` | — |
+| Inbox item | `GET /api/inbox/:id` | `200`, body `id` equals created id | `404` |
+| Inbox item | `GET /api/inbox` | `200` | `200`, list excludes the item |
+| Task | `POST /api/tasks` — `{ id: <uuid>, title }` | `201` | — |
+| Task | `GET /api/tasks/:id` | `200`, body `task.id` equals created id | `404` |
+| Task | `GET /api/tasks` | `200` | `200`, list excludes the task |
+
+Permissions: draft create `submission:create` (bit 6), draft read / mine `submission:read-own`
+(bit 7) (`src/routes/member.ts:363-390,431-441`); inbox and task routes require `tasks:use`
+(bit 20) (`src/routes/inbox.ts:22`, `src/routes/tasks.ts:22`). The task body **must** carry a
+client-generated `id` (the frontend sends `crypto.randomUUID()`,
+`frontend/lib/tasks-data.ts:80-84`); an empty id is rejected `400 TASK_INVALID`
+(`src/tasks/service.ts:401-407,504-506`).
+
+The script prints a compact PASS/FAIL table with the raw status observed per step and a final
+`PASS`/`FAIL` verdict; it exits non-zero on any mismatch. A green run leaves synthetic rows
+behind, so run cleanup (iii) afterwards as usual.
+
+**Non-claims (same as the rest of this kit):** the seeded members are synthetic local
+identities, so a green run is a local smoke test of the authorization wiring and is **not**
+D05/D06/D04/D08 acceptance; it is local-only (never `--remote`), reads no secret, and flips no
+checklist checkbox.
+
 ## (iii) Clean up the synthetic rows
 
 ```bash
@@ -117,7 +167,8 @@ node tools/acceptance/cleanup-local-members.mjs
 
 Deletes in the foreign-key-safe order learned the hard way (a first attempt failed with
 `SQLITE_CONSTRAINT_FOREIGNKEY`): `private_note_shares` → `private_notes` →
-`knowledge_favorite_operation_receipts` → `knowledge_favorites` → (set
+`knowledge_favorite_operation_receipts` → `knowledge_favorites` → `task_links` →
+`task_subtasks` → `task_dependencies` → `task_tags` → `tasks` → `inbox_items` → (set
 `knowledge_items.current_revision_id = NULL` for the seeded items) → `chunks` → `revisions`
 → `knowledge_items` → `source_versions` → `sources` → `submissions` → probe menus →
 `role_members` → `auth_sessions` → `members`. It then prints a residual count per table
