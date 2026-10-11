@@ -46,7 +46,7 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 2026-09-17 Personal Work Graph 后端合同闸门已本地完成：成员隔离、scope/root/depth/types/limit 解析、cursor 绑定、时间线投影、有界 loader 与 citation 授权均通过 focused unit/worker、TypeScript、smoke 和 delivery-status contract。`nextCursor` 延续字段与 malformed/cross-linked citation fixture 保留为 minor deferred；发布、生产与 signed browser acceptance 仍 pending，未执行远程迁移、部署或 push。
 
-总账成熟度：`atoms=96`; `implementation=done:75,partial:8,pending:13,n/a:0`; `verification=done:79,partial:3,pending:14,n/a:0`; `release=done:0,partial:28,pending:68,n/a:0`; `acceptance=done:0,partial:8,pending:88,n/a:0`
+总账成熟度：`atoms=97`; `implementation=done:76,partial:8,pending:13,n/a:0`; `verification=done:80,partial:3,pending:14,n/a:0`; `release=done:0,partial:29,pending:68,n/a:0`; `acceptance=done:0,partial:9,pending:88,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
 
@@ -83,7 +83,7 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 目标：建立 current-main 可复核的生产基线，并先交付身份、Shell、管理、脱敏审计、分页、可访问性和免费层保护等后续旅程共享基础。
 
-范围：`IDN-001`、`IDN-003`、`IDN-004`、`IDN-005`、`IDN-006`、`WB-001`、`WB-002`、`WB-PAGE`、`WB-SCROLL`、`WB-SETTINGS`、`WB-A11Y`、`ADM-001`、`ADM-005`、`ADM-006`、`ADM-007`、`ADM-009`、`ADM-010`、`ADM-011`、`OPS-001`、`OPS-002`、`OPS-003`、`OPS-004`、`OPS-005`、`OPS-006`、`OPS-007`、`OPS-009`。
+范围：`IDN-001`、`IDN-003`、`IDN-004`、`IDN-005`、`IDN-006`、`IDN-007`、`WB-001`、`WB-002`、`WB-PAGE`、`WB-SCROLL`、`WB-SETTINGS`、`WB-A11Y`、`ADM-001`、`ADM-005`、`ADM-006`、`ADM-007`、`ADM-009`、`ADM-010`、`ADM-011`、`OPS-001`、`OPS-002`、`OPS-003`、`OPS-004`、`OPS-005`、`OPS-006`、`OPS-007`、`OPS-009`。
 
 前置依赖：当前阶段没有更早的 R 阶段原子；只使用追加式 migration 和现有身份边界。
 
