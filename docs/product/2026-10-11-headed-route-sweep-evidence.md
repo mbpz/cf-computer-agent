@@ -153,3 +153,27 @@
 - 会话为本地 harness 代理后的**合成本地会话**、独立 `/tmp` profile 的**有头 Chromium**，**仅本地**；**不是 A05/A01/A02/D05/D06/D04 任何验收**。
 - **不改变任何计数**：功能清单父项 **29 在范围内 / 5 已关闭 / 24 开放**（D08 排除）不变，**未翻转任何 checkbox**。
 - **未部署/未 push/未远程迁移**；`migrations/` 无改动。
+
+### 本地浏览器写入被同源守卫拒绝 + 错误态可恢复（2026-10-11）
+
+日期：2026-10-11；分支 `codex/functional-checklist-completion`；基线 `60c598ba55e203f31ebd5558b056257b3ed52d06`（本地，领先 origin 7 个提交，**未推送**）。本增量记录同一有头真 Chrome（macOS）经 CDP 的原生交互轮次中，对 `/tasks` 执行一次 **UI 写入旅程**的实测结果：写入被**同源（CSRF）守卫拒绝**，且因此触发的错误态**可恢复**。
+
+**方法**：有头真 Chrome 经 **CDP** 连接本地栈（`wrangler dev` :8787）+ 本地 harness 透传代理 :8791（注入合成 admin 会话），`--user-data-dir` 隔离独立 `/tmp` profile，窗口 **1280×900**。
+
+**实测（UI 写入尝试）**：在 `/tasks` 打开 `新建任务` 对话框，用键盘在 `任务标题` 字段填入标题并回车提交。对话框**关闭**，但任务**未被创建** —— 本地 D1 `tasks` 计数为 **0**；随后 `/tasks` 页面进入**加载错误态**：`role="alert"` 文案 `无法加载页面。重新搜索`，仅有一个 `重新搜索` 重试按钮（标题取自 `COMMON_UNABLE_TO_LOAD`，见 `frontend/pages/tasks/tasks-page.tsx:61`）。
+
+**已核验根因（本地 dev-server 日志）**：`POST /api/tasks → 403 Forbidden`。这是应用的**同源（CSRF）守卫**：浏览器的 Origin 为本地 harness origin，而应用把规范 origin 钉在 `https://memory.crgmhrc.asia`（`src/config.ts:11`），不安全方法要求 `Origin: https://memory.crgmhrc.asia`。**该 403 是同源守卫，不是授权结论；本地 localhost origin 上的浏览器写入在设计上不可行。**
+
+**已核验恢复**：点击页面的 `重新搜索` 重试会重新读取，页面恢复正常渲染（`任务 管理仅属于你的工作事项。 … 暂无任务 总计 0 · …`），且 `role="alert"` 消失 —— 即该错误态是**瞬时且可恢复**的。
+
+**解读（如实登记）**：
+
+- (a) 同源守卫约束**已在** `docs/product/2026-10-11-multi-member-isolation-sweep-evidence.md` 记录；本地写入覆盖因此来自**规范 `Origin` 的 HTTP 脚本**（`tools/acceptance/check-local-contributor-journey.mjs`，20/20）以及仓库的单元/DOM 批次 —— **原生 UI 写入旅程无法在本地执行**（除非以 HTTPS 路由规范 origin），故此处**不作任何声称**。
+- (b) 写入返回 403 清空受保护列表，与项目既有的 **401/403 策略**一致；重试可恢复页面。
+- (c) 对于**写入**被拒，错误文案是**通用的**（`COMMON_UNABLE_TO_LOAD` + `SEARCH_RETRY`）—— 登记为一条**待产品决策的观察**，本会话**刻意不改动**。
+
+**明确非声明**：
+
+- 会话为本地 harness 代理后的**合成本地会话**、独立 `/tmp` profile 的**有头 Chromium**，**仅本地**；**不是 A01/A02/A05/D05/D06/D04 任何验收**。
+- **不改变任何计数**：功能清单父项 **29 在范围内 / 5 已关闭 / 24 开放**（D08 排除）不变，**未翻转任何 checkbox**。
+- **未部署/未 push/未远程迁移**；`migrations/` 无改动。
