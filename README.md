@@ -20,6 +20,7 @@ The ledger records implementation, verification, release, and acceptance separat
 - [Current evidence index](./docs/operations/evidence/)
 - [Current completion audit and atomic checklist](./docs/product/2026-09-12-personal-workbench-completion-audit.md)
 - [2026-10-10 local functional gate reconciliation](./docs/product/2026-10-10-functional-gate-reconciliation-evidence.md) — full local `npm run check` passed; React teardown regression fixed; 29 in scope, 5 closed, 24 open; not production or signed-browser acceptance.
+- [2026-10-11 exact-candidate full gate evidence](./docs/product/2026-10-11-candidate-gate-evidence.md) — candidate `06a89a85` full local `npm run check` passed (unit 361 files 5199/5199, Worker 70 files 1178/1178, landing 97/97, migration-file count 61); 29 in scope, 5 closed, 24 open; not released, not deployed, no remote migration, and not a substitute for the final candidate or native/signed-browser acceptance.
 - [32-route implementation inventory and known blockers](./docs/product/2026-09-12-personal-workbench-route-inventory.md)
 - [First repair batch: member-scoped submission drafts](./docs/superpowers/plans/2026-09-12-member-scoped-submission-drafts.md)
 

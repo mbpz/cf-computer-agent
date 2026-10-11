@@ -8,6 +8,8 @@
 
 2026-10-10 本地 D07 门禁对账：完整本地 `npm run check` 通过（unit4854/4854、Worker1112/1112、landing97/97）；通知测试导航调度异常已修复，Worker负向日志已归因。迁移文件校验与历史发布清单分离；环境 atom 归属、共享编辑器 11 条证据 gap 和回归夹具已校正，见[审核与验证记录](./docs/product/2026-10-10-functional-gate-reconciliation-evidence.md)。原功能范围仍 **29 / 5 关闭 / 24 未关闭**；不以局部门禁替代真实身份、原生交互或 VM 正式生命周期验收。
 
+2026-10-11 精确候选完整门禁：候选 `06a89a85d8357f5ac24e66673a97fe141b02624f`（分支领先 `origin/codex/functional-checklist-completion` 2 个未推送提交）完整本地 `npm run check` 退出0（unit361文件5199/5199、Worker70文件1178/1178、landing97/97、smoke79/i18n13/delivery30），迁移台账 `count=61`、成熟度15/15、领域审计与操作清点通过；未发布/部署/远程迁移，不替代功能完成后的最终候选或 D04/D05/D06 验收，见[候选证据](./docs/product/2026-10-11-candidate-gate-evidence.md)。原功能范围仍 **29 / 5 关闭 / 24 未关闭**。
+
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
 当前交付事实以 [交付状态总账](./docs/product/delivery-status-ledger.md) 为唯一权威来源；本 Roadmap 只安排可部署、可回滚的纵向用户旅程。历史计划和旧 gate 是执行档案，不能替代 current-main 的发布或验收证据。
