@@ -80,10 +80,25 @@
 
 **边界**：**空闲/冻结**标签不会追溯处理 `storage` 事件——仅当监听标签在写入时**正在运行**才观察到投递。阅读器页面的端到端反应（挂载 + 显式核对）仍以确定性测试为准，而非本原生探针。
 
+## 触控/指针矩阵（375/320，本地）
+
+本批在同一真无头 Chrome/CDP 本地栈上，对 **375×812** 与 **320×812** 两档补充**真实触控输入**观察（此前键盘之外的触控矩阵未测，见“明确非声明”）。触控经 CDP `Emulation.setTouchEmulationEnabled`（`maxTouchPoints: 5`）启用，触摸事件经 `Input.dispatchTouchEvent` 派发；会话仍是**合成本地会话**（非真实设备、非真实身份），代理仍是本地 harness。
+
+**布局（640→375/320）**：移动端导航是原生 `<details><summary>打开导航</summary>`；summary 盒在 375 为 **360×44**、在 320 为 **305×44**；抽屉展开后其中 `<nav>` 为 **239×1096**，含 **25** 个可见链接。
+
+**真实触摸输入**：在 summary 中心派发 touchStart/touchEnd，捕获监听器记录到 `touchstart: 1, pointerdown: 1, mousedown: 1, click: 1`，并置 `details[open] = true`——即抽屉可由**真实触摸事件**（touch→兼容鼠标序列）操作，而非仅合成鼠标点击。
+
+**目标尺寸实测（375，抽屉展开时）**：抽屉链接 25 个 × 最小边 **40px**（min 40、max 40；低于 24px 者 **0**；低于 44px 者 **25**）；summary **360×44**；其余可见控件：命令面板 **36×36**、语言 **32×40**、抽屉关闭（关闭导航）**25×36**、账户菜单 **286×52**。
+
+**解读（如实登记，不作裁定）**：**没有**任一实测控件低于 WCAG 2.5.8 AA 的 24×24 CSS px 下限；但**若干**低于 44×44 的**最佳实践**建议（抽屉链接 40、关闭 25×36、命令面板 36×36、语言 32×40）。这是**实测观察**，**不是** WCAG AA 失败结论，也不给出通过/未通过裁定——该裁定由仓库自有的 `scripts/wcag-contract.test.mjs` 作出，本轮未由其作任何判定。
+
+**harness 事故（一行留痕）**：首次尝试似在登录检查处挂起；根因为本地 `wrangler dev` 进程崩溃（在并发运行 `wrangler d1 execute` 打同一本地 D1 时，反复 `POST /api/telemetry/pageview` 返回 403，触发 wrangler internal error）叠加一个陈旧 service worker 继续投递 SPA；重启 dev server、经 `navigator.serviceWorker.getRegistrations()` 注销 service worker 并清空 caches 后，检查干净跑完。另记：**重新施加视口 emulation 必须发生在启用触控之后**，否则一次 reload 会把 `innerWidth` 打回窗口宽度（1400），使抽屉看起来是隐藏的。
+
 ## 明确非声明
 
 - 会话为**合成本地会话**，**不是真实身份**；透传代理**只是本地 harness，不是产品代码**；浏览器为 **`/tmp` 隔离 `--user-data-dir` 的无头 Chrome**。
 - 本记录**不构成 D05/D06/D04 验收**，不替代真实账户旅程，也不替代用户目标桌面浏览器（Chrome/Edge）上的验收。
 - 16 格矩阵为**本地合成会话 + 真无头 Chrome**；不证明真实成员/权限旅程，也不证明触控矩阵（本批次只测键盘）。
+- 触控矩阵（375/320）为 **CDP 触控 emulation（`setTouchEmulationEnabled`/`dispatchTouchEvent`）驱动 + 合成本地会话**，**不是真机、不是真实身份**，同样**不构成 D05/D06/D04 验收**；目标尺寸与低于 44×44 的项仅为实测登记，**未**由 `scripts/wcag-contract.test.mjs` 作通过/未通过裁定。
 - `<html lang>` 的工作台值与公开落地页值均已为**原生**修复后实测（见上）。
 - 未发布、未部署、未 `wrangler ... --remote`、未远程迁移、未写入 secrets；父项计数 29/5/24（D08 排除）不变，未翻转任何 checkbox。
