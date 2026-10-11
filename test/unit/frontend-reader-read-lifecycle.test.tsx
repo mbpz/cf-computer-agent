@@ -4,6 +4,7 @@ import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeReaderRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (text: string) => <div data-test-markdown>{text}</div> }));
 const vmContexts = new WeakSet<object>();
@@ -122,4 +123,147 @@ describe("knowledge reader composite read ownership", () => {
     expect(container.textContent).toContain("Private body knowledge-a");
     expect(requests.every(request => !request.init?.method || request.init.method === "GET")).toBe(true);
   });
+  const mutations = () => requests.filter(r => ["PUT", "DELETE"].includes(r.init?.method ?? ""));
+  const favoriteReads = () => requests.filter(r => r.url.pathname.endsWith("/favorite") && !r.init?.method);
+  const mutationReply = () => Response.json({ favorite: { knowledgeItemId: "knowledge-a" } });
+  async function addFavorite() { await act(async () => button("Add to favorites").click()); await flush(); }
+  async function checkFavorite() { await act(async () => button("Read current favorite").click()); await flush(); }
+  function noFavoriteAction() { expect([...container.querySelectorAll("button")].some(b => ["Add to favorites", "Remove from favorites"].includes(b.textContent ?? "") && !b.disabled)).toBe(false); }
+
+  it("reserves one favorite write before same-event clicks and blocks navigation until its receipt", async () => {
+    const pending = deferred<Response>(); respond = (url, init) => init?.method === "PUT" ? pending.promise : reply(url);
+    await mount(); const target = button("Add to favorites");
+    await act(async () => { target.click(); target.click(); });
+    expect(mutations()).toHaveLength(1); expect(target.disabled).toBe(true);
+    await act(async () => { writeWorkspaceHistory("push", "/knowledge"); });
+    expect(browser.location.pathname).toBe("/knowledge/knowledge-a");
+    const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); expect(event.defaultPrevented).toBe(true);
+    await act(async () => pending.resolve(mutationReply())); await flush();
+    expect(button("Remove from favorites").getAttribute("aria-pressed")).toBe("true");
+    await act(async () => { writeWorkspaceHistory("push", "/knowledge"); }); expect(browser.location.pathname).toBe("/knowledge");
+  });
+
+  it.each(["lost", "invalid", "server"])("keeps %s favorite results unknown until an explicit matching read, without replay", async kind => {
+    respond = (url, init) => init?.method === "PUT" ? kind === "lost" ? Promise.reject(new TypeError("Failed to fetch")) : kind === "invalid" ? Response.json({ favorite: { knowledgeItemId: "other" } }) : deny(503) : reply(url);
+    await mount(); await addFavorite(); noFavoriteAction();
+    expect(container.textContent).toContain("Favorite result is unconfirmed");
+    expect(favoriteReads()).toHaveLength(1); expect(mutations()).toHaveLength(1);
+    await checkFavorite(); noFavoriteAction(); // false cannot prove the original PUT failed
+    respond = url => url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
+    await checkFavorite(); expect(button("Remove from favorites").getAttribute("aria-pressed")).toBe("true"); expect(mutations()).toHaveLength(1);
+  });
+
+  it("keeps a failed removal unknown and resolves only a false read", async () => {
+    respond = (url, init) => init?.method === "DELETE" ? Promise.reject(new TypeError("lost")) : url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
+    await mount(); await act(async () => button("Remove from favorites").click()); await flush(); noFavoriteAction();
+    await checkFavorite(); noFavoriteAction();
+    respond = reply; await checkFavorite(); expect(button("Add to favorites").getAttribute("aria-pressed")).toBe("false"); expect(mutations().map(r => r.init?.method)).toEqual(["DELETE"]);
+  });
+
+  it("keeps unknown intent through remount, isolates members, and never replays on mount", async () => {
+    respond = (url, init) => init?.method === "PUT" ? Promise.reject(new TypeError("lost")) : reply(url);
+    await mount(); await addFavorite(); await act(async () => root.render(<div>Replacement</div>));
+    await mount("member-b"); expect(button("Add to favorites").disabled).toBe(false);
+    await mount(); noFavoriteAction(); expect(container.textContent).toContain("Favorite result is unconfirmed"); expect(mutations()).toHaveLength(1);
+    respond = url => url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
+    await checkFavorite(); expect(button("Remove from favorites").disabled).toBe(false);
+  });
+
+  it.each([401, 403])("revokes private content on favorite write %s and preserves the unresolved intent", async status => {
+    respond = (url, init) => init?.method === "PUT" ? deny(status) : reply(url);
+    await mount(); await addFavorite(); expectCleared();
+    respond = reply; await act(async () => button("Try again").click()); await flush();
+    noFavoriteAction(); expect(container.textContent).toContain("Favorite result is unconfirmed"); expect(mutations()).toHaveLength(1);
+  });
+
+  it("ignores a retired write receipt after reauthorization and checks without issuing a second write", async () => {
+    const pending = deferred<Response>(); const related = deferred<Response>();
+    respond = (url, init) => init?.method === "PUT" ? pending.promise : url.pathname.endsWith("/related") ? related.promise : reply(url);
+    await mount(); await addFavorite(); await act(async () => related.resolve(deny(403))); await flush(); expectCleared();
+    respond = reply; await act(async () => button("Try again").click()); await flush();
+    await act(async () => pending.resolve(mutationReply())); await flush(); noFavoriteAction();
+    expect(container.textContent).toContain("Favorite result is unconfirmed"); expect(mutations()).toHaveLength(1);
+  });
+
+  it("deduplicates recovery reads, keeps read errors locked, and cancels recovery on unmount", async () => {
+    respond = (url, init) => init?.method === "PUT" ? deny(503) : reply(url);
+    await mount(); await addFavorite();
+    const pending = deferred<Response>(); respond = url => url.pathname.endsWith("/favorite") ? pending.promise : reply(url);
+    const check = button("Read current favorite"); await act(async () => { check.click(); check.click(); });
+    expect(favoriteReads()).toHaveLength(2); noFavoriteAction();
+    const read = favoriteReads().at(-1)!; await act(async () => root.render(<div>Replacement</div>)); expect(read.init?.signal?.aborted).toBe(true);
+    await act(async () => pending.resolve(Response.json({ favorite: true }))); await flush(); expect(container.textContent).toBe("Replacement");
+  });
+
+  it("recovers an initial favorite GET failure without a write or a full reader reload", async () => {
+    respond = url => url.pathname.endsWith("/favorite") ? deny(503) : reply(url);
+    await mount(); noFavoriteAction(); respond = reply; await checkFavorite();
+    expect(button("Add to favorites").disabled).toBe(false); expect(mutations()).toHaveLength(0);
+    expect(requests.filter(r => r.url.pathname === prefix)).toHaveLength(1);
+  });
+
+  it("does not send a write when tab storage cannot preserve its intent", async () => {
+    await mount(); vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    await addFavorite(); expect(mutations()).toHaveLength(0); noFavoriteAction();
+  });
+
+  it.each([401, 403])("revokes the entire reader on favorite recovery %s without replay", async status => {
+    respond = (url, init) => init?.method === "PUT" ? deny(503) : reply(url);
+    await mount(); await addFavorite();
+    respond = url => url.pathname.endsWith("/favorite") ? deny(status) : reply(url);
+    await checkFavorite(); expectCleared(); expect(mutations()).toHaveLength(1);
+  });
+
+  it("retains an unknown write when recovery fails ordinarily, then permits another read", async () => {
+    respond = (url, init) => init?.method === "PUT" ? deny(503) : reply(url);
+    await mount(); await addFavorite();
+    respond = url => url.pathname.endsWith("/favorite") ? deny(503) : reply(url);
+    await checkFavorite(); noFavoriteAction(); expect(container.textContent).toContain("Private body");
+    await act(async () => { writeWorkspaceHistory("push", "/knowledge"); }); expect(browser.location.pathname).toBe("/knowledge/knowledge-a");
+    respond = url => url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
+    await checkFavorite(); expect(button("Remove from favorites").disabled).toBe(false); expect(mutations()).toHaveLength(1);
+  });
+
+  it("does not settle a record if successful write cleanup fails; a matching read retries cleanup only", async () => {
+    await mount(); const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementation(() => { throw new Error("storage"); });
+    respond = (url, init) => init?.method === "PUT" ? mutationReply() : reply(url);
+    await addFavorite(); noFavoriteAction();
+    remove.mockRestore(); respond = url => url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
+    await checkFavorite(); expect(button("Remove from favorites").disabled).toBe(false); expect(mutations()).toHaveLength(1);
+    await act(async () => root.render(<div>Other</div>)); await mount(); expect(button("Remove from favorites").disabled).toBe(false);
+  });
+
+  it("does not clear another operation's record with a stale successful receipt", async () => {
+    const pending = deferred<Response>(); respond = (url, init) => init?.method === "PUT" ? pending.promise : reply(url);
+    await mount(); await addFavorite();
+    const key = "memory-garden:reader-favorite-intent:v1:member-a:knowledge-a";
+    const replacement = JSON.stringify({ v: 1, member: "member-a", item: "knowledge-a", intent: { id: "other-op", desired: false } });
+    browser.sessionStorage.setItem(key, replacement);
+    await act(async () => pending.resolve(mutationReply())); await flush(); noFavoriteAction(); expect(browser.sessionStorage.getItem(key)).toBe(replacement);
+  });
+
+  it("leaves an unresolved record intact and ignores write denial after changing members", async () => {
+    const pending = deferred<Response>(); respond = (url, init) => init?.method === "PUT" ? pending.promise : reply(url);
+    await mount(); await addFavorite(); await mount("member-b");
+    await act(async () => pending.resolve(deny(403))); await flush(); expect(button("Add to favorites").disabled).toBe(false); expect(container.textContent).toContain("Private body");
+    await mount(); noFavoriteAction(); expect(mutations()).toHaveLength(1);
+  });
+
+  it.each(["corrupt", "wrong-member", "wrong-target"])("fails closed for a %s favorite recovery record", async kind => {
+    browser.sessionStorage.setItem("memory-garden:reader-favorite-intent:v1:member-a:knowledge-a", kind === "corrupt" ? "{" : JSON.stringify({ v: 1, member: kind === "wrong-member" ? "member-b" : "member-a", item: kind === "wrong-target" ? "knowledge-b" : "knowledge-a", intent: { id: "operation-a", desired: true } }));
+    await mount(); noFavoriteAction(); expect(container.textContent).toContain("recovery record is unavailable");
+    await checkFavorite(); expect(mutations()).toHaveLength(0); noFavoriteAction();
+  });
+
+  it("does not render a diff whose revision pair differs from the comparison request", async () => {
+    respond = async url => {
+      const result = reply(url);
+      if (!url.pathname.includes("/diff/")) return result;
+      const body = await result.json() as { diff: { fromRevisionId: string } }; body.diff.fromRevisionId = "wrong-version";
+      return Response.json(body);
+    };
+    await mount(); await compare(); expect(container.querySelector("[data-revision-diff]")).toBeNull();
+    expect(container.textContent).toContain("Unable to load revision changes."); expect(container.textContent).toContain("Private body");
+  });
+
 });

@@ -64,6 +64,16 @@ describe("knowledge reader data boundary", () => {
     );
   });
 
+  it.each([
+    ["other", "revision-2"], ["revision-1", "other"], ["revision-2", "revision-1"],
+  ])("rejects a diff bound to %s -> %s instead of the requested pair", async (fromRevisionId, toRevisionId) => {
+    const requester = vi.fn(async () => Response.json({ diff: {
+      fromRevisionId, toRevisionId, changed: false, metadataChanges: [],
+      stats: { added: 0, removed: 0, unchanged: 0, truncated: false }, hunks: [],
+    } }));
+    await expect(loadKnowledgeRevisionDiff("knowledge-1", "revision-1", "revision-2", requester)).rejects.toThrow("KNOWLEDGE_DIFF_INVALID");
+  });
+
   it("loads the exact historical revision behind a citation, never the current revision", async () => {
     const requester = vi.fn(async (url: RequestInfo | URL) => json(String(url).includes("/citations/") ? { citation: citation() } : { revision: historicalRevision() }));
     await expect(loadKnowledgeRevision("knowledge-1", requester, undefined, "#citation-1")).resolves.toMatchObject({ id: "revision-old", isCurrent: false, selectedChunkId: "chunk-old", markdown: "Old text" });

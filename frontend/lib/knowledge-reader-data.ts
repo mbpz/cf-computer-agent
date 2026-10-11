@@ -167,7 +167,7 @@ export async function loadKnowledgeRevisionDiff(
     { requester, signal },
   );
   const diff = normalizeDiff(data.diff);
-  if (!diff) throw new Error("KNOWLEDGE_DIFF_INVALID");
+  if (!diff || diff.fromRevisionId !== fromRevisionId || diff.toRevisionId !== toRevisionId) throw new Error("KNOWLEDGE_DIFF_INVALID");
   return diff;
 }
 

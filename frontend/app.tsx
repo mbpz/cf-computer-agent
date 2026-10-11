@@ -129,6 +129,7 @@ import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 import type { SessionSnapshot } from "./contracts/api";
+import { loadFavoriteIntent, prepareFavoriteIntent, finishFavoriteIntent, type ReaderFavoriteIntent, type FavoriteWritePhase } from "./lib/reader-favorite-intent";
 import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, registerWorkspaceLeaveGuard, subscribeWorkspaceLocation, WORKSPACE_LOCATION_CHANGE_EVENT, writeWorkspaceHistory } from "./lib/workspace-location";
 
 export function App() {
@@ -679,6 +680,19 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     diff: AbortController | null;
   } | null>(null);
   type ReadOwner = NonNullable<typeof readOwner.current>;
+  const favoriteIntent = useRef<ReaderFavoriteIntent | null>(null);
+  const favoriteAttempt = useRef<object | null>(null);
+  const favoritePhaseRef = useRef<FavoriteWritePhase>("idle");
+  const [favoritePhase, setFavoritePhase] = useState<FavoriteWritePhase>("idle");
+  const transitionFavorite = (phase: FavoriteWritePhase) => { favoritePhaseRef.current = phase; setFavoritePhase(phase); };
+  useEffect(() => {
+    const locked = () => favoritePhaseRef.current !== "idle";
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: locked() ? "block" : "allow" }));
+    const owner = window;
+    const warn = (event: BeforeUnloadEvent) => { if (locked()) { event.preventDefault(); event.returnValue = ""; } };
+    owner.addEventListener("beforeunload", warn);
+    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+  }, []);
   const retire = (owner: ReadOwner) => {
     if (readOwner.current === owner) readOwner.current = null;
     owner.primary.cancel(); owner.auxiliary.abort(); owner.diff?.abort();
@@ -696,6 +710,10 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
   useEffect(() => {
     const owner: ReadOwner = { primary: createKnowledgeReaderRequestController(), auxiliary: new AbortController(), diff: null };
     readOwner.current = owner;
+    favoriteAttempt.current = null;
+    const stored = loadFavoriteIntent(memberId, knowledgeItemId);
+    if (stored.kind === "ready") favoriteIntent.current = stored.intent;
+    transitionFavorite(stored.kind === "blocked" ? "blocked" : favoriteIntent.current ? "unknown" : "idle");
     const request = owner.primary.request(knowledgeItemId, citationHash);
     const live = () => readOwner.current === owner && !owner.auxiliary.signal.aborted;
     const failed = (error: unknown, ordinary: () => void) => {
@@ -745,12 +763,51 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
       return <KnowledgeReaderPage memberId={memberId} locale={locale} state={state.kind === "loading" ? state : { kind: "error", message: state.message }} revision={{ id: "", knowledgeItemId: "", markdown: "", isCurrent: false, previousRevisionId: null, sourceVersionId: "", sourceVersionOrdinal: null, parserSchemaVersion: null, indexStatus: "pending", chunks: [] }} renderMarkdown={renderSafeMarkdown} onRetry={() => setRetry((value) => value + 1)} />;
   }
   const toggleFavorite = async () => {
-    if (favorite === null) return;
-    const next = !favorite;
-    setFavorite(next);
-    try { await setKnowledgeFavorite(knowledgeItemId, next); } catch { setFavorite(!next); }
+    const owner = readOwner.current;
+    if (!owner || favorite === null || favoriteError || favoritePhaseRef.current !== "idle") return;
+    // Reserve synchronously and persist before any HTTP mutation. No automatic
+    // replay: a failed response is not evidence that the write failed.
+    transitionFavorite("saving");
+    const attempt = {}; favoriteAttempt.current = attempt;
+    let intent: ReaderFavoriteIntent;
+    try {
+      intent = { id: crypto.randomUUID(), desired: !favorite };
+      prepareFavoriteIntent(memberId, knowledgeItemId, intent);
+      favoriteIntent.current = intent;
+    } catch { transitionFavorite("blocked"); return; }
+    const live = () => readOwner.current === owner && favoriteAttempt.current === attempt;
+    try {
+      const result = await setKnowledgeFavorite(knowledgeItemId, intent.desired);
+      if (!live()) return;
+      finishFavoriteIntent(memberId, knowledgeItemId, intent);
+      favoriteIntent.current = null; setFavorite(result); setFavoriteError(false); transitionFavorite("idle");
+    } catch (error) {
+      if (!live()) return;
+      setFavorite(null); transitionFavorite("unknown"); denyRead(error, owner);
+    }
   };
-  return <KnowledgeReaderPage memberId={memberId} locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} favorite={favorite} favoriteError={favoriteError} onToggleFavorite={toggleFavorite} />;
+  const checkFavorite = async () => {
+    const owner = readOwner.current;
+    if (!owner || favoritePhaseRef.current === "saving" || favoritePhaseRef.current === "checking") return;
+    const stored = loadFavoriteIntent(memberId, knowledgeItemId);
+    if (stored.kind === "blocked") { transitionFavorite("blocked"); return; }
+    if (stored.kind === "ready") favoriteIntent.current = stored.intent;
+    const intent = favoriteIntent.current;
+    const attempt = {}; favoriteAttempt.current = attempt; transitionFavorite("checking");
+    const live = () => readOwner.current === owner && favoriteAttempt.current === attempt;
+    try {
+      const value = await loadKnowledgeFavorite(knowledgeItemId, fetch, owner.auxiliary.signal);
+      if (!live()) return;
+      if (intent && value !== intent.desired) { setFavorite(null); transitionFavorite("unknown"); return; }
+      // This confirms current state, not the outcome of a server operation ID.
+      if (intent) finishFavoriteIntent(memberId, knowledgeItemId, intent);
+      favoriteIntent.current = null; setFavorite(value); setFavoriteError(false); transitionFavorite("idle");
+    } catch (error) {
+      if (!live()) return;
+      setFavorite(null); setFavoriteError(true); transitionFavorite(intent ? "unknown" : "idle"); denyRead(error, owner);
+    }
+  };
+  return <KnowledgeReaderPage memberId={memberId} locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} favorite={favorite} favoriteError={favoriteError} favoritePhase={favoritePhase} onCheckFavorite={checkFavorite} onToggleFavorite={toggleFavorite} />;
 }
 
 function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
