@@ -101,7 +101,7 @@ security settings. The remaining G0 blockers are listed under
 | `npm run dev:browser-vm:connector -- <https-origin> [port]` | Starts the **handshake-only loopback probe**; prints the local control page URL | `package.json:40` (`node tools/browser-vm/connector-probe/server.mjs`); CLI args at `server.mjs:110-116` |
 | `npm run test:browser-vm:connector` | Automated loopback protocol + page-state regression (18/18 historically) | `package.json:39` → `scripts/browser-vm-connector-probe.test.mjs` + `scripts/browser-vm-connector-client.test.mjs` (both exist) |
 | `npm run verify:delivery-status` | Delivery-status docs contract (28/28 historically) | `package.json:50` → `scripts/delivery-status-contract.test.mjs` |
-| `npm run audit:functional-checklist` | Read-only checklist accounting (expects `29 范围内 / 5 已关闭 / 24 未关闭`, D08 excluded) | `package.json:61` → `scripts/functional-checklist-audit.mjs` |
+| `npm run audit:functional-checklist` | Read-only checklist accounting (expects `29 范围内 / 6 已关闭 / 23 未关闭`, D08 excluded) | `package.json:61` → `scripts/functional-checklist-audit.mjs` |
 | `node --test scripts/functional-checklist-audit.test.mjs` | The audit's own tests (9/9) | `scripts/functional-checklist-audit.test.mjs` |
 | `npm run test:browser-vm` | Fast VM suite (includes the probe/client tests) | `package.json:36` |
 
@@ -332,6 +332,6 @@ Additionally, and independently of the above:
   recorded desktop matrix counts.
 - Nothing here authorizes **D08** (deploy / migration / real login) or any production change.
 - A synthetic/local pass **does not close D04**; the checklist counts stay
-  `29 范围内 / 5 已关闭 / 24 未关闭` (D08 excluded).
+  `29 范围内 / 6 已关闭 / 23 未关闭` (D08 excluded).
 - The probe performs **no** DNS, TCP egress, VM boot or member authorization; `forwarding:false`
   is reported by the server itself.
