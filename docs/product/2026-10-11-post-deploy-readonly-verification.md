@@ -90,3 +90,22 @@
 ### 非声明
 - 回滚点已记录但**未演练**；本轮只应用远程 D1 迁移，未做任何部署。
 - 不构成 D05 双身份验收（无第二个真实身份）与 D06 完整矩阵；contributor 侧效果为掩码推断而非实测。
+
+## 迁移后复验：流水线已按新命令发布（2026-10-11）
+
+用户把 Workers Builds 的**部署命令**改为 `npm run release` 后，发布链在**我手动执行之前**就已完成应用与部署：本轮手动 `npm run db:migrate:remote` 返回 `✅ No migrations to apply!`，属空操作（无重复应用）。
+
+### 生产证据
+- 台账第 62 行：`0062_contributor_workspace_tasks_alignment.sql`，`applied_at = 2026-10-11 12:06:05`（由新命令的迁移步写入）。
+- 真实管理员会话 `GET /api/admin/roles` → `role-contributor.allowBits = 0x1600c3`（迁移前生产为 `0x600c3`）；`role-admin = 0x37ffff` 未变。
+- `GET /api/admin/menus` → 32 行；`GET /api/navigation` → 29 条 path 且含 `/review`（`0062` 只改掩码、不改菜单，符合预期）。
+- 线上产物 `assets/index-BpYetGvB.js` = `b75c48e58b8f`、`assets/index-BsQmnhdo.css` = `f6b14b39028c`，与本分支本地构建仍逐字节一致（本轮提交不涉及前端代码）。
+- `0062` 应用后远程无待应用迁移。
+
+### 回滚点登记的诚实边界
+- 本轮开始时抓到的 bookmark `0000015d-0000003a-00005101-b22451fabf11fb3d87173e1d0519be96` 已是 **`0062` 之后**的状态，**不构成 `0062` 的回滚点**；`0051`–`0061` 批量之前那枚 `0000015a-00000000-00005101-602a6f5e08b1fbb7233d7e2fafa8d39e` 同样早于本批。
+- `0062` 的语义是单条确定性掩码更新；如需回退，正确做法是前向修正（或 Time Travel 回到流水线发布之前的时点），而非依赖上述 bookmark。
+
+### 非声明
+- 未执行部署（发布由用户流水线完成）；本轮手动迁移为空操作。
+- contributor 侧栏效果仍为**掩码与菜单规则推断**（无 contributor 会话，未实测真实身份）。

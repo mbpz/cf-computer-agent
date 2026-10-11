@@ -129,3 +129,8 @@ substitute for the bookmark.
   protects the two repo-side invariants only: migrations run before deploy, and
   this runbook keeps documenting the dashboard command, verification, and
   rollback. It cannot observe or verify the dashboard setting.
+
+## Verification log
+
+- **2026-10-11 12:06:05** — the first release under the new deploy command (`npm run release`) applied `0062_contributor_workspace_tasks_alignment.sql` (ledger row 62) and published the Worker. Observed afterwards through an authenticated admin session: `GET /api/admin/roles` → `role-contributor.allowBits = 0x1600c3`; `GET /api/admin/menus` → 32 rows; `GET /api/navigation` → 29 paths including `/review`. The published bundle stayed byte-identical to the local build (`assets/index-BpYetGvB.js` = `b75c48e58b8f`, `assets/index-BsQmnhdo.css` = `f6b14b39028c`).
+- A manual `npm run db:migrate:remote` run right afterwards reported `No migrations to apply!`, confirming the deploy applied the migration exactly once.
