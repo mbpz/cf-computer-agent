@@ -20,7 +20,7 @@
 
 ## 当前计数与关闭条件（2026-09-28）
 
-[关闭条件对账](./2026-09-28-functional-closure-reconciliation.md)逐项解释 30 个父任务的剩余工作，并完成 A03/A04 核对交付物。当前为 **29 范围内 / 6 已关闭 / 23 未关闭**；运行 `npm run audit:functional-checklist` 从下面 canonical 顶层 checkbox 实算，历史进度数字不作为当前计数。真实功能验收仍保留；条目内历史发布后验收均归独立 D08，不再作为本轮功能关闭的重复条件。
+[关闭条件对账](./2026-09-28-functional-closure-reconciliation.md)逐项解释 30 个父任务的剩余工作，并完成 A03/A04 核对交付物。当前为 **29 范围内 / 7 已关闭 / 22 未关闭**；运行 `npm run audit:functional-checklist` 从下面 canonical 顶层 checkbox 实算，历史进度数字不作为当前计数。真实功能验收仍保留；条目内历史发布后验收均归独立 D08，不再作为本轮功能关闭的重复条件。
 
 ## 已确认的缺口（历史摘要，当前分类以上述对账为准）
 
@@ -335,11 +335,12 @@
 - [x] D05 admin/contributor/第二成员正向与越权旅程验收。
   - [x] 2026-10-11 多成员授权/隔离扫描（本地、合成成员，D05 本地可执行部分）：三合成成员（admin/contributor×2）下 contributor 对 9 个 admin GET 全 `403`、admin 对照 `200`，同源 Origin 下 `POST /api/admin/menus` contributor `403`、admin `201`（证明 403 是授权而非 CSRF）；收藏/操作回执/私有笔记/我的提交均成员作用域（B 读 A 回执 `404`、笔记 `null`、列表空）；原生导航零 admin 入口、直达 admin 路由渲染 `403` 拒绝提示。**缺陷：无**。见[扫描证据](./2026-10-11-multi-member-isolation-sweep-evidence.md)。合成本地会话、代理仅本地 harness，不构成 D05/D06/D04 验收；29/5/24 不变。
   - [x] 2026-10-11 真实身份双成员正向与越权旅程（生产、两个真实账号）：读取侧矩阵 admin 面 200 / contributor 全 403、越权写（带正确 Origin）403 且无残留、双向任务隔离互读 404、contributor 正向写旅程（API 与真实 UI，含删除）、成员管理页 UI 签发与 UI 撤销、尝试上限与单次使用、管理员邮箱拒绝 409；contributor 导航 18 条无 admin、`permissionMask 0x1600c3`。见[发布后核验](./2026-10-11-post-deploy-readonly-verification.md)、[菜单/登录码证据](../operations/evidence/2026-10-11-email-code-member-invitation.md)与[生产原生矩阵](./2026-10-11-native-matrix-evidence.md)。
-- [ ] D06 320/375/768/1280、中英文、深浅主题、键盘/触控矩阵验收。
+- [x] D06 320/375/768/1280、中英文、深浅主题、键盘/触控矩阵验收。
   - [x] 2026-10-11 原生浏览器验收环境阻塞：本地 `wrangler dev`＋本地 D1（0001–0061）＋合成本地会话已就绪，但环境仅有 cmux/WKWebView 后端（`tab.setCookies()` 不支持、`tab.emulate` 视口宽度恒为 596），320/375/768/1280 无法被驱动；D06 矩阵、D05 真实身份旅程与 D04 正式入口/原生验收均未取得证据。见[阻塞记录](./2026-10-11-native-acceptance-blocker.md)。本子项只登记环境阻塞，不关闭 D05/D06/D04，未 push/部署/远程迁移；29/5/24 不变。
   - [x] 2026-10-11 原生 4×2×2 矩阵（本地、真无头 Chrome/CDP）：320/375/768/1280 × zh-CN/en × 浅/深共 16 格 `innerWidth` 均等于请求宽度、无横向溢出（320/375/768 为 -15、1280 为 0）、导航链接恒 22，≤768 抽屉默认闭合（0×0）而 1280 停靠（231×647），深浅主题与中英副本符合；原生确认并修复 `<html lang>` 从不随语言更新的缺陷（zh-CN 下仍为 `en`），改由既有 locale 运行时驱动同步（未知/外来输入安全回退 `en`，无 document 不抛错），定向 8 项先 3 失败后全通过。见[矩阵证据](./2026-10-11-native-matrix-evidence.md)。会话为合成本地会话、代理仅本地 harness，本子项不构成 D05/D06/D04 验收；29/5/24 不变。
   - [x] 2026-10-11 原生触控矩阵（375/320，本地、CDP 触控 emulation）：触摸在原生 `<details><summary>打开导航</summary>` 上置 `details[open]`（touch→兼容鼠标序列，捕获到 touchstart/pointerdown/mousedown/click 各 1）；抽屉 `<nav>` 239×1096 含 25 链接；375 抽屉链接最小边 40px、关闭 25×36、命令面板 36×36、语言 32×40，均 ≥24×24 但若干 <44×44。仅为实测登记，未由 `wcag-contract.test.mjs` 裁定，不构成 D05/D06/D04 验收。见[矩阵证据](./2026-10-11-native-matrix-evidence.md)。29/5/24 不变。
   - [x] 2026-10-11 有头真窗口复核（本地、有头真 Chrome/CDP）：真实窗口 resize 下 macOS 钳至约 500px 最小宽度，请求 320/375 均应用为 500（`innerWidth` 500、溢出 -15），768 应用 768×963、1280 应用 1280×800；≤768 停靠 `nav` 0、summary 485/753×44，1280 停靠 `nav` 231、summary 0×0；320/375 另经设备仿真得 `innerWidth` 320/375（溢出均 -15、summary 305/360×44）；nav 链接恒 22、无横向溢出；深浅主题与 zh-CN/en 文档语言（`lang` zh-CN/en）在真窗口一致。见[矩阵证据](./2026-10-11-native-matrix-evidence.md)。会话为合成本地会话、代理仅本地 harness、profile 隔离于 `/tmp`，不构成 D05/D06/D04 验收；29/5/24 不变。
+  - [x] 2026-10-11 生产原生矩阵与键盘/触控专项（真实部署、真实 contributor）：视口 320/375/768/1280 精确且零横向溢出（1280 停靠 231px、≤768 抽屉）、`语言` 菜单同步 `<html lang>`、主题四态（存储偏好 + 账户菜单/设置三选）、真实 touch 点击展开抽屉（最小边 40px、关闭 25×36）；键盘 24 站可达 `新建任务`、弹层焦点零逃逸、Escape 关闭并回焦、纯键盘创建与删除闭环、⌘K 命令面板、语言与账户菜单开合、375 抽屉键盘开合；页面与控制台 0 报错。见[生产原生矩阵](./2026-10-11-native-matrix-evidence.md)。
 - [ ] D07 运行精确候选完整门禁；同步 README、ROADMAP、总账和原 checklist。
   - [x] 2026-10-10 图谱引用修复候选完整 check 退出0：修正建议取消信号的旧 smoke 静态契约后，unit356文件5052/5052、Worker69文件1161/1161、landing97/97及构建/dry-run通过；既有负向Worker异常已对照源码归因，未出现React后台window/act异常。见[本地候选证据](./graph-evidence-read-recovery-evidence.md)。未发布，不替代功能完成后的最终候选或D04/D05/D06验收。
   - [x] 2026-10-10 本地门禁对账：迁移文件59项固定哈希与历史发布51项分离；共享任务编辑器补登记11项证据gap，保持父项开放；Roadmap对齐现有96 atoms与环境归属。五文件契约113/113，确认框草稿/提交意图区分及任务DELETE回归60/60、Worker定向111/111通过；最终npm test退出0（unit 355文件4854/4854，Worker 66文件1112/1112）。后台异常日志尚待归因，见[本地证据](./2026-10-10-functional-gate-reconciliation-evidence.md)。本子项不替代完整候选门禁、原生或真实身份验收。
