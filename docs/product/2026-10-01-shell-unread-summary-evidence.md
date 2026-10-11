@@ -40,9 +40,19 @@
 
 日期：2026-10-11。分支 `codex/functional-checklist-completion`。范围：`frontend/lib/use-notification-summary.ts` 的跨标签重读触发（A06 声称的"跨标签在重新聚焦/可见时读取"）。
 
-### 为什么是确定性覆盖而非原生验收
+### 验证方式：无头受限 → 有头浏览器原生确认
 
-尝试在原生环境验证时不可行：无头 Chrome 报告 `document.visibilityState === "hidden"`，且 `Page.bringToFront` 既不派发 `focus` 也不派发 `visibilitychange`。因此无法用真实浏览器触发本 hook 的两个重读入口，改为在 Happy DOM 中确定性地锁定行为。**这不是原生验收**：真机前后台切换、跨真实标签页、真实身份仍未证明。
+第一次在 **无头** Chrome 中验证时不可行：无头 Chrome 报告 `document.visibilityState === "hidden"`，且 `Page.bringToFront` 既不派发 `focus` 也不派发 `visibilitychange`。该限制仅适用于无头环境，因此当时改为在 Happy DOM 中确定性地锁定行为（见下节），以保证回归覆盖。
+
+随后以**有头 Chrome**（CDP 驱动，独立 `/tmp` 配置目录）在本地 `wrangler dev`（:8787）上重跑：验收包合成的会话经本地透传代理（:8791）注入，工作区页面注入 `focus` / `visibilitychange` 计数器，`/api/notifications/summary` 的请求次数从 CDP 请求日志读取。有头环境能够产生这两个事件，两个重读入口均获**原生确认**：
+
+- **重新聚焦（window focus）**：在一个有头窗口中打开两个标签页，对第二个标签页调用 `Page.bringToFront`，再对第一个标签页调用 `Page.bringToFront`。页面记录 `focus: 2`、`visibilitychange: 0`（有头窗口中两个标签页始终为 `visible`），摘要请求数 **2 → 3**：重新聚焦路径恰好多读一次，而非每事件一次。
+- **恢复可见（visibilitychange）**：通过 CDP `Browser.getWindowForTarget` 取得 windowId，再以 `Browser.setWindowBounds` 依次设置 `{windowState:"minimized"}` 和 `{windowState:"normal"}` 最小化并还原窗口。最小化期间 `document.visibilityState` 变为 `hidden`（hidden: true），还原后回到 `visible`（hidden: false）；页面记录 `visibilitychange: 2`、`focus: 3`（累计），摘要请求数 **3 → 4**：重新可见触发一次重读。
+- **无请求风暴**：2 次可见性事件 + 1 次聚焦事件仅各产生一次额外请求（每个场景各 +1）。
+
+两个记录在案的触发入口——`frontend/lib/use-notification-summary.ts:41` 一区的 `window` focus 监听，以及仅在 `document.visibilityState === "visible"` 时生效的 `visibilitychange` 监听——目前已在真实有头浏览器中原生确认。无头 Chrome 无法产生这些状态迁移，故先前的限制说明仅针对无头环境。
+
+**边界**（不构成过度声明）：会话仍是本地测试装置代理注入的**合成本地身份**，非真实账号；浏览器使用独立 `/tmp` 配置目录，非用户日常浏览器；这**不是** D05/D06/D04 验收；计数保持 **29 范围内 / 5 已关闭 / 24 未关闭**（D08 不计入）；未部署、未推送、未执行远程迁移。
 
 ### 新增测试
 
@@ -73,7 +83,7 @@
 
 ### 非声明
 
-- 这是**本地确定性覆盖**，不是原生/D05/D06 验收，也不代表真机跨标签或真实身份验证。
+- 确定性用例部分是**本地确定性覆盖**；有头浏览器部分是**本机有头 Chrome 原生确认**（合成本地身份 + 独立 `/tmp` 配置）。两者均**不是**原生 D05/D06/D04 验收，也不代表真实身份、真机移动端或用户日常浏览器的验证。
 - 未改现有测试断言；未改产品代码（仅临时变异并还原）。
 - 完整功能清单计数不变：**29 范围内 / 5 已关闭 / 24 未关闭**；D08 不计入。
 - 未推送、未部署、未执行远程迁移、未使用远程 D1、未读取任何密文。
