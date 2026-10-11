@@ -1307,24 +1307,29 @@ describe("Phase 1 control-plane migrations", () => {
     });
   });
 
-  it("keeps historical collaboration menu seeds registered while current coming-soon paths stay seeded", async () => {
-    const registeredPaths = new Set<string>(WORKSPACE_ROUTE_CAPABILITIES.map((route) => route.path));
-    const comingSoonPaths = WORKSPACE_ROUTE_CAPABILITIES
-      .filter((route) => String(route.availability) === "coming_soon")
-      .map((route) => route.path)
-      .sort();
+  it("keeps the 0034 collaboration seeds registered and reconciled with the ready route registry", async () => {
     const seedRows = [...comingSoonMenusMigration.matchAll(/SELECT\s+'([^']+)'[\s\S]*?'(\/[a-z-]+)'[\s\S]*?WHERE NOT EXISTS/gu)]
       .map((match) => ({ id: match[1]!, path: match[2]! }));
-    const seedPaths = seedRows.map(({ path }) => path).sort();
-    expect(seedPaths.every((path) => registeredPaths.has(path))).toBe(true);
-    expect(comingSoonPaths.every((path) => seedPaths.includes(path))).toBe(true);
+    expect(seedRows.map(({ id, path }) => `${id}:${path}`)).toEqual([
+      "menu-boards:/boards", "menu-notifications:/notifications", "menu-messages:/messages",
+    ]);
+    // The 0034 migration is named for coming-soon placeholders, but the registry
+    // now exposes every seeded path as ready, so the seed must stay attached to a
+    // registered route instead of a stale availability flag.
+    const routesByPath = new Map<string, (typeof WORKSPACE_ROUTE_CAPABILITIES)[number]>();
+    for (const route of WORKSPACE_ROUTE_CAPABILITIES) routesByPath.set(route.path, route);
+    for (const { path } of seedRows) {
+      const route = routesByPath.get(path);
+      expect(route, `${path} must stay a registered route`).toBeDefined();
+      expect(route!.availability, `${path} is no longer a coming-soon placeholder`).toBe("ready");
+    }
 
     await applyD1Migrations(env.DB, MIGRATIONS);
     const placeholders = seedRows.map(() => "?").join(", ");
     const rows = await env.DB.prepare(
       `SELECT id, path FROM menus WHERE is_system = 1 AND id IN (${placeholders}) ORDER BY path`,
     ).bind(...seedRows.map(({ id }) => id)).all<{ id: string; path: string }>();
-    expect(rows.results.map(({ path }) => path)).toEqual(seedPaths);
+    expect(rows.results.map(({ path }) => path)).toEqual(seedRows.map(({ path }) => path).sort());
   });
 
   it.each([
@@ -1382,6 +1387,48 @@ describe("Phase 1 control-plane migrations", () => {
       success: true,
       meta: expect.any(Object),
     });
+  });
+
+  it("applies 0060 idempotently without overriding managed system fields", async () => {
+    const registration = MIGRATIONS[MIGRATIONS.length - 1]!;
+    expect(registration.name).toBe("0060_workbench_route_menu_registration.sql");
+    // The migration harness splits the pinned file into statements; run them
+    // verbatim so this test never rewrites the migration text.
+    const statements = registration.queries;
+    expect(statements).toHaveLength(9);
+    expect(statements.filter((statement) => /^INSERT INTO menus/u.test(statement.trim()))).toHaveLength(6);
+    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, -1));
+
+    // A value the 0060 guards must NOT touch: menu-boards keeps an
+    // administrator-managed mask/status/visibility because the conditional
+    // UPDATE only fires on the canonical '0x0' placeholder. Position 42 is
+    // rewritten by the documented unconditional normalization, as 0035 did.
+    await env.DB.prepare(
+      "UPDATE menus SET required_bits = '0x1', status = 'disabled', visible = 0, position = 42 WHERE id = 'menu-boards'",
+    ).run();
+
+    const apply0060 = async () => { for (const statement of statements) await env.DB.prepare(statement).run(); };
+    const snapshot = async () => (await env.DB.prepare(
+      `SELECT id, parent_id, key, label_key, path, icon, group_name, position, required_bits, status, visible, is_system
+       FROM menus ORDER BY id`,
+    ).all()).results;
+
+    await apply0060();
+    const afterFirstRun = await snapshot();
+    await apply0060();
+
+    await expect(snapshot()).resolves.toEqual(afterFirstRun);
+    await expect(env.DB.prepare(
+      "SELECT required_bits, status, visible, position FROM menus WHERE id = 'menu-boards'",
+    ).first()).resolves.toEqual({ required_bits: "0x1", status: "disabled", visible: 0, position: 7 });
+    await expect(env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM menus WHERE id IN
+        ('menu-graph', 'menu-calendar', 'menu-today', 'menu-focus', 'menu-workbench-review', 'menu-environments')`,
+    ).first()).resolves.toEqual({ count: 6 });
+    await expect(env.DB.prepare(
+      `SELECT COUNT(*) AS count, COUNT(DISTINCT position) AS distinct_positions FROM menus
+       WHERE parent_id = 'menu-workspace' AND group_name = 'workspace' AND is_system = 1`,
+    ).first()).resolves.toEqual({ count: 17, distinct_positions: 17 });
   });
 
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {

@@ -97,6 +97,8 @@ export function currentNavigationFixture(role: "contributor" | "admin", permissi
       navLeaf("calendar", "NAV_CALENDAR", "/calendar", "workspace"),
       navLeaf("today", "NAV_TODAY", "/today", "workspace"),
       navLeaf("focus", "NAV_FOCUS", "/focus", "workspace"),
+      // Fixture key mirrors the shared registry route id; the seeded menus row key is
+      // `workbench-review`, because migrations/0029 owns key `review` for /admin/submissions.
       navLeaf("review", "NAV_REVIEW", "/review", "workspace"),
       navLeaf("tasks", "NAV_TASKS", "/tasks", "workspace"),
       navLeaf("boards", "NAV_BOARDS", "/boards", "workspace"),

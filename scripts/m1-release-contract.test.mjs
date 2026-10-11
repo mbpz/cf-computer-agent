@@ -85,6 +85,7 @@ const expectedLocalMigrations = [...expectedMigrations,
   ["0057_connector_authorizations.sql", "582e337e7d37203234e32c1c47a9559991087953459aa15f7e33eaed14ae79af"],
   ["0058_connector_leases.sql", "62f2960ac2fca05f301da4ffb3af36212ece58640edcc45e2d0803ec9270099f"],
   ["0059_admin_workbench_permissions.sql", "b0fa4064ae7149f3436894b56956966b5e901462f06d91e95539002b3e74b97b"],
+  ["0060_workbench_route_menu_registration.sql", "5e08342b4f3da3954b1d80c8014dcb96251f3bc1622b07769756d3ee60cc344a"],
 ];
 
 const requiredEvidenceBlocks = [
@@ -239,7 +240,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^\[pass\] migration-files count=59$/mu);
+  assert.match(result.output, /^\[pass\] migration-files count=60$/mu);
 });
 
 test("keeps asset pairing migration compatible with remote D1 statement execution", async () => {
@@ -282,7 +283,7 @@ test("local forward pins do not expand the historical release manifest or approv
   const manifest = await runVerifier(["--manifest-json"]);
   assert.equal(manifest.code, 0, manifest.output);
   assert.deepEqual(JSON.parse(manifest.output), expectedMigrations.map(([name, sha256]) => ({ name, sha256 })));
-  for (const count of [52, 59]) {
+  for (const count of [52, 59, 60]) {
     await withLedger(ledger(expectedLocalMigrations.slice(0, count).map(([name]) => name)), async (path) => {
       for (const mode of ["--ledger-before", "--ledger-after", "--ledger-catchup-before", "--ledger-catchup-after"]) {
         const result = await runVerifier([mode, path]);
