@@ -172,3 +172,22 @@ npm run check
 - 未关闭任何父清单条目：功能清单仍为 29 范围内 / 5 已关闭 / 24 未关闭。
 - 未执行远程迁移、未部署、未 push、未 commit；未访问生产、Browser-VM 或 Secret；D1 只在本地测试夹具中应用。
 - 未验证真实身份/浏览器/原生旅程；导航与权限结论来自本地 D1 迁移、共享注册表与既有前端守卫的源码与单测，不替代 D05/D06/D08 验收。
+
+## 原生确认：注册结果与权限隔离（本地合成成员，2026-10-11）
+
+方法：有头 Chrome 经本地 CDP，逐成员**单标签**访问按成员注入会话 cookie 的本地代理端口（`__Host-memory-session` 由代理按请求注入，代理转发到 `wrangler dev` :8787）；每个成员以 `/api/navigation` 载荷本身锚定身份（admin 载荷含 `/admin/*`，contributor 不含）。本轮仅读取页面与 `/api/navigation`，未调用任何写入端点。
+
+| 取证项 | acceptance-admin（`role-admin`，掩码 `0x37ffff`） | acceptance-contributor-1（`role-contributor`，掩码 `0x1600c3`） |
+| --- | --- | --- |
+| `GET /api/navigation` | `200`，6418 字节 | `200`，3807 字节 |
+| 载荷含 `/environments` | 是 | **否** |
+| 载荷含 `/admin*` | 是 | **否** |
+| 侧栏渲染出 `/environments` | 是 | **否** |
+| 侧栏渲染出 admin 入口 | 是（`/admin`、`/admin/submissions`、`/admin/assets`、`/admin/duplicates`） | **否** |
+| 工作区侧栏链接数 | 13 | 12 |
+
+- 与 0060 掩码逐位一致：`workspace.tasks = 0x100000` 的 5 条就绪路由（`/graph /calendar /today /focus /review`）两侧都渲染；`workspace.vm = 0x200000` 的 `/environments` 仅位 21 持有者可见——本地 `role-contributor` 掩码 `0x1600c3` 含 bit20、不含 bit21。
+- 侧栏稳定态顺序确定：连续 3 次 reload 的链接序完全一致。`mergeRequiredWorkspaceNavigation` 将 `graph/tasks/boards/notifications/messages` 从服务端序中取出（后四者进入协作栏），故 `/graph` 落到工作区末尾，其余按 0060 的唯一 position 13–18 排列；首次绘制相对服务端载荷序的差异属客户端合并前后态，未发现顺序缺陷。
+- 复核 `test/unit/menu-registry-integrity.test.ts`、`test/worker/menu-seed-integrity.test.ts`、`test/worker/admin-menus.test.ts` 当前退出：3 文件 30 用例全通过；`menu-seed-integrity` 的就绪路由覆盖由共享注册表**独立推导**，非硬编码 id 清单。
+
+非声明：合成成员不是 D05 真实身份验收；`/environments` 在侧栏可见不等于 D04/G0 正式环境接入；未 push、未部署、未远程迁移。
