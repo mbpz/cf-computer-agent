@@ -1469,6 +1469,63 @@ describe("Phase 1 control-plane migrations", () => {
     ).first()).resolves.toEqual({ count: 17, distinct_positions: 17 });
   });
 
+  it("realigns the 0062 contributor workspace.tasks mask without overriding managed roles", async () => {
+    const registration = MIGRATIONS.find((migration) => migration.name === "0062_contributor_workspace_tasks_alignment.sql")!;
+    expect(registration).toBeDefined();
+    // The harness splits the pinned file into statements; run them verbatim so this
+    // test never rewrites the migration text.
+    const statements = registration.queries;
+    expect(statements).toHaveLength(1);
+    expect(statements.filter((statement) => /^UPDATE roles/u.test(statement.trim()))).toHaveLength(1);
+    const apply0062 = async () => { for (const statement of statements) await env.DB.prepare(statement).run(); };
+    const readContributor = async () => env.DB.prepare(
+      "SELECT allow_bits, updated_at FROM roles WHERE id = 'role-contributor'",
+    ).first<{ allow_bits: string; updated_at: string }>();
+
+    await applyD1Migrations(env.DB, MIGRATIONS);
+
+    // (a) The full migration set lands the contributor role on the user-confirmed mask.
+    await expect(readContributor()).resolves.toEqual({
+      allow_bits: "0x1600c3",
+      updated_at: "1970-01-01T00:00:00.000Z",
+    });
+
+    // 0062 exists precisely because the deployed row was recorded as applied while the
+    // mask had reverted to the 0029 placeholder, so the 0032 conditional (WHERE
+    // allow_bits = '0x600c3') could never fire again. Re-create that drift and prove
+    // 0062 realigns it.
+    await env.DB.prepare(
+      "UPDATE roles SET allow_bits = '0x600c3', updated_at = '2026-01-01T00:00:00.000Z' WHERE id = 'role-contributor'",
+    ).run();
+    await apply0062();
+    await expect(readContributor()).resolves.toEqual({
+      allow_bits: "0x1600c3",
+      updated_at: "1970-01-01T00:00:00.000Z",
+    });
+
+    // (b) A rerun is a no-op: the guard no longer matches, so a sentinel updated_at
+    // survives instead of being rewritten to the migration's epoch.
+    await env.DB.prepare(
+      "UPDATE roles SET updated_at = '2222-02-02T00:00:00.000Z' WHERE id = 'role-contributor'",
+    ).run();
+    await apply0062();
+    await expect(readContributor()).resolves.toEqual({
+      allow_bits: "0x1600c3",
+      updated_at: "2222-02-02T00:00:00.000Z",
+    });
+
+    // (c) An administrator-managed mask is preserved verbatim: only the exact legacy
+    // placeholder is realigned, never an operator-set value.
+    await env.DB.prepare(
+      "UPDATE roles SET allow_bits = '0x1', updated_at = '2026-01-01T00:00:00.000Z' WHERE id = 'role-contributor'",
+    ).run();
+    await apply0062();
+    await expect(readContributor()).resolves.toEqual({
+      allow_bits: "0x1",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    });
+  });
+
   it("creates a member-scoped favorite operation receipt store that outlives the live favorite", async () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     await expectTableSchema("knowledge_favorite_operation_receipts", [
