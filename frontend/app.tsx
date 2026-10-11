@@ -182,6 +182,12 @@ export function App() {
     return subscribeWorkspaceLocation(updateLocation);
   }, []);
 
+  useEffect(() => {
+    // /login is a first-class sign-in path: a signed-in visitor is sent home
+    // instead of falling through to the not-found page.
+    if (session && pathname === "/login") writeWorkspaceHistory("replace", "/");
+  }, [session, pathname]);
+
   if (sessionError) return <LoginPage locale={locale} error={frontendText(locale, "APP_SIGN_IN_DESCRIPTION")} />;
   if (anonymous && pathname === "/") return <PublicWorkbenchPage locale={locale} />;
   if (anonymous) return <LoginPage locale={locale} />;

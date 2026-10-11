@@ -92,23 +92,22 @@ describe("public knowledge studio", () => {
     click(action("pause"));
     expect(host.querySelector('[data-demo-action="pause"]')?.getAttribute("aria-pressed")).toBe("false");
   });
-  it("renders an honest Chinese static demo and real OAuth entry without canvas", () => {
+  it("renders an honest Chinese static demo and the two-method sign-in entry without canvas", () => {
     const html = renderToStaticMarkup(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })} />);
     expect(html).toContain("示例演示 · 不读取你的个人数据");
     expect(html).toContain("体验知识之旅");
-    expect(html).toContain('href="/auth/github"');
+    expect(html).toContain('href="/login"');
+    expect(html).not.toContain('href="/auth/github"');
     expect(html).toContain("邀请制");
     expect(html).toContain("<picture ");
     expect(html).not.toContain("<canvas");
   });
 
-  it("removes actionable login links when GitHub is unavailable", () => {
-    act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} githubEnabled={false} />));
-    expect(host.querySelector('a[href="/auth/github"]')).toBeNull();
-    expect(host.querySelector("[data-workbench-landing]")).not.toBeNull();
-    expect(host.textContent).toContain("GitHub sign-in is not configured");
-    expect(host.textContent).not.toContain("login remain available");
-    expect(host.querySelectorAll("button[data-feature]")).toHaveLength(5);
+  it("routes every landing sign-in entry to the login page without a GitHub short-circuit", () => {
+    const html = renderToStaticMarkup(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />);
+    expect(html).toContain("Log in to your workbench");
+    expect(html.match(/href="\/login"/g)).toHaveLength(2);
+    expect(html).not.toContain("/auth/github");
   });
 
   it("completes and replays the gated HTML journey without fetching or storing demo data", () => {

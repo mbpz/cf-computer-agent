@@ -1,7 +1,7 @@
-import { ArrowRight, Bell, Books, ChatCircleText, GithubLogo, SquaresFour, Tray } from "@phosphor-icons/react";
+import { ArrowRight, Bell, Books, ChatCircleText, SquaresFour, Tray } from "@phosphor-icons/react";
 import { useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
 import { Button } from "../../components/ui/button";
-import { frontendText, syncDocumentLanguage, type LocaleRuntime } from "../../lib/i18n";
+import { syncDocumentLanguage, type LocaleRuntime } from "../../lib/i18n";
 import { readTheme, type ThemeMode } from "../../lib/theme";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
 import { demoReducer, initialDemoState, type DemoEvent, type DemoState, type DemoStep, type FeatureId } from "./workbench-demo-state";
@@ -28,7 +28,7 @@ function landingReducer(previous: { demo: DemoState; cycleId: number }, event: D
   };
 }
 
-export function PublicWorkbenchPage({ locale, githubEnabled = true }: { locale: LocaleRuntime; githubEnabled?: boolean }) {
+export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
   const language = useSyncExternalStore(locale.subscribe, () => locale.locale, () => locale.locale);
   const [{ demo: state, cycleId }, dispatch] = useReducer(landingReducer, undefined, () => ({ demo: initialDemoState(), cycleId: 0 }));
   const snapshot = useMemo(() => ({ feature: state.activeFeature, captured: state.captured,
@@ -46,9 +46,9 @@ export function PublicWorkbenchPage({ locale, githubEnabled = true }: { locale: 
   useEffect(() => syncDocumentLanguage(locale, document), [locale]);
   const text = (key: LandingCopyKey) => landingText(locale, key);
   const gated = (state.step === "capture" && !state.captured) || (state.step === "action" && !state.taskDone);
-  const login = githubEnabled
-    ? <a className="workbench-login" href="/auth/github"><GithubLogo size={18} weight="fill" aria-hidden="true" />{text("LOGIN")}</a>
-    : <p className="workbench-muted workbench-login-unavailable">{frontendText(locale, "LOGIN_GITHUB_UNAVAILABLE")}</p>;
+  // The landing always routes to the sign-in page, which offers both the email + one-time-code
+  // path and GitHub, and itself reports when GitHub is not configured.
+  const login = <a className="workbench-login" href="/login">{text("LOGIN")}</a>;
 
   return <main data-public-workbench-page data-workbench-landing className="workbench-landing" lang={language}>
     <div inert={state.activeFeature !== null}>

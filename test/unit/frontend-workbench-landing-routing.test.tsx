@@ -92,7 +92,8 @@ describe("public knowledge studio authentication boundary", () => {
     try {
       await waitForApp(() => Boolean(app.container.querySelector("[data-workbench-landing]")));
       expect(app.container.querySelector("[data-shell-root]")).toBeNull();
-      expect(app.container.querySelector('a[href="/auth/github"]')).not.toBeNull();
+      expect(app.container.querySelector('a[href="/login"]')).not.toBeNull();
+      expect(app.container.querySelector('a[href="/auth/github"]')).toBeNull();
       expect(calls).toContain("/api/session");
       expect(calls.every(path => ["/api/session", "/api/telemetry/pageview"].includes(path))).toBe(true);
     } finally { await app.unmount(); }
@@ -129,6 +130,33 @@ describe("public knowledge studio authentication boundary", () => {
     try {
       await waitForApp(() => Boolean(app.container.querySelector("[data-login-page]")));
       expect(app.container.querySelector("[data-workbench-landing]")).toBeNull();
+    } finally { await app.unmount(); }
+  });
+
+  it("keeps anonymous /login on the two-method sign-in card", async () => {
+    const app = await mountApp({ url: "https://app.test/login", fetch: async (input) => {
+      if (String(input) === "/api/session") return errorResponse(401, "AUTH_REQUIRED");
+      if (String(input) === "/api/telemetry/pageview") return new Response(null, { status: 204 });
+      throw new Error(`UNEXPECTED_REQUEST:${input}`);
+    } });
+    try {
+      await waitForApp(() => Boolean(app.container.querySelector("[data-login-page]")));
+      expect(app.container.querySelector("[data-workbench-landing]")).toBeNull();
+      expect(app.container.querySelector("#login-code-email")).not.toBeNull();
+      expect(app.container.querySelector("#login-code-code")).not.toBeNull();
+      expect(app.container.textContent).toContain("Continue with GitHub");
+    } finally { await app.unmount(); }
+  });
+
+  it("redirects a signed-in visitor from /login back to home", async () => {
+    const app = await mountAuthenticatedApp({ url: "https://app.test/login", role: "contributor", permissionMask: "0x0", fetch: async (input) => {
+      if (String(input) === "/api/telemetry/pageview") return new Response(null, { status: 204 });
+      return Response.json({ items: [], total: 0, unreadCount: 0, page: 1, pageSize: 20 });
+    } });
+    try {
+      await waitForApp(() => app.browser.location.pathname === "/");
+      expect(app.container.textContent).not.toContain("Page not found");
+      expect(app.container.querySelector("[data-login-page]")).toBeNull();
     } finally { await app.unmount(); }
   });
 

@@ -13,6 +13,8 @@
 
 2026-10-11 成员一次性登录授权前端接入后复核：新增 `frontend/lib/admin-member-invitations-data.ts`（数据模块，无控件候选）与成员页授权区块、登录页验证码表单（均归属各自页面路由，不计入未归属项）。`frontend/app.tsx` 的三个外层候选属性与行为未变，仅因新增一行导入下移至214:75、241:39、925:250；同步该文件指纹。当前272文件/1203候选/110未归属，不扩大本记录的运行验收结论。
 
+2026-10-11 落地页登录入口改为 `/login` 后复核：落地页 CTA 由 `/auth/github` 直跳改指 `/login`（指向两名方式登录页，仍属 public 共享面，未归属项不变），`frontend/app.tsx` 新增已认证 `/login` → `/` 的 replace 重定向 effect，不影响三个外层候选的行为，仅使坐标移至220:75、247:39、931:250。当前仍为272文件/1203候选/110未归属；同步 `frontend/app.tsx` 与作为 caller 证据的 `frontend/pages/workbench-landing/public-workbench-page.tsx` 指纹，不扩大本记录的运行验收结论。
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
@@ -33,9 +35,9 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 110 项，但 A01 
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:214:75` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:241:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
-| `frontend/app.tsx:925:250` | app-boundary | 路由 fallback 返回 NotFoundPage | 返回首页链接 href=/；需继续验证带脏草稿时的实际导航行为。 |
+| `frontend/app.tsx:220:75` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:247:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:931:250` | app-boundary | 路由 fallback 返回 NotFoundPage | 返回首页链接 href=/；需继续验证带脏草稿时的实际导航行为。 |
 
 ## `frontend/components/history-navigation-notice.tsx`（2）
 
@@ -300,7 +302,7 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `f4454c419395df86fea143caef5d64f333fa39c82dbfc60f6a40c0a3de88f5d4`
+- `frontend/app.tsx`: `f734e5206d295e4a3b584f3e51a8f0ca8352d527a03b821b5a56923927b81206`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
 - `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
 - `frontend/components/ui/card.tsx`: `bb7f77ce45ee3fec21e25739c61d547900498a0117d3e12101e8932eae204b41`
@@ -324,7 +326,7 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 - `frontend/features/environments/storage/reconcile-checkpoints.ts`: `465fc694b89e3da4750a3ee7b46ee41a141fbdc9dff3631ea4454d47f32ff636`
 - `frontend/lib/workspace-location.ts`: `b77ff862964645fe25610e09f79b8409740f72a85a5685d934adc7e0ff60b92d`
 - `frontend/main.tsx`: `8a56e4c9f5df8e80312df681a99b6f31457b752d9d94ad000e37f6a666ae1f62`
-- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `5ea0051bee107409f5de903620c0b3cc85e51478d135aa55f723d3b66af19d83`
+- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `2c3c00e74e88b1b6ba3053b5feae3545078f68fa5392a0b8914eccc87509a878`
 - `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `a1e4fd7990e6d5a80265496307d7c032115d91f3bac7a753952fc5c3970c794c`
 - `frontend/pages/workbench-landing/workbench-scene.tsx`: `78d8320376b3f6d1cb22254cbb01a638c73498000d11c7dd33a7d4e2db2604d2`
 - `frontend/public/sw.js`: `082532f5be99a67e9d755f9407d59e46359f0b247de2473400c20c229f7080d5`
