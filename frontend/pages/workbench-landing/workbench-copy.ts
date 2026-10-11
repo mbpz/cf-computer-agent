@@ -7,7 +7,7 @@ const en = {
   START: "Try the knowledge journey",
   EXPLORE: "Explore the workbench",
   LOGIN: "Log in to your workbench",
-  INVITE_ONLY: "Access is invitation-only. Log in with an approved GitHub account.",
+  INVITE_ONLY: "Invitation-only: sign in with the email a manager authorized plus your one-time code, or with an approved GitHub account.",
   DEMO_BADGE: "Example demo · Does not read your personal data",
   DEMO_DESCRIPTION: "All documents, answers, citations, tasks and messages here are handwritten fictional examples.",
   FLOW_TITLE: "From collected material to your next action",
@@ -91,7 +91,8 @@ const en = {
 
 export type LandingCopyKey = keyof typeof en;
 
-const catalogs: Record<FrontendLocale, Record<LandingCopyKey, string>> = {
+// Exposes both locale catalogs so tests can assert key and placeholder parity.
+export const LANDING_COPY_CATALOGS: Record<FrontendLocale, Record<LandingCopyKey, string>> = {
   en,
   "zh-CN": {
     BRAND: "个人工作台",
@@ -100,7 +101,7 @@ const catalogs: Record<FrontendLocale, Record<LandingCopyKey, string>> = {
     START: "体验知识之旅",
     EXPLORE: "探索工作台",
     LOGIN: "登录工作台",
-    INVITE_ONLY: "工作台采用邀请制，请使用已获准的 GitHub 账号登录。",
+    INVITE_ONLY: "工作台采用邀请制：请使用管理员授权的邮箱与一次性验证码登录，或使用已获准的 GitHub 账号。",
     DEMO_BADGE: "示例演示 · 不读取你的个人数据",
     DEMO_DESCRIPTION: "这里的资料、回答、引用、任务及消息均为人工编写的虚构样例。",
     FLOW_TITLE: "从收集资料，到下一步行动",
@@ -187,5 +188,5 @@ const catalogs: Record<FrontendLocale, Record<LandingCopyKey, string>> = {
 export const LANDING_COPY_KEYS: readonly LandingCopyKey[] = Object.freeze(Object.keys(en) as LandingCopyKey[]);
 
 export function landingText(locale: LocaleRuntime, key: LandingCopyKey): string {
-  return catalogs[locale.locale][key];
+  return LANDING_COPY_CATALOGS[locale.locale][key];
 }

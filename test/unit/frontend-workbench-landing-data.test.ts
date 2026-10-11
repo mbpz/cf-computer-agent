@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { demoContent } from "../../frontend/pages/workbench-landing/workbench-demo-data";
-import { LANDING_COPY_KEYS, landingText, type LandingCopyKey } from "../../frontend/pages/workbench-landing/workbench-copy";
+import { LANDING_COPY_CATALOGS, LANDING_COPY_KEYS, landingText, type LandingCopyKey } from "../../frontend/pages/workbench-landing/workbench-copy";
 
 describe("public workbench demo content", () => {
   it("keeps source citations resolvable with stable IDs in both languages", () => {
@@ -101,6 +101,19 @@ describe("public workbench demo content", () => {
         expect(chinese).toMatch(/\p{Script=Han}/u);
         expect(english).not.toMatch(/\p{Script=Han}/u);
       }
+    }
+  });
+
+  it("keeps the en and zh-CN landing catalogs key- and placeholder-aligned", () => {
+    for (const locale of ["en", "zh-CN"] as const) {
+      const actualKeys = [...Object.keys(LANDING_COPY_CATALOGS[locale])].sort();
+      const expectedKeys = [...LANDING_COPY_KEYS].sort();
+      expect(actualKeys, `${locale} catalog keys must match LANDING_COPY_KEYS`).toEqual(expectedKeys);
+    }
+    for (const key of LANDING_COPY_KEYS) {
+      const enPlaceholders = [...LANDING_COPY_CATALOGS.en[key].matchAll(/\{([^}]+)\}/g)].map(match => match[1]).sort();
+      const zhPlaceholders = [...LANDING_COPY_CATALOGS["zh-CN"][key].matchAll(/\{([^}]+)\}/g)].map(match => match[1]).sort();
+      expect(zhPlaceholders, `placeholder set for ${key} must match between en and zh-CN`).toEqual(enPlaceholders);
     }
   });
 });
