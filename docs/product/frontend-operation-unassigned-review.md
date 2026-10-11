@@ -33,7 +33,7 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 110 项，但 A01 
 | --- | --- | --- | --- |
 | `frontend/app.tsx:212:75` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
 | `frontend/app.tsx:239:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
-| `frontend/app.tsx:889:250` | app-boundary | 路由 fallback 返回 NotFoundPage | 返回首页链接 href=/；需继续验证带脏草稿时的实际导航行为。 |
+| `frontend/app.tsx:923:250` | app-boundary | 路由 fallback 返回 NotFoundPage | 返回首页链接 href=/；需继续验证带脏草稿时的实际导航行为。 |
 
 ## `frontend/components/history-navigation-notice.tsx`（2）
 
@@ -298,7 +298,7 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `31c198a76ae16baf6df5fcc876d6335c7353fe19ca3264f7554b563609b201da`
+- `frontend/app.tsx`: `075952c54513196e7042ed7a2b91fff0935e8f680fad7dc5b48b40d6db60195e`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
 - `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
 - `frontend/components/ui/card.tsx`: `bb7f77ce45ee3fec21e25739c61d547900498a0117d3e12101e8932eae204b41`

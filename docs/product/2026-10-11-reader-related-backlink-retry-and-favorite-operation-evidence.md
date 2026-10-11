@@ -81,3 +81,14 @@ RED 失败项（原始输出摘要）：新迁移表不存在（`knowledge_favor
 - 收藏服务端操作的**跨刷新恢复**与离页边界的实际验收（当前仅内存 + tab 记录）。
 - 阅读器 related/backlinks 之外的其余普通失败入口复核；笔记草稿保持不受本批影响。
 - D05/D06/D07/D08 与真实身份/原生阅读旅程。
+
+## 后续增量（2026-10-11，跨刷新/跨标签）
+
+在上文“本地意图记录仍是 tab 作用域”的边界上继续本地实现：
+
+- `frontend/lib/reader-favorite-intent.ts` 默认存储由 `window.sessionStorage` 改为 `window.localStorage`，键方案与记录形状不变，新增可选注入式存储端口并导出 `favoriteIntentKey`；**变更前的 sessionStorage-only 未决记录不迁移，故一次性不可见**，刻意不做旧格式兜底（尚无发布）。仍非跨设备备份、仍非锁。
+- `frontend/app.tsx` 的 `KnowledgeReaderSession` 新增 `storage` 事件订阅（卸载移除）：仅响应本标签 localStorage、仅匹配本 member+target 记录键，另一标签预留→空闲标签采纳未决；另一标签清除记录且本标签未决→回 `idle` 并**只**重发布尔收藏 GET；写入中/退休/异成员/异目标/迟到信号一律忽略。**不**自动重发写、**不**除显式核对外的任何回执查询；布尔 GET 是读取，永不落定写入。
+- 新增 `test/unit/frontend-reader-favorite-intent.test.ts`（**16 个执行用例**，9 个 `it` 声明含 2 个 `it.each`）及生命周期 **7 个执行用例**（6 个 `it` 声明，其中 `it.each(["member-b","knowledge-b"])` 展开 2 例；含“在途核对时记录被跨标签损坏不卡 blocked 且不丢未决意图”一例，用例名 `does not stick blocked or lose the unresolved intent when a cross-tab signal corrupts the record mid-check`）；首次 RED 25 失败/46 通过（`/private/tmp/red-fav-crosstab.log`），补测第 7 例后该例单独 RED 1 失败/55 跳过（`/private/tmp/red-fav-midcheck.log`），最终 GREEN 72/72（`/private/tmp/green-fav-crosstab.log`）。生命周期中原 **4 个既有 `it` 声明（5 处 `sessionStorage` 引用，含 `it.each` 展开 3 例 → 6 个执行用例）** 改为 `localStorage`（钉住被替换的介质），不变量逐条保留。
+- **本地存储的隐私边界**：localStorage 不是加密，也不对同源恶意脚本、开发者工具或本机其他使用者保密；记录按 member+target 键命名，另一成员通过本应用读不到它，但**退出登录或切换成员不会清除该 key**——该 key 的唯一删除点是 `frontend/lib/reader-favorite-intent.ts` 的 `finishFavoriteIntent`，全前端无 `localStorage.clear`，无针对该 key 的登出/切换清理路径（与 `2026-09-13-member-scoped-submission-drafts-evidence.md` 同一存储边界口径）。
+- 源码账本重算：`frontend-operation-inventory.{json,md}` → 271 文件/1189 候选，未归属仍 110；`frontend-operation-unassigned-review.md` 坐标 `889:250`→`923:250` 与 app.tsx 指纹同步。
+- **诚实边界**：真实双标签页、真实身份/原生浏览器验收仍未证明；父项计数不变（29/5/24）。上文“下一项”的“跨刷新恢复实际验收”仍未取得原生证据，本增量只是把同源跨标签/跨刷新的本地可见性做成可核对的实现。

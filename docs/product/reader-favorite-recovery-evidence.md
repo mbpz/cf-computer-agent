@@ -45,3 +45,18 @@
 ## 后续本地增量（2026-10-11）
 
 [阅读器分节重试与收藏服务端操作编号](./2026-10-11-reader-related-backlink-retry-and-favorite-operation-evidence.md)补齐本地实现：related/backlinks 分节独立重试（每节独立 token/abort，只重发自身请求，不重发正文/收藏/diff，401/403 仍整页撤权），以及收藏的**服务端唯一操作编号＋同编号安全重试＋精确查询回执**（新迁移 `0061_knowledge_favorite_operations.sql`；本地意图 id 现作为操作编号传输，未知结果改由精确操作查询落定，布尔 GET 只保留初始读取）。本文件“编号与结果的诚实边界”描述的**当时**缺口已由该增量本地补齐；收藏操作回执不代表当前收藏状态，跨刷新恢复/离页边界实际验收、D05/D06/D07/D08 真实身份与原生旅程仍开放，父项计数不变（29/5/24）。
+
+## 跨刷新/跨标签页增量（2026-10-11）
+
+在原“仅内存 + tab 记录”边界上补齐**同源跨标签/跨刷新可见性**，仍不重放写入、绝不从状态读取落定：
+
+- **介质变更**：`frontend/lib/reader-favorite-intent.ts` 的默认存储由 `window.sessionStorage` 改为 `window.localStorage`，键方案（`memory-garden:reader-favorite-intent:v1:<member>:<item>`）与记录形状（`{v:1,member,item,intent:{id,desired}}`、2048 字节上限、失败关闭校验）**完全不变**；三个函数新增可选注入式存储端口（默认读 `window.localStorage`），与 `submission-intent.ts` 的端口风格一致，并导出 `favoriteIntentKey` 供跨标签匹配/测试。文件头注释已改为：member+target 作用域、同源跨标签共享、仍非跨设备备份、仍非锁。
+- **一次性不可见**：变更前写入的 sessionStorage-only 记录**不迁移**，因此变更前遗留的未决记录在新介质下不可见。可接受（尚无发布），**刻意不做旧格式兜底**。
+- **跨标签响应**：`KnowledgeReaderSession` 新增 `window.addEventListener("storage", …)`（卸载移除）。处理器只处理 `storageArea` 为本标签 localStorage 的事件（`key === null` 即 `clear()` 亦处理），仅匹配本 member+target 记录键，经 `loadFavoriteIntent` 重读后：`blocked` → 置 blocked；`ready` 且本标签当前 `idle` → 采纳 `{kind:'unknown'}`（不复活已落定记录）；记录变 `empty` 且本标签处于 `unknown` → 丢弃本地意图回 `idle`，**只**重发既有布尔收藏 GET 以显示当前状态。写入中（`saving`）或 owner 已退休/非存活时不响应；全部经既有 owner/attempt 令牌判定，迟到事件不能重绘已退休阅读器。
+- **诚实边界（未变）**：跨标签回执仍**只**能由显式 `checkFavorite()` 按操作编号精确查询来落定；记录被清除只证明**该源不再有待决写入**（清除它的标签已核对回执），**不**证明本标签观察到了回执。`empty→idle` 时的布尔 GET 是读取，永远不能落定写入。
+- **测试**：新增 `test/unit/frontend-reader-favorite-intent.test.ts` **16 个执行用例**（9 个 `it` 声明，含 2 个 `it.each` 展开 2 例与 7 例；键方案/命名空间、empty/ready/blocked 各损坏形态、overwrite/storage-failed、finish no-op/changed/removal-verified、跨两个 store 实例的可见性）。`frontend-reader-read-lifecycle.test.tsx` 新增 **7 个执行用例**（6 个 `it` 声明，其中 `it.each(["member-b","knowledge-b"])` 展开 2 例）：他标签遗留记录挂载即未决、合成跨标签信号置未决且零写零回执读、异成员/异目标信号被忽略、已落定后的迟到信号不复活、记录被清除后回 idle 且只重发布尔读、核对在途时记录被跨标签损坏后不卡 blocked 且不丢未决意图。RED 先于实现：首次 25 失败 / 46 通过（`/private/tmp/red-fav-crosstab.log`）；补测第 7 例后该例单独 RED 1 失败 / 55 跳过（`/private/tmp/red-fav-midcheck.log`）；最终 GREEN 72/72（`/private/tmp/green-fav-crosstab.log`）。
+- **既有断言更新（合法替换而非削弱）**：`frontend-reader-read-lifecycle.test.tsx` 原先直接读写 `browser.sessionStorage` 的 **4 个既有 `it` 声明（5 处引用）** 改为 `browser.localStorage`：配额写失败、清理失败、旧回执不清他人记录各 1 声明，损坏记录 `it.each(["corrupt","wrong-member","wrong-target"])` 展开 3 例，故更替介质的执行用例为 **6 例**；它们钉住的正是本次被替换的介质；其不变量（写次数、无自动重发、跨成员隔离、损坏 fail closed、迟到回执忽略）逐条保留。
+- **本地存储的隐私边界**：localStorage 不是加密，也不对同源恶意脚本、开发者工具或本机其他使用者保密；记录按 member+target 键命名，另一成员通过本应用读不到它，但**退出登录或切换成员都不会清除该 key**——本仓源码中该 key 的唯一删除点是 `frontend/lib/reader-favorite-intent.ts` 的 `finishFavoriteIntent`（`removeItem`），全前端无 `localStorage.clear`，也没有针对该 key 的登出/切换清理路径。
+- **在途核对期间记录被损坏的边界**：源码阅读曾只**推断**“`checking` 中到达的 blocked 信号不会永久卡住”；现由执行用例 `does not stick blocked or lose the unresolved intent when a cross-tab signal corrupts the record mid-check` 覆盖（替换该源码推断）：handler 确会先置 blocked，但在途精确回执解析后回到 `unknown`（回执错配或 `FAVORITE_INTENT_CHANGED` 降级）或 `idle`，绝不卡在 `blocked`，且不丢内存意图、零写入。
+- **源码账本**：`frontend/app.tsx` 新增监听候选，重算 `frontend-operation-inventory.{json,md}`（271 文件 / 1189 候选），未归属仍 110；`frontend-operation-unassigned-review.md` 的 NotFoundPage 坐标 `889:250`→`923:250` 及 app.tsx 指纹同步更新（非仅改哈希绕过契约）。
+- **未宣称**：真实双标签页、真实身份/原生浏览器对这条恢复路径的可操作性仍未验收；父项计数不变（29/5/24）。

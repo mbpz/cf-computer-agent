@@ -129,7 +129,7 @@ import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 import type { SessionSnapshot } from "./contracts/api";
-import { loadFavoriteIntent, prepareFavoriteIntent, finishFavoriteIntent, type ReaderFavoriteIntent, type FavoriteWritePhase } from "./lib/reader-favorite-intent";
+import { loadFavoriteIntent, prepareFavoriteIntent, finishFavoriteIntent, favoriteIntentKey, type ReaderFavoriteIntent, type FavoriteWritePhase } from "./lib/reader-favorite-intent";
 import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, registerWorkspaceLeaveGuard, subscribeWorkspaceLocation, WORKSPACE_LOCATION_CHANGE_EVENT, writeWorkspaceHistory } from "./lib/workspace-location";
 
 export function App() {
@@ -798,6 +798,40 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     }).catch(error => failed(error, () => setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_READER_ERROR") })));
     return () => retire(owner);
   }, [knowledgeItemId, citationHash, locale, retry]);
+  // Cross-tab reactivity: another tab of this origin may reserve or finish the
+  // same member+target record. React to that durable signal without ever
+  // replaying a write or settling a write from a state read.
+  useEffect(() => {
+    const area = window.localStorage;
+    const recordKey = favoriteIntentKey(memberId, knowledgeItemId);
+    const onStorage = (event: StorageEvent) => {
+      // `clear()` fires with key === null; only this origin's localStorage counts.
+      if (event.storageArea !== area) return;
+      if (event.key !== null && event.key !== recordKey) return;
+      const owner = readOwner.current;
+      if (!owner) return;
+      const phase = favoritePhaseRef.current;
+      if (phase === "saving") return;
+      const stored = loadFavoriteIntent(memberId, knowledgeItemId);
+      if (stored.kind === "blocked") { transitionFavorite("blocked"); return; }
+      if (stored.kind === "ready") {
+        // Only an idle tab adopts an unresolved record; a settled tab is never resurrected.
+        if (phase !== "idle") return;
+        favoriteIntent.current = stored.intent;
+        transitionFavorite("unknown");
+        return;
+      }
+      // The record is gone while this tab was unconfirmed. The settling tab
+      // verified its receipt; this tab only re-reads the boolean favourite to
+      // display current state. That read must never settle a write.
+      if (phase !== "unknown") return;
+      favoriteIntent.current = null;
+      transitionFavorite("idle");
+      void loadFavorite(owner);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [memberId, knowledgeItemId]);
   const retryRelated = () => {
     const owner = readOwner.current;
     if (owner) void loadRelated(owner);

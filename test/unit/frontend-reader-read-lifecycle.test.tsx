@@ -239,6 +239,9 @@ describe("knowledge reader composite read ownership", () => {
   const mutations = () => requests.filter(r => ["PUT", "DELETE"].includes(r.init?.method ?? ""));
   const favoriteReads = () => requests.filter(r => r.url.pathname.endsWith("/favorite") && !r.init?.method);
   const operationPrefix = "/api/knowledge/favorites/operations/";
+  const recordKey = "memory-garden:reader-favorite-intent:v1:member-a:knowledge-a";
+  const foreignOpReceipt = (operationId: string, favorited: boolean) => ({ operationId, kind: favorited ? "knowledge.favorite.add" : "knowledge.favorite.remove", knowledgeItemId: "knowledge-a", favorited, createdAt: stamp });
+  const foreignOpReply = (operationId: string, favorited: boolean) => Response.json({ operation: foreignOpReceipt(operationId, favorited) });
   const panelSelector = { related: "[data-related-knowledge]", backlinks: "[data-backlinks]" } as const;
   const retryLabel = { related: "Retry related knowledge", backlinks: "Retry backlinks" } as const;
   const operationReads = () => requests.filter(r => r.url.pathname.startsWith(operationPrefix));
@@ -273,6 +276,7 @@ describe("knowledge reader composite read ownership", () => {
   const receiptReply = (favorited: boolean) => Response.json({ operation: operationReceipt(mutationOperationId(favorited ? "PUT" : "DELETE"), favorited) });
   async function addFavorite() { await act(async () => button("Add to favorites").click()); await flush(); }
   async function checkFavorite() { await act(async () => button("Read current favorite").click()); await flush(); }
+  async function signalStorage(key: string | null) { await act(async () => { browser.dispatchEvent(new browser.StorageEvent("storage", { key, storageArea: browser.localStorage })); }); }
   function noFavoriteAction() { expect([...container.querySelectorAll("button")].some(b => ["Add to favorites", "Remove from favorites"].includes(b.textContent ?? "") && !b.disabled)).toBe(false); }
 
   it("reserves one favorite write before same-event clicks and blocks navigation until its receipt", async () => {
@@ -356,7 +360,7 @@ describe("knowledge reader composite read ownership", () => {
   });
 
   it("does not send a write when tab storage cannot preserve its intent", async () => {
-    await mount(); vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    await mount(); vi.spyOn(browser.localStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
     await addFavorite(); expect(mutations()).toHaveLength(0); noFavoriteAction();
   });
 
@@ -378,7 +382,7 @@ describe("knowledge reader composite read ownership", () => {
   });
 
   it("does not settle a record if successful write cleanup fails; a matching receipt retries cleanup only", async () => {
-    await mount(); const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementation(() => { throw new Error("storage"); });
+    await mount(); const remove = vi.spyOn(browser.localStorage, "removeItem").mockImplementation(() => { throw new Error("storage"); });
     respond = (url, init) => init?.method === "PUT" ? addReply() : reply(url);
     await addFavorite(); noFavoriteAction();
     remove.mockRestore(); respond = url => url.pathname.startsWith(operationPrefix) ? receiptReply(true) : url.pathname.endsWith("/favorite") ? Response.json({ favorite: true }) : reply(url);
@@ -391,8 +395,8 @@ describe("knowledge reader composite read ownership", () => {
     await mount(); await addFavorite();
     const key = "memory-garden:reader-favorite-intent:v1:member-a:knowledge-a";
     const replacement = JSON.stringify({ v: 1, member: "member-a", item: "knowledge-a", intent: { id: "other-op", desired: false } });
-    browser.sessionStorage.setItem(key, replacement);
-    await act(async () => pending.resolve(addReply())); await flush(); noFavoriteAction(); expect(browser.sessionStorage.getItem(key)).toBe(replacement);
+    browser.localStorage.setItem(key, replacement);
+    await act(async () => pending.resolve(addReply())); await flush(); noFavoriteAction(); expect(browser.localStorage.getItem(key)).toBe(replacement);
   });
 
   it("leaves an unresolved record intact and ignores write denial after changing members", async () => {
@@ -403,7 +407,7 @@ describe("knowledge reader composite read ownership", () => {
   });
 
   it.each(["corrupt", "wrong-member", "wrong-target"])("fails closed for a %s favorite recovery record", async kind => {
-    browser.sessionStorage.setItem("memory-garden:reader-favorite-intent:v1:member-a:knowledge-a", kind === "corrupt" ? "{" : JSON.stringify({ v: 1, member: kind === "wrong-member" ? "member-b" : "member-a", item: kind === "wrong-target" ? "knowledge-b" : "knowledge-a", intent: { id: "operation-a", desired: true } }));
+    browser.localStorage.setItem("memory-garden:reader-favorite-intent:v1:member-a:knowledge-a", kind === "corrupt" ? "{" : JSON.stringify({ v: 1, member: kind === "wrong-member" ? "member-b" : "member-a", item: kind === "wrong-target" ? "knowledge-b" : "knowledge-a", intent: { id: "operation-a", desired: true } }));
     await mount(); noFavoriteAction(); expect(container.textContent).toContain("recovery record is unavailable");
     await checkFavorite(); expect(mutations()).toHaveLength(0); noFavoriteAction();
   });
@@ -417,6 +421,90 @@ describe("knowledge reader composite read ownership", () => {
     };
     await mount(); await compare(); expect(container.querySelector("[data-revision-diff]")).toBeNull();
     expect(container.textContent).toContain("Unable to load revision changes."); expect(container.textContent).toContain("Private body");
+  });
+
+  it("surfaces a pending record left by another tab on mount without a write or receipt read", async () => {
+    browser.localStorage.setItem(recordKey, JSON.stringify({ v: 1, member: "member-a", item: "knowledge-a", intent: { id: "other-tab-op", desired: true } }));
+    await mount(); noFavoriteAction();
+    expect(container.textContent).toContain("Favorite result is unconfirmed");
+    expect(favoriteReads()).toHaveLength(1); expect(mutations()).toHaveLength(0); expect(operationReads()).toHaveLength(0);
+    respond = url => url.pathname.startsWith(operationPrefix) ? foreignOpReply("other-tab-op", true) : reply(url);
+    await checkFavorite();
+    expect(button("Remove from favorites").getAttribute("aria-pressed")).toBe("true");
+    expect(mutations()).toHaveLength(0); expect(browser.localStorage.getItem(recordKey)).toBeNull();
+  });
+
+  it("adopts the unconfirmed state from a cross-tab signal without a write or receipt read", async () => {
+    await mount(); expect(button("Add to favorites").disabled).toBe(false);
+    browser.localStorage.setItem(recordKey, JSON.stringify({ v: 1, member: "member-a", item: "knowledge-a", intent: { id: "other-tab-op", desired: true } }));
+    await signalStorage(recordKey); noFavoriteAction();
+    expect(container.textContent).toContain("Favorite result is unconfirmed");
+    expect(mutations()).toHaveLength(0); expect(operationReads()).toHaveLength(0);
+    respond = url => url.pathname.startsWith(operationPrefix) ? foreignOpReply("other-tab-op", true) : reply(url);
+    await checkFavorite();
+    expect(button("Remove from favorites").getAttribute("aria-pressed")).toBe("true"); expect(mutations()).toHaveLength(0);
+  });
+
+  it.each(["member-b", "knowledge-b"])("ignores a cross-tab signal for a foreign %s", async other => {
+    const member = other === "member-b" ? "member-b" : "member-a";
+    const item = other === "knowledge-b" ? "knowledge-b" : "knowledge-a";
+    const foreignKey = `memory-garden:reader-favorite-intent:v1:${member}:${item}`;
+    await mount();
+    browser.localStorage.setItem(foreignKey, JSON.stringify({ v: 1, member, item, intent: { id: "foreign-op", desired: true } }));
+    await signalStorage(foreignKey);
+    expect(button("Add to favorites").disabled).toBe(false);
+    expect(container.textContent).not.toContain("Favorite result is unconfirmed");
+    expect(mutations()).toHaveLength(0); expect(operationReads()).toHaveLength(0);
+  });
+
+  it("does not resurrect a settled record from a stale cross-tab signal", async () => {
+    respond = (url, init) => init?.method === "PUT" ? addReply() : reply(url);
+    await mount(); await addFavorite();
+    expect(button("Remove from favorites").disabled).toBe(false); expect(browser.localStorage.getItem(recordKey)).toBeNull();
+    await signalStorage(recordKey);
+    expect(button("Remove from favorites").disabled).toBe(false);
+    expect(container.textContent).not.toContain("Favorite result is unconfirmed");
+    expect(browser.localStorage.getItem(recordKey)).toBeNull();
+    expect(mutations()).toHaveLength(1); expect(operationReads()).toHaveLength(0);
+  });
+
+  it("returns to idle when a cross-tab signal clears the record, re-reading only the boolean favourite", async () => {
+    respond = (url, init) => init?.method === "PUT" ? Promise.reject(new TypeError("lost")) : reply(url);
+    await mount(); await addFavorite();
+    expect(container.textContent).toContain("Favorite result is unconfirmed");
+    const readsBefore = favoriteReads().length;
+    browser.localStorage.removeItem(recordKey);
+    await signalStorage(recordKey); await flush();
+    expect(container.textContent).not.toContain("Favorite result is unconfirmed");
+    expect(button("Add to favorites").disabled).toBe(false);
+    expect(favoriteReads()).toHaveLength(readsBefore + 1);
+    expect(mutations()).toHaveLength(1); expect(operationReads()).toHaveLength(0);
+  });
+
+  it("does not stick blocked or lose the unresolved intent when a cross-tab signal corrupts the record mid-check", async () => {
+    respond = (url, init) => init?.method === "PUT" ? Promise.reject(new TypeError("lost")) : reply(url);
+    await mount(); await addFavorite();
+    expect(container.textContent).toContain("Favorite result is unconfirmed");
+    const operationId = mutationOperationId("PUT");
+    const pending = deferred<Response>();
+    respond = url => url.pathname.startsWith(operationPrefix) ? pending.promise : reply(url);
+    await act(async () => button("Read current favorite").click());
+    // Another tab corrupts the shared record while this tab's exact query is in flight.
+    browser.localStorage.setItem(recordKey, "{");
+    await signalStorage(recordKey);
+    expect(container.textContent).toContain("recovery record is unavailable");
+    // The in-flight exact receipt still owns the resolution: it must not stay blocked.
+    await act(async () => pending.resolve(foreignOpReply(operationId, false)));
+    await flush();
+    expect(container.textContent).toContain("Favorite result is unconfirmed");
+    expect(container.textContent).not.toContain("recovery record is unavailable");
+    expect(mutations()).toHaveLength(1); expect(operationReads()).toHaveLength(1);
+    // The unresolved in-memory intent survived: restore the record and settle explicitly.
+    browser.localStorage.setItem(recordKey, JSON.stringify({ v: 1, member: "member-a", item: "knowledge-a", intent: { id: operationId, desired: true } }));
+    respond = url => url.pathname.startsWith(operationPrefix) ? foreignOpReply(operationId, true) : reply(url);
+    await checkFavorite();
+    expect(button("Remove from favorites").getAttribute("aria-pressed")).toBe("true");
+    expect(mutations()).toHaveLength(1);
   });
 
 });
