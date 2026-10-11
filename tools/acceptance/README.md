@@ -277,6 +277,42 @@ commands and the expected observations, and does not itself produce G0 evidence.
 does not close D04/G0 (LC-010–015 and the production relay authorization remain open), does not
 authorize D08, and changes no checklist counts.
 
+## (iv) Optional: local native UI write journey on the canonical origin
+
+The automated checks above drive writes over HTTP with an explicit canonical `Origin`. To
+drive a **real browser UI write** locally, the browser must present the canonical origin
+(`https://memory.crgmhrc.asia`, [`src/config.ts`](../../src/config.ts)), because the app pins
+it and rejects localhost origins with the same-origin (CSRF) guard. This harness does that —
+it is **local-only** and must **never** be pointed at the deployed app or real credentials.
+
+1. **Self-signed cert for the canonical host.**
+   ```bash
+   openssl req -x509 -newkey rsa:2048 -nodes \
+     -keyout /tmp/mg-tls.key -out /tmp/mg-tls.crt -days 1 \
+     -subj "/CN=memory.crgmhrc.asia" \
+     -addext "subjectAltName=DNS:memory.crgmhrc.asia"
+   ```
+2. **Local HTTPS front on `127.0.0.1:9443` proxying `wrangler dev` (:8787)**, injecting the
+   synthetic session cookie *and rewriting the `Origin` header to
+   `https://memory.crgmhrc.asia`*. The rewrite is the harness; a real deployment validates the
+   real `Origin`.
+3. **Headed Chrome** with the host mapping and the local TLS accepted:
+   ```bash
+   --ignore-certificate-errors --no-proxy-server \
+   --host-resolver-rules="MAP memory.crgmhrc.asia:9443 127.0.0.1:9443"
+   ```
+   `--no-proxy-server` is required: the system proxy otherwise bypasses the mapping and the
+   page fails with `ERR_CONNECTION_CLOSED`.
+
+Then browse `https://memory.crgmhrc.asia:9443/tasks` and exercise the native create → edit →
+delete flows. A worked example (with the observed dialog copy and DB counts) is recorded in
+[`docs/product/2026-10-11-headed-route-sweep-evidence.md`](../../docs/product/2026-10-11-headed-route-sweep-evidence.md).
+
+> **Warning** — this is a local harness technique (self-signed TLS + a rewritten `Origin`). It
+> must **never** be used against production or with real accounts: it exists only to let a
+> local browser satisfy the same-origin guard for local write journeys, and a run here is not
+> D05/D06/D04 acceptance and flips no checklist checkbox.
+
 ## Notes on scope
 
 - Seed/check/cleanup only touch the **local** D1 and a locally running `wrangler dev`.

@@ -177,3 +177,28 @@
 - 会话为本地 harness 代理后的**合成本地会话**、独立 `/tmp` profile 的**有头 Chromium**，**仅本地**；**不是 A01/A02/A05/D05/D06/D04 任何验收**。
 - **不改变任何计数**：功能清单父项 **29 在范围内 / 5 已关闭 / 24 开放**（D08 排除）不变，**未翻转任何 checkbox**。
 - **未部署/未 push/未远程迁移**；`migrations/` 无改动。
+
+### 本地原生 UI 写入旅程跑通（规范 origin HTTPS 前端，2026-10-11）
+
+日期：2026-10-11；分支 `codex/functional-checklist-completion`；基线 `88a864fd47494143140e67da41ab10bb0e69c275`（本地，领先 origin 8 个提交，**未推送**）。本节接续上一节：上一节记录 localhost origin 的写入被同源守卫拒绝；本轮**以规范 origin 的 HTTPS 前端**在本地跑通同一 `/tasks` 的**原生 UI 写入闭环**。
+
+**方法（纯本地 harness，无仓库改动）**：
+
+1. 为规范主机签发自签证书：`openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/mg-tls.key -out /tmp/mg-tls.crt -days 1 -subj "/CN=memory.crgmhrc.asia" -addext "subjectAltName=DNS:memory.crgmhrc.asia"`。
+2. 在 `127.0.0.1:9443` 起本地 Bun HTTPS 前端，代理 `wrangler dev`（8787），注入合成会话 cookie **并把 `Origin` 头改写为 `https://memory.crgmhrc.asia`**（仅 harness；真实部署校验真实 Origin）。
+3. 有头 Chrome 以 `--ignore-certificate-errors --no-proxy-server --host-resolver-rules="MAP memory.crgmhrc.asia:9443 127.0.0.1:9443"` 启动（`--no-proxy-server` 必需：系统代理会绕过映射，导致页面 `ERR_CONNECTION_CLOSED`）。
+
+**为何需要**：应用把规范 origin 钉在 `https://memory.crgmhrc.asia`（`src/config.ts:11`），不安全方法要求同源 `Origin`，localhost origin 在设计上一律被拒。
+
+**实测旅程（有头 Chrome，`https://memory.crgmhrc.asia:9443/tasks`，合成 admin 会话）**：
+
+- `新建任务` → 在 `任务标题` 输入 `journey-write-<timestamp>` → **回车（键盘提交）** → 对话框关闭，行出现：列表文本 `… journey-write-… 编辑 待办 中 讨论 完成 删除 总计 1 · 当前显示 1–1 每页行数 20 50 100`。
+- `编辑` 打开**任务编辑器对话框**（字段：任务标题、任务备注、任务优先级、任务截止时间、保存任务、任务状态、保存状态、任务进度、保存进度、任务标签（英文逗号分隔）、保存标签、知识条目 ID、关联知识、子任务标题、添加子任务、添加依赖、关闭任务编辑器）。
+- 行内 `删除` → 确认对话框 `删除此任务？ <title> (<id>) — 将永久删除此任务及其任务标签和关联。不会删除关联的知识内容。此操作无法撤销。`，按钮 `取消` / `永久删除`；点击 `永久删除` 关闭并回到 `暂无任务 总计 0 · 当前显示 0–0`。
+- DB 计数：旅程中 `tasks` = **1**；删除后 = **0**。追加式审计经 UI 写入 `task.created` / `task.deleted`（合成成员）。
+
+**明确非声明**：
+
+- 自签本地 TLS、合成身份、本地 harness（**`Origin` 改写属 harness，非应用行为**）、独立 `/tmp` profile；**不是 D05/D06/D04 任何验收**（非真实身份、非真实部署）。
+- **不改变任何计数**：功能清单父项 **29 在范围内 / 5 已关闭 / 24 开放**（D08 排除）不变，**未翻转任何 checkbox**。
+- **未部署/未 push/未远程迁移**；`migrations/` 无改动。
