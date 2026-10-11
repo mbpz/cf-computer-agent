@@ -38,14 +38,14 @@
 1. 仅存 `sha256` 十六进制，常数时间比较；签发后无论日志还是响应都不得再出现明文码。
 2. **并发下单次使用**：兑换用条件更新 `UPDATE … WHERE id = ? AND status = 'pending' AND expires_at > ?` 并要求 `changes() = 1`，两次并发兑换不可能都成功。
 3. 角色强制 `contributor`；即使邮箱等于 `BOOTSTRAP_ADMIN_EMAIL` 也不得创建或提升 admin。
-4. 24 小时过期；按邀请持久化 `attempt_count`，达上限后**静默锁定**（仍返回统一 `401`）。
+4. 24 小时过期；按邀请持久化 `attempt_count`，失败上限 **5 次**，达上限后**静默锁定**（仍返回统一 `401`）。
 5. 成员解析与 GitHub 路径一致（先按规范化邮箱匹配既有成员，缺失才创建），新建时用独立主体命名空间（如 `code:<uuid>`）并复用 `MembersRepository.insert`/`insertWithAudit`；受邀邮箱**无需**在 `ALLOWED_MEMBER_EMAILS` 中——邀请本身即授权。
 6. 所有状态变更经既有强类型审计映射（`src/audit/types.ts`，需新增动作键并保持 `validateMetadata` 一致），采用 `db.batch([mutation, auditStatement])`。
 7. 不新增路由与能力 id；前端改动落在既有成员管理页与登录页。
 
 ## 数据
 
-迁移 `0063`：新表 `member_login_invitations`（`id`、`email`、`code_hash`、`status`、`expires_at`、`attempt_count`、`last_attempt_at`、`created_by`、`created_at`、`redeemed_at`、`redeemed_member_id`），含 `UNIQUE(email) WHERE status='pending'` 与 `code_hash` 索引；风格沿用 `0034`/`0060` 的幂等守卫。迁移文件 sha256 需同步钉入 `scripts/verify-m1-migrations.mjs`（仅 `localMigrations`）与 `scripts/m1-release-contract.test.mjs`。
+迁移 `0063`：新表 `member_login_invitations`（`id`、`email`、`code_hash`、`status ∈ {pending, redeemed, revoked}`、`attempt_count`、`created_at`、`expires_at`、`redeemed_at`、`revoked_at`），含部分唯一索引 `UNIQUE(email) WHERE status='pending'` 与 `created_at DESC, id DESC` 索引；兑换走条件更新并沿用 `0034`/`0060` 的幂等守卫风格。成员归属不落该表：兑换成功后由 `member.code_login` 审计（含 `email`）与成员行本身溯源，不额外写入 `redeemed_member_id`。迁移文件 sha256 需同步钉入 `scripts/verify-m1-migrations.mjs`（仅 `localMigrations`）与 `scripts/m1-release-contract.test.mjs`。
 
 ## 明确不做
 

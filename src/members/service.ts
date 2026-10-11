@@ -92,6 +92,26 @@ export class MembersService {
     return this.insertWithConflictRecovery(identity, role);
   }
 
+  /**
+   * Resolves the member for an admin-issued one-time code login.
+   *
+   * No email allowlist applies here (the invitation itself is the
+   * authorization), the account is always created as an active contributor,
+   * and the bootstrap administrator promotion is never consulted, so this path
+   * can neither create nor promote an administrator.
+   */
+  async resolveCodeLogin(input: { email: string }): Promise<Member> {
+    const email = canonicalEmail(input.email);
+    if (!email || email !== input.email) {
+      throw new AppError("MEMBER_IDENTITY_INVALID", "Member identity is invalid", 401);
+    }
+    const byEmail = await this.repository.findByCanonicalEmail(email, 2);
+    if (byEmail.length > 1) throw identityConflict();
+    if (byEmail.length === 1) return this.resolveExisting(byEmail[0]!);
+    const identity: MemberIdentity = { identitySubject: `code:${this.id()}`, email };
+    return this.insertWithConflictRecovery(identity, "contributor");
+  }
+
   async setContributorStatus(actor: Member, memberId: string, status: MemberStatus): Promise<Member> {
     if (actor.role !== "admin" || actor.status !== "active") {
       throw new AppError("FORBIDDEN", "Administrator access required", 403);

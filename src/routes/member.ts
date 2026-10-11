@@ -499,6 +499,22 @@ export function strictRecord(
   return result;
 }
 
+/**
+ * Parses the JSON body while keeping the endpoint's single 400 code: a
+ * syntactically broken body is malformed request input exactly like a broken
+ * shape, so callers do not have to special-case INVALID_JSON.
+ */
+export async function parseJsonRequestAs(request: Request, errorCode: string): Promise<unknown> {
+  try {
+    return await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes);
+  } catch (error) {
+    if (error instanceof AppError && error.code === "INVALID_JSON") {
+      throw new AppError(errorCode, "Request body is invalid", 400);
+    }
+    throw error;
+  }
+}
+
 function draftInput(value: unknown): {
   requestedSpaceId: string;
   requestedCollectionId?: string | null;

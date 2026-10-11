@@ -1,10 +1,12 @@
 import { APP_CONFIG } from "../config";
-import { AppError, errorResponse, logRequestFailure, methodNotAllowed, requireSameOrigin, type RequestContext } from "../http";
+import { AppError, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, requireNoQuery, requireSameOrigin, type RequestContext } from "../http";
 import type { GitHubOAuthClient } from "../identity/github-oauth";
 import type { WeChatOAuthClient } from "../identity/wechat-oauth";
 import { clearCookie, oauthCookie, readUniqueCookie, sessionCookie } from "../identity/oauth-cookies";
 import type { SessionService } from "../identity/session";
+import type { MemberInvitationsService } from "../member-invitations/service";
 import type { MembersService } from "../members/service";
+import { parseJsonRequestAs, strictRecord } from "./member";
 
 const OAUTH_STATE_COOKIE = "__Host-oauth-state";
 const OAUTH_VERIFIER_COOKIE = "__Host-oauth-verifier";
@@ -18,6 +20,7 @@ export interface AuthRouteServices {
   oauth: GitHubOAuthClient;
   wechat: WeChatOAuthClient;
   members: Pick<MembersService, "resolveGitHubLogin" | "resolveWeChatLogin">;
+  invitations: Pick<MemberInvitationsService, "redeem">;
   sessions: Pick<SessionService, "create" | "logout">;
 }
 
@@ -91,6 +94,19 @@ export async function routeAuth(
     return response;
   }
 
+  if (url.pathname === "/auth/code") {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const input = await parseCodeLoginRequest(request);
+    const member = await services.invitations.redeem(input);
+    const session = await services.sessions.create(member);
+    const response = jsonResponse({
+      member: { id: member.id, email: member.email, role: member.role },
+    }, 200, context.requestId);
+    response.headers.append("set-cookie", sessionCookie(session.token));
+    return response;
+  }
+
   if (url.pathname === "/auth/logout") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
@@ -122,6 +138,20 @@ export function clearWeChatCookie(response: Response): Response {
 export function clearSessionCookie(response: Response): Response {
   response.headers.append("set-cookie", clearCookie(SESSION_COOKIE));
   return response;
+}
+
+async function parseCodeLoginRequest(request: Request): Promise<{ email: string; code: string }> {
+  const input = strictRecord(
+    await parseJsonRequestAs(request, "CODE_LOGIN_REQUEST_INVALID"),
+    ["email", "code"],
+    "CODE_LOGIN_REQUEST_INVALID",
+  );
+  if (typeof input.email !== "string" || typeof input.code !== "string") throw codeLoginRequestInvalid();
+  return { email: input.email, code: input.code };
+}
+
+function codeLoginRequestInvalid(): AppError {
+  return new AppError("CODE_LOGIN_REQUEST_INVALID", "Login code request is invalid", 400);
 }
 
 function uniqueQueryValue(url: URL, name: string): string | undefined {

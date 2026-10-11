@@ -1,3 +1,4 @@
+import { canonicalEmail } from "../identity/email";
 import type { MemberRole, MemberStatus } from "../members/types";
 import type { Page, PageRequest } from "../pagination";
 import type { RecordStatus } from "../spaces/types";
@@ -10,6 +11,10 @@ export interface AuditActionMap {
   "member.login": { resourceType: "member"; metadata: { role: MemberRole } };
   "member.identity_linked": { resourceType: "member"; metadata: { provider: "github" | "wechat" } };
   "member.status_updated": { resourceType: "member"; metadata: { previousStatus: MemberStatus; newStatus: MemberStatus } };
+  "member.invitation_issued": { resourceType: "member_invitation"; metadata: { email: string; expiresAt: string } };
+  "member.invitation_revoked": { resourceType: "member_invitation"; metadata: { email: string } };
+  "member.code_login": { resourceType: "member_invitation"; metadata: { email: string } };
+  "member.code_login_denied": { resourceType: "member_invitation"; metadata: { email: string; reason: "code_mismatch" | "expired" } };
   "role.updated": { resourceType: "role"; metadata: { previousAllowBits: string; allowBits: string } };
   "role.created": { resourceType: "role"; metadata: { allowBits: string } };
   "role.deleted": { resourceType: "role"; metadata: { key: string } };
@@ -64,6 +69,10 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "member.login",
   "member.identity_linked",
   "member.status_updated",
+  "member.invitation_issued",
+  "member.invitation_revoked",
+  "member.code_login",
+  "member.code_login_denied",
   "role.updated",
   "role.created",
   "role.deleted",
@@ -184,6 +193,26 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["provider"]));
       if (metadata.provider !== "github" && metadata.provider !== "wechat") throw invalidMetadata();
       return safeMetadata({ provider: metadata.provider });
+    }
+    case "member.invitation_issued": {
+      assertResourceType(resourceType, "member_invitation");
+      const metadata = readPlainDataObject(input, new Set(["email", "expiresAt"]));
+      if (!isCanonicalEmail(metadata.email) || !isNonEmptyString(metadata.expiresAt)) throw invalidMetadata();
+      return safeMetadata({ email: metadata.email, expiresAt: metadata.expiresAt });
+    }
+    case "member.invitation_revoked":
+    case "member.code_login": {
+      assertResourceType(resourceType, "member_invitation");
+      const metadata = readPlainDataObject(input, new Set(["email"]));
+      if (!isCanonicalEmail(metadata.email)) throw invalidMetadata();
+      return safeMetadata({ email: metadata.email });
+    }
+    case "member.code_login_denied": {
+      assertResourceType(resourceType, "member_invitation");
+      const metadata = readPlainDataObject(input, new Set(["email", "reason"]));
+      if (!isCanonicalEmail(metadata.email)
+        || (metadata.reason !== "code_mismatch" && metadata.reason !== "expired")) throw invalidMetadata();
+      return safeMetadata({ email: metadata.email, reason: metadata.reason });
     }
     case "member.status_updated": {
       assertResourceType(resourceType, "member");
@@ -490,6 +519,9 @@ function isNonEmptyString(value: unknown): value is string { return typeof value
 function isBoundedId(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 128
     && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
+}
+function isCanonicalEmail(value: unknown): value is string {
+  return canonicalEmail(value) === value;
 }
 function isBoundedToolName(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(value);

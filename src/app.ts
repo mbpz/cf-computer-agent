@@ -41,6 +41,8 @@ import { LibraryRepository } from "./library/repository";
 import { LibraryService } from "./library/service";
 import { MembersRepository } from "./members/repository";
 import { MembersService } from "./members/service";
+import { MemberInvitationsRepository } from "./member-invitations/repository";
+import { MemberInvitationsService } from "./member-invitations/service";
 import { PrivateNotesRepository } from "./private-notes/repository";
 import { PrivateNotesService } from "./private-notes/service";
 import { routeAdminApi } from "./routes/admin";
@@ -363,6 +365,7 @@ function createRequestServices(
     legacyRepository,
     memberRecords,
     members,
+    invitations: new MemberInvitationsService(new MemberInvitationsRepository(env.DB, audit), members),
     publication: new PublicationService(publicationRecords, publishedContent.committer, publishedContent.remover),
     publishedContent,
     oauth: createGitHubOAuthClient({
