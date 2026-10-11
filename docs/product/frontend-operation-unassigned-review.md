@@ -9,6 +9,8 @@
 
 2026-10-10 阅读器读取生命周期修复后复核：AppShell与Settings转发候选行为不变；NotFoundPage返回首页链接仅从739行移至757行。读取owner/abort属于KnowledgeReaderSession内部控制流，不新增可见操作。当前270文件/1180候选/110未归属；仅同步该坐标及App源码指纹，不提升运行验收。
 
+2026-10-10 收藏写入恢复后复核：三个App外层候选的属性、回调和前置条件未变，仅坐标移至212:75、239:39、814:250。新增收藏只读恢复入口归属阅读器，不计入未归属项；当前271文件/1184候选/110未归属。更新App指纹，不代替运行验收。
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
@@ -29,9 +31,9 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 110 项，但 A01 
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:211:75` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:238:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
-| `frontend/app.tsx:757:250` | app-boundary | 路由 fallback 返回 NotFoundPage | 返回首页链接 href=/；需继续验证带脏草稿时的实际导航行为。 |
+| `frontend/app.tsx:212:75` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:239:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:814:250` | app-boundary | 路由 fallback 返回 NotFoundPage | 返回首页链接 href=/；需继续验证带脏草稿时的实际导航行为。 |
 
 ## `frontend/components/history-navigation-notice.tsx`（2）
 
@@ -296,7 +298,7 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `60a58af19342b8ab7fbc0fbfd4f4d81e175c649df83c03c45e5a21fbac0b39c3`
+- `frontend/app.tsx`: `75871f15d254b326d268dc062d14f9249e8f85c319999e083a6b368958702b09`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
 - `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
 - `frontend/components/ui/card.tsx`: `bb7f77ce45ee3fec21e25739c61d547900498a0117d3e12101e8932eae204b41`
