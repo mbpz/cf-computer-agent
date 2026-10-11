@@ -233,6 +233,13 @@ function hasOAuthCredentialPair(clientId: unknown, clientSecret: unknown): boole
   return valid(clientId, 256) && valid(clientSecret, 1024);
 }
 
+// Shell paths that are not menu-registry routes. `/login` is the anonymous
+// sign-in entry the landing page links to; the client renders the two-method
+// sign-in card there for anonymous visitors, so it must receive the same shell
+// as any other workspace route. Keep this out of the route-capability registry,
+// which drives maturity/inventory/ledger pins.
+const publicShellPaths: Record<string, true> = { "/login": true };
+
 const workspaceRoutes = new Set<string>(
   WORKSPACE_ROUTE_CAPABILITIES
     .filter(({ availability }) => availability === "ready")
@@ -240,7 +247,8 @@ const workspaceRoutes = new Set<string>(
 );
 
 function knownWorkspaceRoute(pathname: string): boolean {
-  return workspaceRoutes.has(pathname)
+  return publicShellPaths[pathname] === true
+    || workspaceRoutes.has(pathname)
     || /^\/knowledge\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
     || /^\/messages\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
     || /^\/projects\/[A-Za-z0-9_-]{1,128}\/timeline$/u.test(pathname)

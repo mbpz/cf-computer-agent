@@ -99,6 +99,27 @@ describe("React workspace assets", () => {
     expect(response.headers.get("x-frame-options")).toBe("DENY");
   });
 
+  it("serves the same anonymous shell for /login as for /", async () => {
+    const login = await SELF.fetch("https://example.test/login");
+    expect(login.status).toBe(200);
+    expect(login.headers.get("content-type")).toContain("text/html");
+    const loginHtml = await login.text();
+    expect(loginHtml).toContain('id="root"');
+    expect(loginHtml).toContain("/assets/");
+
+    const root = await SELF.fetch("https://example.test/");
+    expect(root.status).toBe(200);
+    await expect(root.text()).resolves.toBe(loginHtml);
+  });
+
+  it("keeps an unknown path a 404 with no shell body", async () => {
+    const response = await SELF.fetch("https://example.test/unknown-xyz");
+    expect(response.status).toBe(404);
+    const body = await response.text();
+    expect(body).not.toContain('id="root"');
+    expect(body).toBe("");
+  });
+
   it.each(["/knowledge/knowledge-1/revisions/revision-1", "/admin/submissions/submission-1/publish", "/admin/publications/recover", "/not-a-workspace-route"]) ("does not broaden the SPA allowlist to %s", async (path) => {
     const response = await SELF.fetch(`https://example.test${path}`);
     expect(response.status).toBe(404);
