@@ -36,6 +36,23 @@ function catalogKeysForLocale(source, locale) {
   return [...source.slice(start, end).matchAll(/^\s+(GRAPH_[A-Z0-9_]+):/gmu)].map((match) => match[1]);
 }
 
+function localeCatalogSlice(source, locale) {
+  const start = source.indexOf(`${locale}: {`);
+  assert.notEqual(start, -1, `missing ${locale} locale catalog`);
+  const end = locale === "en" ? source.indexOf('"zh-CN": {', start) : source.indexOf("\n  },\n};", start);
+  assert.notEqual(end, -1, `unterminated ${locale} locale catalog`);
+  return source.slice(start, end);
+}
+
+function catalogEntriesForPrefixes(source, locale, prefixes) {
+  const pattern = new RegExp(`^\\s+((?:${prefixes.join("|")})_[A-Z0-9_]+):\\s*"((?:[^"\\\\]|\\\\.)*)"`, "gmu");
+  return new Map([...localeCatalogSlice(source, locale).matchAll(pattern)].map((match) => [match[1], match[2]]));
+}
+
+function placeholderNames(value) {
+  return [...value.matchAll(/\{([A-Za-z0-9_]+)\}/gu)].map((match) => match[1]).sort();
+}
+
 function matchingDelimiter(source, openIndex, openCharacter, closeCharacter) {
   let depth = 0;
   let quote = null;
@@ -212,4 +229,17 @@ test("the application shell keeps account actions out of the topbar and removes 
   assert.match(shell, /data-shell-mobile-account-footer/u);
   assert.doesNotMatch(shell, /SHELL_FREE_TIER_LABEL/u);
   assert.doesNotMatch(locale, /SHELL_FREE_TIER_LABEL/u);
+});
+
+test("invitation management and code login keep both locale catalogs in parity", async () => {
+  const locale = await localeSource();
+  const prefixes = ["ADMIN_INVITATION", "LOGIN"];
+  const en = catalogEntriesForPrefixes(locale, "en", prefixes);
+  const zh = catalogEntriesForPrefixes(locale, '"zh-CN"', prefixes);
+  assert.ok(en.size >= 40, `expected invitation and login copy in the en catalog, found ${en.size}`);
+  assert.ok(en.has("ADMIN_INVITATION_SECTION_TITLE") && en.has("LOGIN_CODE_SUBMIT"));
+  assert.deepEqual([...zh.keys()].sort(), [...en.keys()].sort(), "invitation/login keys differ between en and zh-CN");
+  for (const [key, value] of en) {
+    assert.deepEqual(placeholderNames(zh.get(key)), placeholderNames(value), `placeholder mismatch for ${key}`);
+  }
 });

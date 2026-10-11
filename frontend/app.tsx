@@ -94,6 +94,7 @@ import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussi
 import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
+import { adminMemberInvitationFailure, issueAdminMemberInvitation, loadAdminMemberInvitations, revokeAdminMemberInvitation, type AdminMemberInvitation } from "./lib/admin-member-invitations-data";
 import { clearAdminAssetRetry, discardBlockedAdminAssetRetry, loadAdminAssetRetries, saveAdminAssetRetry } from "./lib/admin-asset-retry-intent";
 import { clearAdminMemberStatus, discardBlockedAdminMemberStatus, loadAdminMemberStatuses, saveAdminMemberStatus, type AdminMemberStatusIntent } from "./lib/admin-member-status-intent";
 import { createAdminSpace, manageAdminSpace, loadAdminSpacesPage, loadAdminCollections, type AdminSpace, type AdminSpaceCommand } from "./lib/admin-spaces-data";
@@ -3778,7 +3779,7 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
   return <DuplicateQueuePage onLoadRetry={retryRead} locale={locale} state={state} pendingId={pendingId} pending={pending || recordBlocked} lockedIds={lockedIds} readRequired={!pendingId && lockedIds.some((id) => !acknowledgedRef.current.has(id) || (state.kind === "ready" && state.data.items.some((item) => item.submissionId === id)))} localError={recordNotice ?? localError} decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord} onDecision={recordBlocked ? undefined : (id, decision) => void decide(id, decision)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
-export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMembers, update = updateMemberStatus }: { locale: LocaleRuntime; search: string; memberId?: string; load?: typeof loadAdminMembers; update?: typeof updateMemberStatus }) {
+export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMembers, update = updateMemberStatus, loadInvitations = loadAdminMemberInvitations, issueInvitation = issueAdminMemberInvitation, revokeInvitation = revokeAdminMemberInvitation }: { locale: LocaleRuntime; search: string; memberId?: string; load?: typeof loadAdminMembers; update?: typeof updateMemberStatus; loadInvitations?: typeof loadAdminMemberInvitations; issueInvitation?: typeof issueAdminMemberInvitation; revokeInvitation?: typeof revokeAdminMemberInvitation }) {
   const initial = parsePageSearch(search);
   const [page, setPage] = useState(initial.page);
   const [pageSize, setPageSize] = useState(initial.pageSize);
@@ -3885,6 +3886,90 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
     if (controllerRef.current) void read(controllerRef.current, { ...queryRef.current });
     else { readRef.current = {}; setReadVersion((version) => version + 1); }
   };
+  const [invitations, setInvitations] = useState<AdminMemberInvitation[]>([]);
+  const [invitationsPending, setInvitationsPending] = useState(false);
+  const [invitationsError, setInvitationsError] = useState<string>();
+  const [invitationForbidden, setInvitationForbidden] = useState(false);
+  const [invitationWritePending, setInvitationWritePending] = useState(false);
+  const [invitationError, setInvitationError] = useState<string>();
+  const [issuedInvitation, setIssuedInvitation] = useState<{ email: string; code: string; expiresAt: string } | null>(null);
+  const [invitationsVersion, setInvitationsVersion] = useState(0);
+  const invitationReadRef = useRef<AbortController | null>(null);
+  const invitationWriteRef = useRef<object | null>(null);
+  // The invitation list is the only source of truth we can re-read after an ambiguous write.
+  const readInvitations = async () => {
+    invitationReadRef.current?.abort();
+    const controller = new AbortController();
+    invitationReadRef.current = controller;
+    setInvitationsPending(true);
+    try {
+      const items = await loadInvitations(fetch, controller.signal);
+      if (invitationReadRef.current !== controller) return;
+      setInvitationForbidden(false); setInvitations(items); setInvitationsError(undefined);
+    } catch (error: unknown) {
+      if (invitationReadRef.current !== controller || isAbort(error)) return;
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) { setInvitationForbidden(true); setInvitations([]); }
+      else setInvitationsError(frontendText(locale, "ADMIN_INVITATION_LIST_ERROR"));
+    } finally {
+      if (invitationReadRef.current === controller) { invitationReadRef.current = null; setInvitationsPending(false); }
+    }
+  };
+  useEffect(() => {
+    void readInvitations();
+    return () => { invitationReadRef.current?.abort(); invitationReadRef.current = null; };
+  }, [loadInvitations, locale, invitationsVersion]);
+  const retryInvitations = () => { setInvitationsError(undefined); setInvitationsVersion((version) => version + 1); };
+  const issueInvitationFor = async (email: string) => {
+    if (invitationWriteRef.current || !email) return;
+    const token = {};
+    invitationWriteRef.current = token;
+    setInvitationWritePending(true); setInvitationError(undefined);
+    try {
+      const result = await issueInvitation(email);
+      if (invitationWriteRef.current !== token) return;
+      setIssuedInvitation({ email: result.invitation.email, code: result.code, expiresAt: result.invitation.expiresAt });
+      await readInvitations();
+    } catch (error: unknown) {
+      if (invitationWriteRef.current !== token) return;
+      const reason = adminMemberInvitationFailure(error);
+      if (reason === "forbidden") { setInvitationForbidden(true); setInvitations([]); setInvitationError(frontendText(locale, "ADMIN_INVITATION_ERROR_FORBIDDEN")); return; }
+      if (reason === "already_pending" || reason === "unknown") {
+        // Never silently retry an ambiguous issue: a blind retry could mint a second code.
+        // Re-read the list to reconcile; a duplicate (409) means one is already pending, and
+        // its plaintext code is unrecoverable — the admin must revoke before issuing again.
+        await readInvitations();
+        const message = frontendText(locale, reason === "already_pending" ? "ADMIN_INVITATION_ALREADY_PENDING" : "ADMIN_INVITATION_UNKNOWN");
+        setInvitationError(message.replace("{email}", email));
+        return;
+      }
+      setInvitationError(frontendText(locale, reason === "invalid" ? "ADMIN_INVITATION_ERROR_INVALID" : reason === "admin_email" ? "ADMIN_INVITATION_ERROR_ADMIN_EMAIL" : "ADMIN_INVITATION_ERROR_UNKNOWN"));
+    } finally {
+      if (invitationWriteRef.current === token) { invitationWriteRef.current = null; setInvitationWritePending(false); }
+    }
+  };
+  const revokeInvitationFor = async (id: string) => {
+    if (invitationWriteRef.current || !id) return;
+    const token = {};
+    invitationWriteRef.current = token;
+    setInvitationWritePending(true); setInvitationError(undefined);
+    try {
+      await revokeInvitation(id);
+      if (invitationWriteRef.current !== token) return;
+      await readInvitations();
+    } catch (error: unknown) {
+      if (invitationWriteRef.current !== token) return;
+      const reason = adminMemberInvitationFailure(error);
+      if (reason === "forbidden") { setInvitationForbidden(true); setInvitations([]); setInvitationError(frontendText(locale, "ADMIN_INVITATION_ERROR_FORBIDDEN")); return; }
+      if (reason === "not_found" || reason === "not_pending") {
+        await readInvitations();
+        setInvitationError(frontendText(locale, reason === "not_found" ? "ADMIN_INVITATION_ERROR_NOT_FOUND" : "ADMIN_INVITATION_ERROR_NOT_PENDING"));
+        return;
+      }
+      setInvitationError(frontendText(locale, "ADMIN_INVITATION_ERROR_UNKNOWN"));
+    } finally {
+      if (invitationWriteRef.current === token) { invitationWriteRef.current = null; setInvitationWritePending(false); }
+    }
+  };
   useEffect(() => subscribeWorkspaceLocation(() => {
     const next = { ...parsePageSearch(readWorkspaceLocation().search), status: memberStatusSearch(readWorkspaceLocation().search) };
     if (sameQuery(next)) return;
@@ -3932,7 +4017,7 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
     if (!memberId || !blockedRef.current || !discardBlockedAdminMemberStatus(memberId)) return;
     blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
   }
-  return <MembersPage onLoadRetry={retryRead} locale={locale} status={status || ""} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} pageError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending || recordBlocked} pendingIds={pendingIds} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} actionError={recordNotice ?? actionError} statusRecordBlocked={recordBlocked} onDiscardStatusRecord={discardRecord} onStatusFilterChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} onStatusChange={recordBlocked ? undefined : changeStatus} />;
+  return <MembersPage onLoadRetry={retryRead} locale={locale} status={status || ""} loading={state.kind === "loading"} forbidden={state.kind === "forbidden" || invitationForbidden} error={state.kind === "error" || state.kind === "forbidden" ? state.message : invitationForbidden ? frontendText(locale, "COMMON_UNABLE_TO_LOAD") : undefined} pageError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending || recordBlocked} pendingIds={pendingIds} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} actionError={recordNotice ?? actionError} statusRecordBlocked={recordBlocked} onDiscardStatusRecord={discardRecord} onStatusFilterChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} onStatusChange={recordBlocked ? undefined : changeStatus} invitations={invitations} invitationsPending={invitationsPending} invitationWritePending={invitationWritePending} invitationError={invitationError} invitationsError={invitationsError} issuedInvitation={issuedInvitation} onIssueInvitation={invitationForbidden || state.kind === "forbidden" ? undefined : issueInvitationFor} onRevokeInvitation={invitationForbidden || state.kind === "forbidden" ? undefined : revokeInvitationFor} onLoadInvitationsRetry={retryInvitations} />;
 }
 
 export function AdminSpacesRoute({ locale, memberId }: { locale: LocaleRuntime; memberId?: string }) {

@@ -22,7 +22,7 @@ describe("numbered admin routes", () => {
   it("restores member status and pagination from URL and aborts stale requests", async () => {
     browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2&pageSize=20");
     const requests: Array<{ url: string; signal?: AbortSignal }> = [];
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { requests.push({ url: String(input), signal: init?.signal || undefined }); return response("member", 2, 20, 21); });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { if (String(input).startsWith("/api/admin/member-invitations")) return Response.json({ items: [] }); requests.push({ url: String(input), signal: init?.signal || undefined }); return response("member", 2, 20, 21); });
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} />)); await flush();
     expect(requests.at(-1)?.url).toContain("status=disabled"); expect(requests.at(-1)?.url).toContain("page=2");
     await locationChange("?status=active&pageSize=50");
@@ -606,6 +606,9 @@ async function waitFor(predicate: () => boolean) {
 function memberRequests() {
   const requests: Array<{ url: string; method: string; body?: BodyInit | null; signal?: AbortSignal; pending: ReturnType<typeof deferred<Response>> }> = [];
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    // These journeys probe member operations only; the invitation list loads
+    // alongside the page, so answer it here to keep the request census unchanged.
+    if (String(input).startsWith("/api/admin/member-invitations")) return Promise.resolve(Response.json({ items: [] }));
     const pending = deferred<Response>();
     requests.push({ url: String(input), method: init?.method || "GET", body: init?.body, signal: init?.signal || undefined, pending });
     return pending.promise;

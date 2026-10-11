@@ -148,6 +148,9 @@ function commonAuxiliaryResponse(path: string): Response | null {
   if (path.endsWith("/note")) return Response.json({ note: null });
   if (path.endsWith("/comments")) return Response.json({ comments: [] });
   if (path === "/api/members/active") return Response.json({ items: [] });
+  // The admin members page loads its invitation list alongside members; the route audit
+  // only probes member behavior, so an empty invitation list keeps it out of the census.
+  if (path === "/api/admin/member-invitations") return Response.json({ items: [] });
   return null;
 }
 
