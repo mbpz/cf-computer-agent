@@ -144,6 +144,90 @@ describe("dropdown keyboard contract", () => {
     host.remove();
   });
 
+  it("closes an open menu on a document Escape when focus never entered it (macOS click)", () => {
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<DropdownMenu>
+      <DropdownMenuTrigger>Language</DropdownMenuTrigger>
+      <DropdownMenuContent><DropdownMenuItem>English</DropdownMenuItem></DropdownMenuContent>
+    </DropdownMenu>));
+    const trigger = host.querySelector<HTMLButtonElement>("button")!;
+
+    act(() => {
+      browser.document.body.focus();
+      trigger.click();
+    });
+    expect(browser.document.activeElement).toBe(browser.document.body);
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+
+    act(() => browser.document.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(browser.document.activeElement).toBe(trigger);
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("closes an open menu on Escape while focus is inside the content", () => {
+    const onOpenChange = vi.fn();
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<DropdownMenu onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger>Account</DropdownMenuTrigger>
+      <DropdownMenuContent><DropdownMenuItem>Settings</DropdownMenuItem></DropdownMenuContent>
+    </DropdownMenu>));
+    const trigger = host.querySelector<HTMLButtonElement>("button")!;
+
+    act(() => trigger.click());
+    const item = host.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+    act(() => item.focus());
+    act(() => item.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(browser.document.activeElement).toBe(trigger);
+    expect(onOpenChange).toHaveBeenCalledTimes(2);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("ignores a document Escape when the menu is already closed", () => {
+    const onOpenChange = vi.fn();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return <DropdownMenu open={open} onOpenChange={(next) => { onOpenChange(next); setOpen(next); }}>
+        <DropdownMenuTrigger>Language</DropdownMenuTrigger>
+        <DropdownMenuContent><DropdownMenuItem>English</DropdownMenuItem></DropdownMenuContent>
+      </DropdownMenu>;
+    }
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<Harness />));
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+
+    act(() => browser.document.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("closes the shell account menu on a document Escape after a mouse open", async () => {
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    await act(async () => root.render(<AppShell session={{ member: { id: "m1", email: "member@example.com", role: "contributor" }, capabilities: ["knowledge:read"], logoutUrl: "/logout" }} pathname="/" locale={createLocaleRuntime()}><div /></AppShell>));
+    const accountTrigger = host.querySelector<HTMLButtonElement>('[data-account-trigger-variant="expanded"]')!;
+    await act(async () => accountTrigger.click());
+    expect(host.querySelector('[data-menu-id="account-desktop"] [role="menu"]')).not.toBeNull();
+
+    act(() => browser.document.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(host.querySelector('[data-menu-id="account-desktop"] [role="menu"]')).toBeNull();
+    act(() => root.unmount());
+    host.remove();
+  });
+
   it("dismisses when focus completes outside the menu", async () => {
     const host = browser.document.createElement("div") as unknown as HTMLDivElement;
     browser.document.body.append(host as unknown as Node);

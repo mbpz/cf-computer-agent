@@ -72,3 +72,53 @@
 ## 与同批记录的边界
 
 本扫描与同批的 **`2026-10-11-native-matrix-evidence.md`（4×2×2 视口/主题/语言矩阵）**、**`2026-10-11-multi-member-isolation-sweep-evidence.md`（多成员授权/隔离扫描）** 互为补充：三者均是**合成本地会话**下的原生观察，**均不构成 D05/D06/D04 验收**，也**均不覆盖路由级操作**。
+
+## 同一轮发现并修复：菜单 Escape 关闭缺口（macOS 点击打开）
+
+日期：2026-10-11；分支 `codex/functional-checklist-completion`；基线 `65d5fcbde187711f2d660de734072da6516e256c`（本地，**未推送**）。本增量记录同一轮有头真 Chrome（macOS）原生交互测试中**发现并修复**的一个可访问性缺陷。
+
+### 原生观察
+
+在有头真 Chrome（macOS、`--user-data-dir` 隔离 `/tmp`、1280×900、合成本地会话）中，用**鼠标点击**打开外壳的**语言菜单**（`menuId="language"`）后：触发按钮 `aria-expanded="true"`、`[role="menu"]` 可见。按下 **`Escape`** 后：`aria-expanded` **仍为 `true`**、`[role="menu"]` **仍可见** —— **未被关闭**。而用**外部指针点击**（`pointerdown` 落在菜单之外）**可以**关闭它。对照：命令面板（command palette）同一情境下 **`Escape` 可关闭**。
+
+### 已核验的根因（源码）
+
+`Escape` 当时**仅**由包装层的 React `onKeyDown`（`frontend/components/ui/dropdown-menu.tsx` 中 `DropdownMenu` 包装 `<div data-menu-id=… onKeyDown={handleKeyDown}>`）与 `DropdownMenuContent` 自身的 keydown handler 处理。在 macOS 上，**点击 `<button>` 不会把焦点移给它**，因此焦点**停留在 `document.body`**；`Escape` 的 keydown **不会经过**包装层，两个 handler 均不触发 → 菜单不关闭。
+
+### 修复
+
+`frontend/components/ui/dropdown-menu.tsx`（`DropdownMenu`，既有 outside-dismiss effect 内，第 65–74 行新增 handler；第 79、84 行注册/注销）：在菜单 `open` 期间新增 **`document` 级 `keydown` 监听**，忽略 `event.defaultPrevented` 与非 `Escape` 键，命中后调用既有 `setOpen(false, "escape")`（其内部已将焦点还原到触发按钮）；菜单关闭/清理时移除监听。既有的 **Enter/Space/Arrow/Home/End 行为、键盘打开时的焦点移动、outside-dismiss 语义、受控/非受控 API 均未改动**。
+
+**为什么不会重复处理**：包装层/内容 handler 命中 `Escape` 时调用 `event.preventDefault()`；本 `document` 监听通过 `defaultPrevented` 检查观察到此标记后直接返回，因此同一 keydown 不会被消费两次。真实浏览器中原生 keydown 是 **cancelable** 的，故 `preventDefault()` 会正确置位 `defaultPrevented`。
+
+### 回归断言（`test/unit/frontend-menu-keyboard.test.tsx`，新增 4 条）
+
+- **(a) macOS 点击打开**：焦点置于 `document.body`、以鼠标 `click()` 打开菜单，再在 `document` 上派发 `Escape` → 菜单关闭（`[role="menu"]` 为 `null`）、焦点回到触发按钮。
+- **(b) 焦点在内容内**（既有行为保持）：焦点在菜单项上派发 `Escape` → 关闭且焦点回到触发按钮，且 `onOpenChange` **恰好被调 2 次**（打开 1 + 关闭 1），证明未重复处理。
+- **(c) 菜单已关闭时**：在 `document` 上派发 `Escape` → `onOpenChange` **未被调用**、无异常。
+- **(d) 外壳账户菜单实例**：`AppShell` 渲染的账户菜单（`data-menu-id="account-desktop"`）鼠标打开后，`document` 上的 `Escape` 关闭之。
+
+### 变异检测（mutation evidence）
+
+对每条新断言，临时移除/破坏**新增的 document 监听**后运行聚焦测试文件，捕获原始失败，再**逐字节还原**（`diff` 与变异前副本一致，且 `git diff` 中无残留变异标记）。`+actual -expected` 摘录：
+
+| 变异 | (a) macOS | (b) 焦点在内容内 | (c) 已关闭 | (d) 账户菜单 |
+| --- | --- | --- | --- | --- |
+| **M1** 移除 `document.addEventListener("keydown", dismissOnEscape)` 注册 | **RED**（菜单仍可见：`expected <div role="menu"> to be null`） | GREEN | GREEN | **RED**（`expected <div data-account-menu="true"> to be null`） |
+| **M2** 去掉 `defaultPrevented` 守卫 | GREEN | **RED**（`expected vi.fn() to be called 2 times, but got 3 times` = 重复处理） | GREEN | GREEN |
+| **M3** 去掉 effect 顶部 `if (!open) return;`（关闭态也注册监听） | GREEN | GREEN | **RED**（`expected vi.fn() to not be called at all, but actually been called 1 times`） | **RED** |
+
+（M3 下 (d) 亦失败系副作用：关闭态监听在其他菜单上误触发。）**还原后** 聚焦文件 **21 passed / 0 failed**。
+
+### 修复后原生确认
+
+修复后，本地 dev server 提供重新构建的 bundle `/assets/index-BpYetGvB.js`，在有头 Chrome（CDP，相同本地栈/代理/合成 admin 会话）中复测：**语言菜单**点击后触发按钮 `aria-expanded="true"` 且可见 `[role="menu"]` 为 1，按 `Escape` 后语言触发按钮的 `aria-expanded` 消失（仅侧栏折叠开关仍为 `true`）、可见 `[role="menu"]` 为 **0**、`document.activeElement` 为 `BUTTON`（焦点回到触发按钮）；**账户菜单**（`账户菜单：acceptance-…`）点击后 `aria-expanded="true"` + 1 个可见菜单，按 `Escape` 后已关闭（`aria-expanded` 清除、0 个可见菜单、焦点在 `BUTTON`）。与上文**修复前**值（两菜单均保持打开；仅外部 `pointerdown` 可关闭）形成对照。
+
+边界：仍为本地 harness 代理后的**合成本地会话**、独立 `/tmp` profile 的**有头 Chromium**；键盘/浮层行为**仅在本地验证**，**不是 A05/D05/D06/D04 验收**，**计数不变**，**未部署/未 push/未远程迁移**。
+
+### 明确非声明
+
+- 原生观察为**本地有头真 Chrome（macOS）+ 合成本地会话**；键盘/浮层行为**仅在本地验证**。
+- 本增量**不是 A05/D05/D06/D04 任何验收**，**未翻转任何 checkbox**，**不改变任何计数**（功能清单父项 **29 在范围内 / 5 已关闭 / 24 开放**，D08 排除）。
+- **未发布、未部署、未 push、未远程迁移**；改动保持**本地未提交**。
+- 除该下拉菜单外**未触碰任何产品行为**（`migrations/` 无改动）。

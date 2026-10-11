@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：271；操作/转发候选：1189。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：271；操作/转发候选：1190。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -68,7 +68,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/ui/checkbox.tsx | 1 |
 | frontend/components/ui/confirm-action.tsx | 5 |
 | frontend/components/ui/dialog.tsx | 2 |
-| frontend/components/ui/dropdown-menu.tsx | 6 |
+| frontend/components/ui/dropdown-menu.tsx | 7 |
 | frontend/components/ui/focus-scope.tsx | 1 |
 | frontend/components/ui/input.tsx | 1 |
 | frontend/components/ui/label.tsx | 1 |
@@ -323,7 +323,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 82 | 无（不代表动态边界已核对） |
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 45 | 无（不代表动态边界已核对） |
 | /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 66 | 无（不代表动态边界已核对） |
-| &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 94 | 无（不代表动态边界已核对） |
+| &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 95 | 无（不代表动态边界已核对） |
 | &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 38 | 无（不代表动态边界已核对） |
 | &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 8 | 无（不代表动态边界已核对） |
 
@@ -953,12 +953,13 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 67:5 DropdownMenu | document.addEventListener  | "pointerdown", dismissOutside | earlier return: !open |
-| 68:5 DropdownMenu | document.addEventListener  | "focusin", dismissAfterFocus | earlier return: !open |
-| 88:110 DropdownMenu | div children | onKeyDown=handleKeyDown |  |
-| 104:10 DropdownMenuTrigger | button  | onClick=handleClick; onKeyDown=handleKeyDown; type=type ?? "button" | aria-expanded=open; spread: props |
-| 128:10 DropdownMenuContent | div  | onKeyDown=handleKeyDown | earlier return: !open; spread: props |
-| 141:10 DropdownMenuItem | button  | onClick=handleClick; type="button" | aria-disabled=disabled ? "true" : undefined; disabled=disabled; spread: props |
+| 77:5 DropdownMenu | document.addEventListener  | "pointerdown", dismissOutside | earlier return: !open |
+| 78:5 DropdownMenu | document.addEventListener  | "focusin", dismissAfterFocus | earlier return: !open |
+| 79:5 DropdownMenu | document.addEventListener  | "keydown", dismissOnEscape | earlier return: !open |
+| 100:110 DropdownMenu | div children | onKeyDown=handleKeyDown |  |
+| 116:10 DropdownMenuTrigger | button  | onClick=handleClick; onKeyDown=handleKeyDown; type=type ?? "button" | aria-expanded=open; spread: props |
+| 140:10 DropdownMenuContent | div  | onKeyDown=handleKeyDown | earlier return: !open; spread: props |
+| 153:10 DropdownMenuItem | button  | onClick=handleClick; type="button" | aria-disabled=disabled ? "true" : undefined; disabled=disabled; spread: props |
 
 ## frontend/components/ui/focus-scope.tsx
 

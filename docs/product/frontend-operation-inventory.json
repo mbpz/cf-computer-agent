@@ -2959,12 +2959,13 @@
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/dialog.tsx:15:10",
         "frontend/components/ui/dialog.tsx:17:99",
-        "frontend/components/ui/dropdown-menu.tsx:67:5",
-        "frontend/components/ui/dropdown-menu.tsx:68:5",
-        "frontend/components/ui/dropdown-menu.tsx:88:110",
-        "frontend/components/ui/dropdown-menu.tsx:104:10",
-        "frontend/components/ui/dropdown-menu.tsx:128:10",
-        "frontend/components/ui/dropdown-menu.tsx:141:10",
+        "frontend/components/ui/dropdown-menu.tsx:77:5",
+        "frontend/components/ui/dropdown-menu.tsx:78:5",
+        "frontend/components/ui/dropdown-menu.tsx:79:5",
+        "frontend/components/ui/dropdown-menu.tsx:100:110",
+        "frontend/components/ui/dropdown-menu.tsx:116:10",
+        "frontend/components/ui/dropdown-menu.tsx:140:10",
+        "frontend/components/ui/dropdown-menu.tsx:153:10",
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/components/ui/input.tsx:6:5",
         "frontend/components/ui/sheet.tsx:15:10",
@@ -16760,10 +16761,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/dropdown-menu.tsx:67:5",
+      "id": "frontend/components/ui/dropdown-menu.tsx:77:5",
       "path": "frontend/components/ui/dropdown-menu.tsx",
       "owner": "DropdownMenu",
-      "line": 67,
+      "line": 77,
       "column": 5,
       "kind": "listener",
       "tag": "document.addEventListener",
@@ -16785,10 +16786,10 @@
       ]
     },
     {
-      "id": "frontend/components/ui/dropdown-menu.tsx:68:5",
+      "id": "frontend/components/ui/dropdown-menu.tsx:78:5",
       "path": "frontend/components/ui/dropdown-menu.tsx",
       "owner": "DropdownMenu",
-      "line": 68,
+      "line": 78,
       "column": 5,
       "kind": "listener",
       "tag": "document.addEventListener",
@@ -16810,10 +16811,35 @@
       ]
     },
     {
-      "id": "frontend/components/ui/dropdown-menu.tsx:88:110",
+      "id": "frontend/components/ui/dropdown-menu.tsx:79:5",
       "path": "frontend/components/ui/dropdown-menu.tsx",
       "owner": "DropdownMenu",
-      "line": 88,
+      "line": 79,
+      "column": 5,
+      "kind": "listener",
+      "tag": "document.addEventListener",
+      "event": "\"keydown\"",
+      "arguments": [
+        "\"keydown\"",
+        "dismissOnEscape"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!open",
+          "source": "if (!open) return;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/ui/dropdown-menu.tsx:100:110",
+      "path": "frontend/components/ui/dropdown-menu.tsx",
+      "owner": "DropdownMenu",
+      "line": 100,
       "column": 110,
       "kind": "jsx",
       "tag": "div",
@@ -16833,10 +16859,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/dropdown-menu.tsx:104:10",
+      "id": "frontend/components/ui/dropdown-menu.tsx:116:10",
       "path": "frontend/components/ui/dropdown-menu.tsx",
       "owner": "DropdownMenuTrigger",
-      "line": 104,
+      "line": 116,
       "column": 10,
       "kind": "jsx",
       "tag": "button",
@@ -16861,10 +16887,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/dropdown-menu.tsx:128:10",
+      "id": "frontend/components/ui/dropdown-menu.tsx:140:10",
       "path": "frontend/components/ui/dropdown-menu.tsx",
       "owner": "DropdownMenuContent",
-      "line": 128,
+      "line": 140,
       "column": 10,
       "kind": "jsx",
       "tag": "div",
@@ -16890,10 +16916,10 @@
       ]
     },
     {
-      "id": "frontend/components/ui/dropdown-menu.tsx:141:10",
+      "id": "frontend/components/ui/dropdown-menu.tsx:153:10",
       "path": "frontend/components/ui/dropdown-menu.tsx",
       "owner": "DropdownMenuItem",
-      "line": 141,
+      "line": 153,
       "column": 10,
       "kind": "jsx",
       "tag": "button",

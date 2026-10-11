@@ -62,14 +62,26 @@ export function DropdownMenu({
         if (active && document.activeElement === target) dismissOutside(event);
       });
     };
+    // Escape must close the menu even when focus never landed inside it (macOS
+    // does not focus a button on click, so the keydown never reaches the
+    // wrapper's React onKeyDown). The wrapper/content handlers call
+    // preventDefault(), which we observe via defaultPrevented, so this never
+    // double-handles a keydown they already consumed.
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false, "escape");
+    };
     // A blur can temporarily leave focus on body between pointerdown and click.
     // Only dismiss when a pointer or new focus actually lands outside the menu.
     document.addEventListener("pointerdown", dismissOutside);
     document.addEventListener("focusin", dismissAfterFocus);
+    document.addEventListener("keydown", dismissOnEscape);
     return () => {
       active = false;
       document.removeEventListener("pointerdown", dismissOutside);
       document.removeEventListener("focusin", dismissAfterFocus);
+      document.removeEventListener("keydown", dismissOnEscape);
     };
   }, [open, setOpen]);
 
