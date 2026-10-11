@@ -32,11 +32,45 @@
 - `POST /auth/code` 以 `apples398@163.com` + 该码兑换 → `200 {"member":{"id":"15772ed5-03f6-4b38-9b83-f2326b44a3b8","email":"apples398@163.com","role":"contributor"}}`，并下发 `__Host-memory-session`。
 - 该成员在生产 `/api/admin/members` 中为 `contributor` / `active`，其邀请行为 `redeemed`。
 
+## 真实双身份写旅程与双向隔离（2026-10-11 追加）
+
+方法：contributor 会话由管理员在生产成员管理页签发新授权码后经 `POST /auth/code` 兑换获得（同一邮箱**复用既有成员** `15772ed5-03f6-4b38-9b83-f2326b44a3b8`，未新建）；管理员侧经其真实浏览器会话（omp relay）执行。所有正向对象以 `d05-` 前缀标记并在本轮末删除。
+
+| 检查 | 实测 |
+| --- | --- |
+| contributor `GET /api/tasks`（起始） | `200`，自有 0 条 |
+| contributor `POST /api/tasks`（**无** `Origin` 头） | `403 FORBIDDEN` —— **同源写保护**，非授权拒绝 |
+| contributor `POST /api/tasks`（带 `Origin: https://memory.crgmhrc.asia`） | **`201`**：`created=true`，`task.memberId` = 该 contributor |
+| contributor `GET /api/tasks`（创建后） | `200`，**仅**自己那 1 条 |
+| contributor 读管理员任务 `GET /api/tasks/<admin-task>` | **`404 TASK_NOT_FOUND`** |
+| 管理员读 contributor 任务（真实会话） | **`404 TASK_NOT_FOUND`** |
+| contributor `DELETE /api/tasks/<own-task>` | **`204`**，其后自有列表回 `0` |
+| 越权写（**带** 正确 `Origin`）`POST /api/admin/member-invitations`、`POST /api/admin/spaces` | 均 **`403 FORBIDDEN`**（确为授权拒绝） |
+| 清理 | 管理员与 contributor 的任务均删除，双方列表均为 `0` |
+
+**方法学要点**：不安全方法在缺少匹配 `Origin` 时会被同源写保护**先行**拒绝，且错误码与授权拒绝同为 `FORBIDDEN`。因此单凭 403 **无法**区分"来源守卫"与"能力不足"；判定越权必须带正确 `Origin` 复测（本轮已复测）。
+
+本轮结束后生产只读核对：成员恰 2 名（`apples398@gmail.com`=admin、`apples398@163.com`=contributor，均 active）；管理员与 contributor 的任务均为 0；邀请行 2 条，均属 `apples398@163.com` 且均 `redeemed`（无 pending）；本轮验收写入产生的审计行按设计保留。
+
 ## 尚未覆盖（不提升状态）
-- **正向写旅程**：contributor 在生产创建/整理自己的工作数据未执行（属生产写入，需另行授权）。
-- **跨成员数据隔离**：双方各自持有的对象（回执/私有笔记/收藏）交叉读取对比未执行。
-- 未对生产库做任何正向写入；本轮仅含被拒写探测与读取。
+- **撤销与尝试上限**：`POST /api/admin/member-invitations/:id/revoke` 与失败尝试上限（5 次静默锁定）仅本地验证，未在生产演练。
+- 未观察到生产 5xx；未执行部署；未记录 `0063` 的回滚点。
+- 不构成 D05 父项关闭：其自述关闭条件另含原生键盘/触控等范围。
 
 ## 明确非声明
 - 未执行部署；未记录回滚点（`0063` 由用户流水线于 2026-10-11 应用，其回滚点应取自该次发布之前，本轮未采集）。
-- 不构成 D05 父项关闭：正向写旅程与跨成员数据隔离未覆盖。
+- 不构成 D05 父项关闭：其自述关闭条件另含原生键盘/触控等范围；本轮已覆盖真实双身份读取侧矩阵、双向任务隔离与 contributor 正向写旅程（含删除）。
+
+## 真实 UI 层 contributor 旅程（生产，独立浏览器）
+
+方法：独立 Chrome（CDP + 全新 profile）+ 由授权码兑换得到的 contributor 会话注入该浏览器；**未干扰**用户浏览器中的管理员会话（两者 cookie 同名，故不复用同一浏览器）。
+
+| 步骤 | 实测 |
+| --- | --- |
+| 打开 `/tasks` | 渲染 contributor 视图（非登录页）；侧栏 17 条、**无 `/admin`**，含新注册的 `/calendar /today /focus /review` |
+| 聚焦 `新建任务` 后回车 | 弹层打开 |
+| 输入标题并回车提交 | 行出现，`总计 1` |
+| 行内 `删除` | 确认弹层：`删除此任务？ <标题> (<id>) — 将永久删除此任务及其任务标签和关联。不会删除关联的知识内容。此操作无法撤销。`（`取消` / `永久删除`） |
+| 确认删除 | `暂无任务 总计 0` |
+
+清理后只读核对：contributor 自有任务 `0`、管理员任务 `0`、成员仍为 2（admin + contributor）、邀请行 2 条均 `redeemed`（无 pending）。
