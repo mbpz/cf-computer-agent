@@ -9,6 +9,7 @@ import {
   type CitedAnswerAiInput,
 } from "../../src/ai/cited-answer-service";
 import { computeEvidenceConfidence } from "../../src/ai/evidence-confidence";
+import { loadKnowledgeRevision } from "../../frontend/lib/knowledge-reader-data";
 import { AppError } from "../../src/http";
 import { AuditRepository } from "../../src/audit/repository";
 import type { KnowledgeBase } from "../../src/index";
@@ -76,6 +77,59 @@ describe("M1 permission-scoped library", () => {
     expect(detail.currentRevision.chunks[0]).toEqual(expect.objectContaining({ location: { kind: "pdf", page: 3 } }));
     const citation = await service.readCitation(contributor, detail.currentRevision.chunks[0]!.citationId);
     expect(citation.location).toEqual({ kind: "pdf", page: 3 });
+  });
+
+  it("carries revision chunk text so a citation deep link resolves into the reader outline", async () => {
+    await seedKnowledge({
+      id: "knowledge-citation-text",
+      revisionId: "revision-citation-text",
+      title: "Citable outline",
+      visibility: "shared",
+      body: "Cited body text",
+      markdown: "# Citable outline\n\nCited body text\n",
+    });
+    const service = serviceWithContent();
+    const detail = await service.revision(contributor, "knowledge-citation-text", "revision-citation-text");
+
+    // The reader resolves a deep link against the exact revision it names and keeps every chunk
+    // (identity, heading path, lines), which is what populates the outline and the note citation.
+    // The reader boundary requires a string `text` per chunk, so the revision payload must carry
+    // the stored chunk body verbatim, exactly as the citation endpoint returns it.
+    expect(detail.chunks.length).toBeGreaterThan(0);
+    for (const chunk of detail.chunks) {
+      expect(typeof chunk.text).toBe("string");
+      expect(chunk.text.length).toBeGreaterThan(0);
+      const citation = await service.readCitation(contributor, chunk.citationId);
+      expect(chunk.text).toBe(citation.body);
+    }
+    expect(detail.chunks.some((chunk) => chunk.headingPath.length > 0)).toBe(true);
+
+    const cited = detail.chunks[0]!;
+    const paths: string[] = [];
+    const requester = async (input: RequestInfo | URL) => {
+      const path = String(input);
+      paths.push(path);
+      if (path.startsWith("/api/knowledge/citations/")) {
+        const citationId = decodeURIComponent(path.slice("/api/knowledge/citations/".length));
+        return Response.json({ citation: await service.readCitation(contributor, citationId) });
+      }
+      return Response.json({ revision: detail });
+    };
+    const revision = await loadKnowledgeRevision(
+      "knowledge-citation-text",
+      requester,
+      undefined,
+      `#${encodeURIComponent(cited.citationId)}`,
+    );
+
+    expect(paths).toEqual([
+      `/api/knowledge/citations/${encodeURIComponent(cited.citationId)}`,
+      "/api/knowledge/knowledge-citation-text/revisions/revision-citation-text",
+    ]);
+    expect(revision.selectedChunkId).toBe(cited.id);
+    expect(revision.chunks.map((chunk) => chunk.id)).toEqual(detail.chunks.map((chunk) => chunk.id));
+    expect(revision.chunks.filter((chunk) => chunk.headingPath.length > 0).length)
+      .toBe(detail.chunks.filter((chunk) => chunk.headingPath.length > 0).length);
   });
 
   it("recalls a child chunk and returns its bounded parent context", async () => {

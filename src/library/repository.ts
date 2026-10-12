@@ -77,6 +77,8 @@ export interface AuthorizedRevisionChunk {
   headingPath: string[];
   startLine: number;
   endLine: number;
+  /** The stored chunk body, byte-identical to the `body` the citation endpoint returns for this chunk. */
+  text: string;
   location?: SourceLocation;
 }
 
@@ -190,6 +192,7 @@ type RevisionRow = KnowledgeRow & {
   start_line: number | null;
   end_line: number | null;
   location_json: string | null;
+  body: string | null;
 };
 
 type SearchRow = {
@@ -726,7 +729,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
        SELECT ar.*, sv.ordinal AS source_version_ordinal, sv.parser_schema_version,
          sv.code_language, sv.file_label, sv.line_baseline,
          coalesce(review.reviewer_id, ar.published_by) AS reviewer_id,
-           c.id AS chunk_id, c.parent_chunk_id, c.ordinal, c.heading_path, c.start_line, c.end_line, c.location_json
+           c.id AS chunk_id, c.parent_chunk_id, c.ordinal, c.heading_path, c.start_line, c.end_line, c.location_json, c.body
        FROM authorized_revision ar
        JOIN source_versions sv ON sv.id = ar.source_version_id
        LEFT JOIN reviews review
@@ -777,6 +780,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
         ...(row.parent_chunk_id ? { parentChunkId: row.parent_chunk_id } : {}),
         ordinal: requireInteger(row.ordinal),
         headingPath: parseStringArray(requireString(row.heading_path)),
+        text: requireString(row.body),
         startLine: requireInteger(row.start_line),
         endLine: requireInteger(row.end_line),
         ...(parseSourceLocationJson(row.location_json) ? { location: parseSourceLocationJson(row.location_json) } : {}),

@@ -124,6 +124,8 @@ export interface RevisionChunkLocation {
   headingPath: string[];
   startLine: number;
   endLine: number;
+  /** The stored chunk body, identical to the citation endpoint's `body` for this chunk. */
+  text: string;
   location?: SourceLocation;
 }
 

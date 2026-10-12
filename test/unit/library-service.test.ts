@@ -630,6 +630,7 @@ function revisionRecord(): AuthorizedRevisionRecord {
       headingPath: ["Trusted"],
       startLine: 3,
       endLine: 3,
+      text: "Trusted citation body",
     }],
   };
 }
