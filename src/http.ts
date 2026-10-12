@@ -50,13 +50,17 @@ export function jsonResponse(value: unknown, status = 200, requestId?: string): 
 }
 
 /**
- * Trialled HSTS value. The header is sticky for its max-age window and
- * `includeSubDomains`/`preload` are hard to reverse, so the rollout starts at a
- * short window and is raised in a follow-up once the trial is observed.
- * Browsers ignore HSTS received over plain HTTP, so local development is
- * unaffected and no production-only condition is needed.
+ * Live HSTS policy. The rollout first shipped a short `max-age=300` trial
+ * window, which was then observed in production, and this is the raised policy:
+ * a one-year window that also covers subdomains of the host sending the header
+ * (i.e. `*.memory.crgmhrc.asia`).
+ *
+ * `preload` is deliberately unset: it is hard to reverse and is a separate
+ * submission decision, so it is not part of this raise. Browsers ignore HSTS
+ * received over plain HTTP, so local development is unaffected and no
+ * production-only condition is needed.
  */
-export const STRICT_TRANSPORT_SECURITY = "max-age=300";
+export const STRICT_TRANSPORT_SECURITY = "max-age=31536000; includeSubDomains";
 
 /**
  * Applies transport-level HSTS to a response. HSTS is not content-type

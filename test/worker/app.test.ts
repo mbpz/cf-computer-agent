@@ -182,7 +182,7 @@ function clearedOAuthCookies(): string[] {
 function expectProtectedResponse(response: Response): void {
   expect(response.headers.get("x-request-id")).toBeTruthy();
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
-  expect(response.headers.get("strict-transport-security")).toBe("max-age=300");
+  expect(response.headers.get("strict-transport-security")).toBe("max-age=31536000; includeSubDomains");
   expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
 }
 
@@ -915,7 +915,7 @@ describe("Worker application", () => {
       const page = await SELF.fetch(`https://example.test${path}`);
       expect(page.status, path).toBe(200);
       expect(page.headers.get("content-security-policy"), path).toBe(policy);
-      expect(page.headers.get("strict-transport-security"), path).toBe("max-age=300");
+      expect(page.headers.get("strict-transport-security"), path).toBe("max-age=31536000; includeSubDomains");
       expect(page.headers.get("x-frame-options"), path).toBe("DENY");
       expect(page.headers.get("x-content-type-options"), path).toBe("nosniff");
       expect(page.headers.get("referrer-policy"), path).toBe("no-referrer");

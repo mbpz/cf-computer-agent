@@ -30,7 +30,7 @@ describe("React workspace assets", () => {
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("script-src 'self' https://static.cloudflareinsights.com");
     expect(csp).toContain("connect-src 'self'");
-    expect(page.headers.get("strict-transport-security")).toBe("max-age=300");
+    expect(page.headers.get("strict-transport-security")).toBe("max-age=31536000; includeSubDomains");
     expect(page.headers.get("referrer-policy")).toBe("no-referrer");
     expect(page.headers.get("x-content-type-options")).toBe("nosniff");
     expect(page.headers.get("x-frame-options")).toBe("DENY");
@@ -132,7 +132,7 @@ describe("React workspace assets", () => {
   it("keeps API authorization server-authoritative", async () => {
     const response = await SELF.fetch("https://example.test/api/admin/members");
     expect(response.status).toBe(401);
-    expect(response.headers.get("strict-transport-security")).toBe("max-age=300");
+    expect(response.headers.get("strict-transport-security")).toBe("max-age=31536000; includeSubDomains");
     expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; frame-ancestors 'none'");
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
