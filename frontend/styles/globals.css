@@ -94,6 +94,21 @@ body {
   }
 }
 
+/* Reader markdown: generated content can contain very long code lines, wide
+   tables, or unbreakable URLs. Keep them inside the column with their own
+   horizontal scroll containers so the page never scrolls sideways and no line
+   is clipped unreachable inside the desktop `overflow: hidden` shell. */
+.markdown-content {
+  overflow-wrap: anywhere;
+}
+
+.markdown-content pre,
+.markdown-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 :focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
