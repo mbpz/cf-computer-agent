@@ -27,7 +27,7 @@ import { requireCapability } from "./authorization/policy";
 import { RolesRepository } from "./authorization/roles-repository";
 import { MenusRepository } from "./authorization/menus-repository";
 import { APP_CONFIG } from "./config";
-import { AppError, createRequestContext, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, parseJsonRequest, requireSameOrigin, type RequestContext } from "./http";
+import { AppError, createRequestContext, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, parseJsonRequest, requireSameOrigin, withStrictTransportSecurity, type RequestContext } from "./http";
 import { AutomationAuthenticator } from "./identity/automation";
 import { createGitHubOAuthClient, type GitHubOAuthDiagnostic } from "./identity/github-oauth";
 import { createWeChatOAuthClient } from "./identity/wechat-oauth";
@@ -153,7 +153,7 @@ export interface AppDependencies {
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
-  return {
+  const handler: ExportedHandler<Env> = {
     async fetch(request, env, ctx): Promise<Response> {
       const context = createRequestContext(request);
       const url = new URL(request.url);
@@ -224,6 +224,13 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
           : url.pathname === "/auth/wechat/callback" ? clearWeChatCookie(response) : response;
       }
     },
+  };
+  // HSTS is transport-level and must cover every response the worker emits —
+  // the HTML shell and static assets, JSON APIs, OAuth redirects, agent
+  // streams and empty bodies — so it is applied once at this boundary rather
+  // than in each content-type-specific header builder.
+  return {
+    fetch: async (request, env, ctx) => withStrictTransportSecurity(await handler.fetch!(request, env, ctx)),
   };
 }
 

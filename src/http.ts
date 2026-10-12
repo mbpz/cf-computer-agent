@@ -49,6 +49,27 @@ export function jsonResponse(value: unknown, status = 200, requestId?: string): 
   });
 }
 
+/**
+ * Trialled HSTS value. The header is sticky for its max-age window and
+ * `includeSubDomains`/`preload` are hard to reverse, so the rollout starts at a
+ * short window and is raised in a follow-up once the trial is observed.
+ * Browsers ignore HSTS received over plain HTTP, so local development is
+ * unaffected and no production-only condition is needed.
+ */
+export const STRICT_TRANSPORT_SECURITY = "max-age=300";
+
+/**
+ * Applies transport-level HSTS to a response. HSTS is not content-type
+ * specific, so the worker boundary applies it to every response it emits
+ * (the HTML shell and static assets, JSON APIs, OAuth redirects, agent streams
+ * and empty bodies) exactly once, instead of each header builder doing it.
+ */
+export function withStrictTransportSecurity(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("strict-transport-security", STRICT_TRANSPORT_SECURITY);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 export function errorResponse(error: unknown, requestId: string): Response {
   const app = error instanceof AppError
     ? error
