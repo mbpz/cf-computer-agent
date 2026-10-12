@@ -64,7 +64,7 @@ Tab 停靠至 `Publish` → Enter 打开弹层（初始焦点落在 `Cancel`）�
 
 `/knowledge/<item>#<citationId>` 在 citation 与 revision 两个接口都返回 200、`chunkId`/行号/`citationId` 逐项吻合的情况下报「无法加载这条知识」。根因：revision 载荷的 chunk 只有 `id/ordinal/headingPath/startLine/endLine/citationId`，缺 `text`，而 `frontend/lib/knowledge-reader-data.ts` 的 `normalizeRevision` 丢弃无字符串 `text` 的 chunk → `chunks` 为空 → `KNOWLEDGE_CITATION_INVALID`。同因可见：预存条目的「目录」全空、笔记引用静默为空。修复 `a77d34bc`（revision 投影补 `chunks.body` → `text`）。部署后 2.3/2.4 全部通过。
 
-### 3.2 阅读器横向溢出（本地已验证，待部署复验）
+### 3.2 阅读器横向溢出（已修复、已部署并线上复验）
 
 `frontend/lib/markdown-renderer.ts` 渲染的 `div.markdown-content` 在全仓库**没有任何 CSS**（构建产物中 `markdown-content` 命中 0），于是 `pre` 保持 UA 的 `white-space: pre; overflow-x: visible`：长行撑破列宽。实测：
 
@@ -93,9 +93,21 @@ Tab 停靠至 `Publish` → Enter 打开弹层（初始焦点落在 `Cancel`）�
 
 独立复核（把该规则用 CSSOM 应用到**生产阅读页真实 DOM**，320 视口）：`f64ca1f3-…` 溢出 **1204 → −15**、`pre` 计算值 `overflow-x: auto`（client 223 / scroll 1483、`scrollLeft` 移到 1260）、容器 `overflow-wrap: anywhere`。**`display: block` 是否破坏表格网格**另测（同构建 CSS 的 before/after 夹具，同实际宽度对比）：首行单元格 before `tops=[83]`、rects `[[83,41,969],[83,1010,48],…]`；after `tops=[83]`、rects `[[83,41,488],[83,529,23],…]` —— 同排同行、`left` 递增，网格未被破坏（浏览器为 `display: block` 的表生成匿名表盒）。
 
+**部署与线上复验。** 推送后 Cloudflare 侧 API 连续 504（`/secrets`、`/services`、`/versions`、`/subdomain`，Ray ID 均 SJC；官方状态页 `indicator: major`「Partial System Outage」），`npm run deploy`（仅 worker，不含迁移）重试第 2 次成功：`Uploaded memory-garden-agent (16.69 sec)`、`Deployed memory-garden-agent triggers (22.05 sec)`。线上资产由 `/assets/index-DMM4WYyg.css`（57015 B、`markdown-content` 命中 0）切换为 `/assets/index-BaLv26tG.css`（**57147 B、命中 3**，含 `.markdown-content pre,.markdown-content table{… display:block;overflow-x:auto}`）。
+
+部署后复验（真实 production、真实身份、真实 device-metrics emulation；citation 由接口实时取回）：
+
+| 场景 | 320 | 375 | 1280 |
+| --- | --- | --- | --- |
+| `f64ca1f3-…` 代码块条目（无 hash） | 溢出 **−15**；`pre` `overflow-x: auto`，client 223 / scroll 1483，`scrollLeft` 可达 **1260** | 溢出 −15，可达 1205 | 溢出 0；`pre` 由 `visible`（裁切）变 `auto`，可达 **1220** |
+| `f64ca1f3-…` citation 深链 | 溢出 −15；无错误；目录 2 项；「已选来源上下文 \`\`\`dot digraph fresh_purchase_tax_li…」 | 同左 | 同左 |
+| `5938b281-…` 长无断点词条目 | 溢出 **−15**；容器 `overflow-wrap: anywhere` | — | — |
+
+（过程中一度出现深链报错，经查为本文档前一轮手写 hash 时误用**来源版本 id** 充当 `revisionId`；该条目当前 revision 实为 `d15d15d8-a0f7-460c-bc72-0fc13f310030`，改用接口实时 citation 后全部通过——即该报错是正确拒绝。）
+
 ## 四、诚实边界
 
 - **分页导航未实测**：生产语料仅 5 条（< 20/页），`/search`、`/knowledge` 的分页控件存在但无法翻到第 2 页；分页行为仅有既有本地回归覆盖。
-- 3.2 的修复**尚未部署**，故其生产复验（`f64ca1f3-…` / `5938b281-…` 在 320 下溢出应为 0）待部署后补记；上述 CSSOM 复核是在生产 DOM 上应用同一规则的效果，不等同部署后复验。
-- 夹具表格几何是在 **cmux WKWebView** 标签内测量（该后端忽略视口模拟），因此 before/after 的**宽度列不代表 320/1280**；其结论仅用于"网格是否被 `display: block` 破坏"的同宽对比。受控宽度的证据来自 worker 的真实 Chromium 四宽表与生产 CSSOM 复核。
+- 3.2 的**部署由本会话执行**（`npm run deploy`，即 `wrangler deploy`，身份为账户 OAuth 令牌；**仅 worker 与静态资产，不含任何 D1 迁移**——迁移只在 `release` 脚本里），原因是推送后 Cloudflare API 持续 504、自动部署未能落地；仓库内不含任何 CI 部署工作流（`.github/workflows/` 为空）。三次失败与一次成功的原始输出见 3.2。
+- 夹具表格几何是在 **cmux WKWebView** 标签内测量（该后端忽略视口模拟），因此 before/after 的**宽度列不代表 320/1280**；其结论仅用于"网格是否被 `display: block` 破坏"的同宽对比。受控宽度的证据来自 worker 的真实 Chromium 四宽表与部署后的生产复验。
 - 未声明刷新/跨导航持久化行为；未覆盖无对象存储下的二进制上传路径；未执行远程迁移。
