@@ -335,3 +335,17 @@ Additionally, and independently of the above:
   `29 范围内 / 7 已关闭 / 22 未关闭` (D08 excluded).
 - The probe performs **no** DNS, TCP egress, VM boot or member authorization; `forwarding:false`
   is reported by the server itself.
+
+## 运行记录（2026-10-11，用户目标桌面）
+
+- **环境**：macOS 27.0.1（26A434）；Chrome **155.0.8059.39**（正式版，arm64；修订 `3ff7ac5a9224be9156d7f8703a06e22890aafd34`；V8 15.5.35.20）；命令行仅 `--restart --restart --flag-switches-begin --flag-switches-end`，**无** `--ignore-certificate-errors` / `--disable-web-security` 等放宽项；个人资料 `…/Chrome/Default`。
+- **Step 0 基线** `npm run test:browser-vm:connector`：**18/18 通过，0 失败 0 跳过**（本机回环协议与页面状态，非浏览器矩阵）。
+- **Step 1 探针启动**：`npm run dev:browser-vm:connector -- https://40b8e0aa.memory-garden-vm-connector-probe.pages.dev 55157` → `Handshake-only probe. Local control page: http://127.0.0.1:55157`。
+- **Step 2 控制页与配对码**：控制页加载正常（文案含「仅验证握手，不转发外网流量，不运行 Linux」及 30 秒有效期提示）；点击 `生成一次性配对码` 成功产出 **43 字符**一次性码。
+- **Step 3 桌面浏览器握手：被浏览器拦截，连接未建立**。
+  - 页面控制台：`WebSocket connection to 'ws://127.0.0.1:55157/probe' failed: Error in connection establishment: net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS`
+  - 页面内权限查询：`navigator.permissions.query({name:"local-network-access"})` = **denied**（`local-network` = prompt；`loopback-network` = denied）
+  - 页面自述：`连接不可用，浏览器未提供足够原因。请核对组件、端口和浏览器的权限 / 安全诊断，不据此判断具体原因。`
+  - 用户把该浏览器的本地网络访问开关打开后**仍为 denied**；以 CDP 真实输入点击 `验证连接` 后权限状态不变 —— 站点级已保存的拒绝优先于全局默认。
+- **结论与边界**：桌面浏览器准入**尚未取得通过证据**（Step 3–5 未完成）。未以任何方式放宽安全设置，也未程序化授予权限（那会绕过该权限本身要取得的用户同意）；未改动产品代码；探针仅在 `127.0.0.1:55157` 回环监听。下一步需用户在**该源**（`https://40b8e0aa.memory-garden-vm-connector-probe.pages.dev`）显式允许本地网络访问（或重置该站点权限后以真实手势重试），随后继续 Step 3–5。
+- **非声明**：本记录不关闭 D04/G0，不构成生产验收或 VM 联网验收。
