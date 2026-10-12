@@ -110,7 +110,6 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 - [ ] 启用私有 R2 后，真实文件、资产队列、预览、下载、重试和安全回收有范围匹配的生产证据（owned: `KB-003`、`ADM-004`; consumed: `OPS-009`）
 - [ ] AI、R2 或 Queue 故障不产生可见半成品，任务可有限重试/扫描恢复并受容量断路器保护（owned: `KB-003`、`KB-004`、`ADM-004`; consumed: `OPS-009`）
 - [ ] contributor 提交到可见知识、管理员审核到发布、两者搜索到精确引用回读均完成（owned: `ADM-003`; consumed: `IDN-004`、`IDN-005`）
-  - 2026-10-12 线上阻塞与修复：`/knowledge/<item>#<citationId>` 深链在 citation 与 revision 两个接口都返回 200 且 `chunkId`/行号/`citationId` 逐项吻合的情况下报「无法加载这条知识」——revision 载荷的 chunk 缺少 `text`，阅读器 `normalizeRevision` 因此丢弃全部 chunk。同因可见：「目录」对带真实 headingPath 的预存条目（`f64ca1f3-48ad-4ab7-8d90-c1ff81c724d2`，5 个标题）显示「暂无目录」；笔记保存静默丢 citations。修复 `a77d34bc`（revision 投影补 `chunks.body` → `text`），本地全量闸门通过；**待线上部署后复验深链、目录、笔记引用三面，方可勾选本项**。
 
 ## R2 — 任务、通知、看板与上下文消息
 
