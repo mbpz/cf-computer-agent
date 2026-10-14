@@ -12,7 +12,7 @@
 | 2 | `shared-layout-bg` | hover 时滑动的行高亮 | 活动项滑动已落地；hover 版用同一 `layoutId + SPRING_LAYOUT` 手法加在侧栏行上，并用 `useHoverCapable()` 门控（不引入该组件的克隆容器） | **已完成**（`侧栏 hover 滑动`提交） |
 | 3 | `animated-toast-stack` | 无落点的瞬时反馈 | 已接入 Provider + 栈；落在两个真实缺口：命令面板的主题切换、**面板发起退出登录失败**（此前账户菜单未挂载，用户完全看不到） | **已完成**（`beUI 通知栈`提交） |
 | 4 | `code-block` | 阅读器里的代码呈现与复制 | 已用细粒度 shiki 入口落地到版本对比面板（见 §4） | **已完成**（`beUI code-block`提交） |
-| 5 | `streaming-response` | 答案逐 token 流式呈现 | **核证后不可按原方案做**：唯一存在的流式端点是不做检索的裸模型流，而 grounded 答案走 strict JSON schema + 服务端 grounding 校验，逐 token 流与"带引用且经校验"不相容（见 §5） | 需要重新决定（见 §5） |
+| 5 | `streaming-response` | 逐 token 流式 | **原方案不成立**（唯一流式端点不做检索；grounded 答案走 strict JSON schema + 服务端校验，逐 token 与之不相容）。改为方案 A：阶段式进度 | **Phase 1 已完成**（服务端 SSE 出口 + 测试）；Phase 2 客户端待做 |
 | 6 | `table` / `table-async` | 可排序/虚拟化的 admin 列表 | 只在一个纯表格列表上落地（推荐 admin 审计页，只读、无写恢复），保留编号分页与 role 语义 | **需要你的决定**（+2 依赖） |
 | 7 | `heat-calendar` | 长周期活跃密度 | 服务端把统计范围限制在 1–31 天；要做年视图需新增 365 天密度读，再作为**独立可视化**（年密度 vs 30 天趋势，问的是不同问题，不算重复） | **需要你的决定**（改服务端） |
 | 8 | `expandable-tabs` | 图标+标签的页签 | 读源码后确认它是"浮动变形页签条"（展开成浮层、点外部/Esc 收起），不是在流布局里拥有面板的页面页签。改为**在仓库内自建流布局可展开页签**并切到阅读器移动端（见 §8） | **已完成**（`自建流布局页签`提交） |
@@ -49,11 +49,22 @@ markdown 正文的代码高亮（路线 B）仍未做：正文走净化 HTML，�
 
 ### 可选方案（都需要你确认）
 
-- **A（推荐）**：改为**阶段式进度**而非 token 流——服务端在 `library.ts` 的 chat 处理里以 SSE 推送真实阶段（检索 → 证据置信度 → 生成 → 校验），客户端用 `agent-activity` / `agent-progress` / `thinking-shimmer` 呈现，**校验通过后再整段呈现答案**。诚实、不与 grounding 冲突，且保留现有未确认写语义。
+- **A（推荐，已选定）**：改为**阶段式进度**而非 token 流——服务端推送真实阶段，客户端用 `agent-activity` / `agent-progress` 呈现，**校验通过后再整段呈现答案**。
 - **B**：按原方案消费 `/api/agent/sessions/:id/stream`。**不建议**——那会把 grounded 答案换成无依据的模型输出，是产品级回退。
 - **C**：保持现状（加载态占位），不动服务端。
 
 原方案里"客户端消费已有流"的判断是错的（我把它当成了问答链路），特此更正。
+
+### 落地进度
+
+**Phase 1（服务端，已完成）**：
+
+- `src/ai/cited-answer-service.ts` 新增 `CitedAnswerStage = "evidence" | "generating" | "validating"`，`answer(...)` 增加可选 `onStage` 回调，只在**真实发生**的节点上报（证据置信度算出后、进入生成前、进入校验前）；低置信度提前返回 `noEvidence` 时只报 `evidence`。
+- `src/routes/library.ts` 把 chat turn 主体提取为共享的 `runChatTurn(services, scope, turn, onStage?)`，**JSON 与 SSE 两条传输共用同一实现**，收据/会话/引用授权行为不会分叉；新增 `POST /api/knowledge/chat/stream`，返回 `text/event-stream`，帧为 `{stage}` … 直到终帧 `{stage:"answer", body}` 或 `{stage:"error", error:{code,message,retryable}}`。
+- 能力校验与请求校验仍发生在开流之前，所以 401/403/400 依旧是真实状态码；开流之后的失败只能作为错误帧下发。
+- 测试（`test/worker/m1-api.test.ts`）：阶段序列 `retrieving → evidence → generating → validating → answer`、非终帧不带 `body`、同 key 重放只出 `answer` 帧且不再调用模型、AI 失败只出 `error` 帧（`AI_UNAVAILABLE`/retryable）、JSON 传输不变。整套 65 项通过。
+
+**Phase 2（客户端，待做）**：`agent-data.ts` 增加 SSE 读取并把帧映射成与现在**同一套错误语义**（含"流未终结即视为未确认写"）；agent 路由用 beUI `agent-activity`/`agent-progress` 呈现阶段；补客户端测试与浏览器验收。
 
 ## 6. `table` 的落地边界
 

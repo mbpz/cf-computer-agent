@@ -2467,3 +2467,57 @@ function standardBase64(bytes: Uint8Array): string {
   }
   return btoa(binary);
 }
+
+type ChatStreamFrame = {
+  stage: string;
+  body?: { answer?: string; citations?: string[]; idempotencyKey?: string };
+  error?: { code: string; message: string; retryable: boolean };
+};
+
+async function chatStreamFrames(response: Response): Promise<ChatStreamFrame[]> {
+  const text = await response.text();
+  return text.trim().split("\n\n").filter(Boolean).map((chunk) => JSON.parse(chunk.replace(/^data: /u, "")) as ChatStreamFrame);
+}
+
+describe("grounded chat streaming", () => {
+  it("streams the real stages and the same terminal body the JSON transport returns", async () => {
+    const published = await publishSubmission("admin", "Streamed answer", "streamstagemarker is documented", "shared", "chat-stream-key0001");
+    const body = { question: "streamstagemarker", scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] } };
+    const init = { method: "POST", headers: { "idempotency-key": "chat-stream-key-00001" }, body: JSON.stringify(body) };
+    const response = await memberApi("contributor", "/api/knowledge/chat/stream", init);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const frames = await chatStreamFrames(response);
+    expect(frames.map((frame) => frame.stage)).toEqual(["retrieving", "evidence", "generating", "validating", "answer"]);
+    const terminal = frames.at(-1)!;
+    expect(terminal.body?.answer).toBe("Launch latency is documented. [1]");
+    expect(terminal.body?.citations).toHaveLength(1);
+    expect(terminal.body?.idempotencyKey).toBe("chat-stream-key-00001");
+    expect(frames.slice(0, -1).every((frame) => frame.body === undefined)).toBe(true);
+
+    const calls = fakeAiCalls;
+    const replay = await chatStreamFrames(await memberApi("contributor", "/api/knowledge/chat/stream", init));
+    expect(replay.map((frame) => frame.stage)).toEqual(["answer"]);
+    expect(replay[0]?.body).toEqual(terminal.body);
+    expect(fakeAiCalls).toBe(calls);
+  });
+
+  it("reports a pipeline failure as an error frame and never as an answer", async () => {
+    const published = await publishSubmission("admin", "Failing answer", "streamfailuremarker is documented", "shared", "chat-stream-key0002");
+    beforeFakeAnswer = async () => { throw new Error("local AI mock failure"); };
+    const response = await memberApi("contributor", "/api/knowledge/chat/stream", { method: "POST", body: JSON.stringify({ question: "streamfailuremarker", scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] } }) });
+    expect(response.status).toBe(200);
+    const frames = await chatStreamFrames(response);
+    expect(frames.some((frame) => frame.stage === "answer")).toBe(false);
+    expect(frames.at(-1)?.stage).toBe("error");
+    expect(frames.at(-1)?.error).toEqual({ code: "AI_UNAVAILABLE", message: "AI service is temporarily unavailable", retryable: true });
+  });
+
+  it("leaves the JSON transport unchanged", async () => {
+    const published = await publishSubmission("admin", "Json answer", "streamjsonmarker is documented", "shared", "chat-stream-key0003");
+    const response = await memberApi("contributor", "/api/knowledge/chat", { method: "POST", body: JSON.stringify({ question: "streamjsonmarker", scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] } }) });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect((await response.json<{ answer: string }>()).answer).toBe("Launch latency is documented. [1]");
+  });
+});

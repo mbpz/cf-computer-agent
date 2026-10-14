@@ -14,7 +14,7 @@ import type { Principal } from "../identity/principal";
 import { parseNumberedPageRequest, parsePageRequest } from "../pagination";
 import type { LibraryService } from "../library/service";
 import type { ChatScope, LibraryFilters, LibraryScope, SearchRequest } from "../library/types";
-import type { CitedAnswerService } from "../ai/cited-answer-service";
+import type { CitedAnswerService, CitedAnswerStage } from "../ai/cited-answer-service";
 import type { ChatConversationService } from "../chat/conversation-service";
 import type { ChatTurnReceipts } from "../chat/turn-receipts";
 import type { ChatFeedbackService } from "../chat/feedback-service";
@@ -55,6 +55,113 @@ export interface LibraryRouteServices {
   favorites: FavoritesService;
   recentVisits: RecentVisitsService;
   review: ReviewService;
+}
+
+type ChatTurnRequest = {
+  question: string;
+  chatScope: ChatScope;
+  conversationId: string | undefined;
+  key: string | null;
+};
+
+/** `retrieving` happens before the answer service is entered; the rest are the
+ * service's own milestones. */
+type ChatTurnStage = CitedAnswerStage | "retrieving";
+
+/**
+ * One grounded chat turn. Both transports share this so the receipt,
+ * conversation and citation-authorization behaviour cannot drift apart.
+ * `onStage` only reports stages that already happened, and the validated answer
+ * is handed back to the caller rather than streamed, so no unvalidated prose is
+ * ever exposed.
+ */
+async function runChatTurn(services: LibraryRouteServices, scope: LibraryScope, turn: ChatTurnRequest, onStage?: (stage: ChatTurnStage) => void): Promise<{ body: unknown; status: number }> {
+  const { question, chatScope, conversationId, key } = turn;
+  if (key !== null) {
+    const claim = await services.chatTurnReceipts.claim(scope.memberId, key, { question, scope: chatScope, conversationId });
+    if (claim.kind === "replay") {
+      // Cached prose can depend on earlier context, not just displayed citations.
+      await services.chatConversations.read(scope, claim.response.conversationId);
+      await parallelWork(services.workScope, claim.authorizationCitations.map((citationId) => () => services.library.readCitation(scope, citationId)));
+      return { body: claim.response, status: 200 };
+    }
+    let activeConversationId: string | undefined;
+    let commitAttempted = false;
+    try {
+      const conversation = await services.chatConversations.ensure(scope, conversationId, chatScope);
+      await services.chatConversations.startTurn(scope, conversation.id, claim.id);
+      activeConversationId = conversation.id;
+      const history = await services.chatConversations.history(scope, conversation.id);
+      const historyCitations = history.flatMap((message) => message.citationIds);
+      await parallelWork(services.workScope, [...new Set(historyCitations)].map((citationId) => () => services.library.readCitation(scope, citationId)));
+      onStage?.("retrieving");
+      const hits = await services.library.searchInternal(scope, { query: question, limit: 8 }, chatScope);
+      const answer = await services.citedAnswers.answer(scope, question, hits.items, history, onStage);
+      const authorizationCitations = [...new Set([...historyCitations, ...hits.items.map((hit) => hit.citationId), ...answer.citations])];
+      // Recheck after generation too: access may have changed during the AI call.
+      await parallelWork(services.workScope, authorizationCitations.map((citationId) => () => services.library.readCitation(scope, citationId)));
+      if (await services.chatConversations.isCancelled(scope, conversation.id, claim.id)) throw new AppError("CHAT_CANCELLED", "Chat generation was cancelled", 409);
+      const response = { ...answer, conversationId: conversation.id, idempotencyKey: key };
+      commitAttempted = true;
+      await services.chatTurnReceipts.complete({ memberId: scope.memberId, id: claim.id, question, response, authorizationCitations });
+      return { body: response, status: 200 };
+    } catch (error) {
+      // A lost commit response is not proof of failure. Preserve the durable receipt.
+      if (!commitAttempted) await services.chatTurnReceipts.fail(scope.memberId, claim.id);
+      throw error;
+    } finally {
+      if (activeConversationId) await services.chatConversations.finishTurn(scope, activeConversationId, claim.id);
+    }
+  }
+  // Compatibility path: older clients without a key do not get replay guarantees.
+  const conversation = await services.chatConversations.ensure(scope, conversationId, chatScope);
+  const turnId = crypto.randomUUID();
+  await services.chatConversations.startTurn(scope, conversation.id, turnId);
+  try {
+    const history = await services.chatConversations.history(scope, conversation.id);
+    onStage?.("retrieving");
+    const hits = await services.library.searchInternal(scope, { query: question, limit: 8 }, chatScope);
+    const answer = await services.citedAnswers.answer(scope, question, hits.items, history, onStage);
+    if (await services.chatConversations.isCancelled(scope, conversation.id, turnId)) throw new AppError("CHAT_CANCELLED", "Chat generation was cancelled", 409);
+    await services.chatConversations.appendTurn(scope, conversation.id, { turnId, question, answer: answer.answer, citationIds: answer.citations });
+    return { body: { ...answer, conversationId: conversation.id }, status: 200 };
+  } finally {
+    await services.chatConversations.finishTurn(scope, conversation.id, turnId);
+  }
+}
+
+/**
+ * Server-sent stage frames for the same turn. Capability checks and request
+ * validation already produced a real status before this runs, so the stream
+ * itself only carries pipeline outcomes: `stage` frames, one terminal `answer`
+ * frame, or one terminal `error` frame whose `error` object matches the JSON
+ * transport's error shape. A client that sees the stream end without a terminal
+ * frame must treat the write as unconfirmed.
+ */
+function chatStreamResponse(services: LibraryRouteServices, scope: LibraryScope, turn: ChatTurnRequest, context: RequestContext): Response {
+  const encoder = new TextEncoder();
+  const stream = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = stream.writable.getWriter();
+  const frame = (payload: unknown) => writer.write(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+  void runChatTurn(services, scope, turn, (stage) => { void frame({ stage }); })
+    .then(({ body }) => frame({ stage: "answer", body }))
+    .catch((error: unknown) => {
+      const failure = error instanceof AppError
+        ? { code: error.code, message: error.message, retryable: error.retryable }
+        : { code: "CHAT_FAILED", message: "Chat generation failed", retryable: false };
+      return frame({ stage: "error", error: failure });
+    })
+    .then(() => writer.close())
+    .catch(() => undefined);
+  return new Response(stream.readable, {
+    status: 200,
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "text/event-stream; charset=utf-8",
+      "x-content-type-options": "nosniff",
+      "x-request-id": context.requestId,
+    },
+  });
 }
 
 export async function routeLibraryApi(
@@ -230,7 +337,7 @@ export async function routeLibraryApi(
     return jsonResponse({ feedback }, 201, context.requestId);
   }
 
-  if (url.pathname === "/api/knowledge/chat") {
+  if (url.pathname === "/api/knowledge/chat" || url.pathname === "/api/knowledge/chat/stream") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
     const input = strictRecord(
@@ -243,56 +350,10 @@ export async function routeLibraryApi(
     const chatScope = chatScopeRequest(input.scope);
     const conversationId = input.conversationId === undefined ? undefined : stringValue(input.conversationId);
     if (conversationId !== undefined && !/^[A-Za-z0-9_-]{1,128}$/u.test(conversationId)) throw invalidChatRequest();
-    const key = request.headers.get("idempotency-key");
-    if (key !== null) {
-      const claim = await services.chatTurnReceipts.claim(scope.memberId, key, { question, scope: chatScope, conversationId });
-      if (claim.kind === "replay") {
-        // Cached prose can depend on earlier context, not just displayed citations.
-        await services.chatConversations.read(scope, claim.response.conversationId);
-        await parallelWork(services.workScope, claim.authorizationCitations.map((citationId) => () => services.library.readCitation(scope, citationId)));
-        return jsonResponse(claim.response, 200, context.requestId);
-      }
-      let activeConversationId: string | undefined;
-      let commitAttempted = false;
-      try {
-        const conversation = await services.chatConversations.ensure(scope, conversationId, chatScope);
-        await services.chatConversations.startTurn(scope, conversation.id, claim.id);
-        activeConversationId = conversation.id;
-        const history = await services.chatConversations.history(scope, conversation.id);
-        const historyCitations = history.flatMap((message) => message.citationIds);
-        await parallelWork(services.workScope, [...new Set(historyCitations)].map((citationId) => () => services.library.readCitation(scope, citationId)));
-        const hits = await services.library.searchInternal(scope, { query: question, limit: 8 }, chatScope);
-        const answer = await services.citedAnswers.answer(scope, question, hits.items, history);
-        const authorizationCitations = [...new Set([...historyCitations, ...hits.items.map((hit) => hit.citationId), ...answer.citations])];
-        // Recheck after generation too: access may have changed during the AI call.
-        await parallelWork(services.workScope, authorizationCitations.map((citationId) => () => services.library.readCitation(scope, citationId)));
-        if (await services.chatConversations.isCancelled(scope, conversation.id, claim.id)) throw new AppError("CHAT_CANCELLED", "Chat generation was cancelled", 409);
-        const response = { ...answer, conversationId: conversation.id, idempotencyKey: key };
-        commitAttempted = true;
-        await services.chatTurnReceipts.complete({ memberId: scope.memberId, id: claim.id, question, response, authorizationCitations });
-        return jsonResponse(response, 200, context.requestId);
-      } catch (error) {
-        // A lost commit response is not proof of failure. Preserve the durable receipt.
-        if (!commitAttempted) await services.chatTurnReceipts.fail(scope.memberId, claim.id);
-        throw error;
-      } finally {
-        if (activeConversationId) await services.chatConversations.finishTurn(scope, activeConversationId, claim.id);
-      }
-    }
-    // Compatibility path: older clients without a key do not get replay guarantees.
-    const conversation = await services.chatConversations.ensure(scope, conversationId, chatScope);
-    const turnId = crypto.randomUUID();
-    await services.chatConversations.startTurn(scope, conversation.id, turnId);
-    try {
-      const history = await services.chatConversations.history(scope, conversation.id);
-      const hits = await services.library.searchInternal(scope, { query: question, limit: 8 }, chatScope);
-      const answer = await services.citedAnswers.answer(scope, question, hits.items, history);
-      if (await services.chatConversations.isCancelled(scope, conversation.id, turnId)) throw new AppError("CHAT_CANCELLED", "Chat generation was cancelled", 409);
-      await services.chatConversations.appendTurn(scope, conversation.id, { turnId, question, answer: answer.answer, citationIds: answer.citations });
-      return jsonResponse({ ...answer, conversationId: conversation.id }, 200, context.requestId);
-    } finally {
-      await services.chatConversations.finishTurn(scope, conversation.id, turnId);
-    }
+    const turn = { question, chatScope, conversationId, key: request.headers.get("idempotency-key") };
+    if (url.pathname === "/api/knowledge/chat/stream") return chatStreamResponse(services, scope, turn, context);
+    const { body, status } = await runChatTurn(services, scope, turn);
+    return jsonResponse(body, status, context.requestId);
   }
 
   const summary = /^\/api\/knowledge\/([^/]+)\/summary$/.exec(url.pathname);

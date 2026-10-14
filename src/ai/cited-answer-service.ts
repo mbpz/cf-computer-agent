@@ -114,6 +114,13 @@ export interface CitedAnswerHistoryMessage {
   citationIds: string[];
 }
 
+/**
+ * Real milestones of a grounded answer, reported so a transport can show
+ * progress. Only stages that have actually occurred are emitted: the answer text
+ * itself is never exposed before grounding validation passes.
+ */
+export type CitedAnswerStage = "evidence" | "generating" | "validating";
+
 export interface CitedAnswerServiceOptions {
   timeoutMs?: number;
 }
@@ -152,6 +159,7 @@ export class CitedAnswerService {
     question: string,
     authorizedHits: SearchHit[],
     history: CitedAnswerHistoryMessage[] = [],
+    onStage?: (stage: CitedAnswerStage) => void,
   ): Promise<CitedAnswerResult> {
     assertScope(scope);
     const normalizedQuestion = normalizeSearchQuery(question);
@@ -164,11 +172,13 @@ export class CitedAnswerService {
         excerpt: context.excerpt,
       })),
     );
+    onStage?.("evidence");
     if (evidenceConfidence < EVIDENCE_CONFIDENCE_THRESHOLD) {
       return noEvidence(evidenceConfidence);
     }
 
     let providerResult: unknown;
+    onStage?.("generating");
     try {
       providerResult = await withTimeout(this.ai.run(APP_CONFIG.model, {
         messages: [
@@ -196,6 +206,7 @@ export class CitedAnswerService {
       throw aiUnavailable();
     }
 
+    onStage?.("validating");
     const providerAnswer = parseProviderAnswer(providerResult);
     const normalizedClaims = validateGrounding(providerAnswer, preparedSources);
     const conflicts = validateConflicts(providerAnswer.conflicts ?? [], preparedSources);
