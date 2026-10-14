@@ -25,6 +25,17 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Materials — Apple-style frosted surfaces. Depth comes from blur,
+     translucency, a hairline highlight and a soft shadow only; decorative
+     gradients stay forbidden. Values are var-indirected so the dark theme
+     reuses them unchanged. */
+  --material-blur: 24px;
+  --material-saturate: 180%;
+  --material-chrome: color-mix(in oklab, var(--card) 72%, transparent);
+  --material-panel: color-mix(in oklab, var(--card) 82%, transparent);
+  --material-surface: color-mix(in oklab, var(--card) 88%, transparent);
+  --material-highlight: color-mix(in oklab, white 62%, transparent);
+  --material-shadow: 0 1px 1px color-mix(in oklab, black 5%, transparent), 0 12px 32px -12px color-mix(in oklab, black 26%, transparent);
 }
 
 .dark {
@@ -46,6 +57,9 @@
   --border: oklch(0.32 0.025 255);
   --input: oklch(0.32 0.025 255);
   --ring: oklch(0.7 0.13 235);
+  /* Dark materials need a weaker edge light and a deeper shadow. */
+  --material-highlight: color-mix(in oklab, white 11%, transparent);
+  --material-shadow: 0 1px 1px color-mix(in oklab, black 32%, transparent), 0 18px 44px -16px color-mix(in oklab, black 62%, transparent);
 }
 
 @theme inline {
@@ -127,5 +141,50 @@ body {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* Material utilities. `@utility` keeps them in Tailwind's utilities layer, so
+   variants still compose and the existing `focus-visible:ring-*` (higher
+   specificity) keeps replacing the material shadow while a surface is focused. */
+@utility material-chrome {
+  background-color: var(--material-chrome);
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+}
+
+@utility material-panel {
+  background-color: var(--material-panel);
+  -webkit-backdrop-filter: blur(calc(var(--material-blur) * 1.4)) saturate(var(--material-saturate));
+  backdrop-filter: blur(calc(var(--material-blur) * 1.4)) saturate(var(--material-saturate));
+  box-shadow: inset 0 1px 0 0 var(--material-highlight), var(--material-shadow);
+}
+
+@utility material-surface {
+  background-color: var(--material-surface);
+  -webkit-backdrop-filter: blur(calc(var(--material-blur) * 0.6)) saturate(var(--material-saturate));
+  backdrop-filter: blur(calc(var(--material-blur) * 0.6)) saturate(var(--material-saturate));
+  box-shadow: inset 0 1px 0 0 var(--material-highlight), var(--material-shadow);
+}
+
+/* Reduce Transparency drops the material, the way the platform does. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --material-chrome: var(--card);
+    --material-panel: var(--card);
+    --material-surface: var(--card);
+    --material-blur: 0px;
+    --material-saturate: 100%;
+    --material-highlight: transparent;
+  }
+}
+
+/* Without backdrop-filter a translucent surface would leave text over
+   unscrimmed content, so fall back to the opaque surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --material-chrome: var(--card);
+    --material-panel: var(--card);
+    --material-surface: var(--card);
   }
 }

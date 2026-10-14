@@ -98,7 +98,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
   return (
     <div data-shell-root className="min-h-screen bg-background text-foreground lg:h-dvh lg:overflow-hidden">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2">{locale.t("SHELL_SKIP_MAIN")}</a>
-      <aside data-shell-sidebar data-shell-sidebar-state={collapsed ? "collapsed" : "expanded"} className={cn("fixed inset-y-0 left-0 z-40 hidden border-r bg-card transition-[width] duration-200 ease-[var(--ease-out)] lg:block", collapsed ? "w-16" : "w-64")}>
+      <aside data-shell-sidebar data-shell-sidebar-state={collapsed ? "collapsed" : "expanded"} className={cn("fixed inset-y-0 left-0 z-40 hidden border-r material-chrome transition-[width] duration-200 ease-[var(--ease-out)] lg:block", collapsed ? "w-16" : "w-64")}>
         <div className="flex h-full min-h-0 flex-col p-3">
           <div className={cn("mb-4 flex min-h-12 shrink-0 items-center gap-2", collapsed ? "justify-center" : "justify-between") }>
             <div className={cn("min-w-0 px-2", collapsed && "sr-only")}><p className="truncate text-sm font-semibold">{locale.t("APP_BRAND_EYEBROW")}</p><p className="mt-1 truncate text-xs text-muted-foreground">{locale.t("NAV_KNOWLEDGE_BASE")}</p></div>
@@ -116,7 +116,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
         </div>
       </aside>
       <div className={cn("transition-[padding] duration-200 ease-[var(--ease-out)] lg:flex lg:h-dvh lg:min-h-0 lg:flex-col", collapsed ? "lg:pl-16" : "lg:pl-64")}>
-        <header data-shell-topbar className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
+        <header data-shell-topbar className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b material-chrome px-4 lg:px-6">
           <div className="hidden min-w-0 items-center gap-3 sm:flex"><Breadcrumb pathname={pathname} locale={locale} /></div>
           <div data-shell-topbar-actions className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
             <CommandPalette session={session} locale={locale} onNavigate={navigate} onToggleTheme={toggleTheme} onLogout={onLogout} logoutPending={logoutPending} />

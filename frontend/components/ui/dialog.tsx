@@ -25,7 +25,7 @@ export const DialogContent = ({ className, portal = false, ...props }: HTMLMotio
   if (!open) return null;
   // Tailwind v4 compiles the centering utilities to the `translate` property,
   // so animating `transform` here never fights the -50%/-50% offset.
-  const surface = <motion.div ref={ref} role="dialog" aria-modal="true" data-focus-scope={open ? "true" : "false"} tabIndex={-1} initial={reduce ? false : { opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.18, ease: EASE_OUT }} className={cn("fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-6 shadow-lg", className)} {...props} />;
+  const surface = <motion.div ref={ref} role="dialog" aria-modal="true" data-focus-scope={open ? "true" : "false"} tabIndex={-1} initial={reduce ? false : { opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.18, ease: EASE_OUT }} className={cn("fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border p-6 material-panel", className)} {...props} />;
   return portal && typeof document !== "undefined" ? createPortal(surface, document.body) : surface;
 };
 export const DialogTitle = ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => <h2 className={cn("text-lg font-semibold", className)} {...props} />;

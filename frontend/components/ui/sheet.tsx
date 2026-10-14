@@ -15,7 +15,7 @@ export function SheetContent({ className, side = "left", ...props }: HTMLMotionP
   const ref = useFocusScope(open, () => onOpenChange?.(false));
   const reduce = useReducedMotion();
   if (!open) return null;
-  return <motion.div ref={ref} role="dialog" aria-modal="true" data-focus-scope={open ? "true" : "false"} tabIndex={-1} data-sheet-content data-side={side} initial={reduce ? false : { x: side === "right" ? 32 : -32, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.26, ease: EASE_DRAWER }} className={cn("fixed inset-y-0 z-50 w-72 border bg-background p-6 shadow-lg", side === "right" ? "right-0" : "left-0", className)} {...props} />;
+  return <motion.div ref={ref} role="dialog" aria-modal="true" data-focus-scope={open ? "true" : "false"} tabIndex={-1} data-sheet-content data-side={side} initial={reduce ? false : { x: side === "right" ? 32 : -32, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.26, ease: EASE_DRAWER }} className={cn("fixed inset-y-0 z-50 w-72 border p-6 material-panel", side === "right" ? "right-0" : "left-0", className)} {...props} />;
 }
 
 export const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div className={cn("flex flex-col space-y-2 text-left", className)} {...props} />;

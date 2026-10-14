@@ -96,7 +96,7 @@ export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-home-section="tasks">
           <CardHeader className="flex-row items-start justify-between space-y-0">
             <div>
               <CardTitle>{frontendText(locale, "WORKBENCH_TASKS_TITLE")}</CardTitle>
@@ -112,7 +112,7 @@ export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card>
+        <Card data-home-section="knowledge">
           <CardHeader className="flex-row items-start justify-between space-y-0">
             <CardTitle>{frontendText(locale, "WORKBENCH_KNOWLEDGE_TITLE")}</CardTitle>
             <a href="/knowledge" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "HOME_OPEN_KNOWLEDGE")}</a>
@@ -131,7 +131,7 @@ export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-home-section="activity">
           <CardHeader><CardTitle>{frontendText(locale, "WORKBENCH_ACTIVITY_TITLE")}</CardTitle></CardHeader>
           <CardContent>
             {unavailable.has("activity") ? failed : summary.recentActivity.length ? (

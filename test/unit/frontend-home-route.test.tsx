@@ -39,7 +39,14 @@ describe("home summary real route", () => {
   async function flush() { await act(async () => { await new Promise(r => setTimeout(r, 20)); }); }
   async function render() { await act(async () => root.render(<App />)); for (let n = 0; n < 20 && requests.length < 3; n++) await flush(); expect(requests).toHaveLength(3); }
   async function answer(index: number, body: unknown, status = 200) { await act(async () => { requests[index].resolve(Response.json(body, { status })); }); await flush(); }
-  const section = (name: string) => Array.from(container.querySelectorAll("h3")).find(h => h.textContent === ({ tasks: "My tasks", knowledge: "Recent knowledge", activity: "Activity" } as Record<string,string>)[name])?.closest(".bg-card");
+  // Scope by a stable hook rather than a styling class, and keep the heading
+  // check: the localized title must still live inside its own section.
+  const HOME_SECTION_TITLES = { tasks: "My tasks", knowledge: "Recent knowledge", activity: "Activity" } as const;
+  const section = (name: keyof typeof HOME_SECTION_TITLES) => {
+    const scoped = container.querySelector(`[data-home-section="${name}"]`);
+    const heading = Array.from(container.querySelectorAll("h3")).find(h => h.textContent === HOME_SECTION_TITLES[name]);
+    return scoped && heading && scoped.contains(heading) ? scoped : null;
+  };
   it.each([true, false])("logout confirmed=%s respects the security boundary rather than ordinary leave consent", async confirmed => {
     await render(); await answer(0, taskSummary); await answer(1, knowledge); await answer(2, { items: [] });
     const baseFetch = vi.mocked(fetch).getMockImplementation()!; let loggedOut = false;

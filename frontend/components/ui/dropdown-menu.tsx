@@ -137,7 +137,7 @@ export function DropdownMenuContent({ className, onKeyDown, ...props }: React.HT
     items[index]?.focus();
   };
   if (!open) return null;
-  return <div ref={contentRef} {...props} role="menu" className={cn("absolute right-0 z-20 mt-2 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md", className)} onKeyDown={handleKeyDown} />;
+  return <div ref={contentRef} {...props} role="menu" className={cn("absolute right-0 z-20 mt-2 min-w-48 rounded-md border p-1 text-popover-foreground material-panel", className)} onKeyDown={handleKeyDown} />;
 }
 
 export function DropdownMenuItem({ className, closeOnSelect = true, disabled = false, onClick, role = "menuitem", ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { closeOnSelect?: boolean }) {

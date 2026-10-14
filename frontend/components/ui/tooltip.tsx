@@ -19,7 +19,7 @@ export function TooltipContent({ className, sideOffset = 4, children, ...props }
     <TooltipPrimitive.Content
       side="right"
       sideOffset={sideOffset}
-      className={cn("z-50 w-fit origin-[var(--radix-tooltip-content-transform-origin)] rounded-md border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md", className)}
+      className={cn("z-50 w-fit origin-[var(--radix-tooltip-content-transform-origin)] rounded-md border px-3 py-1.5 text-xs text-popover-foreground material-panel", className)}
       {...props}
     >
       {children}

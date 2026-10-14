@@ -336,7 +336,7 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 - `frontend/components/motion/not-found/glitch.tsx`: `f63ed5577881f978c331ffd4552241abc90c71c14cd2bb5e2eafa2ed2556ef03`
 - `frontend/components/motion/not-found/shared.tsx`: `f98d45223967f45277bf89b659b308e63c784397d4da9c2830565b9bcfc508da`
 - `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
-- `frontend/components/ui/card.tsx`: `bb7f77ce45ee3fec21e25739c61d547900498a0117d3e12101e8932eae204b41`
+- `frontend/components/ui/card.tsx`: `6de765c3d44b584bccdd7619816718d0500fdcd20428fcaa98a74c31f0614923`
 - `frontend/components/ui/tabs.tsx`: `1db24d455b581eae7de2ed76e1aa6cc01d0370fa8b9b221fca4d78207cdc9a77`
 - `frontend/features/environments/account-network-boundary.tsx`: `9835f50b5387cc2173e47a5dd4c4f85e0f64ec419d88926578b262bf971716b2`
 - `frontend/features/environments/account-network-owner.mjs`: `06943c97426e9b8df13e267ff0f668bbc2e3c80445905d2ac3a76591593f735f`
@@ -392,3 +392,8 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 - 新增 `frontend/components/motion/number-ticker.tsx`，并把它接到 `frontend/pages/admin/admin-dashboard-page.tsx` 的管理概览计数与 `frontend/pages/admin/analytics-page.tsx` 的三张统计卡。
 - 未归属集合不变，仍为 **115**：该组件的候选经管理页路由 root 追踪为已归属，没有新增未归属坐标、没有坐标移除、也没有既有指纹漂移，因此不新增未归属行与指纹。当前索引 283 文件 / 1211 候选 / 115 未归属（候选数与上轮相同：该组件不引入新的控件候选）。
 - 同批次另外三个候选被否决：`table`／`table-async` 需要 `@tanstack/react-table` 与 `@tanstack/react-virtual` 两个新依赖，并把承载分页、权限与恢复语义的 admin 列表改写为虚拟化表格，收益不足抵偿回归面；`heat-calendar` 的唯一候选数据源是 7／14／30 天的 `daily` 序列，而该页已有可读的柱状趋势图，替换会降低趋势可读性、并列展示又会同一数据两种图形；`expandable-tabs` 无调用点——通用 `Tabs` 原语在第一方源码中零消费。
+
+### 2026-10-14 毛玻璃材质层后重新审查
+
+- 本轮只为既有表面替换背景/阴影类名（`bg-card`／`bg-background`／`bg-popover`／`shadow-*` → `material-chrome`／`material-panel`／`material-surface`），未新增控件、未改回调。索引仍为 283 文件 / 1211 候选 / 115 未归属。
+- 唯一需要更新的指纹是 `frontend/components/ui/card.tsx`：候选坐标与语义未变，仅因类名替换导致源码字节变化。其余被 touched 的文件（shell、dialog、sheet、dropdown-menu、tooltip、落地页 CSS）的候选均归属各自路由 root，不在本记录指纹范围内。
