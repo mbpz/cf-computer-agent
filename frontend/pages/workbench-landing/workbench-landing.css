@@ -38,7 +38,7 @@ html:has(.workbench-landing-overlay) { overflow: hidden; }
   --ring: hsl(166 22% 67%);
 }
 .workbench-container { width: min(100% - 4rem, 86rem); margin-inline: auto; }
-.workbench-header { position: sticky; top: 0; z-index: 30; min-height: 5rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; border-bottom: 1px solid transparent; background: color-mix(in oklab, var(--background) 74%, transparent); -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%); }
+.workbench-header { position: sticky; top: 0; z-index: 30; min-height: 5rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; border-bottom: 1px solid transparent; background: color-mix(in oklab, var(--background) 88%, transparent); -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%); }
 .workbench-brand { font-size: 1.05rem; font-weight: 650; letter-spacing: -.035em; white-space: nowrap; }
 .workbench-header-actions, .workbench-hero-actions, .workbench-guide-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
 .workbench-locale { min-height: 2.75rem; max-width: 100%; border: 1px solid var(--input); border-radius: .375rem; padding: .4rem .6rem; background: var(--background); font: inherit; font-size: .8125rem; color: inherit; }
@@ -84,7 +84,7 @@ html:has(.workbench-landing-overlay) { overflow: hidden; }
 .workbench-footer p { max-width: 58ch; margin-block: 1rem; font-size: .875rem; }
 /* One fixed modal layer; the sibling page is inert while this is mounted. */
 .workbench-landing-overlay { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: flex-end; align-items: center; padding: .5rem 1.5rem; background: hsl(150 5% 8% / .44); }
-.workbench-feature-panel { box-sizing: border-box; width: min(100%, 31rem); max-height: calc(100dvh - 1rem); overflow-y: auto; overscroll-behavior-y: contain; padding: 1.5rem; border: 1px solid var(--border); border-radius: .75rem; background: color-mix(in oklab, var(--card) 84%, transparent); color: var(--card-foreground); -webkit-backdrop-filter: blur(32px) saturate(180%); backdrop-filter: blur(32px) saturate(180%); box-shadow: inset 0 1px 0 0 color-mix(in oklab, white 55%, transparent), 0 18px 48px -18px color-mix(in oklab, black 45%, transparent); }
+.workbench-feature-panel { box-sizing: border-box; width: min(100%, 31rem); max-height: calc(100dvh - 1rem); overflow-y: auto; overscroll-behavior-y: contain; padding: 1.5rem; border: 1px solid var(--border); border-radius: .75rem; background: color-mix(in oklab, var(--card) 93%, transparent); color: var(--card-foreground); -webkit-backdrop-filter: blur(32px) saturate(180%); backdrop-filter: blur(32px) saturate(180%); box-shadow: inset 0 1px 0 0 color-mix(in oklab, white 55%, transparent), 0 14px 36px -20px color-mix(in oklab, black 38%, transparent); }
 @media (prefers-reduced-transparency: reduce) { .workbench-header, .workbench-feature-panel { background: var(--background); -webkit-backdrop-filter: none; backdrop-filter: none; } .workbench-feature-panel { background: var(--card); } }
 .workbench-panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
 .workbench-panel-header p { margin: .5rem 0 0; }

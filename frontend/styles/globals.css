@@ -31,11 +31,13 @@
      reuses them unchanged. */
   --material-blur: 24px;
   --material-saturate: 180%;
-  --material-chrome: color-mix(in oklab, var(--card) 72%, transparent);
-  --material-panel: color-mix(in oklab, var(--card) 82%, transparent);
-  --material-surface: color-mix(in oklab, var(--card) 88%, transparent);
+  /* Opaque enough that a surface still reads as its own colour: the first pass
+     mixed too far toward the page background and looked washed out and grey. */
+  --material-chrome: color-mix(in oklab, var(--card) 86%, transparent);
+  --material-panel: color-mix(in oklab, var(--card) 92%, transparent);
+  --material-surface: color-mix(in oklab, var(--card) 95%, transparent);
   --material-highlight: color-mix(in oklab, white 62%, transparent);
-  --material-shadow: 0 1px 1px color-mix(in oklab, black 5%, transparent), 0 12px 32px -12px color-mix(in oklab, black 26%, transparent);
+  --material-shadow: 0 1px 1px color-mix(in oklab, black 4%, transparent), 0 10px 26px -14px color-mix(in oklab, black 20%, transparent);
 }
 
 .dark {
@@ -57,9 +59,10 @@
   --border: oklch(0.32 0.025 255);
   --input: oklch(0.32 0.025 255);
   --ring: oklch(0.7 0.13 235);
-  /* Dark materials need a weaker edge light and a deeper shadow. */
+  /* Dark materials need a weaker edge light and a shallower shadow: a deep
+     diffuse shadow over a dark page reads as grey mud rather than depth. */
   --material-highlight: color-mix(in oklab, white 11%, transparent);
-  --material-shadow: 0 1px 1px color-mix(in oklab, black 32%, transparent), 0 18px 44px -16px color-mix(in oklab, black 62%, transparent);
+  --material-shadow: 0 1px 1px color-mix(in oklab, black 22%, transparent), 0 12px 30px -18px color-mix(in oklab, black 45%, transparent);
 }
 
 @theme inline {
