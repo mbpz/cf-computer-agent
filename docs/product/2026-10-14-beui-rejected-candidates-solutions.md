@@ -19,10 +19,12 @@
 
 ## 4. `code-block` 的两条路线
 
-- **路线 A（推荐，无需新依赖）**：只把 beUI `code-block` 用在阅读器的**来源片段面板**（`data-reader-outline` 旁边的 chunk 文本，含行号）。这是纯 React 面，不涉及 markdown 管线。
-- **路线 B（高亮正文代码）**：markdown 正文由 `renderSafeMarkdown` 输出净化 HTML。要加语法高亮，需引入 shiki（多语法包，体积大）或等价的高亮器，并把初始化放到懒加载 chunk 里，以维持 `verify:browser-vm:build` 的 gzip 预算检查。
+已确认：`code-block.tsx` 依赖 `agent-code.tsx`，后者**静态** `import { createHighlighter } from "shiki"`（仅调用时机是懒的）。因此直接落地会把 shiki 带进启动包。
 
-`code-block` 本体依赖 shiki，因此**无论哪条路线，只要引入该组件就会带入 shiki**；若只想拿到"代码外壳 + 复制按钮"的观感而不带高亮，应改为在仓库内自建等价外壳（这与"优先使用 beUI 源码"冲突，需你确认取舍）。
+- **路线 A（推荐，仍需新依赖）**：只把 beUI `code-block` 用在阅读器的**来源片段面板**（chunk 文本，含行号），并把 `agent-code.tsx` 的 shiki 改为**动态导入**（`await import("shiki")`，一行改动），使 shiki 落进懒加载 chunk。这样启动包不变，仍满足仓库的构建体积检查。它已支持 `diff` 语言，因此版本对比面板也可复用。
+- **路线 B（高亮 markdown 正文）**：正文由 `renderSafeMarkdown` 输出净化 HTML，要加高亮就得改渲染管线（HTML→React 或引入同步高亮器）。不建议与本批次合并。
+
+**需要的决定**：是否接受新增 `shiki` 依赖（懒加载）。接受即按路线 A 落地。
 
 ## 5. `streaming-response` 的具体做法
 
@@ -57,6 +59,12 @@
 - 该读必须走同一 D1 事务与同一授权检查，避免出现第二套统计口径。
 - 客户端把结果交给 `HeatCalendar`（`endDate` 用 UTC 日历日），与现有 30 天柱状图并列，两者回答不同问题。
 
-## 8. 顺带清理
+## 8. `expandable-tabs` 的约束
 
-`frontend/components/ui/tabs.tsx` 在第一方源码中零消费（仅自身定义），属于死重；随 `expandable-tabs` 落地时一并删除，并同步 `docs/product/frontend-operation-unassigned-review.md` 的对应指纹与坐标。
+已确认 `ExpandableTabs` 的契约是 `items[] = { id, label, icon, content }`，即**页签拥有自己的内容面板**，且 `value` 支持 `null`（全部收起）。
+
+阅读器移动端那个 `role="tablist"` 只有两个按钮，而它控制的 `#reader-outline-panel` / `#reader-sources-panel` 同时是**桌面三栏栅格的一部分**（`lg:block` 常显）。直接套用要么把面板搬进组件、破坏桌面栅格，要么两处渲染同一面板（重复）。
+
+**需要的决定**：是否接受为此重构阅读器布局（移动端为可展开页签、桌面端仍为三栏）。若不重构，则保持现状。
+
+顺带说明：`ui/tabs.tsx` 在第一方源码中零消费，但 `docs/product/frontend-operation-unassigned-review.md` 已把它登记为 `unmounted-ui`，并按仓库既有处置保留（"由功能需求确认是否需接线，不自动计为缺失"）。因此**不应**为了"清理死代码"而单方面删除它，而应由功能需求决定去留。
