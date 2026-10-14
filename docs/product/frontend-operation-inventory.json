@@ -9,8 +9,11 @@
     "frontend/components/agent/agent-feedback.tsx",
     "frontend/components/agent/agent-history-list.tsx",
     "frontend/components/agent/answer-panel.tsx",
+    "frontend/components/agents/agent-code.tsx",
     "frontend/components/agents/agent-disclosure.tsx",
+    "frontend/components/agents/agent-highlighter.ts",
     "frontend/components/agents/citations.tsx",
+    "frontend/components/agents/code-block.tsx",
     "frontend/components/assets/asset-availability-panel.tsx",
     "frontend/components/assets/asset-dropzone.tsx",
     "frontend/components/assets/asset-preview-model.ts",
@@ -2704,6 +2707,8 @@
         "frontend/app.tsx:843:5",
         "frontend/app.tsx:871:14",
         "frontend/app.tsx:930:10",
+        "frontend/components/agents/code-block.tsx:149:11",
+        "frontend/components/agents/code-block.tsx:170:7",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2731,58 +2736,58 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/knowledge-reader-page.tsx:20:10",
-        "frontend/pages/knowledge-reader-page.tsx:56:134",
-        "frontend/pages/knowledge-reader-page.tsx:59:5",
-        "frontend/pages/knowledge-reader-page.tsx:60:7",
+        "frontend/pages/knowledge-reader-page.tsx:21:10",
+        "frontend/pages/knowledge-reader-page.tsx:57:134",
+        "frontend/pages/knowledge-reader-page.tsx:60:5",
         "frontend/pages/knowledge-reader-page.tsx:61:7",
-        "frontend/pages/knowledge-reader-page.tsx:65:9",
-        "frontend/pages/knowledge-reader-page.tsx:68:491",
-        "frontend/pages/knowledge-reader-page.tsx:68:644",
-        "frontend/pages/knowledge-reader-page.tsx:68:894",
-        "frontend/pages/knowledge-reader-page.tsx:68:1124",
-        "frontend/pages/knowledge-reader-page.tsx:68:1373",
-        "frontend/pages/knowledge-reader-page.tsx:68:1754",
-        "frontend/pages/knowledge-reader-page.tsx:68:2033",
-        "frontend/pages/knowledge-reader-page.tsx:68:2286",
-        "frontend/pages/knowledge-reader-page.tsx:72:9",
+        "frontend/pages/knowledge-reader-page.tsx:62:7",
+        "frontend/pages/knowledge-reader-page.tsx:66:9",
+        "frontend/pages/knowledge-reader-page.tsx:69:491",
+        "frontend/pages/knowledge-reader-page.tsx:69:644",
+        "frontend/pages/knowledge-reader-page.tsx:69:894",
+        "frontend/pages/knowledge-reader-page.tsx:69:1124",
+        "frontend/pages/knowledge-reader-page.tsx:69:1373",
+        "frontend/pages/knowledge-reader-page.tsx:69:1754",
+        "frontend/pages/knowledge-reader-page.tsx:69:2033",
+        "frontend/pages/knowledge-reader-page.tsx:69:2286",
         "frontend/pages/knowledge-reader-page.tsx:73:9",
-        "frontend/pages/knowledge-reader-page.tsx:74:43",
-        "frontend/pages/knowledge-reader-page.tsx:75:42",
-        "frontend/pages/knowledge-reader-page.tsx:85:655",
-        "frontend/pages/knowledge-reader-page.tsx:85:778",
-        "frontend/pages/knowledge-reader-page.tsx:85:851",
-        "frontend/pages/knowledge-reader-page.tsx:85:1013",
-        "frontend/pages/knowledge-reader-page.tsx:85:1116",
-        "frontend/pages/knowledge-reader-page.tsx:85:1287",
-        "frontend/pages/knowledge-reader-page.tsx:85:1363",
-        "frontend/pages/knowledge-reader-page.tsx:85:1628",
-        "frontend/pages/knowledge-reader-page.tsx:85:2101",
-        "frontend/pages/knowledge-reader-page.tsx:85:2531",
-        "frontend/pages/knowledge-reader-page.tsx:85:2632",
-        "frontend/pages/knowledge-reader-page.tsx:85:3031",
-        "frontend/pages/knowledge-reader-page.tsx:85:3110",
-        "frontend/pages/knowledge-reader-page.tsx:85:3305",
-        "frontend/pages/knowledge-reader-page.tsx:85:3414",
-        "frontend/pages/knowledge-reader-page.tsx:85:3605",
-        "frontend/pages/knowledge-reader-page.tsx:85:3863",
-        "frontend/pages/knowledge-reader-page.tsx:85:4128",
-        "frontend/pages/knowledge-reader-page.tsx:85:4315",
-        "frontend/pages/knowledge-reader-page.tsx:85:4391",
-        "frontend/pages/knowledge-reader-page.tsx:85:5107",
-        "frontend/pages/knowledge-reader-page.tsx:85:5338",
-        "frontend/pages/knowledge-reader-page.tsx:93:448",
-        "frontend/pages/knowledge-reader-page.tsx:98:206",
-        "frontend/pages/knowledge-reader-page.tsx:98:325",
-        "frontend/pages/knowledge-reader-page.tsx:100:466",
-        "frontend/pages/knowledge-reader-page.tsx:105:200",
-        "frontend/pages/knowledge-reader-page.tsx:105:321",
-        "frontend/pages/knowledge-reader-page.tsx:107:358",
-        "frontend/pages/knowledge-reader-page.tsx:123:584",
-        "frontend/pages/knowledge-reader-page.tsx:123:927",
-        "frontend/pages/knowledge-reader-page.tsx:123:1061",
-        "frontend/pages/knowledge-reader-page.tsx:123:1886",
-        "frontend/pages/knowledge-reader-page.tsx:135:38"
+        "frontend/pages/knowledge-reader-page.tsx:74:9",
+        "frontend/pages/knowledge-reader-page.tsx:75:43",
+        "frontend/pages/knowledge-reader-page.tsx:76:42",
+        "frontend/pages/knowledge-reader-page.tsx:86:655",
+        "frontend/pages/knowledge-reader-page.tsx:86:778",
+        "frontend/pages/knowledge-reader-page.tsx:86:851",
+        "frontend/pages/knowledge-reader-page.tsx:86:1013",
+        "frontend/pages/knowledge-reader-page.tsx:86:1116",
+        "frontend/pages/knowledge-reader-page.tsx:86:1287",
+        "frontend/pages/knowledge-reader-page.tsx:86:1363",
+        "frontend/pages/knowledge-reader-page.tsx:86:1628",
+        "frontend/pages/knowledge-reader-page.tsx:86:2101",
+        "frontend/pages/knowledge-reader-page.tsx:86:2531",
+        "frontend/pages/knowledge-reader-page.tsx:86:2632",
+        "frontend/pages/knowledge-reader-page.tsx:86:3031",
+        "frontend/pages/knowledge-reader-page.tsx:86:3110",
+        "frontend/pages/knowledge-reader-page.tsx:86:3305",
+        "frontend/pages/knowledge-reader-page.tsx:86:3414",
+        "frontend/pages/knowledge-reader-page.tsx:86:3605",
+        "frontend/pages/knowledge-reader-page.tsx:86:3863",
+        "frontend/pages/knowledge-reader-page.tsx:86:4128",
+        "frontend/pages/knowledge-reader-page.tsx:86:4315",
+        "frontend/pages/knowledge-reader-page.tsx:86:4391",
+        "frontend/pages/knowledge-reader-page.tsx:86:5107",
+        "frontend/pages/knowledge-reader-page.tsx:86:5338",
+        "frontend/pages/knowledge-reader-page.tsx:94:448",
+        "frontend/pages/knowledge-reader-page.tsx:99:206",
+        "frontend/pages/knowledge-reader-page.tsx:99:325",
+        "frontend/pages/knowledge-reader-page.tsx:101:466",
+        "frontend/pages/knowledge-reader-page.tsx:106:200",
+        "frontend/pages/knowledge-reader-page.tsx:106:321",
+        "frontend/pages/knowledge-reader-page.tsx:108:358",
+        "frontend/pages/knowledge-reader-page.tsx:124:584",
+        "frontend/pages/knowledge-reader-page.tsx:124:927",
+        "frontend/pages/knowledge-reader-page.tsx:124:1061",
+        "frontend/pages/knowledge-reader-page.tsx:124:1886",
+        "frontend/pages/knowledge-reader-page.tsx:148:38"
       ],
       "unresolvedSymbols": [],
       "routePattern": "/^\\/knowledge\\/[A-Za-z0-9_-]+$/u"
@@ -6666,6 +6671,73 @@
       "spreads": [],
       "labels": [],
       "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/agents/code-block.tsx:149:11",
+      "path": "frontend/components/agents/code-block.tsx",
+      "owner": "CodeBlock",
+      "line": 149,
+      "column": 11,
+      "kind": "jsx",
+      "tag": "motion.button",
+      "attributes": {
+        "type": "\"button\"",
+        "aria-label": "copied ? labels?.copied ?? \"Copied\" : labels?.copy ?? \"Copy code\"",
+        "title": "copied ? labels?.copied ?? \"Copied\" : labels?.copy ?? \"Copy code\"",
+        "onClick": "handleCopy",
+        "whileTap": "reduce ? undefined : { scale: 0.9 }",
+        "transition": "SPRING_PRESS",
+        "className": "cn(\n              \"grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-background/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring\",\n              !showStatus && \"ml-auto\",\n            )"
+      },
+      "handlers": {
+        "onClick": "handleCopy"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "streaming"
+          }
+        },
+        {
+          "kind": "branch",
+          "expression": "copyable || onCopy",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/agents/code-block.tsx:170:7",
+      "path": "frontend/components/agents/code-block.tsx",
+      "owner": "CodeBlock",
+      "line": 170,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "ref": "viewportRef",
+        "role": "streaming ? \"log\" : undefined",
+        "aria-live": "streaming ? \"polite\" : undefined",
+        "className": "\"scrollbar-hide overflow-auto border-t border-foreground/[0.06] py-2\"",
+        "style": "{ maxHeight }"
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "streaming"
+          }
+        }
+      ],
       "earlyReturns": []
     },
     {
@@ -34922,10 +34994,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:20:10",
+      "id": "frontend/pages/knowledge-reader-page.tsx:21:10",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderPage",
-      "line": 20,
+      "line": 21,
       "column": 10,
       "kind": "jsx",
       "tag": "KnowledgeReaderSessionPage",
@@ -34941,10 +35013,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:56:134",
+      "id": "frontend/pages/knowledge-reader-page.tsx:57:134",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 56,
+      "line": 57,
       "column": 134,
       "kind": "jsx",
       "tag": "Button",
@@ -34975,10 +35047,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:59:5",
+      "id": "frontend/pages/knowledge-reader-page.tsx:60:5",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 59,
+      "line": 60,
       "column": 5,
       "kind": "jsx",
       "tag": "div",
@@ -35003,10 +35075,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:60:7",
+      "id": "frontend/pages/knowledge-reader-page.tsx:61:7",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 60,
+      "line": 61,
       "column": 7,
       "kind": "jsx",
       "tag": "button",
@@ -35038,10 +35110,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:61:7",
+      "id": "frontend/pages/knowledge-reader-page.tsx:62:7",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 61,
+      "line": 62,
       "column": 7,
       "kind": "jsx",
       "tag": "button",
@@ -35073,10 +35145,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:65:9",
+      "id": "frontend/pages/knowledge-reader-page.tsx:66:9",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 65,
+      "line": 66,
       "column": 9,
       "kind": "jsx",
       "tag": "ReaderOutlinePanel",
@@ -35104,10 +35176,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:68:491",
+      "id": "frontend/pages/knowledge-reader-page.tsx:69:491",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 68,
+      "line": 69,
       "column": 491,
       "kind": "jsx",
       "tag": "p",
@@ -35139,10 +35211,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:68:644",
+      "id": "frontend/pages/knowledge-reader-page.tsx:69:644",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 68,
+      "line": 69,
       "column": 644,
       "kind": "jsx",
       "tag": "p",
@@ -35174,10 +35246,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:68:894",
+      "id": "frontend/pages/knowledge-reader-page.tsx:69:894",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 68,
+      "line": 69,
       "column": 894,
       "kind": "jsx",
       "tag": "Button",
@@ -35213,10 +35285,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:68:1124",
+      "id": "frontend/pages/knowledge-reader-page.tsx:69:1124",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 68,
+      "line": 69,
       "column": 1124,
       "kind": "jsx",
       "tag": "p",
@@ -35248,10 +35320,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:68:1373",
+      "id": "frontend/pages/knowledge-reader-page.tsx:69:1373",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 68,
+      "line": 69,
       "column": 1373,
       "kind": "jsx",
       "tag": "Button",
@@ -35289,10 +35361,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:68:1754",
+      "id": "frontend/pages/knowledge-reader-page.tsx:69:1754",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 68,
+      "line": 69,
       "column": 1754,
       "kind": "jsx",
       "tag": "Button",
@@ -35328,10 +35400,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:68:2033",
+      "id": "frontend/pages/knowledge-reader-page.tsx:69:2033",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 68,
+      "line": 69,
       "column": 2033,
       "kind": "jsx",
       "tag": "a",
@@ -35363,10 +35435,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:68:2286",
+      "id": "frontend/pages/knowledge-reader-page.tsx:69:2286",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 68,
+      "line": 69,
       "column": 2286,
       "kind": "jsx",
       "tag": "a",
@@ -35392,10 +35464,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:72:9",
+      "id": "frontend/pages/knowledge-reader-page.tsx:73:9",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 72,
+      "line": 73,
       "column": 9,
       "kind": "jsx",
       "tag": "SourcePanel",
@@ -35424,10 +35496,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:73:9",
+      "id": "frontend/pages/knowledge-reader-page.tsx:74:9",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 73,
+      "line": 74,
       "column": 9,
       "kind": "jsx",
       "tag": "ReaderNotePanel",
@@ -35470,10 +35542,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:74:43",
+      "id": "frontend/pages/knowledge-reader-page.tsx:75:43",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 74,
+      "line": 75,
       "column": 43,
       "kind": "jsx",
       "tag": "BacklinkPanel",
@@ -35506,10 +35578,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:75:42",
+      "id": "frontend/pages/knowledge-reader-page.tsx:76:42",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "KnowledgeReaderSessionPage",
-      "line": 75,
+      "line": 76,
       "column": 42,
       "kind": "jsx",
       "tag": "RelatedKnowledgePanel",
@@ -35542,10 +35614,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:655",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:655",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 655,
       "kind": "jsx",
       "tag": "p",
@@ -35568,10 +35640,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:778",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:778",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 778,
       "kind": "jsx",
       "tag": "div",
@@ -35591,10 +35663,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:851",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:851",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 851,
       "kind": "jsx",
       "tag": "Button",
@@ -35621,10 +35693,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:1013",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:1013",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 1013,
       "kind": "jsx",
       "tag": "div",
@@ -35645,10 +35717,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:1116",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:1116",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 1116,
       "kind": "jsx",
       "tag": "Button",
@@ -35675,10 +35747,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:1287",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:1287",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 1287,
       "kind": "jsx",
       "tag": "div",
@@ -35698,10 +35770,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:1363",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:1363",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 1363,
       "kind": "jsx",
       "tag": "Button",
@@ -35728,10 +35800,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:1628",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:1628",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 1628,
       "kind": "jsx",
       "tag": "input",
@@ -35752,10 +35824,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:2101",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:2101",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 2101,
       "kind": "jsx",
       "tag": "textarea",
@@ -35776,10 +35848,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:2531",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:2531",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 2531,
       "kind": "jsx",
       "tag": "span",
@@ -35803,10 +35875,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:2632",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:2632",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 2632,
       "kind": "jsx",
       "tag": "Button",
@@ -35832,10 +35904,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:3031",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:3031",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 3031,
       "kind": "jsx",
       "tag": "div",
@@ -35860,10 +35932,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:3110",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:3110",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 3110,
       "kind": "jsx",
       "tag": "Button",
@@ -35895,10 +35967,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:3305",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:3305",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 3305,
       "kind": "jsx",
       "tag": "div",
@@ -35924,10 +35996,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:3414",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:3414",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 3414,
       "kind": "jsx",
       "tag": "Button",
@@ -35959,10 +36031,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:3605",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:3605",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 3605,
       "kind": "jsx",
       "tag": "Button",
@@ -35994,10 +36066,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:3863",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:3863",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 3863,
       "kind": "jsx",
       "tag": "select",
@@ -36023,10 +36095,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:4128",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:4128",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 4128,
       "kind": "jsx",
       "tag": "option",
@@ -36055,10 +36127,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:4315",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:4315",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 4315,
       "kind": "jsx",
       "tag": "option",
@@ -36092,10 +36164,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:4391",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:4391",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 4391,
       "kind": "jsx",
       "tag": "Button",
@@ -36122,10 +36194,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:5107",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:5107",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 5107,
       "kind": "jsx",
       "tag": "button",
@@ -36166,10 +36238,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:85:5338",
+      "id": "frontend/pages/knowledge-reader-page.tsx:86:5338",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderNotePanel",
-      "line": 85,
+      "line": 86,
       "column": 5338,
       "kind": "jsx",
       "tag": "p",
@@ -36197,10 +36269,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:93:448",
+      "id": "frontend/pages/knowledge-reader-page.tsx:94:448",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "ReaderOutlinePanel",
-      "line": 93,
+      "line": 94,
       "column": 448,
       "kind": "jsx",
       "tag": "button",
@@ -36231,10 +36303,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:98:206",
+      "id": "frontend/pages/knowledge-reader-page.tsx:99:206",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "RelatedKnowledgePanel",
-      "line": 98,
+      "line": 99,
       "column": 206,
       "kind": "jsx",
       "tag": "p",
@@ -36262,10 +36334,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:98:325",
+      "id": "frontend/pages/knowledge-reader-page.tsx:99:325",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "RelatedKnowledgePanel",
-      "line": 98,
+      "line": 99,
       "column": 325,
       "kind": "jsx",
       "tag": "Button",
@@ -36302,10 +36374,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:100:466",
+      "id": "frontend/pages/knowledge-reader-page.tsx:101:466",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "RelatedKnowledgePanel",
-      "line": 100,
+      "line": 101,
       "column": 466,
       "kind": "jsx",
       "tag": "a",
@@ -36344,10 +36416,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:105:200",
+      "id": "frontend/pages/knowledge-reader-page.tsx:106:200",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "BacklinkPanel",
-      "line": 105,
+      "line": 106,
       "column": 200,
       "kind": "jsx",
       "tag": "p",
@@ -36375,10 +36447,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:105:321",
+      "id": "frontend/pages/knowledge-reader-page.tsx:106:321",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "BacklinkPanel",
-      "line": 105,
+      "line": 106,
       "column": 321,
       "kind": "jsx",
       "tag": "Button",
@@ -36415,10 +36487,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:107:358",
+      "id": "frontend/pages/knowledge-reader-page.tsx:108:358",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "BacklinkPanel",
-      "line": 107,
+      "line": 108,
       "column": 358,
       "kind": "jsx",
       "tag": "a",
@@ -36457,10 +36529,10 @@
       ]
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:123:584",
+      "id": "frontend/pages/knowledge-reader-page.tsx:124:584",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "SourcePanel",
-      "line": 123,
+      "line": 124,
       "column": 584,
       "kind": "jsx",
       "tag": "a",
@@ -36484,10 +36556,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:123:927",
+      "id": "frontend/pages/knowledge-reader-page.tsx:124:927",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "SourcePanel",
-      "line": 123,
+      "line": 124,
       "column": 927,
       "kind": "jsx",
       "tag": "div",
@@ -36509,10 +36581,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:123:1061",
+      "id": "frontend/pages/knowledge-reader-page.tsx:124:1061",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "SourcePanel",
-      "line": 123,
+      "line": 124,
       "column": 1061,
       "kind": "jsx",
       "tag": "button",
@@ -36544,10 +36616,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:123:1886",
+      "id": "frontend/pages/knowledge-reader-page.tsx:124:1886",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "SourcePanel",
-      "line": 123,
+      "line": 124,
       "column": 1886,
       "kind": "jsx",
       "tag": "div",
@@ -36568,10 +36640,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/knowledge-reader-page.tsx:135:38",
+      "id": "frontend/pages/knowledge-reader-page.tsx:148:38",
       "path": "frontend/pages/knowledge-reader-page.tsx",
       "owner": "RevisionDiffPanel",
-      "line": 135,
+      "line": 148,
       "column": 38,
       "kind": "jsx",
       "tag": "p",

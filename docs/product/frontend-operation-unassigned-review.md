@@ -424,3 +424,10 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - 新增 `frontend/components/motion/animated-toast-stack.tsx`（beUI 落地副本，图标改用仓库既有 phosphor，`aria-label` 参数化后由调用方本地化）与 `frontend/lib/use-toast.tsx`（App 级 Provider + no-op 回退）。
 - 未归属候选 115 → **120**：新增 5 条——通知栈 4 条（逐条渲染、拖拽关闭、action 按钮、关闭按钮）与 Provider 挂载 1 条，全部归 `app-boundary`，因为它们在 App 边界挂载一次、不属于任何业务 root。`frontend/app.tsx` 的两条外层坐标仅因新增一行导入下移至 223:106、250:39。
 - 同步更新 `frontend/app.tsx` 指纹并新增上述两个来源指纹。当前索引 285 文件 / 1216 候选 / 120 未归属。
+
+### 2026-10-14 阅读器接入 beUI code-block 后重新审查
+
+- 新增 `frontend/components/agents/code-block.tsx`（beUI 落地副本：图标换 phosphor、复制/状态文案参数化、可在无流时隐藏状态芯片）、`frontend/components/agents/agent-code.tsx` 与 `frontend/components/agents/agent-highlighter.ts`（细粒度 shiki 入口：只带 5 个语法与 2 个主题，JS 正则引擎，动态加载）。
+- 阅读器版本对比面板由自绘逐行 `<span>` 改为 `CodeBlock`（`language="diff"`），diff 文本按 hunk 头 + `±/空格` 前缀生成统一 diff。
+- 未归属集合不变，仍为 **120**：新文件的候选经阅读器路由 root 追踪为已归属，无新增未归属坐标、无坐标移除、无既有指纹漂移。当前索引 288 文件 / 1218 候选 / 120 未归属。
+- 无新增未归属指纹需求；`pages/knowledge-reader-page.tsx` 与 `lib/i18n.ts` 的候选均归属各自路由，且不在本记录指纹范围内。

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { PageState } from "../components/ui/page-state";
 import { Button } from "../components/ui/button";
+import { CodeBlock } from "../components/agents/code-block";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { useReaderNoteShares } from "../lib/use-reader-note-shares";
 import type { KnowledgeBacklinkItem, KnowledgeRevision, KnowledgeRevisionDiff, KnowledgeSourceLocation, RelatedKnowledgeItem } from "../lib/knowledge-reader-data";
@@ -130,11 +131,23 @@ function locationLabel(location: KnowledgeSourceLocation | undefined, locale?: L
   return `${frontendText(locale, "KNOWLEDGE_READER_SOURCE_SLIDE")} ${location.slide} · ${location.elementStart}–${location.elementEnd}`;
 }
 
+/** Unified-diff text for the beUI code surface. Shiki's diff grammar colours the
+ * ± prefixes, and each hunk header keeps the absolute line ranges the previous
+ * per-line markup carried. */
+function revisionDiffText(diff: KnowledgeRevisionDiff): string {
+  return diff.hunks.map((hunk) => {
+    const oldCount = hunk.lines.filter((line) => line.kind !== "added").length;
+    const newCount = hunk.lines.filter((line) => line.kind !== "removed").length;
+    const body = hunk.lines.map((line) => `${line.kind === "added" ? "+" : line.kind === "removed" ? "-" : " "}${line.text}`);
+    return [`@@ -${hunk.oldStart},${oldCount} +${hunk.newStart},${newCount} @@`, ...body].join("\n");
+  }).join("\n");
+}
+
 function RevisionDiffPanel({ locale, state }: { locale?: LocaleRuntime; state: DiffState }) {
   if (state.kind === "loading") return <Card><CardContent className="p-5 text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_DIFF_LOADING")}</CardContent></Card>;
   if (state.kind === "error") return <p role="alert" className="text-sm text-destructive">{frontendText(locale, "KNOWLEDGE_READER_DIFF_ERROR")}</p>;
   if (state.kind === "idle") return null;
   const diff = state.diff;
   const statsLabel = frontendText(locale, "KNOWLEDGE_READER_DIFF_STATS").replace("{added}", String(diff.stats.added)).replace("{removed}", String(diff.stats.removed));
-  return <Card data-revision-diff="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_READER_DIFF_TITLE")}</CardTitle><p className="text-xs text-muted-foreground">{statsLabel}</p></CardHeader><CardContent className="space-y-4">{diff.metadataChanges.length > 0 && <div><h3 className="text-sm font-medium">{frontendText(locale, "KNOWLEDGE_READER_DIFF_METADATA")}</h3><ul className="mt-2 space-y-1 text-xs text-muted-foreground">{diff.metadataChanges.map((change) => <li key={change.field}><span className="font-medium">{change.field}</span>: {String(change.from ?? "∅")} → {String(change.to ?? "∅")}</li>)}</ul></div>}{diff.hunks.flatMap((hunk) => hunk.lines).length > 0 ? <pre className="max-h-[30rem] overflow-auto rounded-md border bg-muted/30 p-3 text-xs leading-5"><code>{diff.hunks.flatMap((hunk) => hunk.lines).map((line, index) => <span key={`${line.kind}-${line.oldLine ?? "x"}-${line.newLine ?? "x"}-${index}`} className={line.kind === "added" ? "block bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" : line.kind === "removed" ? "block bg-red-50 text-red-900 dark:bg-red-950/30 dark:text-red-200" : "block text-muted-foreground"}>{line.kind === "added" ? "+ " : line.kind === "removed" ? "− " : "  "}{line.text}</span>)}</code></pre> : <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_DIFF_EMPTY")}</p>}{diff.stats.truncated && <p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_DIFF_TRUNCATED")}</p>}</CardContent></Card>;
+  return <Card data-revision-diff="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_READER_DIFF_TITLE")}</CardTitle><p className="text-xs text-muted-foreground">{statsLabel}</p></CardHeader><CardContent className="space-y-4">{diff.metadataChanges.length > 0 && <div><h3 className="text-sm font-medium">{frontendText(locale, "KNOWLEDGE_READER_DIFF_METADATA")}</h3><ul className="mt-2 space-y-1 text-xs text-muted-foreground">{diff.metadataChanges.map((change) => <li key={change.field}><span className="font-medium">{change.field}</span>: {String(change.from ?? "∅")} → {String(change.to ?? "∅")}</li>)}</ul></div>}{diff.hunks.flatMap((hunk) => hunk.lines).length > 0 ? <CodeBlock code={revisionDiffText(diff)} language="diff" showLineNumbers={false} showStatus={false} maxHeight={480} labels={{ copy: frontendText(locale, "COMMON_COPY_CODE"), copied: frontendText(locale, "COMMON_COPIED") }} /> : <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_DIFF_EMPTY")}</p>}{diff.stats.truncated && <p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_DIFF_TRUNCATED")}</p>}</CardContent></Card>;
 }
