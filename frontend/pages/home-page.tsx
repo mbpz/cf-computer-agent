@@ -85,7 +85,7 @@ export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-        <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background">
+        <Card className="overflow-hidden border-primary/25">
           <CardHeader>
             <CardTitle>{frontendText(locale, "WORKBENCH_CAPTURE_TITLE")}</CardTitle>
             <p className="text-sm text-muted-foreground">{frontendText(locale, "WORKBENCH_CAPTURE_DESCRIPTION")}</p>
