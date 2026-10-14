@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { LinkSimpleIcon, ListBulletsIcon } from "@phosphor-icons/react";
+import { ExpandableTabs } from "../components/ui/expandable-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { PageState } from "../components/ui/page-state";
 import { Button } from "../components/ui/button";
@@ -57,10 +59,10 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
   if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "KNOWLEDGE_READER_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>;
   return <article data-reader-layout className="space-y-5">
     {note.draft.confirmation}{sharing.confirmation}
-    <div className="flex gap-2 lg:hidden" role="tablist" aria-label={frontendText(locale, "KNOWLEDGE_READER_MOBILE_PANELS")}>
-      <button type="button" role="tab" aria-selected={mobilePanel === "outline"} aria-controls="reader-outline-panel" onClick={() => setMobilePanel(mobilePanel === "outline" ? null : "outline")} className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_TAB_OUTLINE")}</button>
-      <button type="button" role="tab" aria-selected={mobilePanel === "sources"} aria-controls="reader-sources-panel" onClick={() => setMobilePanel(mobilePanel === "sources" ? null : "sources")} className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_TAB_SOURCES")}</button>
-    </div>
+    <ExpandableTabs className="lg:hidden" ariaLabel={frontendText(locale, "KNOWLEDGE_READER_MOBILE_PANELS")} value={mobilePanel} onValueChange={setMobilePanel} items={[
+      { id: "outline", label: frontendText(locale, "KNOWLEDGE_READER_TAB_OUTLINE"), controls: "reader-outline-panel", icon: <ListBulletsIcon size={16} aria-hidden="true" /> },
+      { id: "sources", label: frontendText(locale, "KNOWLEDGE_READER_TAB_SOURCES"), controls: "reader-sources-panel", icon: <LinkSimpleIcon size={16} aria-hidden="true" /> },
+    ]} />
     <div className="grid gap-5 lg:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_minmax(17rem,22rem)] lg:items-start">
       <aside id="reader-outline-panel" data-reader-outline className={(mobilePanel === "outline" ? "block" : "hidden") + " lg:block"}>
         <ReaderOutlinePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} onSelectChunk={setSelectedChunkId} />
