@@ -9,10 +9,10 @@
 | # | 候选 | 需求 | 解决方案 | 状态 |
 | --- | --- | --- | --- | --- |
 | 1 | `button-base` / `button-stateful` | 按压反馈；异步按钮的 pending/success/error | 按压已用 `SPRING_PRESS` 注入既有 `Button`；再给 `Button` 加可选 `pending`，用已落地的 beUI `Loader` 呈现，**不引入第二套按钮 API** | 按压已完成；pending 待做（可直接做） |
-| 2 | `shared-layout-bg` | hover 时滑动的行高亮 | 活动项滑动已落地；hover 版用同一 `layoutId + SPRING_LAYOUT` 手法加在侧栏行上，并用 `useHoverCapable()` 门控 | 活动项已完成；hover 待做（可直接做） |
+| 2 | `shared-layout-bg` | hover 时滑动的行高亮 | 活动项滑动已落地；hover 版用同一 `layoutId + SPRING_LAYOUT` 手法加在侧栏行上，并用 `useHoverCapable()` 门控（不引入该组件的克隆容器） | **已完成**（`侧栏 hover 滑动`提交） |
 | 3 | `animated-toast-stack` | 无落点的瞬时反馈 | 已接入 Provider + 栈；落在两个真实缺口：命令面板的主题切换、**面板发起退出登录失败**（此前账户菜单未挂载，用户完全看不到） | **已完成**（`beUI 通知栈`提交） |
 | 4 | `code-block` | 阅读器里的代码呈现与复制 | 已用细粒度 shiki 入口落地到版本对比面板（见 §4） | **已完成**（`beUI code-block`提交） |
-| 5 | `streaming-response` | 答案逐 token 流式呈现 | 服务端已有 `/api/agent/sessions/:id/stream`；客户端消费 `ReadableStream` 并保留 `agent-turn-intent` 的未确认写语义 | 已批准，**进行中** |
+| 5 | `streaming-response` | 答案逐 token 流式呈现 | **核证后不可按原方案做**：唯一存在的流式端点是不做检索的裸模型流，而 grounded 答案走 strict JSON schema + 服务端 grounding 校验，逐 token 流与"带引用且经校验"不相容（见 §5） | 需要重新决定（见 §5） |
 | 6 | `table` / `table-async` | 可排序/虚拟化的 admin 列表 | 只在一个纯表格列表上落地（推荐 admin 审计页，只读、无写恢复），保留编号分页与 role 语义 | **需要你的决定**（+2 依赖） |
 | 7 | `heat-calendar` | 长周期活跃密度 | 服务端把统计范围限制在 1–31 天；要做年视图需新增 365 天密度读，再作为**独立可视化**（年密度 vs 30 天趋势，问的是不同问题，不算重复） | **需要你的决定**（改服务端） |
 | 8 | `expandable-tabs` | 图标+标签的页签 | 读源码后确认它是"浮动变形页签条"（展开成浮层、点外部/Esc 收起），不是在流布局里拥有面板的页面页签。改为**在仓库内自建流布局可展开页签**并切到阅读器移动端（见 §8） | **已完成**（`自建流布局页签`提交） |
@@ -31,25 +31,29 @@
 
 markdown 正文的代码高亮（路线 B）仍未做：正文走净化 HTML，需要另外改渲染管线。
 
-## 5. `streaming-response` 的具体做法
+## 5. `streaming-response` —— 核证后原方案不成立
 
-服务端已经具备（`src/routes/agent.ts`）：
+动手前核了两条链路，结论推翻了本方案的前提：
 
-- `POST /api/agent/sessions/:id/stream`，请求体 `{question}`；
-- 响应 `content-type: text/event-stream; charset=utf-8`、`cache-control: no-store`，并带 `x-agent-turn-id`；
-- 上游流被 `withPersistedAssistant(...)` 包裹：**边流边落库**，事后可用 `GET /api/agent/sessions/:id/turns/:turnId` 查该 turn 的权威结果；
-- 进入流之前先 `stub.startTurn(memberId, question)`，因此重放同一问题会创建新 turn。
+- UI 的问答走 `POST /api/knowledge/chat`（`src/routes/library.ts:233`），这是**带引用、可复核**的 grounded 答案；
+- 全仓唯一的流式端点是 `POST /api/agent/sessions/:id/stream`（`src/routes/agent.ts:71`），其实现是 `ai.run(model, { messages: [{ role: "user", content: question }], stream: true })` —— **裸模型调用，没有检索、没有引用**。
 
-客户端落地步骤：
+### 为什么 grounded 链路上不能逐 token 流
 
-1. `askAgent` 增加流式分支：POST 上述路径，记录 `x-agent-turn-id`。
-2. 解析 SSE 帧（`data:` 行）增量更新 `{ kind: "streaming", text }`。
-3. **收据权威性**：流正常结束不等于已持久化——结束后用 `GET .../turns/:turnId` 复核，保持与现有 `CHAT_RECEIPT_UNKNOWN` 同一标准。
-4. **中断处理**：不自动重发；用同一 turn id 查询权威结果，查不到就落回"结果未确认"提示（与现有未确认写一致）。
-5. 渲染用 beUI `streaming-response`（或 `message` + `message-scroller`）。
-6. 测试：部分帧、中途 500、用户取消、刷新后按 turn id 恢复、重复问题不重放。
+`src/ai/cited-answer-service.ts:173` 用 `response_format: { type: "json_schema", strict: true }` 取回答，随后 `JSON.parse` 并跑 `validateGrounding(providerAnswer, preparedSources)`，再由 `sourceOrder` 推导引用标记（`[1]`、`[2]`…）。
 
-代价：触及 agent 的写入与恢复路径，属于独立功能批次，需签名浏览器验收。**这一项要你点头才动。**
+因此：
+
+1. 流出去的是 **JSON 片段**，不是散文——直接呈现给用户是噪声，之后还得整体替换；
+2. 更根本的是**校验顺序**：答案文本只有在 grounding 校验与引用映射通过之后才可展示。把校验前的 token 显示给用户，等于展示未经验证的断言与可能不存在的引用编号，这与产品"带引用、可复核"的核心承诺直接冲突。
+
+### 可选方案（都需要你确认）
+
+- **A（推荐）**：改为**阶段式进度**而非 token 流——服务端在 `library.ts` 的 chat 处理里以 SSE 推送真实阶段（检索 → 证据置信度 → 生成 → 校验），客户端用 `agent-activity` / `agent-progress` / `thinking-shimmer` 呈现，**校验通过后再整段呈现答案**。诚实、不与 grounding 冲突，且保留现有未确认写语义。
+- **B**：按原方案消费 `/api/agent/sessions/:id/stream`。**不建议**——那会把 grounded 答案换成无依据的模型输出，是产品级回退。
+- **C**：保持现状（加载态占位），不动服务端。
+
+原方案里"客户端消费已有流"的判断是错的（我把它当成了问答链路），特此更正。
 
 ## 6. `table` 的落地边界
 

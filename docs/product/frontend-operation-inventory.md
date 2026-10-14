@@ -801,70 +801,70 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 104:7 AppShell | a locale.t("SHELL_SKIP_MAIN") | href="#main-content" |  |
-| 109:13 AppShell | Button  | onClick=() =&gt; setCollapsed((value) =&gt; !value); type="button" | aria-expanded=!collapsed |
-| 114:13 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) |  |
-| 115:40 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"logical","expression":"adminRoutes.length &gt; 0","operator":"&&"} |
-| 118:93 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"branch","expression":"collapsed","branch":"true"} |
-| 119:81 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"branch","expression":"collapsed","branch":"false"} |
-| 126:13 AppShell | CommandPalette  | onNavigate=navigate; onToggleTheme=toggleTheme; onLogout=onLogout |  |
-| 128:75 AppShell | motion.a  | onClick=(event) =&gt; { event.preventDefault(); navigate(link.path); }; href=link.path | {"kind":"repeat","expression":"collaborationLinks"} |
-| 128:1147 AppShell | span unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—" |  | {"kind":"repeat","expression":"collaborationLinks"}; {"kind":"logical","expression":"link.path === \"/notifications\"","operator":"&&"} |
-| 128:1538 AppShell | Button locale.t("COMMON_RETRY") | onClick=notificationSummary.retry | {"kind":"repeat","expression":"collaborationLinks"}; {"kind":"logical","expression":"link.path === \"/notifications\" && unreadState.kind === \"error\"","ope… |
-| 130:13 AppShell | DropdownMenu  | onOpenChange=(open) =&gt; setActiveMenu(open ? "language" : null) | open=activeMenu === "language" |
-| 131:15 AppShell | DropdownMenuTrigger  |  | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === \"language\""}} |
-| 133:17 AppShell | DropdownMenuItem locale.t("SHELL_LANGUAGE_EN") | onClick=() =&gt; locale.setLocale("en") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === \"language\""}} |
-| 134:17 AppShell | DropdownMenuItem locale.t("SHELL_LANGUAGE_ZH_CN") | onClick=() =&gt; locale.setLocale("zh-CN") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === \"language\""}} |
-| 139:148 AppShell | MobileNavigation  | onNavigate=navigate; onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onLogout=onLogout |  |
-| 141:307 AppShell | section  |  | {"kind":"branch","expression":"access.kind === \"forbidden\"","branch":"true"} |
-| 155:210 NavGroup | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"repeat","expression":"nodes"} |
-| 166:29 NavNode | button  | onClick=(event) =&gt; event.preventDefault(); type="button" | aria-disabled="true" |
-| 169:14 NavNode | motion.a  | onClick=(event) =&gt; { event.preventDefault(); onNavigate(path); }; href=path | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"true"} |
-| 170:9 NavNode | button  | onClick=() =&gt; onToggle(node.id); type="button" | aria-expanded=expanded[node.id] ?? false; {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch… |
-| 171:168 NavNode | button  | onClick=() =&gt; onToggle(node.id); type="button" | aria-expanded=expanded[node.id] ?? false; {"kind":"logical","expression":"hasChildren && !collapsed","operator":"&&"} |
-| 171:688 NavNode | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"logical","expression":"hasChildren && (expanded[node.id] ?? false) && !collapsed && depth &lt; 4","operator":"&&"}; {"kind":"repeat","expression":"n… |
-| 214:135 Breadcrumb | a locale.t("NAV_HOME") | href="/" |  |
-| 219:33 NavIcon | Checks  |  | {"kind":"branch","expression":"path === \"/tasks\"","branch":"true"}; spread: props |
-| 220:34 NavIcon | Kanban  |  | {"kind":"branch","expression":"path === \"/boards\"","branch":"true"}; earlier return: path === "/tasks"; spread: props |
-| 221:41 NavIcon | Bell  |  | {"kind":"branch","expression":"path === \"/notifications\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; spread: … |
-| 222:36 NavIcon | ChatCircle  |  | {"kind":"branch","expression":"path === \"/messages\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
-| 223:33 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/graph\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 224:28 NavIcon | House  |  | {"kind":"branch","expression":"path === \"/\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path … |
-| 225:37 NavIcon | BookOpen  |  | {"kind":"branch","expression":"path === \"/knowledge\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retu… |
-| 226:34 NavIcon | UploadSimple  |  | {"kind":"branch","expression":"path === \"/submit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
-| 227:34 NavIcon | MagnifyingGlass  |  | {"kind":"branch","expression":"path === \"/search\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
-| 228:33 NavIcon | Sparkle  |  | {"kind":"branch","expression":"path === \"/agent\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 229:42 NavIcon | Files  |  | {"kind":"branch","expression":"path === \"/my-submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier… |
-| 230:33 NavIcon | Target  |  | {"kind":"branch","expression":"path === \"/goals\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 231:36 NavIcon | FolderSimple  |  | {"kind":"branch","expression":"path === \"/projects\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
-| 232:36 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/calendar\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
-| 233:33 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/today\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 234:33 NavIcon | Timer  |  | {"kind":"branch","expression":"path === \"/focus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 235:34 NavIcon | Check  |  | {"kind":"branch","expression":"path === \"/review\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
-| 236:33 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 237:45 NavIcon | NotePencil  |  | {"kind":"branch","expression":"path === \"/admin/submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earl… |
-| 238:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/assets\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
-| 239:41 NavIcon | UsersThree  |  | {"kind":"branch","expression":"path === \"/admin/members\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier … |
-| 240:39 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin/roles\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
-| 241:39 NavIcon | DotsThree  |  | {"kind":"branch","expression":"path === \"/admin/menus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
-| 242:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/spaces\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
-| 243:39 NavIcon | Scroll  |  | {"kind":"branch","expression":"path === \"/admin/audit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
-| 244:43 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/admin/analytics\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlie… |
-| 245:10 NavIcon | DotsThree  |  | earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path === "/notifications"; earlier return: path === "/messages"; earli… |
-| 264:10 AccountMenu | DropdownMenu  | onOpenChange=(open) =&gt; onActiveMenuChange(open ? menuId : null) | open=activeMenu === menuId |
-| 264:135 AccountMenu | DropdownMenuTrigger  |  | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
-| 264:1163 AccountMenu | DropdownMenuItem locale.t("SHELL_SETTINGS") | onClick=selectSettings | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
-| 264:1472 AccountMenu | DropdownMenuItem locale.t("SHELL_THEME_LIGHT") / selectedThemeIndicator("light") | onClick=() =&gt; selectTheme("light") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
-| 264:1758 AccountMenu | DropdownMenuItem locale.t("SHELL_THEME_DARK") / selectedThemeIndicator("dark") | onClick=() =&gt; selectTheme("dark") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
-| 264:2039 AccountMenu | DropdownMenuItem locale.t("SHELL_THEME_SYSTEM") / selectedThemeIndicator("system") | onClick=() =&gt; selectTheme("system") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
-| 264:2317 AccountMenu | p logoutError |  | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}}; {"kind":"logical","expression":"logoutError","operator":"&&"} |
-| 264:2398 AccountMenu | DropdownMenuItem logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT") | onClick=onLogout | disabled=logoutPending; {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
-| 271:10 MobileNavigation | Sheet  | onOpenChange=setOpen | open=open |
-| 271:52 MobileNavigation | details  |  | open=open; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}} |
-| 271:102 MobileNavigation | summary locale.t("SHELL_OPEN_NAVIGATION") | onClick=(event) =&gt; { event.preventDefault(); setOpen((current) =&gt; !current); } | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}} |
-| 271:885 MobileNavigation | button  | type="button" | disabled=true; aria-disabled="true"; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open… |
-| 271:1263 MobileNavigation | motion.a  | onClick=(event) =&gt; { event.preventDefault(); setOpen(false); onNavigate(path); }; href=path | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}}; {"kind":"repeat","express… |
-| 271:2097 MobileNavigation | AccountMenu  | onActiveMenuChange=onActiveMenuChange; onThemeChange=onThemeChange; onNavigate=(path) =&gt; { setOpen(false); onNavigate(path); }; onLogout=onLogout | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}} |
+| 106:7 AppShell | a locale.t("SHELL_SKIP_MAIN") | href="#main-content" |  |
+| 111:13 AppShell | Button  | onClick=() =&gt; setCollapsed((value) =&gt; !value); type="button" | aria-expanded=!collapsed |
+| 116:13 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) |  |
+| 117:40 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"logical","expression":"adminRoutes.length &gt; 0","operator":"&&"} |
+| 120:93 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"branch","expression":"collapsed","branch":"true"} |
+| 121:81 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"branch","expression":"collapsed","branch":"false"} |
+| 128:13 AppShell | CommandPalette  | onNavigate=navigate; onToggleTheme=toggleTheme; onLogout=onLogout |  |
+| 130:75 AppShell | motion.a  | onClick=(event) =&gt; { event.preventDefault(); navigate(link.path); }; href=link.path | {"kind":"repeat","expression":"collaborationLinks"} |
+| 130:1147 AppShell | span unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—" |  | {"kind":"repeat","expression":"collaborationLinks"}; {"kind":"logical","expression":"link.path === \"/notifications\"","operator":"&&"} |
+| 130:1538 AppShell | Button locale.t("COMMON_RETRY") | onClick=notificationSummary.retry | {"kind":"repeat","expression":"collaborationLinks"}; {"kind":"logical","expression":"link.path === \"/notifications\" && unreadState.kind === \"error\"","ope… |
+| 132:13 AppShell | DropdownMenu  | onOpenChange=(open) =&gt; setActiveMenu(open ? "language" : null) | open=activeMenu === "language" |
+| 133:15 AppShell | DropdownMenuTrigger  |  | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === \"language\""}} |
+| 135:17 AppShell | DropdownMenuItem locale.t("SHELL_LANGUAGE_EN") | onClick=() =&gt; locale.setLocale("en") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === \"language\""}} |
+| 136:17 AppShell | DropdownMenuItem locale.t("SHELL_LANGUAGE_ZH_CN") | onClick=() =&gt; locale.setLocale("zh-CN") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === \"language\""}} |
+| 141:148 AppShell | MobileNavigation  | onNavigate=navigate; onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onLogout=onLogout |  |
+| 143:307 AppShell | section  |  | {"kind":"branch","expression":"access.kind === \"forbidden\"","branch":"true"} |
+| 157:210 NavGroup | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"repeat","expression":"nodes"} |
+| 174:29 NavNode | button  | onClick=(event) =&gt; event.preventDefault(); type="button" | aria-disabled="true" |
+| 177:14 NavNode | motion.a hoverPill | onMouseEnter=() =&gt; setHovered(true); onMouseLeave=() =&gt; setHovered(false); onClick=(event) =&gt; { event.preventDefault(); onNavigate(path); }; href=path | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"true"} |
+| 178:9 NavNode | button hoverPill | onMouseEnter=() =&gt; setHovered(true); onMouseLeave=() =&gt; setHovered(false); onClick=() =&gt; onToggle(node.id); type="button" | aria-expanded=expanded[node.id] ?? false; {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch… |
+| 179:168 NavNode | button  | onClick=() =&gt; onToggle(node.id); type="button" | aria-expanded=expanded[node.id] ?? false; {"kind":"logical","expression":"hasChildren && !collapsed","operator":"&&"} |
+| 179:688 NavNode | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"logical","expression":"hasChildren && (expanded[node.id] ?? false) && !collapsed && depth &lt; 4","operator":"&&"}; {"kind":"repeat","expression":"n… |
+| 222:135 Breadcrumb | a locale.t("NAV_HOME") | href="/" |  |
+| 227:33 NavIcon | Checks  |  | {"kind":"branch","expression":"path === \"/tasks\"","branch":"true"}; spread: props |
+| 228:34 NavIcon | Kanban  |  | {"kind":"branch","expression":"path === \"/boards\"","branch":"true"}; earlier return: path === "/tasks"; spread: props |
+| 229:41 NavIcon | Bell  |  | {"kind":"branch","expression":"path === \"/notifications\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; spread: … |
+| 230:36 NavIcon | ChatCircle  |  | {"kind":"branch","expression":"path === \"/messages\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
+| 231:33 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/graph\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 232:28 NavIcon | House  |  | {"kind":"branch","expression":"path === \"/\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path … |
+| 233:37 NavIcon | BookOpen  |  | {"kind":"branch","expression":"path === \"/knowledge\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retu… |
+| 234:34 NavIcon | UploadSimple  |  | {"kind":"branch","expression":"path === \"/submit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
+| 235:34 NavIcon | MagnifyingGlass  |  | {"kind":"branch","expression":"path === \"/search\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
+| 236:33 NavIcon | Sparkle  |  | {"kind":"branch","expression":"path === \"/agent\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 237:42 NavIcon | Files  |  | {"kind":"branch","expression":"path === \"/my-submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier… |
+| 238:33 NavIcon | Target  |  | {"kind":"branch","expression":"path === \"/goals\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 239:36 NavIcon | FolderSimple  |  | {"kind":"branch","expression":"path === \"/projects\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
+| 240:36 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/calendar\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
+| 241:33 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/today\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 242:33 NavIcon | Timer  |  | {"kind":"branch","expression":"path === \"/focus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 243:34 NavIcon | Check  |  | {"kind":"branch","expression":"path === \"/review\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
+| 244:33 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 245:45 NavIcon | NotePencil  |  | {"kind":"branch","expression":"path === \"/admin/submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earl… |
+| 246:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/assets\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
+| 247:41 NavIcon | UsersThree  |  | {"kind":"branch","expression":"path === \"/admin/members\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier … |
+| 248:39 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin/roles\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
+| 249:39 NavIcon | DotsThree  |  | {"kind":"branch","expression":"path === \"/admin/menus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
+| 250:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/spaces\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
+| 251:39 NavIcon | Scroll  |  | {"kind":"branch","expression":"path === \"/admin/audit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
+| 252:43 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/admin/analytics\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlie… |
+| 253:10 NavIcon | DotsThree  |  | earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path === "/notifications"; earlier return: path === "/messages"; earli… |
+| 272:10 AccountMenu | DropdownMenu  | onOpenChange=(open) =&gt; onActiveMenuChange(open ? menuId : null) | open=activeMenu === menuId |
+| 272:135 AccountMenu | DropdownMenuTrigger  |  | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
+| 272:1163 AccountMenu | DropdownMenuItem locale.t("SHELL_SETTINGS") | onClick=selectSettings | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
+| 272:1472 AccountMenu | DropdownMenuItem locale.t("SHELL_THEME_LIGHT") / selectedThemeIndicator("light") | onClick=() =&gt; selectTheme("light") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
+| 272:1758 AccountMenu | DropdownMenuItem locale.t("SHELL_THEME_DARK") / selectedThemeIndicator("dark") | onClick=() =&gt; selectTheme("dark") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
+| 272:2039 AccountMenu | DropdownMenuItem locale.t("SHELL_THEME_SYSTEM") / selectedThemeIndicator("system") | onClick=() =&gt; selectTheme("system") | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
+| 272:2317 AccountMenu | p logoutError |  | {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}}; {"kind":"logical","expression":"logoutError","operator":"&&"} |
+| 272:2398 AccountMenu | DropdownMenuItem logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT") | onClick=onLogout | disabled=logoutPending; {"kind":"container","tag":"DropdownMenu","attributes":{"open":"activeMenu === menuId"}} |
+| 279:10 MobileNavigation | Sheet  | onOpenChange=setOpen | open=open |
+| 279:52 MobileNavigation | details  |  | open=open; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}} |
+| 279:102 MobileNavigation | summary locale.t("SHELL_OPEN_NAVIGATION") | onClick=(event) =&gt; { event.preventDefault(); setOpen((current) =&gt; !current); } | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}} |
+| 279:885 MobileNavigation | button  | type="button" | disabled=true; aria-disabled="true"; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open… |
+| 279:1263 MobileNavigation | motion.a  | onClick=(event) =&gt; { event.preventDefault(); setOpen(false); onNavigate(path); }; href=path | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}}; {"kind":"repeat","express… |
+| 279:2097 MobileNavigation | AccountMenu  | onActiveMenuChange=onActiveMenuChange; onThemeChange=onThemeChange; onNavigate=(path) =&gt; { setOpen(false); onNavigate(path); }; onLogout=onLogout | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}} |
 
 ## frontend/components/shell/command-palette.tsx
 

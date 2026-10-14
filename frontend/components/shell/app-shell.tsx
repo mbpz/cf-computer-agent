@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/
 import { collaborationQuickLinks, isCollaborationPath } from "./navigation-policy";
 import { CommandPalette } from "./command-palette";
 import { motion, useReducedMotion } from "motion/react";
+import { useHoverCapable } from "../../lib/hooks/use-hover-capable";
 import { EASE_OUT, SPRING_LAYOUT, SPRING_PRESS } from "../../lib/ease";
 
 interface LocaleRuntime {
@@ -47,6 +48,7 @@ function displayValue(value: unknown, fallback: string) {
 
 export function AppShell({ session, pathname, contentScrollKey = pathname, locale, children, onNavigate, onLogout, logoutPending = false, logoutError = null }: AppShellProps) {
   const reduceMotion = useReducedMotion();
+  const canHover = useHoverCapable();
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "knowledge-base": true, admin: true, governance: true });
   const [activeMenu, setActiveMenu] = useState<ShellMenuId>(null);
@@ -111,8 +113,8 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
             </Button>
           </div>
           <TooltipProvider><nav data-shell-sidebar-scroll data-navigation-source={serverNavigation ? "server" : "fallback"} aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-p-1 p-1">
-            <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} nodes={sidebarWorkspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />
-            {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} nodes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />}
+            <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} nodes={sidebarWorkspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} canHover={canHover} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />
+            {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} nodes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} canHover={canHover} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />}
           </nav></TooltipProvider>
           {collapsed
             ? <div data-shell-collapsed-account-controls className="shrink-0 border-t pt-3"><AccountMenu variant="collapsed" memberLabel={memberLabel} session={session} locale={locale} theme={theme} activeMenu={activeMenu} onActiveMenuChange={setActiveMenu} onThemeChange={changeTheme} onNavigate={navigate} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>
@@ -151,24 +153,30 @@ function menuAvailability(path: string) {
   return resolveMenuAvailability(path) ?? { availability: "coming_soon" as const, disabledReason: "not_implemented" as const };
 }
 
-function NavGroup({ title, nodes, pathname, locale, onNavigate, collapsed, expanded, onToggle }: { title: string; nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void }) {
-  return <div data-nav-group><p className={cn("mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground", collapsed && "sr-only")}>{title}</p><div className="space-y-1">{nodes.map((node) => <NavNode key={node.id} node={node} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} depth={1} />)}</div></div>;
+function NavGroup({ title, nodes, pathname, locale, onNavigate, collapsed, expanded, onToggle, canHover }: { title: string; nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void; canHover: boolean }) {
+  return <div data-nav-group><p className={cn("mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground", collapsed && "sr-only")}>{title}</p><div className="space-y-1">{nodes.map((node) => <NavNode key={node.id} node={node} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} canHover={canHover} depth={1} />)}</div></div>;
 }
 
-function NavNode({ node, pathname, locale, onNavigate, collapsed, expanded, onToggle, depth }: { node: NavigationNode; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void; depth: number }) {
+function NavNode({ node, pathname, locale, onNavigate, collapsed, expanded, onToggle, canHover, depth }: { node: NavigationNode; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void; canHover: boolean; depth: number }) {
   const label = locale.t(node.labelKey);
   const reduce = useReducedMotion();
+  const [hovered, setHovered] = useState(false);
   const path = node.path ?? node.route?.path ?? null;
   const unavailable = node.availability === "coming_soon";
   const unavailableLabel = `${label}（${locale.t("NAV_COMING_SOON")}）`;
   const active = Boolean(path && (pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))) || Boolean(node.children?.some((child) => isNodeActive(child, pathname)));
+  // One pill is shared by every row, so it glides between them on hover the same
+  // way the active indicator does. Touch devices never fire a real hover, so the
+  // state stays off unless the pointer can actually hover, and the active row
+  // keeps its own accent pill instead.
+  const hoverPill = canHover && hovered && !active ? <motion.span aria-hidden="true" layoutId="shell-nav-hover" transition={reduce ? { duration: 0 } : SPRING_LAYOUT} className="absolute inset-0 rounded-md bg-muted/70" /> : null;
   const hasChildren = Boolean(node.children?.length);
   const unavailableButton = <button type="button" aria-disabled="true" onClick={(event) => event.preventDefault()} className={cn("flex min-w-0 flex-1 cursor-not-allowed items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground opacity-70", collapsed && "justify-center px-0")}><NavIcon path={path} /><span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>{label}</span>{!collapsed && <Badge variant="outline" className="shrink-0 text-[10px]">{locale.t("NAV_COMING_SOON")}</Badge>}</button>;
   const content = path && unavailable
     ? collapsed ? <Tooltip><TooltipTrigger asChild>{unavailableButton}</TooltipTrigger><TooltipContent>{unavailableLabel}</TooltipContent></Tooltip> : unavailableButton
-    : path ? <motion.a data-route-id={routeCapability(path)?.id} href={path} aria-current={pathname === path ? "page" : undefined} title={collapsed ? label : undefined} onClick={(event) => { event.preventDefault(); onNavigate(path); }} whileTap={reduce ? undefined : { scale: 0.985 }} transition={SPRING_PRESS} className={cn("relative flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors", pathname === path ? "font-medium text-accent-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground", collapsed && "justify-center px-0")}>{pathname === path && <motion.span aria-hidden="true" layoutId="shell-nav-active" transition={SPRING_LAYOUT} className="absolute inset-0 rounded-md bg-accent" />}<NavIcon path={path} className="relative z-10" /><span className={cn("relative z-10 truncate", collapsed && "sr-only")}>{label}</span></motion.a>
-      : <button type="button" aria-expanded={expanded[node.id] ?? false} onClick={() => onToggle(node.id)} title={collapsed ? label : undefined} className={cn("flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", active && "text-foreground", collapsed && "justify-center px-0")}><NavIcon path={path} /><span className={cn("truncate", collapsed && "sr-only")}>{label}</span></button>;
-  return <div data-nav-node data-nav-depth={depth} data-nav-availability={node.availability}><div className="flex items-center">{content}{hasChildren && !collapsed && <button type="button" className="mr-1 rounded p-1 text-muted-foreground hover:bg-accent" aria-label={`${label} ${expanded[node.id] ? "collapse" : "expand"}`} aria-expanded={expanded[node.id] ?? false} onClick={() => onToggle(node.id)}><CaretDown size={14} className={cn("transition-transform", !expanded[node.id] && "-rotate-90")} aria-hidden="true" /></button>}</div>{hasChildren && (expanded[node.id] ?? false) && !collapsed && depth < 4 && <div className="ml-4 space-y-1 border-l pl-2">{node.children!.map((child) => <NavNode key={child.id} node={child} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} depth={depth + 1} />)}</div>}</div>;
+    : path ? <motion.a data-route-id={routeCapability(path)?.id} href={path} aria-current={pathname === path ? "page" : undefined} title={collapsed ? label : undefined} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onClick={(event) => { event.preventDefault(); onNavigate(path); }} whileTap={reduce ? undefined : { scale: 0.985 }} transition={SPRING_PRESS} className={cn("relative flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors", pathname === path ? "font-medium text-accent-foreground" : "text-muted-foreground hover:text-accent-foreground", collapsed && "justify-center px-0")}>{hoverPill}{pathname === path && <motion.span aria-hidden="true" layoutId="shell-nav-active" transition={SPRING_LAYOUT} className="absolute inset-0 rounded-md bg-accent" />}<NavIcon path={path} className="relative z-10" /><span className={cn("relative z-10 truncate", collapsed && "sr-only")}>{label}</span></motion.a>
+      : <button type="button" aria-expanded={expanded[node.id] ?? false} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onClick={() => onToggle(node.id)} title={collapsed ? label : undefined} className={cn("relative flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:text-accent-foreground", active && "text-foreground", collapsed && "justify-center px-0")}>{hoverPill}<NavIcon path={path} className="relative z-10" /><span className={cn("relative z-10 truncate", collapsed && "sr-only")}>{label}</span></button>;
+  return <div data-nav-node data-nav-depth={depth} data-nav-availability={node.availability}><div className="flex items-center">{content}{hasChildren && !collapsed && <button type="button" className="mr-1 rounded p-1 text-muted-foreground hover:bg-accent" aria-label={`${label} ${expanded[node.id] ? "collapse" : "expand"}`} aria-expanded={expanded[node.id] ?? false} onClick={() => onToggle(node.id)}><CaretDown size={14} className={cn("transition-transform", !expanded[node.id] && "-rotate-90")} aria-hidden="true" /></button>}</div>{hasChildren && (expanded[node.id] ?? false) && !collapsed && depth < 4 && <div className="ml-4 space-y-1 border-l pl-2">{node.children!.map((child) => <NavNode key={child.id} node={child} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} canHover={canHover} depth={depth + 1} />)}</div>}</div>;
 }
 
 function isNodeActive(node: NavigationNode, pathname: string): boolean { const path = node.path ?? node.route?.path; return Boolean(path && (pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))) || Boolean(node.children?.some((child) => isNodeActive(child, pathname))); }
