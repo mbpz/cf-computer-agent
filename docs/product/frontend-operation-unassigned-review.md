@@ -35,8 +35,8 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 110 项，但 A01 
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:222:75` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:249:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:223:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:250:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
 
 ## `frontend/components/agents/citations.tsx`（1）
 
@@ -54,6 +54,17 @@ App 外层挂载：[source:frontend/app.tsx]。无 fault 时返回 null；故障
 | --- | --- | --- | --- |
 | `frontend/components/history-navigation-notice.tsx:11:10` | app-boundary | 已登录 App 挂载且 history fault 非空 | role=alert 呈现历史导航故障；无写接口。 |
 | `frontend/components/history-navigation-notice.tsx:13:5` | app-boundary | 同上且 retrying 为 false 时点击 | retryWorkspaceHistory；等待期间禁用按钮，finally 清除 pending；失败仍不视为导航完成。 |
+
+## `frontend/components/motion/animated-toast-stack.tsx`（4）
+
+beUI 通知栈的落地副本，由 `frontend/lib/use-toast.tsx` 的 `ToastProvider` 在 App 边界挂载一次。它不是路由能力，也不属于任一业务 root，故逐项登记。[source:frontend/lib/use-toast.tsx]
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/animated-toast-stack.tsx:301:11` | app-boundary | Provider 传入 toasts 后逐条渲染 | 按 toast.id 渲染；本身不发起任何网络请求。 |
+| `frontend/components/motion/animated-toast-stack.tsx:352:5` | app-boundary | 通知入队或出队时 | 入场/退场动画；仅当横向拖拽超过 72px 或速度超过 520 才视为关闭。 |
+| `frontend/components/motion/animated-toast-stack.tsx:480:17` | app-boundary | 通知带 action 且用户点击该按钮 | 调用调用方传入的 `action.onClick(toast)`；组件自身不执行写入。 |
+| `frontend/components/motion/animated-toast-stack.tsx:494:15` | app-boundary | canDismiss 为真且用户点击关闭 | 调用 `onDismiss(toast.id)`；`aria-label` 由调用方以本地化文案传入（`COMMON_DISMISS`）。 |
 
 ## `frontend/components/motion/loader.tsx`（3）
 
@@ -319,6 +330,14 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 | VM 启动/恢复 | authenticated runtime 在读 bytes 前 GET /api/session、/api/environments/:id；checkpoint 为成员/环境 IndexedDB | `scripts/browser-vm-runtime-checkpoint.test.mjs`；正式 UI G0 尚未放行 |
 | 删除快照对账 | reconcile -> GET /api/environments/tombstones 分页；命中墓碑后撤销对应环境、停止对应 runtime、提交本地 remove | `scripts/browser-vm-checkpoint-reconcile.test.mjs`；不能从列表缺项删本地快照 |
 
+## `frontend/lib/use-toast.tsx`（1）
+
+App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`useToast()` 在无 Provider 时返回 no-op（避免测试与非 Provider 渲染被反馈通道拖垮）。写结果仍以内联持久状态为准，本通道只承载本来没有落点的事件。[source:frontend/app.tsx]
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/lib/use-toast.tsx:29:7` | app-boundary | ToastProvider 挂载（App 已认证分支） | 把通知栈固定渲染在右下角并 portal 到 body；`dismissLabel` 取本地化文案；不在无 Provider 时抛错。 |
+
 ## 验证范围与维护
 
 - 新增两条文档契约：全部未归属 ID 必须恰好一次且有分类/条件/行为；记录的源码及 caller 证据必须与指纹一致。文档缺失时 8 条旧测试通过、2 条新测试失败；补齐后 `node --test scripts/frontend-operation-inventory.test.mjs` 10/10 通过。与 frontend-typecheck-contract、functional-checklist-audit、workbench-maturity-contract 联合运行 37/37 通过。这是文档/源码门禁，不是业务旅程回归。
@@ -328,10 +347,11 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `ee67e974182f529eaf5d4014cd117db73ccad29ead8bbf0283963509d71afa27`
+- `frontend/app.tsx`: `b8243c08e3809027cc82af0f4f7aacce220620e2ee1fd5744ff2a9acfc36a53d`
 - `frontend/components/agent/answer-panel.tsx`: `aacef68e378bab0307b095b1afa160fb2151de7ec7f06d53a7928b3f6c4aef70`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
+- `frontend/components/motion/animated-toast-stack.tsx`: `bbfe97a6aa83e2acb5ea270fdf93bc3541764a7bbf80bc9e514e02566a6342e9`
 - `frontend/components/motion/loader.tsx`: `1ce4a393641bb366407ae43b28f31146008664fe9cdc43f2b687c259db745e84`
 - `frontend/components/motion/not-found/glitch.tsx`: `f63ed5577881f978c331ffd4552241abc90c71c14cd2bb5e2eafa2ed2556ef03`
 - `frontend/components/motion/not-found/shared.tsx`: `f98d45223967f45277bf89b659b308e63c784397d4da9c2830565b9bcfc508da`
@@ -355,6 +375,7 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 - `frontend/features/environments/network-lifecycle.mjs`: `0e40ef5fc54547a8eb8769598176d1bdae454d99a4e62a143981b7f545d89e06`
 - `frontend/features/environments/storage/checkpoints.mjs`: `0f3e6fdf0a47455748cc139f7b811ca87be00a144c8a3c25433c26647c085722`
 - `frontend/features/environments/storage/reconcile-checkpoints.ts`: `465fc694b89e3da4750a3ee7b46ee41a141fbdc9dff3631ea4454d47f32ff636`
+- `frontend/lib/use-toast.tsx`: `7156c51d16a4247a000682d67ce6c2784b77f09b35c374ca1abff8c6a1f94a87`
 - `frontend/lib/workspace-location.ts`: `b77ff862964645fe25610e09f79b8409740f72a85a5685d934adc7e0ff60b92d`
 - `frontend/main.tsx`: `8a56e4c9f5df8e80312df681a99b6f31457b752d9d94ad000e37f6a666ae1f62`
 - `frontend/pages/workbench-landing/public-workbench-page.tsx`: `8dade45d323b9ca993abab52b7cf30e99e0f633f54a2ec936fb0780ce9a819c2`
@@ -397,3 +418,9 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 - 本轮只为既有表面替换背景/阴影类名（`bg-card`／`bg-background`／`bg-popover`／`shadow-*` → `material-chrome`／`material-panel`／`material-surface`），未新增控件、未改回调。索引仍为 283 文件 / 1211 候选 / 115 未归属。
 - 唯一需要更新的指纹是 `frontend/components/ui/card.tsx`：候选坐标与语义未变，仅因类名替换导致源码字节变化。其余被 touched 的文件（shell、dialog、sheet、dropdown-menu、tooltip、落地页 CSS）的候选均归属各自路由 root，不在本记录指纹范围内。
+
+### 2026-10-14 beUI 通知栈接入后重新审查
+
+- 新增 `frontend/components/motion/animated-toast-stack.tsx`（beUI 落地副本，图标改用仓库既有 phosphor，`aria-label` 参数化后由调用方本地化）与 `frontend/lib/use-toast.tsx`（App 级 Provider + no-op 回退）。
+- 未归属候选 115 → **120**：新增 5 条——通知栈 4 条（逐条渲染、拖拽关闭、action 按钮、关闭按钮）与 Provider 挂载 1 条，全部归 `app-boundary`，因为它们在 App 边界挂载一次、不属于任何业务 root。`frontend/app.tsx` 的两条外层坐标仅因新增一行导入下移至 223:106、250:39。
+- 同步更新 `frontend/app.tsx` 指纹并新增上述两个来源指纹。当前索引 285 文件 / 1216 候选 / 120 未归属。

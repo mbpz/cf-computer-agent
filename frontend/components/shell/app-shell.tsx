@@ -92,7 +92,11 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
     setTheme(mode);
     applyTheme(mode, document, window.localStorage);
   };
-  const toggleTheme = () => changeTheme(document.documentElement.classList.contains("dark") ? "light" : "dark");
+  const toggleTheme = (): ThemeMode => {
+    const next: ThemeMode = document.documentElement.classList.contains("dark") ? "light" : "dark";
+    changeTheme(next);
+    return next;
+  };
   const access = resolveFrontendAccess({ session, route: matchRoute(pathname) });
 
   return (
@@ -119,7 +123,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
         <header data-shell-topbar className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b material-chrome px-4 lg:px-6">
           <div className="hidden min-w-0 items-center gap-3 sm:flex"><Breadcrumb pathname={pathname} locale={locale} /></div>
           <div data-shell-topbar-actions className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
-            <CommandPalette session={session} locale={locale} onNavigate={navigate} onToggleTheme={toggleTheme} onLogout={onLogout} logoutPending={logoutPending} />
+            <CommandPalette session={session} locale={locale} onNavigate={navigate} onToggleTheme={toggleTheme} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} />
             <motion.nav layoutRoot data-shell-collaboration-navigation aria-label={locale.t("SHELL_COLLABORATION_NAVIGATION")} className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
               {collaborationLinks.map((link) => <Fragment key={link.path}><motion.a data-route-id={routeCapability(link.path)?.id} href={link.path} title={locale.t(link.labelKey)} aria-label={locale.t(link.labelKey)} aria-current={isCollaborationActive(pathname, link.activePrefix) ? "page" : undefined} onClick={(event) => { event.preventDefault(); navigate(link.path); }} whileTap={reduceMotion ? undefined : { scale: 0.97 }} transition={SPRING_PRESS} className={cn("relative flex min-h-10 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs transition-colors sm:text-sm", isCollaborationActive(pathname, link.activePrefix) ? "font-medium text-accent-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground")}>{isCollaborationActive(pathname, link.activePrefix) && <motion.span aria-hidden="true" layoutId="shell-collab-active" transition={SPRING_LAYOUT} className="absolute inset-0 rounded-md bg-accent" />}<NavIcon path={link.icon} className="relative z-10" /><span className="relative z-10 hidden sm:inline sm:max-w-28 sm:truncate lg:max-w-none">{locale.t(link.labelKey)}</span>{link.path === "/notifications" && <span data-notification-summary data-state={unreadState.kind} role="status" aria-live="polite" aria-label={unreadLabel} title={unreadLabel} className="relative z-10 rounded bg-muted px-1 text-xs tabular-nums">{unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—"}</span>}</motion.a>{link.path === "/notifications" && unreadState.kind === "error" && <Button data-notification-summary-retry variant="ghost" size="sm" aria-label={locale.t("SHELL_UNREAD_RETRY")} onClick={notificationSummary.retry}>{locale.t("COMMON_RETRY")}</Button>}</Fragment>)}
             </motion.nav>

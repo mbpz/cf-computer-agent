@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Command, MagnifyingGlass } from "@phosphor-icons/react";
 import { SPRING_LAYOUT } from "../../lib/ease";
+import { useToast } from "../../lib/use-toast";
+import type { ThemeMode } from "../../lib/theme";
 import type { SessionSnapshot } from "../../contracts/api";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { defaultCommands, filterCommands, type CommandPaletteItem } from "../../lib/command-palette";
@@ -9,14 +11,17 @@ import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 
-export function CommandPalette({ session, locale, onNavigate, onToggleTheme, onLogout, logoutPending = false }: {
+export function CommandPalette({ session, locale, onNavigate, onToggleTheme, onLogout, logoutPending = false, logoutError = null }: {
   session: SessionSnapshot;
   locale: Pick<LocaleRuntime, "t" | "locale">;
   onNavigate: (path: string) => void;
-  onToggleTheme?: () => void;
+  onToggleTheme?: () => ThemeMode | void;
   onLogout?: () => void;
   logoutPending?: boolean;
+  logoutError?: string | null;
 }) {
+  const toast = useToast();
+  const logoutFromPalette = useRef(false);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -58,10 +63,23 @@ export function CommandPalette({ session, locale, onNavigate, onToggleTheme, onL
 
   const execute = (command: CommandPaletteItem) => {
     setOpen(false);
-    if (command.action === "logout") { if (!logoutPending) onLogout?.(); return; }
-    if (command.action === "toggle-theme") { onToggleTheme?.(); return; }
+    if (command.action === "logout") { if (!logoutPending) { logoutFromPalette.current = true; onLogout?.(); } return; }
+    if (command.action === "toggle-theme") {
+      // The palette closes before the result is on screen, so confirm it here.
+      const next = onToggleTheme?.();
+      if (next) toast.show({ status: "info", duration: 2000, title: `${frontendText(locale, "SHELL_THEME")}: ${frontendText(locale, next === "dark" ? "SHELL_THEME_DARK" : next === "light" ? "SHELL_THEME_LIGHT" : "SHELL_THEME_SYSTEM")}` });
+      return;
+    }
     if (command.href) onNavigate(command.href);
   };
+
+  useEffect(() => {
+    // A failed sign-out renders inside the account menu, which is not mounted
+    // when the palette started it; surface it where the user actually is.
+    if (!logoutError || !logoutFromPalette.current) return;
+    logoutFromPalette.current = false;
+    toast.show({ status: "error", duration: 8000, title: logoutError });
+  }, [logoutError, toast]);
 
   return <>
     <Button type="button" variant="outline" size="sm" data-command-palette-trigger aria-label={frontendText(locale, "SHELL_COMMAND_PALETTE")} onClick={() => setOpen(true)} className="hidden min-w-36 justify-between gap-3 text-muted-foreground xl:inline-flex">

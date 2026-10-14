@@ -58,6 +58,7 @@ import { ThreadPage, type ThreadPageState } from "./pages/messages/thread-page";
 import { LoginPage } from "./pages/login-page";
 import { PublicWorkbenchPage } from "./pages/workbench-landing/public-workbench-page";
 import { NotFoundGlitch } from "./components/motion/not-found/glitch";
+import { ToastProvider } from "./lib/use-toast";
 import { Loader } from "./components/motion/loader";
 import { SettingsPage } from "./pages/settings-page";
 import { GraphRoute } from "./pages/graph-page";
@@ -219,7 +220,7 @@ export function App() {
   };
   const kind = pageKindForPath(pathname);
   const page = renderPage(kind, pathname, locale, location.search, session);
-  return <AccountNetworkBoundary memberId={session.member.id}>{(owner) => <AppShell session={session} pathname={pathname} contentScrollKey={canonicalWorkspaceLocationKey(location)} locale={locale} onNavigate={navigate} onLogout={() => logout(owner)} logoutPending={logoutPending} logoutError={logoutError}><HistoryNavigationNotice locale={locale} />{page}</AppShell>}</AccountNetworkBoundary>;
+  return <AccountNetworkBoundary memberId={session.member.id}>{(owner) => <ToastProvider locale={locale}><AppShell session={session} pathname={pathname} contentScrollKey={canonicalWorkspaceLocationKey(location)} locale={locale} onNavigate={navigate} onLogout={() => logout(owner)} logoutPending={logoutPending} logoutError={logoutError}><HistoryNavigationNotice locale={locale} />{page}</AppShell></ToastProvider>}</AccountNetworkBoundary>;
 }
 
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "", session?: SessionSnapshot) {
