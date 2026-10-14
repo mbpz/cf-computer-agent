@@ -135,8 +135,8 @@ async function runChatTurn(services: LibraryRouteServices, scope: LibraryScope, 
  * validation already produced a real status before this runs, so the stream
  * itself only carries pipeline outcomes: `stage` frames, one terminal `answer`
  * frame, or one terminal `error` frame whose `error` object matches the JSON
- * transport's error shape. A client that sees the stream end without a terminal
- * frame must treat the write as unconfirmed.
+ * transport's error shape (including its status). A client that sees the stream
+ * end without a terminal frame must treat the write as unconfirmed.
  */
 function chatStreamResponse(services: LibraryRouteServices, scope: LibraryScope, turn: ChatTurnRequest, context: RequestContext): Response {
   const encoder = new TextEncoder();
@@ -147,8 +147,8 @@ function chatStreamResponse(services: LibraryRouteServices, scope: LibraryScope,
     .then(({ body }) => frame({ stage: "answer", body }))
     .catch((error: unknown) => {
       const failure = error instanceof AppError
-        ? { code: error.code, message: error.message, retryable: error.retryable }
-        : { code: "CHAT_FAILED", message: "Chat generation failed", retryable: false };
+        ? { code: error.code, message: error.message, status: error.status, retryable: error.retryable }
+        : { code: "CHAT_FAILED", message: "Chat generation failed", status: 500, retryable: false };
       return frame({ stage: "error", error: failure });
     })
     .then(() => writer.close())

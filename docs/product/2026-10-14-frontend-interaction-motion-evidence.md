@@ -142,3 +142,47 @@
 
 - 管理列表（`table`）与活动热力图（`heat-calendar`）本轮不采纳，理由见 7.1，不属于已交付范围。
 - 未在真实 Safari / 真机复核数字滚动；Blink 已实测，WebKit 结论不成立（该窗口动画停摆，无有效观测）。
+
+## 8. 第四批：agent 问答接入流式阶段进度（beUI agent-progress）
+
+### 8.1 取舍
+
+| 候选 | 结论 | 依据 |
+| --- | --- | --- |
+| `agent-progress` | 采纳 | 加载态需要「正在做什么」的单一权威指示（3×3 脉冲字形 + 动词 + 计时）；仅依赖 `motion` |
+| `agent-activity` | 否决 | 是推理/搜索/工具调用的多行轨迹容器；本仓库的阶段是可枚举的 4 个里程碑，当成日志列表会造出并不存在的条目 |
+| `thinking-shimmer` | 否决 | 只有文本微光，不携带阶段语义，与既有 loading 呈现重复 |
+| `loader` | 已用 | 全局启动等待态已采用；页内使用不表达阶段 |
+| `prompt-input` / `message-scroller` / `message-bubble` | 仍否决 | 见第 1 节：这些页面承载恢复、幂等与授权语义，替换面大于收益 |
+
+### 8.2 变更
+
+- 传输：前端从 JSON 端点整体切到 `POST /api/knowledge/chat/stream`（SSE），不留第二套客户端路径。
+  - `frontend/lib/agent-data.ts`：新增 `askAgentStream`（可读流逐帧解析）与 `ChatStage` 联合类型；回执校验与归一化抽为 `normalizeChatPayload`，JSON 与流式两种载荷共用同一套规则（流的终端帧与服务端 JSON 响应同形）。
+  - 删除已无调用点的 `askAgent`（JSON 客户端）；服务端 `/api/knowledge/chat` 保留，但不再留死客户端。
+  - 流在无终端帧时结束 → `CHAT_STREAM_INTERRUPTED`：按未确认写处理，交回既有 keyed-intent 恢复流程，不自动重发。
+  - 错误帧携带 `status`，客户端抛出与 JSON 传输同语义的 `ApiRequestError`。
+  - 控制器 `request(...)` 新增 `onStage`，并按代次过滤：被后续请求取代的流不再改动 UI。
+- UI：`frontend/pages/agent-page.tsx` 的加载态由 `PageState kind="loading"` 换成 `AgentProgress`（阶段文案 + 计时），`frontend/app.tsx` 持有 `stage` 状态并在每次提交时重置。
+- 新增 `frontend/components/agents/agent-progress.tsx`：相对上游仅两处改动——导入路径改相对，新增 `ariaLabel` 属性。原因是上游把英文 `", in progress"` 拼进 `aria-label`，在该仓库会造成屏幕阅读器的英文残留。
+- i18n：新增 `AGENT_STAGE_RETRIEVING` / `_EVIDENCE` / `_GENERATING` / `_VALIDATING` 中英各 4 条；阶段未知时回落到既有 `AGENT_PREPARING`。
+- 夹具与生成物对账：
+  - `test/helpers/workbench-maturity-route-fixtures.ts` 的 agent 分支原本只认 `/api/knowledge/chat`，切换后会命中「unplanned request」；改为流式端点（loading → 永不结算、error → 503、其余 → 单个 answer 帧），并删除旧路径分支：若应用退回 JSON 端点，夹具会直接报 unplanned 而不是静默通过。
+  - `frontend/pages/agent-page.tsx` 的加载态外包一层 `data-page-state="loading"` + `aria-busy="true"`，保持 `frontend-workbench-maturity-routes.test.tsx` 对「agent loading」的既有选择器契约（该审计按 `main [data-page-state="loading"]` 判定加载态）。
+  - 生成物重新对账（有意重新生成，非同义绕过）：`docs/product/frontend-operation-inventory.json` / `.md` 由 289 文件 / 1218 候选更新为 **290 文件 / 1219 候选**（新增项是 `frontend/components/agents/agent-progress.tsx` 的 `role="status"` 候选）；未归属候选保持 **120**，`docs/product/frontend-operation-unassigned-review.md` 中 `frontend/app.tsx` 的审查指纹随本轮改动刷新。
+
+### 8.3 验证
+
+完整本地门禁（本轮实际运行）：`npm run test:smoke` 84/84、`test:i18n` 13/13、`verify:i18n`（keys=434 placeholders=55 files=6）与 delivery-status 30/30；单元 **366 文件 / 5237 用例**；Worker **71 文件 / 1203 用例**；`npm run typecheck`（worker + frontend）全部通过。
+
+- 传输层（`test/unit/frontend-agent-data.test.ts` 16/16）：阶段上报顺序、错误帧（`code`/`status`/`retryable`）、截断流 → `CHAT_STREAM_INTERRUPTED`；原有用例全部迁到流式桩。
+- 端到端渲染（`test/unit/frontend-agent-cancellation-route.test.tsx` 新增用例）：服务端只发 `retrieving` 时容器呈现 "Searching your knowledge" 且不含答案文本，终端帧到达后渲染答案。同文件其余用例改桩后通过（75/75）。
+- 状态审计：`test/unit/frontend-workbench-maturity-routes.test.tsx` 的 agent 四态（loading / empty / error / ready）在流式夹具下 4/4 通过——loading 所依赖的 `data-page-state="loading"` 契约保持；夹具已删除旧 JSON 端点分支，应用若退回该端点会直接失败而不是静默通过。
+- Worker：`test/worker/m1-library.test.ts` 46/46；`test/worker/m1-api.test.ts` 的流式错误帧用例断言含 `status`。
+- 真实浏览器（托管 Chromium，非 PiP 窗口）：临时入口渲染 `AgentPage` 并驱动四个阶段——9 格字形 20×20、标签 14px、计时器 3.5s→4.1s 递增、字形透明度在 420ms 内 0.292→0.556（波浪动画实际运行）、`aria-label` 与可见文案一致（无英文残留）、无阶段时回落 "Preparing answer"、0 条控制台错误。该入口已删除。
+
+### 8.4 边界
+
+- 未做生产身份与真实 AI 绑定的浏览器验收：本地无可用 AI 绑定，端到端以流桩驱动。
+- SSE 在真实网络下的分块到达与中间代理缓冲未验证；帧按 `\n\n` 分隔、逐帧解析已由单元用例覆盖。
+- 未在真机 / Safari 复核；`prefers-reduced-motion` 路径由组件源码（`useReducedMotion`）保证，本轮未模拟。

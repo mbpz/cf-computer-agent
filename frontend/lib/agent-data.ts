@@ -1,4 +1,4 @@
-import { apiFetch, type Fetcher } from "./api";
+import { apiFetch, parseApiError, ApiRequestError, type Fetcher } from "./api";
 import { createAsyncOwner } from "./async-owner";
 
 export type AgentScope =
@@ -28,21 +28,15 @@ export interface AgentAnswer {
   conflicts?: Array<{ text: string; citationIds: string[] }>;
 }
 
-export async function askAgent({ question, scope, conversationId, idempotencyKey, requester = fetch, signal }: {
-  question: string;
-  scope: AgentScope;
-  conversationId?: string;
-  idempotencyKey?: string;
-  requester?: Fetcher;
-  signal?: AbortSignal;
-}): Promise<AgentAnswer> {
-  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; conflicts?: unknown[]; messageKey?: unknown; suggestedActionKeys?: unknown; idempotencyKey?: unknown }>("/api/knowledge/chat", {
-    requester,
-    signal,
-    method: "POST",
-    headers: { "content-type": "application/json", ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}) },
-    body: JSON.stringify({ question: question.trim(), scope, ...(conversationId ? { conversationId } : {}) }),
-  });
+type ChatPayload = { answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; conflicts?: unknown[]; messageKey?: unknown; suggestedActionKeys?: unknown; idempotencyKey?: unknown };
+
+/**
+ * Receipt validation and normalization shared by both transports: the JSON
+ * response and the terminal frame of the stream carry the same payload, so a
+ * streamed answer is accepted under exactly the same rules.
+ */
+function normalizeChatPayload(data: ChatPayload, receipt: { idempotencyKey?: string; conversationId?: string }): AgentAnswer {
+  const { idempotencyKey, conversationId } = receipt;
   if (idempotencyKey && (data.idempotencyKey !== idempotencyKey || (conversationId !== undefined && data.conversationId !== conversationId) || typeof data.answer !== "string" || typeof data.conversationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(data.conversationId) || typeof data.evidenceConfidence !== "number" || !Number.isFinite(data.evidenceConfidence) || data.evidenceConfidence < 0 || data.evidenceConfidence > 1 || !Array.isArray(data.citations) || !data.citations.every(isKeyedCitation) || !Array.isArray(data.sources) || !data.sources.every(isKeyedSource))) throw new Error("CHAT_RECEIPT_UNKNOWN");
   const confidence = typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.8
     ? "high"
@@ -118,15 +112,70 @@ function normalizeCitation(value: unknown): AgentCitation | null {
   return citation;
 }
 
+/** Real milestones the server reports while a grounded answer is produced. */
+export type ChatStage = "retrieving" | "evidence" | "generating" | "validating";
+
+const CHAT_STAGES: readonly string[] = ["retrieving", "evidence", "generating", "validating"];
+
+/**
+ * Streaming transport for the same grounded turn. Stage frames are progress
+ * only; the answer arrives in one terminal frame and goes through the shared
+ * receipt validation, so no unvalidated prose is ever rendered. A stream that
+ * ends without a terminal frame is an unconfirmed write, not a plain failure.
+ */
+export async function askAgentStream({ question, scope, conversationId, idempotencyKey, requester = fetch, signal, onStage }: {
+  question: string;
+  scope: AgentScope;
+  conversationId?: string;
+  idempotencyKey?: string;
+  requester?: Fetcher;
+  signal?: AbortSignal;
+  onStage?: (stage: ChatStage) => void;
+}): Promise<AgentAnswer> {
+  const response = await requester("/api/knowledge/chat/stream", {
+    method: "POST",
+    signal,
+    headers: { "content-type": "application/json", ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}) },
+    body: JSON.stringify({ question: question.trim(), scope, ...(conversationId ? { conversationId } : {}) }),
+  });
+  if (!response.ok) throw await parseApiError(response);
+  if (!response.body) throw new ApiRequestError("CHAT_STREAM_UNAVAILABLE", "The answer stream is unavailable", 503, true);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let payload: ChatPayload | undefined;
+  let failure: { code: string; message: string; status: number; retryable: boolean } | undefined;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let separator = buffer.indexOf("\n\n");
+    while (separator >= 0) {
+      const raw = buffer.slice(0, separator).trim();
+      buffer = buffer.slice(separator + 2);
+      separator = buffer.indexOf("\n\n");
+      if (!raw.startsWith("data:")) continue;
+      let frame: { stage?: unknown; body?: unknown; error?: unknown };
+      try { frame = JSON.parse(raw.slice(5).trim()) as typeof frame; } catch { continue; }
+      if (frame.stage === "answer") payload = frame.body as ChatPayload;
+      else if (frame.stage === "error") failure = frame.error as typeof failure;
+      else if (typeof frame.stage === "string" && CHAT_STAGES.includes(frame.stage)) onStage?.(frame.stage as ChatStage);
+    }
+  }
+  if (failure) throw new ApiRequestError(failure.code, failure.message, failure.status, failure.retryable);
+  if (!payload) throw new ApiRequestError("CHAT_STREAM_INTERRUPTED", "The answer stream ended before a result was confirmed", 503, true);
+  return normalizeChatPayload(payload, { idempotencyKey, conversationId });
+}
+
 export function createAgentRequestController(requester: Fetcher = fetch) {
   let active: AbortController | null = null;
   const owner = createAsyncOwner();
   return {
-    request(question: string, scope: AgentScope, conversationId?: string, idempotencyKey?: string) {
+    request(question: string, scope: AgentScope, conversationId?: string, idempotencyKey?: string, onStage?: (stage: ChatStage) => void) {
       active?.abort();
       active = new AbortController();
       const generation = owner.claim();
-      const promise = askAgent({ question, scope, conversationId, idempotencyKey, requester, signal: active.signal }).then((answer) => ({ generation, answer })).finally(() => { if (owner.isCurrent(generation)) active = null; });
+      const promise = askAgentStream({ question, scope, conversationId, idempotencyKey, requester, signal: active.signal, onStage: onStage && ((stage) => { if (owner.isCurrent(generation)) onStage(stage); }) }).then((answer) => ({ generation, answer })).finally(() => { if (owner.isCurrent(generation)) active = null; });
       return { generation, promise };
     },
     isCurrent(generation: number) { return owner.isCurrent(generation); },

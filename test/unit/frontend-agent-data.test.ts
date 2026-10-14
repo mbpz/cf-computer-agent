@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { loadAgentConversations, submitAgentFeedback, agentLocationFromSearch, loadAgentConversation, askAgent, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
+import { loadAgentConversations, submitAgentFeedback, agentLocationFromSearch, loadAgentConversation, askAgentStream, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
+
+/** The streaming transport carries the same payload in one terminal frame. */
+function streamed(payload: unknown, init: ResponseInit = { status: 200 }): Response {
+  return new Response(`data: ${JSON.stringify({ stage: "answer", body: payload })}\n\n`, { headers: { "content-type": "text/event-stream" }, ...init });
+}
 
 describe("frontend agent data", () => {
   it("loads bounded history pages and rejects malformed or duplicate identifiers", async () => {
@@ -42,8 +47,8 @@ describe("frontend agent data", () => {
   });
 
   it("preserves the server's insufficient-evidence marker and allowlists suggestions", async () => {
-    await expect(askAgent({ question: "unknown", scope: { kind: "all" }, requester: async () => new Response(JSON.stringify({ answer: "No evidence", messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT", suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "run-untrusted-action", "KNOWLEDGE_CHAT_EXPAND_SCOPE", "KNOWLEDGE_CHAT_EXPAND_SCOPE"] })) })).resolves.toMatchObject({ insufficientEvidence: true, suggestions: ["rewrite", "sources"] });
-    await expect(askAgent({ question: "unknown", scope: { kind: "all" }, requester: async () => new Response(JSON.stringify({ messageKey: "something-else", suggestedActionKeys: ["KNOWLEDGE_CHAT_EXPAND_SCOPE"] })) })).resolves.not.toHaveProperty("insufficientEvidence");
+    await expect(askAgentStream({ question: "unknown", scope: { kind: "all" }, requester: async () => streamed({ answer: "No evidence", messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT", suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "run-untrusted-action", "KNOWLEDGE_CHAT_EXPAND_SCOPE", "KNOWLEDGE_CHAT_EXPAND_SCOPE"] }) })).resolves.toMatchObject({ insufficientEvidence: true, suggestions: ["rewrite", "sources"] });
+    await expect(askAgentStream({ question: "unknown", scope: { kind: "all" }, requester: async () => streamed({ messageKey: "something-else", suggestedActionKeys: ["KNOWLEDGE_CHAT_EXPAND_SCOPE"] }) })).resolves.not.toHaveProperty("insufficientEvidence");
   });
 
   it("requires a matching feedback receipt before confirming a write", async () => {
@@ -60,19 +65,19 @@ describe("frontend agent data", () => {
     const request = { question: "Follow up", scope: { kind: "all" as const }, conversationId: "conv-1", idempotencyKey: key };
     const valid = { answer: "Done", conversationId: "conv-1", idempotencyKey: key, evidenceConfidence: 0.3, citations: [], sources: [] };
     for (const receipt of [{ ...valid, conversationId: "conv-other" }, { ...valid, idempotencyKey: "different-chat-key" }, { ...valid, answer: null }]) {
-      await expect(askAgent({ ...request, requester: async () => Response.json(receipt) })).rejects.toThrow();
+      await expect(askAgentStream({ ...request, requester: async () => streamed(receipt) })).rejects.toThrow();
     }
-    await expect(askAgent({ ...request, requester: async () => Response.json(valid) })).resolves.toMatchObject({ answer: "Done", conversationId: "conv-1" });
+    await expect(askAgentStream({ ...request, requester: async () => streamed(valid) })).resolves.toMatchObject({ answer: "Done", conversationId: "conv-1" });
   });
 
   it("posts an explicit scope and normalizes grounded citations/confidence", async () => {
     const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      expect(String(input)).toBe("/api/knowledge/chat");
+      expect(String(input)).toBe("/api/knowledge/chat/stream");
       expect(init?.method).toBe("POST");
       expect(JSON.parse(String(init?.body))).toEqual({ question: "Where is the guide?", scope: { kind: "all" } });
-      return new Response(JSON.stringify({ answer: "Use [1]", evidenceConfidence: 0.9, citations: [{ citationId: "c-1", knowledgeItemId: "k-1", title: "Guide" }, null, { citationId: "", knowledgeItemId: "k-2" }] }), { status: 200 });
+      return streamed({ answer: "Use [1]", evidenceConfidence: 0.9, citations: [{ citationId: "c-1", knowledgeItemId: "k-1", title: "Guide" }, null, { citationId: "", knowledgeItemId: "k-2" }] });
     });
-    await expect(askAgent({ question: "  Where is the guide?  ", scope: { kind: "all" }, requester })).resolves.toEqual({
+    await expect(askAgentStream({ question: "  Where is the guide?  ", scope: { kind: "all" }, requester })).resolves.toEqual({
       answer: "Use [1]",
       confidence: "high",
       citations: [{ id: "c-1", title: "Guide", href: "/knowledge/k-1#c-1" }],
@@ -80,16 +85,30 @@ describe("frontend agent data", () => {
   });
 
   it("fails closed on malformed answer fields", async () => {
-    const requester = vi.fn(async () => new Response(JSON.stringify({ answer: 42, evidenceConfidence: "high", citations: [{ citationId: "c-1", knowledgeItemId: "" }] }), { status: 200 }));
-    await expect(askAgent({ question: "q", scope: { kind: "all" }, requester })).resolves.toEqual({ answer: "", confidence: "low", citations: [] });
+    const requester = vi.fn(async () => streamed({ answer: 42, evidenceConfidence: "high", citations: [{ citationId: "c-1", knowledgeItemId: "" }] }));
+    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester })).resolves.toEqual({ answer: "", confidence: "low", citations: [] });
   });
 
   it("round-trips the server conversation id for follow-up turns", async () => {
     const requester = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       expect(JSON.parse(String(init?.body))).toEqual({ question: "follow up", scope: { kind: "all" }, conversationId: "conversation-1" });
-      return new Response(JSON.stringify({ answer: "Grounded", evidenceConfidence: 0.9, citations: [], conversationId: "conversation-1" }), { status: 200 });
+      return streamed({ answer: "Grounded", evidenceConfidence: 0.9, citations: [], conversationId: "conversation-1" });
     });
-    await expect(askAgent({ question: "follow up", scope: { kind: "all" }, conversationId: "conversation-1", requester })).resolves.toMatchObject({ conversationId: "conversation-1" });
+    await expect(askAgentStream({ question: "follow up", scope: { kind: "all" }, conversationId: "conversation-1", requester })).resolves.toMatchObject({ conversationId: "conversation-1" });
+  });
+
+  it("reports pipeline stages and refuses to confirm an unterminated stream", async () => {
+    const stages: string[] = [];
+    const frames = ["retrieving", "evidence", "generating", "validating"].map((stage) => `data: ${JSON.stringify({ stage })}\n\n`).join("");
+    const streaming = vi.fn(async () => new Response(`${frames}data: ${JSON.stringify({ stage: "answer", body: { answer: "Grounded [1]", evidenceConfidence: 0.9, citations: [] } })}\n\n`, { headers: { "content-type": "text/event-stream" } }));
+    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester: streaming, onStage: (stage) => stages.push(stage) })).resolves.toMatchObject({ answer: "Grounded [1]", confidence: "high" });
+    expect(stages).toEqual(["retrieving", "evidence", "generating", "validating"]);
+
+    const failed = `data: ${JSON.stringify({ stage: "error", error: { code: "AI_UNAVAILABLE", message: "AI service is temporarily unavailable", status: 503, retryable: true } })}\n\n`;
+    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester: async () => new Response(failed, { headers: { "content-type": "text/event-stream" } }) })).rejects.toMatchObject({ code: "AI_UNAVAILABLE", status: 503, retryable: true });
+
+    const truncated = `data: ${JSON.stringify({ stage: "generating" })}\n\n`;
+    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester: async () => new Response(truncated, { headers: { "content-type": "text/event-stream" } }) })).rejects.toMatchObject({ code: "CHAT_STREAM_INTERRUPTED" });
   });
 
   it("updates conversation sources through the explicit scope endpoint", async () => {
@@ -112,11 +131,11 @@ describe("frontend agent data", () => {
   });
 
   it("binds cited source context from the server source set without exposing raw content", async () => {
-    const requester = vi.fn(async () => new Response(JSON.stringify({
+    const requester = vi.fn(async () => streamed({
       answer: "Use [1]", evidenceConfidence: 0.8, citations: ["citation-1"],
       sources: [{ citationId: "citation-1", knowledgeItemId: "knowledge-1", title: "Guide", spaceId: "space-1", collectionId: "collection-1", headingPath: ["Guide"], startLine: 4, endLine: 8, body: "secret body" }],
-    }), { status: 200 }));
-    await expect(askAgent({ question: "q", scope: { kind: "all" }, requester })).resolves.toEqual({
+    }));
+    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester })).resolves.toEqual({
       answer: "Use [1]", confidence: "high", citations: [{ id: "citation-1", title: "Guide", href: "/knowledge/knowledge-1#citation-1", spaceId: "space-1", collectionId: "collection-1", headingPath: ["Guide"], startLine: 4, endLine: 8 }],
     });
   });
@@ -134,7 +153,7 @@ describe("frontend agent data", () => {
     expect(controller.isCurrent(second.generation)).toBe(false);
   });
   it("does not send remote cancellation after an answer has completed", async () => {
-    const requester = vi.fn(async () => new Response(JSON.stringify({ answer: "Done", conversationId: "conversation-1", citations: [] })));
+    const requester = vi.fn(async () => streamed({ answer: "Done", conversationId: "conversation-1", citations: [] }));
     const controller = createAgentRequestController(requester);
     await controller.request("Question", { kind: "all" }, "conversation-1").promise;
     controller.cancel("conversation-1");

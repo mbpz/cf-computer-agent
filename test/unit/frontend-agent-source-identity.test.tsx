@@ -69,14 +69,14 @@ describe("agent source identity read", () => {
   async function ask() {
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
       const key = new Headers(init?.headers).get("idempotency-key");
-      return Response.json({
+      return new Response(`data: ${JSON.stringify({ stage: "answer", body: {
         answer: "Grounded answer",
         conversationId: "conv-1",
         evidenceConfidence: 0.9,
         citations: ["cite-1"],
         sources: [{ ...source }],
         idempotencyKey: key,
-      });
+      } })}\n\n`, { headers: { "content-type": "text/event-stream" } });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" />));
     await flush();

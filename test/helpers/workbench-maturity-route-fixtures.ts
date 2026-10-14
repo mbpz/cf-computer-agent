@@ -196,9 +196,14 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (pathname(path) === "/api/knowledge/search") return probeResponse(state, { ...numbered([]), degraded: false }, { ...numbered([{ knowledgeItemId: "ready-search", title: "READY::search", excerpt: "route fixture", matchedFields: [] }]), degraded: false });
       return null;
     case "agent":
-      if (path === "/api/knowledge/chat") {
+      if (path === "/api/knowledge/chat/stream") {
+        if (state === "loading") return neverResponse();
+        if (state === "error") return apiError(503, "ROUTE_MATURITY_RETRYABLE_ERROR", true);
         const key = new Headers(init?.headers).get("idempotency-key");
-        return probeResponse(state, {}, { answer: "READY::agent", evidenceConfidence: 1, citations: [], sources: [], conversationId: "conv-maturity", ...(key ? { idempotencyKey: key } : {}) });
+        const payload = state === "ready"
+          ? { answer: "READY::agent", evidenceConfidence: 1, citations: [], sources: [], conversationId: "conv-maturity", ...(key ? { idempotencyKey: key } : {}) }
+          : {};
+        return new Response(`data: ${JSON.stringify({ stage: "answer", body: payload })}\n\n`, { headers: { "content-type": "text/event-stream" } });
       }
       return null;
     case "my-submissions":

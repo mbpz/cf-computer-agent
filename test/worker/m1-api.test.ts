@@ -2510,7 +2510,7 @@ describe("grounded chat streaming", () => {
     const frames = await chatStreamFrames(response);
     expect(frames.some((frame) => frame.stage === "answer")).toBe(false);
     expect(frames.at(-1)?.stage).toBe("error");
-    expect(frames.at(-1)?.error).toEqual({ code: "AI_UNAVAILABLE", message: "AI service is temporarily unavailable", retryable: true });
+    expect(frames.at(-1)?.error).toEqual({ code: "AI_UNAVAILABLE", message: "AI service is temporarily unavailable", status: 503, retryable: true });
   });
 
   it("leaves the JSON transport unchanged", async () => {

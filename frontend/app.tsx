@@ -73,7 +73,7 @@ import { discardBlockedSearchComposerDraft, loadSearchComposerDraft, persistSear
 import { clearAgentIntent, createAgentIntent, loadAgentIntent, saveAgentIntent, type AgentTurnIntent, type StoredAgentIntent } from "./lib/agent-turn-intent";
 import { clearAgentFeedback, discardBlockedAgentFeedback, loadAgentFeedback, type AgentFeedbackIntent } from "./lib/agent-feedback-intent";
 import { discardBlockedAgentComposerDraft, loadAgentComposerDraft, persistAgentComposerDraft } from "./lib/agent-composer-draft";
-import { agentScopeSearch, agentLocationFromSearch, loadAgentConversation, createAgentRequestController, submitAgentFeedback, type AgentConversation, type AgentAnswer, type AgentScope } from "./lib/agent-data";
+import { agentScopeSearch, agentLocationFromSearch, loadAgentConversation, createAgentRequestController, submitAgentFeedback, type AgentConversation, type AgentAnswer, type AgentScope, type ChatStage } from "./lib/agent-data";
 import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
 import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, saveSubmissionIntent, type SubmissionIntent } from "./lib/submission-intent";
@@ -1209,6 +1209,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   }, [restoreId, recoveryVersion]);
   const [lastQuestion, setLastQuestion] = useState("");
   const [state, setState] = useState<{ kind: "loading" } | { kind: "cancelled" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [], conflicts: [] });
+  const [stage, setStage] = useState<ChatStage | null>(null);
   const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
   const pendingRef = useRef(false);
   const conversationIdRef = useRef<string | undefined>(undefined);
@@ -1273,7 +1274,8 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     rememberComposer();
     setLastQuestion(sentQuestion);
     setState({ kind: "loading" });
-    const request = controllerRef.current.request(sentQuestion, intent?.scope ?? scopeRef.current, intent ? intent.conversationId : conversationIdRef.current, intent?.key);
+    setStage(null);
+    const request = controllerRef.current.request(sentQuestion, intent?.scope ?? scopeRef.current, intent ? intent.conversationId : conversationIdRef.current, intent?.key, setStage);
     void request.promise.then(({ generation, answer }) => {
       if (controllerRef.current?.isCurrent(generation)) {
         pendingRef.current = false;
@@ -1364,7 +1366,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
       {feedbackIntent && visibleConversation !== feedbackIntent.conversationId && <div role="alert" data-agent-feedback-unconfirmed className="space-y-2 rounded-md border p-4"><p>{feedbackNotice ?? frontendText(locale, "AGENT_FEEDBACK_UNKNOWN")}</p><Button type="button" variant="outline" onClick={retryFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RETRY")}</Button></div>}
       {history.length > 0 && <section aria-label={frontendText(locale, "AGENT_HISTORY")} className="space-y-3"><h2>{frontendText(locale, "AGENT_HISTORY")}</h2><p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_HISTORY_DETAIL")}</p>{history.map((message, index) => <article key={index} className="rounded-md border p-3"><h3 className="font-medium">{frontendText(locale, message.role === "user" ? "AGENT_QUESTION_LABEL" : "AGENT_HISTORY_ANSWER")}</h3><p className="whitespace-pre-wrap">{message.content}</p>{message.citations.map((citation) => <a key={citation.id} className="mr-3 underline" href={citation.href}>{citation.title ?? citation.id}</a>)}</article>)}</section>}
       {conversationIdRef.current && <a className="underline" href={`/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}`}>{frontendText(locale, "AGENT_RESTORE_LINK")}</a>}
-      <AgentPage locale={locale} memberId={memberId} scope={scope} state={state} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} isWriteBlocked={locked} sourceDraft={sourceDraft} feedbackAdmission={feedbackAdmission} feedbackBlocked={feedbackBlocked} />
+      <AgentPage locale={locale} memberId={memberId} scope={scope} state={state} stage={stage} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} isWriteBlocked={locked} sourceDraft={sourceDraft} feedbackAdmission={feedbackAdmission} feedbackBlocked={feedbackBlocked} />
       <AgentHistoryList locale={locale} />
     </div>;
   };

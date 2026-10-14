@@ -130,7 +130,7 @@ describe("agent request cancellation route", () => {
         if (++feedbackCalls === 1) return new Response(null, { status: 503 });
         return new Response(JSON.stringify({ feedback: { conversationId: "conv-1", ...body } }));
       }
-      return new Response(JSON.stringify({ answer: "Not enough grounded evidence", conversationId: "conv-1", citations: [], messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT", suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "KNOWLEDGE_CHAT_EXPAND_SCOPE"] }));
+      return frame({ answer: "Not enough grounded evidence", conversationId: "conv-1", citations: [], messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT", suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "KNOWLEDGE_CHAT_EXPAND_SCOPE"] });
     });
     await act(async () => root.render(<AgentRoute locale={language} search="?scope=items&knowledgeItemId=k-1" />)); await flush();
     await question("Unclear question"); await submit();
@@ -271,7 +271,7 @@ describe("agent request cancellation route", () => {
     const old = deferred<Response>(); const current = deferred<Response>(); let feedback = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith("/feedback")) return ++feedback === 1 ? old.promise : current.promise;
-      return Response.json({answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], idempotencyKey: new Headers(init?.headers).get("idempotency-key")});
+      return frame({answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], idempotencyKey: new Headers(init?.headers).get("idempotency-key")});
     });
     await render(); await question("Question"); await submit(); await click("Useful");
     await act(async () => root.render(<AgentRoute locale={language} memberId="new-member" />));
@@ -320,7 +320,7 @@ describe("agent request cancellation route", () => {
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
       requests.push(init!);
       if (requests.length === 1) throw new Error("response lost");
-      return Response.json({ answer: "Recovered answer", conversationId: "recovered-turn", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
+      return frame({ answer: "Recovered answer", conversationId: "recovered-turn", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" />));
     await question("Original question"); await submit();
@@ -343,7 +343,7 @@ describe("agent request cancellation route", () => {
   it("does not expose another member's unconfirmed intent or accept a mismatched receipt", async () => {
     const requests: RequestInit[] = [];
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
-      requests.push(init!); return Response.json({ answer: "Wrong receipt answer", conversationId: "conv-wrong", idempotencyKey: "different-key-0001", citations: [] });
+      requests.push(init!); return frame({ answer: "Wrong receipt answer", conversationId: "conv-wrong", idempotencyKey: "different-key-0001", citations: [] });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" />));
     await question("Private pending question"); await submit();
@@ -377,7 +377,7 @@ describe("agent request cancellation route", () => {
   it("uses a new key with the recovered conversation for the next distinct question", async () => {
     const requests: RequestInit[] = [];
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
-      requests.push(init!); return Response.json({ answer: "Verified answer", conversationId: "conv-stable", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
+      requests.push(init!); return frame({ answer: "Verified answer", conversationId: "conv-stable", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-sequence" />));
     await question("First"); await submit(); await question("Second"); await submit();
@@ -602,7 +602,7 @@ describe("agent request cancellation route", () => {
       expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
     });
     expect(browser.location.pathname).toBe("/agent"); expect(init?.signal?.aborted).toBe(false);
-    await act(async () => late.resolve(Response.json({answer: "Verified", conversationId: "conv-nav", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: []})));
+    await act(async () => late.resolve(frame({answer: "Verified", conversationId: "conv-nav", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: []})));
     await flush(); expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
   });
 
@@ -647,7 +647,7 @@ describe("agent request cancellation route", () => {
     const storage = browser.sessionStorage;
     Object.defineProperty(browser, "sessionStorage", {configurable: true, value: {getItem: (key: string) => storage.getItem(key), removeItem: () => {throw new Error("denied");}}});
     try {
-      await act(async () => late.resolve(Response.json({answer: "Verified", conversationId: "conv-nav", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: []}))); await flush();
+      await act(async () => late.resolve(frame({answer: "Verified", conversationId: "conv-nav", evidenceConfidence: 0.3, idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: []}))); await flush();
       expect(container.textContent).toContain("Question recovery storage is unavailable or invalid");
       expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
       await click("Abandon unconfirmed question"); expect(leave()).toBe("blocked");
@@ -671,7 +671,7 @@ describe("agent request cancellation route", () => {
   });
 
   it("does not release navigation for a mismatched receipt", async () => {
-    vi.stubGlobal("fetch", async () => Response.json({answer: "Wrong receipt", conversationId: "conv-nav", idempotencyKey: "another-key-00000001", citations: []}));
+    vi.stubGlobal("fetch", async () => frame({answer: "Wrong receipt", conversationId: "conv-nav", idempotencyKey: "another-key-00000001", citations: []}));
     await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
     await question("Pending"); await submit();
     expect(container.textContent).not.toContain("Wrong receipt"); expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
@@ -695,7 +695,7 @@ describe("agent request cancellation route", () => {
         return Response.json({ feedback: { conversationId: "conv-1", rating: "useful", citationIds: [] } });
       }
       const key = new Headers(init?.headers).get("idempotency-key");
-      return Response.json({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], ...(key ? { idempotencyKey: key } : {}) });
+      return frame({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], ...(key ? { idempotencyKey: key } : {}) });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-feedback" />)); await flush();
     await question("Question"); await submit(); await click("Useful");
@@ -715,7 +715,7 @@ describe("agent request cancellation route", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith("/feedback")) { feedback++; return new Response(null, { status: 503 }); }
       const key = new Headers(init?.headers).get("idempotency-key");
-      return Response.json({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], ...(key ? { idempotencyKey: key } : {}) });
+      return frame({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], ...(key ? { idempotencyKey: key } : {}) });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-feedback" />)); await flush();
     await question("Question"); await submit();
@@ -730,7 +730,7 @@ describe("agent request cancellation route", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith("/feedback")) { feedback++; return Response.json({ feedback: { conversationId: "conv-1", rating: "useful", citationIds: [] } }); }
       const key = new Headers(init?.headers).get("idempotency-key");
-      return Response.json({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], ...(key ? { idempotencyKey: key } : {}) });
+      return frame({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], ...(key ? { idempotencyKey: key } : {}) });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-feedback" />)); await flush();
     expect(container.textContent).toContain("can't be read");
@@ -794,7 +794,7 @@ describe("agent request cancellation route", () => {
   it("does not restore a question that was already sent", async () => {
     vi.stubGlobal("fetch", async (_url: unknown, init?: RequestInit) => {
       const key = new Headers(init?.headers).get("idempotency-key");
-      return Response.json({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], idempotencyKey: key });
+      return frame({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], idempotencyKey: key });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="composer-member" />));
     await question("Sent question"); await submit();
@@ -820,7 +820,23 @@ describe("agent request cancellation route", () => {
   }
   async function submit() { await act(async () => container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }) as unknown as Event)); await flush(); }
   async function click(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent === label); expect(button).toBeTruthy(); await act(async () => button!.click()); await flush(); }
+
+  it("shows the pipeline stage the server reports while the answer is pending", async () => {
+    const late = deferred<Response>();
+    vi.stubGlobal("fetch", async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ stage: "retrieving" })}\n\n`));
+        void late.promise.then(() => { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ stage: "answer", body: { answer: "Grounded answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [] } })}\n\n`)); controller.close(); });
+      },
+    }), { headers: { "content-type": "text/event-stream" } }));
+    await render(); await question("Where is the guide?"); await submit(); await flush();
+    expect(container.textContent).toContain("Searching your knowledge");
+    expect(container.textContent).not.toContain("Grounded answer");
+    await act(async () => { late.resolve(new Response()); }); await flush();
+    expect(container.textContent).toContain("Grounded answer");
+  });
 });
-function answer(text: string, conversationId: string) { return new Response(JSON.stringify({ answer: text, conversationId, evidenceConfidence: 0.3, citations: [], sources: [] }), { headers: { "content-type": "application/json" } }); }
+function frame(payload: unknown, init: ResponseInit = {}) { return new Response(`data: ${JSON.stringify({ stage: "answer", body: payload })}\n\n`, { headers: { "content-type": "text/event-stream" }, ...init }); }
+function answer(text: string, conversationId: string) { return frame({ answer: text, conversationId, evidenceConfidence: 0.3, citations: [], sources: [] }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); for (let index = 0; index < 12; index++) await Promise.resolve(); }); }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((yes) => { resolve = yes; }); return { promise, resolve }; }
