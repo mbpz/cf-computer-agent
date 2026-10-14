@@ -46,38 +46,40 @@ describe("AdminAnalyticsRoute", () => {
     vi.unstubAllGlobals();
   });
 
-  it("initializes from URL and restores days and pagination on popstate", async () => {
+  it("loads the first window from the days filter and ignores URL page params", async () => {
     browser.history.replaceState({}, "", "/admin/analytics?days=14&page=3&pageSize=50");
     const inputs: LoadAdminAnalyticsInput[] = [];
-    const loader: Loader = async (input) => { inputs.push(input); return overview(input.page, input.pageSize, 101, [`/page-${input.page}`]); };
+    const loader: Loader = async (input) => { inputs.push(input); return overview(1, 20, 1, [`/visitor-${input.days}`]); };
     await renderRoute(loader);
-    expect(inputShape(inputs.at(-1)!)).toEqual({ days: 14, page: 3, pageSize: 50 });
+    expect(inputShape(inputs.at(-1)!)).toEqual({ days: 14, page: 1, pageSize: 20 });
+    expect(container.textContent).toContain("/visitor-14");
 
     await act(async () => {
-      browser.history.pushState({}, "", "/admin/analytics?days=7&page=2&pageSize=20");
+      browser.history.pushState({}, "", "/admin/analytics?days=7");
       browser.dispatchEvent(new browser.PopStateEvent("popstate"));
     });
-    expect(inputShape(inputs.at(-1)!)).toEqual({ days: 7, page: 2, pageSize: 20 });
+    await flush();
+    expect(inputShape(inputs.at(-1)!)).toEqual({ days: 7, page: 1, pageSize: 20 });
+    expect(container.textContent).toContain("/visitor-7");
   });
 
-  it("resets page one when days or page size changes", async () => {
-    browser.history.replaceState({}, "", "/admin/analytics?days=14&page=3&pageSize=50");
-    const loader: Loader = async (input) => overview(input.page, input.pageSize, 120, [`/page-${input.page}`]);
+  it("restarts the loaded window at the first page when days changes", async () => {
+    browser.history.replaceState({}, "", "/admin/analytics?days=14");
+    const inputs: LoadAdminAnalyticsInput[] = [];
+    const loader: Loader = async (input) => { inputs.push(input); return overview(input.page, input.pageSize, 21, Array.from({ length: 20 }, (_, index) => `/day${input.days}-p${input.page}-${index}`)); };
     await renderRoute(loader);
+    expect(inputShape(inputs.at(-1)!)).toEqual({ days: 14, page: 1, pageSize: 20 });
+    expect(container.textContent).toContain("/day14-p1-0");
 
     await changeSelect("#admin-analytics-range", "30");
-    expect(Object.fromEntries(new URLSearchParams(browser.location.search))).toEqual({ days: "30", pageSize: "50" });
-
-    browser.history.replaceState({}, "", "/admin/analytics?days=30&page=3&pageSize=50");
-    browser.dispatchEvent(new browser.PopStateEvent("popstate"));
-    await flush();
-    const pushState = vi.spyOn(browser.history, "pushState");
-    await changeSelect('select[aria-label="Rows per page"]', "100");
-    expect(Object.fromEntries(new URLSearchParams(browser.location.search))).toEqual({ days: "30", pageSize: "100" });
-    expect(pushState).toHaveBeenCalledTimes(1);
+    expect(Object.fromEntries(new URLSearchParams(browser.location.search))).toEqual({ days: "30" });
+    expect((container.querySelector("#admin-analytics-range") as HTMLSelectElement).value).toBe("30");
+    expect(inputShape(inputs.at(-1)!)).toEqual({ days: 30, page: 1, pageSize: 20 });
+    expect(container.textContent).toContain("/day30-p1-0");
+    expect(container.textContent).not.toContain("/day14-p1-0");
   });
 
-  it("aborts stale requests, keeps ready data pending or failed, and accepts only the latest result", async () => {
+  it("keeps ready rows while a reload is pending or fails", async () => {
     const requests: Array<{ input: LoadAdminAnalyticsInput; deferred: ReturnType<typeof deferred<AdminAnalyticsOverview>> }> = [];
     const loader: Loader = (input) => {
       const pending = deferred<AdminAnalyticsOverview>();
@@ -85,40 +87,66 @@ describe("AdminAnalyticsRoute", () => {
       return pending.promise;
     };
     await act(async () => root.render(<AdminAnalyticsRoute locale={locale()} search="" load={loader} />));
-    requests[0]!.deferred.resolve(overview(1, 20, 60, ["/ready"]));
+    requests[0]!.deferred.resolve(overview(1, 20, 1, ["/ready"]));
     await flush();
 
-    await clickPage(2);
-    expect(requests[0]!.input.signal?.aborted).toBe(true);
+    await act(async () => (container.querySelector('[data-analytics-refresh]') as HTMLButtonElement).click());
     expect(container.textContent).toContain("/ready");
-    expect(container.querySelector('button[aria-label="Page 2"]')?.hasAttribute("disabled")).toBe(true);
+    expect(container.querySelector('[data-analytics-stale]')).not.toBeNull();
 
     requests[1]!.deferred.reject(new Error("failed"));
     await flush();
     expect(container.textContent).toContain("/ready");
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(container.querySelector('[data-analytics-retry]')).not.toBeNull();
+  });
 
-    await clickPage(3);
-    await act(async () => {
-      browser.history.pushState({}, "", "/admin/analytics?page=2");
-      browser.dispatchEvent(new browser.PopStateEvent("popstate"));
-    });
+  it("aborts a superseded window request and accepts only the latest result", async () => {
+    const requests: Array<{ input: LoadAdminAnalyticsInput; deferred: ReturnType<typeof deferred<AdminAnalyticsOverview>> }> = [];
+    const loader: Loader = (input) => {
+      const pending = deferred<AdminAnalyticsOverview>();
+      requests.push({ input, deferred: pending });
+      return pending.promise;
+    };
+    await act(async () => root.render(<AdminAnalyticsRoute locale={locale()} search="" load={loader} />));
+    requests[0]!.deferred.resolve(overview(1, 20, 1, ["/ready"]));
     await flush();
-    expect(requests[2]!.input.signal?.aborted).toBe(true);
-    requests[3]!.deferred.resolve(overview(2, 20, 60, ["/latest"]));
+
+    await act(async () => (container.querySelector('[data-analytics-refresh]') as HTMLButtonElement).click());
+    await changeSelect("#admin-analytics-range", "30");
+    expect(requests[1]!.input.signal?.aborted).toBe(true);
+
+    requests[2]!.deferred.resolve(overview(1, 20, 1, ["/latest"]));
     await flush();
-    requests[2]!.deferred.resolve(overview(3, 20, 60, ["/stale"]));
+    requests[1]!.deferred.resolve(overview(1, 20, 1, ["/stale"]));
     await flush();
     expect(container.textContent).toContain("/latest");
     expect(container.textContent).not.toContain("/stale");
   });
 
-  it("renders a legal empty page beyond the last page", async () => {
+  it("appends the next page's visitors on end-of-list without duplicating the first page", async () => {
     browser.history.replaceState({}, "", "/admin/analytics?page=4");
-    await renderRoute(async () => overview(4, 20, 21, []));
-    expect(container.textContent).toContain("0–0");
-    expect(container.textContent).toContain("4 / 2");
-    expect(container.querySelector('[aria-current="page"]')).toBeNull();
+    const inputs: LoadAdminAnalyticsInput[] = [];
+    const loader: Loader = async (input) => { inputs.push(input); return overview(input.page, input.pageSize, 41, Array.from({ length: 20 }, (_, index) => `/visit-p${input.page}-${index}`)); };
+    await renderRoute(loader);
+    expect(inputs.map((input) => input.page)).toEqual([1]);
+    expect(container.textContent).toContain("/visit-p1-0");
+
+    await scrollToEnd();
+    expect(inputs.map((input) => input.page)).toEqual([1, 2]);
+    expect(container.textContent).toContain("/visit-p1-0");
+    expect(container.textContent).toContain("/visit-p2-0");
+  });
+
+  it("stops requesting once the last page is appended", async () => {
+    const inputs: LoadAdminAnalyticsInput[] = [];
+    const loader: Loader = async (input) => { inputs.push(input); return overview(input.page, input.pageSize, 21, input.page === 1 ? Array.from({ length: 20 }, (_, index) => `/only-p1-${index}`) : ["/only-p2-0"]); };
+    await renderRoute(loader);
+    await scrollToEnd();
+    expect(inputs.map((input) => input.page)).toEqual([1, 2]);
+    await scrollToEnd();
+    expect(inputs.map((input) => input.page)).toEqual([1, 2]);
+    expect(container.textContent).toContain("/only-p2-0");
   });
 
   it("retries the original initial query once even on double click", async () => {
@@ -130,8 +158,8 @@ describe("AdminAnalyticsRoute", () => {
     expect(retry).not.toBeNull();
     await act(async () => { retry.click(); retry.click(); });
     expect(inputs).toHaveLength(2);
-    expect(inputShape(inputs[1]!)).toEqual({ days: 14, page: 3, pageSize: 50 });
-    recovery.resolve({ ...overview(3, 50, 101, ["/recovered"]), range: { from: "2026-08-13", to: "2026-08-26", days: 14 } });
+    expect(inputShape(inputs[1]!)).toEqual({ days: 14, page: 1, pageSize: 20 });
+    recovery.resolve({ ...overview(1, 20, 1, ["/recovered"]), range: { from: "2026-08-13", to: "2026-08-26", days: 14 } });
     await flush();
     expect(container.textContent).toContain("/recovered");
   });
@@ -164,11 +192,11 @@ describe("AdminAnalyticsRoute", () => {
     expect(container.querySelector('[data-analytics-stale]')).toBeNull();
   });
 
-  it("replaces second-page counts and rows together after a write, rejecting mixed snapshots before retry", async () => {
-    browser.history.replaceState({}, "", "/admin/analytics?days=7&page=2&pageSize=20");
-    const before = overview(2, 20, 21, ["/old-last"]);
+  it("replaces visitor counts and rows together after a refresh, rejecting mixed snapshots before retry", async () => {
+    const old = (index: number) => `/old-${index}`;
+    const before = overview(1, 20, 21, Array.from({ length: 20 }, (_, index) => old(index)));
     before.daily = [{ day: "2026-08-26", pageViews: 21, uniqueVisitors: 21, loginUsers: 0 }];
-    const after = overview(2, 20, 22, ["/shifted-row", "/old-last"]);
+    const after = overview(1, 20, 22, ["/shifted-row", ...Array.from({ length: 19 }, (_, index) => old(index))]);
     after.daily = [{ day: "2026-08-26", pageViews: 22, uniqueVisitors: 22, loginUsers: 0 }];
     const mixed = { ...after, totals: before.totals };
     const replies = [before, mixed, after];
@@ -199,8 +227,7 @@ describe("AdminAnalyticsRoute", () => {
     expect(container.querySelector('[data-analytics-stale]')).toBeNull();
     expect(container.textContent).toContain("/shifted-row");
     expect(container.textContent).toContain("22");
-    expect(container.querySelector('button[aria-label="Page 2"]')?.getAttribute("aria-current")).toBe("page");
-    expect(queries).toEqual(Array(3).fill("/api/admin/analytics/overview?days=7&page=2&pageSize=20"));
+    expect(queries).toEqual(Array(3).fill("/api/admin/analytics/overview?days=7&page=1&pageSize=20"));
   });
 
   it("shows a valid one-day URL selection and falls back for duplicate day filters", async () => {
@@ -218,8 +245,9 @@ describe("AdminAnalyticsRoute", () => {
 
   it.each([401, 403])("clears visitor details on HTTP %s instead of keeping stale private data", async (status) => {
     let calls = 0;
-    await renderRoute(async () => { if (++calls > 1) throw new ApiRequestError("FORBIDDEN", "Denied", status, false); return overview(1, 20, 60, ["/private-visitor"]); });
-    await clickPage(2);
+    await renderRoute(async () => { if (++calls > 1) throw new ApiRequestError("FORBIDDEN", "Denied", status, false); return overview(1, 20, 1, ["/private-visitor"]); });
+    await act(async () => (container.querySelector('[data-analytics-refresh]') as HTMLButtonElement).click());
+    await flush();
     expect(container.textContent).not.toContain("/private-visitor");
     expect(container.querySelector('[data-page-state="forbidden"]')).not.toBeNull();
   });
@@ -249,9 +277,12 @@ describe("AdminAnalyticsRoute", () => {
     await flush();
   }
 
-  async function clickPage(page: number): Promise<void> {
-    const button = container.querySelector(`button[aria-label="Page ${page}"]`) as HTMLButtonElement;
-    await act(async () => button.click());
+  async function scrollToEnd(): Promise<void> {
+    const scroller = container.querySelector("div.overflow-auto") as HTMLElement;
+    await act(async () => {
+      scroller.scrollTop = scroller.scrollHeight;
+      scroller.dispatchEvent(new browser.Event("scroll", { bubbles: true }));
+    });
     await flush();
   }
 });

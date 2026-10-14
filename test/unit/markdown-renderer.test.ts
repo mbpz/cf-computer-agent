@@ -63,7 +63,7 @@ describe("safe Markdown renderer", () => {
 <math><mtext>math</mtext></math>
 `);
     const host = window.document.createElement("div");
-    host.append(fragment);
+    host.append(fragment as unknown as Parameters<typeof host.append>[0]); // happy-dom node vs the DOM lib's Node
 
     expect(fragment.nodeType).toBe(11);
     expect(host.querySelector("h1")?.textContent).toBe("Safe heading");
@@ -89,7 +89,7 @@ describe("safe Markdown renderer", () => {
 Linkified https://linkified.example.test/path.
 `);
     const host = window.document.createElement("div");
-    host.append(fragment);
+    host.append(fragment as unknown as Parameters<typeof host.append>[0]); // happy-dom node vs the DOM lib's Node
     const anchors = [...host.querySelectorAll("a")];
 
     expect(anchors.map((anchor) => anchor.getAttribute("href"))).toEqual([
@@ -118,7 +118,7 @@ const markup = "<script>not executable</script>";
   - inner
 `);
     const host = window.document.createElement("div");
-    host.append(fragment);
+    host.append(fragment as unknown as Parameters<typeof host.append>[0]); // happy-dom node vs the DOM lib's Node
 
     expect(host.querySelector("table tbody td")?.textContent).toBe("Reader");
     expect(host.querySelector("pre code")?.textContent).toContain("<script>not executable</script>");

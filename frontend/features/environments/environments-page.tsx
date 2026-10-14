@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { EnvironmentMetadata, EnvironmentType } from '../../../shared/environments';
 import type { SessionSnapshot } from '../../contracts/api';
+import { DataTable } from '../../components/data-table';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Select } from '../../components/ui/select';
@@ -47,6 +48,25 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   const [edit,setEdit]=useState<EnvironmentMetadata|null>(null),[remove,setRemove]=useState<EnvironmentMetadata|null>(null);
   const [localError,setLocalError]=useState(false);
   const blocked=operationBlocked() || draft.confirming;
+  // The manager still replaces one server page per `load(page)`; the surface keeps
+  // every page it has read so `onLoadMore` appends instead of swapping the list.
+  const [pages,setPages]=useState<readonly {page:number;items:readonly EnvironmentMetadata[]}[]>([]);
+  const loadedFilter=useRef(state.filter);
+  useEffect(()=>{
+    if(loadedFilter.current===state.filter)return;
+    loadedFilter.current=state.filter;
+    setPages([]);
+  },[state.filter]);
+  useEffect(()=>{
+    // A failed or blocked read rewrites `items` to [] from the same snapshot, so it
+    // is only ever appended once it has settled cleanly for its own page.
+    if(state.loading || state.closed || state.error || state.items.length===0)return;
+    const page=state.pagination.page;
+    setPages(current=>{
+      if(current.some(entry=>entry.page===page && entry.items===state.items))return current;
+      return [...current.filter(entry=>entry.page<page),{page,items:state.items}].sort((a,b)=>a.page-b.page);
+    });
+  },[state.loading,state.closed,state.error,state.items,state.pagination.page]);
   const asCreate=(): EnvironmentCreateFields => ({name:draft.current.current.name,type:draft.current.current.type==='temporary'?'temporary':'personal',taskId:draft.current.current.taskId});
   const remembered=(): {create: EnvironmentCreateFields; rename: EnvironmentRenameFields | null} => {
     const create=asCreate();
@@ -81,6 +101,7 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   },[state.closed,state.pending,state.confirmed]);
   const closeRemove=()=>{removeRef.current=null;setRemove(null);};
   const run=async(action:()=>Promise<void>)=>{if(!alive.current || draft.isConfirming())return;setLocalError(false);try{await action();}catch{if(alive.current && !manager.getSnapshot().closed)setLocalError(true);}};
+  const loadMore=()=>{if(state.writing)return;const next=state.pagination.page+1;if(next>500)return;void run(()=>manager.load(next));};
   if(state.closed)return <section data-environments-closed role="alert">{t('ENV_ACCOUNT_CLOSED')}</section>;
   return <section data-environments-page className="mx-auto max-w-5xl space-y-6">
     {draft.confirmation}
@@ -112,10 +133,24 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
       </form>
     </CardContent></Card>
     <div className="flex flex-wrap items-end gap-3"><label className="text-sm">{t('ENV_FILTER')}<Select aria-label={t('ENV_FILTER')} value={state.filter} disabled={state.loading || state.writing} onChange={event=>void run(()=>manager.load(1,event.target.value as ''|EnvironmentType))}><option value="">{t('ENV_ALL')}</option><option value="personal">{t('ENV_PERSONAL')}</option><option value="temporary">{t('ENV_TEMPORARY')}</option></Select></label><Button variant="outline" disabled={state.loading || state.writing} onClick={()=>void run(()=>manager.load())}>{t('ENV_REFRESH')}</Button></div>
-    <div aria-busy={state.loading} aria-live="polite" className="space-y-3">
-      {state.loading ? <p>{t('ENV_LOADING')}</p> : state.items.length===0 ? <p>{t('ENV_EMPTY')}</p> : state.items.map(item=><Card key={item.id} data-environment-id={item.id}><CardContent className="flex flex-wrap items-center justify-between gap-3 p-4"><div className="min-w-0"><h2 className="break-words font-medium">{item.name}</h2><p className="text-sm text-muted-foreground">{t(item.type==='personal'?'ENV_PERSONAL':'ENV_TEMPORARY')} · {t('ENV_NOT_RUNNING')}</p>{item.taskId && <p className="break-all text-xs">{t('ENV_TASK')}: {item.taskId}</p>}</div><div className="flex gap-2"><Button data-environment-rename variant="outline" disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){editRef.current=item;setEdit(item);}}}>{t('ENV_RENAME')}</Button><Button data-environment-delete variant="destructive" disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){removeRef.current=item;setRemove(item);}}}>{t('ENV_DELETE')}</Button></div></CardContent></Card>)}
+    <div aria-busy={state.loading} className="space-y-3">
+      <DataTable
+        locale={locale}
+        rows={pages.flatMap(entry=>entry.items)}
+        rowId={item=>item.id}
+        ariaLabel={t('NAV_ENVIRONMENTS')}
+        emptyState={<p>{t('ENV_EMPTY')}</p>}
+        loading={state.loading}
+        hasMore={!state.loading && !state.writing && !state.error && state.pagination.page<state.pagination.totalPages && state.pagination.page<500}
+        onLoadMore={loadMore}
+        rowHeight={88}
+        columns={[
+          { key:'name', header:t('ENV_NAME'), cellClassName:'whitespace-normal', cell:item=><div data-environment-id={item.id} className="min-w-0"><h2 className="break-words font-medium">{item.name}</h2>{item.taskId && <p className="break-all text-xs">{t('ENV_TASK')}: {item.taskId}</p>}</div> },
+          { key:'status', header:t('ENV_TYPE'), width:'40%', cellClassName:'whitespace-normal', cell:item=><span className="text-sm text-muted-foreground">{t(item.type==='personal'?'ENV_PERSONAL':'ENV_TEMPORARY')} · {t('ENV_NOT_RUNNING')}</span> },
+          { key:'actions', header:t('ENV_COLUMN_ACTIONS'), align:'right', width:'200px', cell:item=><div className="flex justify-end gap-2"><Button data-environment-rename variant="outline" disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){editRef.current=item;setEdit(item);}}}>{t('ENV_RENAME')}</Button><Button data-environment-delete variant="destructive" disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){removeRef.current=item;setRemove(item);}}}>{t('ENV_DELETE')}</Button></div> },
+        ]}
+      />
     </div>
-    <nav aria-label={t('ENV_PAGINATION')} className="flex flex-wrap items-center gap-3"><Button variant="outline" disabled={state.loading || state.writing || state.pagination.page<=1} onClick={()=>void run(()=>manager.load(state.pagination.page-1))}>{t('ENV_PREVIOUS')}</Button><span>{t('ENV_PAGE')} {state.pagination.page} / {Math.max(1,state.pagination.totalPages)} · {state.pagination.total}</span><Button variant="outline" disabled={state.loading || state.writing || state.pagination.page>=state.pagination.totalPages || state.pagination.page>=500} onClick={()=>void run(()=>manager.load(state.pagination.page+1))}>{t('ENV_NEXT')}</Button></nav>
     {edit && <EnvironmentRenameDialog key={`${edit.id}:${edit.version}`} item={edit} manager={manager} locale={locale} initialName={renameSeed?.environmentId===edit.id?renameSeed.name:undefined} onName={reportRename} onClose={()=>{if(editRef.current===edit){editRef.current=null;setEdit(null);setRenameSeed(null);if(!recordBlocked)persistEnvironmentDraft(scope.origin,scope.memberId,{create:environmentCreateIsBlank(asCreate())?blank:asCreate(),rename:null});}}} />}
     <Dialog open={!!remove} onOpenChange={open=>{if(!open)closeRemove();}}><DialogContent aria-labelledby="environment-delete-title"><DialogTitle id="environment-delete-title">{t('ENV_DELETE')}</DialogTitle><p className="mt-3 break-words">{remove?.name}</p><p className="my-3 text-sm">{t('ENV_DELETE_CONFIRM')}</p><div className="flex gap-2"><Button data-environment-confirm-delete variant="destructive" disabled={blocked} onClick={()=>{const item=removeRef.current;if(!alive.current || !item || operationBlocked() || draft.isConfirming())return;closeRemove();void run(()=>manager.remove(item));}}>{t('ENV_DELETE')}</Button><Button variant="outline" onClick={closeRemove}>{t('ENV_CANCEL')}</Button></div></DialogContent></Dialog>
   </section>;

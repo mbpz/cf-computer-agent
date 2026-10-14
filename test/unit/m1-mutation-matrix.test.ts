@@ -212,7 +212,7 @@ async function witnesses(): Promise<M1MutationWitness[]> {
     });
     const fragment = renderer("# Safe\n\n<script>alert(1)</script>\n\n[bad](javascript:alert(1))");
     const host = window.document.createElement("div");
-    host.append(fragment);
+    host.append(fragment as unknown as Parameters<typeof host.append>[0]); // happy-dom node vs the DOM lib's Node
     const safe = host.querySelector("script,a") === null;
     window.close();
     return safe;
@@ -358,8 +358,8 @@ describe("M1 behavior-level mutation matrix", () => {
       purifier: { sanitize(markup: string) { const template = window.document.createElement("template"); template.innerHTML = markup; return template.content; } } as never,
     });
     const input = "# Safe\n\n<script>alert(1)</script>";
-    const baselineHost = window.document.createElement("div"); baselineHost.append(render(input));
-    const mutantHost = window.document.createElement("div"); mutantHost.append(mutant(input));
+    const baselineHost = window.document.createElement("div"); baselineHost.append(render(input) as unknown as Parameters<typeof baselineHost.append>[0]); // happy-dom node vs the DOM lib's Node
+    const mutantHost = window.document.createElement("div"); mutantHost.append(mutant(input) as unknown as Parameters<typeof mutantHost.append>[0]); // happy-dom node vs the DOM lib's Node
     expect(baselineHost.querySelector("script")).toBeNull();
     expect(mutantHost.querySelector("script"), "markdown-sanitization: mutated dependency must fail").not.toBeNull();
     window.close();

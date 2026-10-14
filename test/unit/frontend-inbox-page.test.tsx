@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { InboxPage } from "../../frontend/pages/inbox-page";
 
-const paging = { onFilterChange: vi.fn(), onPageChange: vi.fn(), onPageSizeChange: vi.fn() };
+const paging = { onFilterChange: vi.fn(), onLoadMore: vi.fn() };
 describe("Inbox page", () => {
   it("renders bilingual recovery, archive and promotion affordances without undefined", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Badge } from "../ui/badge";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { shareKnowledgeItem } from "../../lib/system-share";
 
 export interface KnowledgeCardItem { id: string; title?: string; summary?: string; publishedAt?: string; tags?: string[]; }
 
-export function KnowledgeCard({ item, locale }: { item: KnowledgeCardItem; locale?: LocaleRuntime }) {
+/**
+ * Device share for one knowledge item, with its own pending and settled
+ * announcements. Kept out of the card so list surfaces can render it on its own.
+ */
+export function KnowledgeShareButton({ item, locale }: { item: KnowledgeCardItem; locale?: LocaleRuntime }) {
   const title = item.title?.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED");
   const [shareState, setShareState] = useState<"idle" | "pending" | "shared" | "unavailable">("idle");
   const shareOwner = useRef<object | null>(null);
@@ -26,5 +28,5 @@ export function KnowledgeCard({ item, locale }: { item: KnowledgeCardItem; local
       if (shareOwner.current === owner) shareOwner.current = null;
     }
   };
-  return <Card><CardHeader><CardTitle><a href={`/knowledge/${encodeURIComponent(item.id)}`} className="hover:underline">{title}</a></CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">{item.summary?.trim() || frontendText(locale, "KNOWLEDGE_NO_SUMMARY")}</p><div className="mt-4 flex flex-wrap items-center gap-2">{(item.tags ?? []).slice(0, 8).map((tag) => <Badge key={tag} variant="outline">{tag}</Badge>)}{item.publishedAt && <span className="text-xs text-muted-foreground">{item.publishedAt}</span>}<button type="button" className="text-xs font-medium text-primary hover:underline" disabled={shareState === "pending"} aria-busy={shareState === "pending"} onClick={() => void share()}>{frontendText(locale, shareState === "pending" ? "KNOWLEDGE_SHARE_PENDING" : "KNOWLEDGE_SHARE_ACTION")}</button>{shareState === "shared" && <span role="status" className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_SHARE_DONE")}</span>}{shareState === "unavailable" && <span role="status" className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_SHARE_UNAVAILABLE")}</span>}</div></CardContent></Card>;
+  return <span className="flex flex-wrap items-center gap-2"><button type="button" className="text-xs font-medium text-primary hover:underline" disabled={shareState === "pending"} aria-busy={shareState === "pending"} onClick={() => void share()}>{frontendText(locale, shareState === "pending" ? "KNOWLEDGE_SHARE_PENDING" : "KNOWLEDGE_SHARE_ACTION")}</button>{shareState === "shared" && <span role="status" className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_SHARE_DONE")}</span>}{shareState === "unavailable" && <span role="status" className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_SHARE_UNAVAILABLE")}</span>}</span>;
 }

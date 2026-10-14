@@ -17,11 +17,9 @@ describe("React page locale boundary", () => {
   });
 
   it("localizes empty knowledge and submit labels without exposing undefined", () => {
-    const empty = renderToStaticMarkup(<KnowledgePage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />);
+    const empty = renderToStaticMarkup(<KnowledgePage locale={locale} state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }} />);
     const submit = renderToStaticMarkup(<SubmitPage locale={locale} draft={{ mode: "markdown", title: "", content: "" }} state={{ kind: "idle" }} />);
     expect(empty).toContain("当前没有可见的已发布知识。");
-    expect(empty).toContain(">0<");
-    expect(empty).toContain("0 / 0");
     expect(submit).toContain("新建提交");
     expect(`${empty}${submit}`).not.toMatch(/\bundefined\b|\bnull\b/u);
   });

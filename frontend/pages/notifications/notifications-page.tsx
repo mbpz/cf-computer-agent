@@ -1,8 +1,7 @@
 import { Alert, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { Card, CardContent } from "../../components/ui/card";
-import { DataPagination } from "../../components/data-pagination";
+import { DataTable } from "../../components/data-table";
 import { PageState } from "../../components/ui/page-state";
 import { Select, SelectOption } from "../../components/ui/select";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -18,7 +17,7 @@ export type NotificationsPageState =
   | { kind: "forbidden" }
   | { kind: "ready"; items: readonly NotificationItem[]; pagination: Pagination };
 
-export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, recordBlocked = false, onDiscardRecord, onRetry, onFilterChange, onPageChange, onPageSizeChange, onMarkRead, onMarkVisibleRead, onOpen }: {
+export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, recordBlocked = false, onDiscardRecord, onRetry, onFilterChange, onLoadMore, onMarkRead, onMarkVisibleRead, onOpen }: {
   locale: LocaleRuntime;
   state: NotificationsPageState;
   summary: NotificationSummary | null;
@@ -30,8 +29,7 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   onDiscardRecord?: () => void;
   onRetry: () => void;
   onFilterChange: (filters: NotificationFilters) => void;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: SupportedPageSize) => void;
+  onLoadMore?: () => void;
   onMarkRead: (id: string) => void;
   onMarkVisibleRead: (ids: readonly string[]) => void;
   onOpen: (id: string) => void;
@@ -41,6 +39,7 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
   if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "NOTIFICATIONS_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
   const visibleUnreadIds = state.items.filter((item) => item.readAt === null).map((item) => item.id).slice(0, 100);
+  const actionsDisabled = pending || actionPending || recordBlocked;
   return <section className="space-y-5">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="text-2xl font-semibold">{frontendText(locale, "NOTIFICATIONS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_DESCRIPTION")}</p></div>
@@ -63,27 +62,33 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
       <div className="mt-3"><Button variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_DISCARD")}</Button></div>
     </Alert>}
     {actionError && <Alert variant="destructive"><AlertTitle>{actionError}</AlertTitle></Alert>}
-    {state.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "NOTIFICATIONS_EMPTY")} /> : <div className="space-y-3" aria-busy={pending || actionPending || undefined}>
-      {state.items.map((item) => <NotificationCard key={item.id} item={item} locale={locale} disabled={actionPending || pending} recordBlocked={recordBlocked} onMarkRead={onMarkRead} onOpen={onOpen} />)}
-    </div>}
-    <DataPagination {...state.pagination} visibleCount={state.items.length} locale={locale} pending={pending || actionPending} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} />
+    <DataTable
+      locale={locale}
+      rows={state.items}
+      rowId={(item: NotificationItem) => item.id}
+      ariaLabel={frontendText(locale, "NOTIFICATIONS_TITLE")}
+      emptyState={<PageState kind="empty" title={frontendText(locale, "NOTIFICATIONS_EMPTY")} />}
+      loading={pending}
+      hasMore={state.pagination.page < state.pagination.totalPages}
+      onLoadMore={onLoadMore}
+      rowHeight={72}
+      columns={[
+        { key: "notification", header: frontendText(locale, "NOTIFICATIONS_COLUMN_NOTIFICATION"), cellClassName: "whitespace-normal", cell: (item: NotificationItem) => <div data-notification-id={item.id} data-read={item.readAt === null ? "false" : "true"} className="min-w-0 space-y-1 py-1">
+          <p className="line-clamp-1 font-medium">{(typeof item.payload.title === "string" ? item.payload.title.trim() : "") || frontendText(locale, notificationEventKey(item.eventType))}</p>
+          <p className="line-clamp-1 text-sm text-muted-foreground">{frontendText(locale, notificationEventKey(item.eventType))}</p>
+        </div> },
+        { key: "createdAt", header: frontendText(locale, "NOTIFICATIONS_COLUMN_TIME"), width: "200px", cellClassName: "whitespace-normal", cell: (item: NotificationItem) => <time className="line-clamp-1 text-xs text-muted-foreground" dateTime={item.createdAt}>{item.createdAt}</time> },
+        { key: "status", header: frontendText(locale, "NOTIFICATIONS_COLUMN_STATUS"), width: "120px", cell: (item: NotificationItem) => <Badge variant={item.readAt === null ? "default" : "outline"}>{frontendText(locale, item.readAt === null ? "NOTIFICATIONS_UNREAD" : "NOTIFICATIONS_READ")}</Badge> },
+        { key: "actions", header: frontendText(locale, "NOTIFICATIONS_COLUMN_ACTIONS"), width: "260px", cellClassName: "whitespace-normal", cell: (item: NotificationItem) => {
+          const href = notificationTargetHref(item);
+          return <div className="flex flex-wrap items-center gap-2 py-1">
+            {href ? <Button variant="outline" disabled={actionsDisabled} onClick={() => onOpen(item.id)}>{frontendText(locale, "NOTIFICATIONS_OPEN")}</Button> : <p className="text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")}</p>}
+            {item.readAt === null && <Button variant="outline" disabled={actionsDisabled} onClick={() => onMarkRead(item.id)}>{frontendText(locale, "NOTIFICATIONS_MARK_READ")}</Button>}
+          </div>;
+        } },
+      ]}
+    />
   </section>;
-}
-
-function NotificationCard({ item, locale, disabled, recordBlocked = false, onMarkRead, onOpen }: { item: NotificationItem; locale: LocaleRuntime; disabled: boolean; recordBlocked?: boolean; onMarkRead: (id: string) => void; onOpen: (id: string) => void }) {
-  const unread = item.readAt === null;
-  const href = notificationTargetHref(item);
-  const payloadTitle = typeof item.payload.title === "string" ? item.payload.title.trim() : "";
-  return <Card data-notification-id={item.id} data-read={unread ? "false" : "true"}>
-    <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0 space-y-1">
-        <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{payloadTitle || frontendText(locale, notificationEventKey(item.eventType))}</p><Badge variant={unread ? "default" : "outline"}>{frontendText(locale, unread ? "NOTIFICATIONS_UNREAD" : "NOTIFICATIONS_READ")}</Badge></div>
-        <p className="text-sm text-muted-foreground">{frontendText(locale, notificationEventKey(item.eventType))}</p>
-        <time className="block text-xs text-muted-foreground" dateTime={item.createdAt}>{item.createdAt}</time>
-      </div>
-      <div className="flex flex-wrap gap-2">{href ? <Button variant="outline" disabled={disabled || recordBlocked} onClick={() => onOpen(item.id)}>{frontendText(locale, "NOTIFICATIONS_OPEN")}</Button> : <p className="text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")}</p>}{unread && <Button variant="outline" disabled={disabled || recordBlocked} onClick={() => onMarkRead(item.id)}>{frontendText(locale, "NOTIFICATIONS_MARK_READ")}</Button>}</div>
-    </CardContent>
-  </Card>;
 }
 
 function readFilter(value: string): NotificationFilters["read"] {

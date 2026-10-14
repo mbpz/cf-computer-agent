@@ -355,7 +355,7 @@
 
 当前 R 阶段：R0；总账映射：[WB-A11Y、ADM-011](./delivery-status-ledger.md)
 
-- [x] `I18N-001` P0/M1 中英文完整国际化；状态：L/W；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。共享 `DataPagination` 的 total、visible range、rows per page、previous/next、数字页码 aria 与移动摘要均强制消费 locale runtime，中文空页不泄漏英文默认值；知识、任务、看板、通知及所有管理列表保持 URL/history、页长重置和 stale request 合同。证据：`frontend/lib/i18n.ts`、`frontend/components/data-pagination.tsx`、`test/unit/frontend-pagination.test.tsx`、`scripts/formal-pagination-contract.test.mjs`、`docs/operations/evidence/2026-08-30-workbench-collaboration.md`；命令：`rtk npm run test:i18n`、`rtk npm run verify:i18n`、`rtk npm run check`。
+- [x] `I18N-001` P0/M1 中英文完整国际化；状态：L/W；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。共享列表表格 `DataTable` 的「加载更多 / 已加载全部」播报、表格可访问名、空态与列标题均强制消费 locale runtime，中文空页不泄漏英文默认值；知识、任务、看板、通知及所有管理列表改为服务端分页窗口 + 无限滚动追加，保留写恢复、权限判定与 stale request 代次合同。证据：`frontend/lib/i18n.ts`、`frontend/components/data-table.tsx`、`test/unit/frontend-data-table.test.tsx`、`scripts/infinite-list-contract.test.mjs`、`docs/product/2026-10-14-frontend-list-tables-evidence.md`；命令：`rtk npm run test:i18n`、`rtk npm run verify:i18n`、`rtk npm run check`。
 
 ## EVAL — 质量评测
 

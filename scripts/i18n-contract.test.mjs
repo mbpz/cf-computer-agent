@@ -377,3 +377,18 @@ async function expectFailure(root, pattern, label = "mutation") {
   assert.notEqual(result.code, 0, `${label}: ${result.output}`);
   assert.match(result.output, pattern, label);
 }
+
+test("the workbench catalog keeps both locales at exact key and placeholder parity", async () => {
+  const source = await readFile(new URL("../frontend/lib/i18n.ts", import.meta.url), "utf8");
+  const blocks = [...source.matchAll(/^  (?:"?zh-CN"?|en): \{$/gmu)].map((match) => match.index);
+  assert.equal(blocks.length, 4, "workbench locale blocks");
+  const entries = (start, end) => new Map([...source.slice(start, end).matchAll(/^    ([A-Z0-9_]+): "((?:[^"\\]|\\.)*)"/gmu)].map((match) => [match[1], match[2]]));
+  const english = entries(blocks[0], blocks[1]);
+  const chinese = entries(blocks[1], blocks[2]);
+  assert.ok(english.size >= 1000, `expected the full workbench catalog, received ${english.size} keys`);
+  assert.deepEqual([...chinese.keys()].filter((key) => !english.has(key)).sort(), []);
+  assert.deepEqual([...english.keys()].filter((key) => !chinese.has(key)).sort(), []);
+  for (const [key, value] of english) {
+    assert.deepEqual(placeholders(chinese.get(key)), placeholders(value), key);
+  }
+});

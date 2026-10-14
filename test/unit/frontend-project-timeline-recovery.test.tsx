@@ -15,7 +15,12 @@ describe("parameterized project timeline through real App", () => {
   let override: ((url: URL, init?: RequestInit) => Promise<Response> | Response | undefined) | undefined;
   const main = () => app!.container.querySelector("main")!;
   const button = (text: string) => [...main().querySelectorAll("button")].find(node => node.textContent === text)!;
-  const pageButton = (page = 2) => main().querySelector(`button[aria-label="Page ${page}"]`) as HTMLButtonElement;
+  /** The timeline appends by scrolling its table container to the bottom. */
+  async function loadMore() {
+    const scroller = main().querySelector("div.overflow-auto") as HTMLElement;
+    expect(scroller).toBeTruthy();
+    await act(async () => { scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new app!.browser.Event("scroll", { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 0)); });
+  }
   const title = () => main().querySelector('input[aria-label="Timeline title"]') as HTMLInputElement;
   const writes = () => requests.filter(r => r.init?.method === "POST");
   async function mount(saved?: Record<string, string>) {
@@ -46,27 +51,28 @@ describe("parameterized project timeline through real App", () => {
   it("isolates project navigation, clears the draft and ignores late old-project reads", async () => {
     await mount(); await fill("Private A draft");
     let resolve!: (response: Response) => void;
-    override = (url) => url.pathname === "/api/projects/a/timeline" ? new Promise<Response>(done => { resolve = done; }) : undefined;
-    await click(pageButton());
+    override = (url) => url.pathname === "/api/projects/a/timeline" && url.searchParams.get("page") === "2" ? new Promise<Response>(done => { resolve = done; }) : undefined;
+    await loadMore();
+    await click(button("Back to projects"));
     expect(main().querySelector('[role="alertdialog"]')).toBeTruthy();
     await click(main().querySelector<HTMLButtonElement>('[data-confirm-action]')!);
     const pending = requests.findLast(r => r.url.pathname === "/api/projects/a/timeline")!;
     await navigate("b"); await waitForApp(() => main().textContent!.includes("b first"));
     expect(title().value).toBe(""); expect(pending.init?.signal?.aborted).toBe(true);
-    await act(async () => resolve(Response.json({ items: [item("a", "late")] })));
+    await act(async () => resolve(Response.json(numbered([item("a", "late")]))));
     expect(main().textContent).not.toContain("a late"); expect(main().textContent).not.toContain("Project a");
   });
   it.each([401, 403, 404])("clears private rows on denied continuation %s and retries only reads", async status => {
-    await mount(); override = url => url.pathname.endsWith("/timeline") ? apiError(status, "DENIED", false) : undefined;
-    await click(pageButton()); await waitForApp(() => main().textContent!.includes("Unable to load"));
+    await mount(); override = url => url.pathname.endsWith("/timeline") && url.searchParams.get("page") === "2" ? apiError(status, "DENIED", false) : undefined;
+    await loadMore(); await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().textContent).not.toContain("a first"); expect(title()).toBeNull();
     override = undefined; await click(button("Try timeline again")); await waitForApp(() => !!title()); expect(writes()).toHaveLength(0);
   });
-  it("retries a failed numbered navigation at the requested page without stale rows", async () => {
+  it("retries a failed append at the requested page without losing the loaded window", async () => {
     await mount(); override = url => url.searchParams.get("page") === "2" ? apiError(503, "UNAVAILABLE", true) : undefined;
-    await click(pageButton()); expect(main().textContent).not.toContain("a first");
-    override = undefined; await click(button("Try timeline again")); await waitForApp(() => main().textContent!.includes("a second"));
-    expect(main().querySelectorAll("h2")).toHaveLength(1);
+    await loadMore(); await waitForApp(() => main().textContent!.includes("Unable to update the project timeline."));
+    expect(main().textContent).toContain("a first");
+    override = undefined; await loadMore(); await waitForApp(() => main().textContent!.includes("a second"));
     expect(requests.filter(r => r.url.searchParams.get("page") === "2").map(r => r.url.searchParams.get("page"))).toEqual(["2", "2"]);
   });
   it.each(["foreign-row", "duplicate", "wrong-page", "foreign-project"])("rejects malformed project-bound readback: %s", async mode => {
@@ -77,8 +83,9 @@ describe("parameterized project timeline through real App", () => {
       if (mode === "duplicate") return Response.json(numbered([item("a", "second"), item("a", "second")]));
       return Response.json(numbered([item("a", "second")], 1, 1));
     };
-    await click(pageButton());
-    expect(main().textContent).toContain("Unable to load");
+    await loadMore();
+    await waitForApp(() => main().textContent!.includes("Unable to update the project timeline."));
+    expect(main().textContent).toContain("a first");
     expect(main().textContent).not.toContain("b secret"); expect(main().textContent).not.toContain("a second");
     expect(main().textContent).not.toContain("Project b");
   });
@@ -87,7 +94,11 @@ describe("parameterized project timeline through real App", () => {
     override = (_url, init) => init?.method === "POST" ? Promise.reject(new TypeError("offline")) : undefined;
     await click(button("Add to timeline")); await waitForApp(() => !!button("Retry original creation"));
     expect(title().value).toBe("Keep this draft"); expect(title().disabled).toBe(true);
-    expect(button("Mark done").disabled).toBe(true); expect(pageButton().disabled).toBe(true);
+    expect(button("Mark done").disabled).toBe(true);
+    // While the creation is unresolved the list is loading, so approaching the end requests nothing.
+    const reads = requests.filter(r => r.url.pathname.endsWith("/timeline")).length;
+    await loadMore();
+    expect(requests.filter(r => r.url.pathname.endsWith("/timeline"))).toHaveLength(reads);
     const original = JSON.parse(String(writes()[0].init?.body));
     expect(original.id).toEqual(expect.any(String)); expect(original.clientKey).toEqual(expect.any(String));
     override = undefined; await click(button("Retry original creation")); await waitForApp(() => title().value === "");
@@ -167,20 +178,23 @@ describe("parameterized project timeline through real App", () => {
     await act(async () => resolve(Response.json({ item: { ...item("a"), ...body }, created: true })));
     await waitForApp(() => title().value === ""); expect(writes()).toHaveLength(1);
   });
-  it("coalesces same-frame page navigation and replaces the old rows", async () => {
+  it("coalesces a same-frame append and accumulates the new rows", async () => {
     await mount(); let resolve!: (response: Response) => void;
     override = url => url.searchParams.get("page") === "2" ? new Promise<Response>(done => { resolve = done; }) : undefined;
-    const more = pageButton(); await act(async () => { more.click(); more.click(); });
+    await loadMore();
     expect(requests.filter(r => r.url.searchParams.get("page") === "2")).toHaveLength(1);
     await act(async () => resolve(Response.json(numbered([item("a", "second")]))));
-    await waitForApp(() => main().textContent!.includes("a second")); expect(main().querySelectorAll("h2")).toHaveLength(1);
-    expect(main().textContent).not.toContain("a first");
+    await waitForApp(() => main().textContent!.includes("a second"));
+    expect(main().textContent).toContain("a first");
   });
-  it("rejects a stale page receipt when navigating back from page two", async () => {
-    await mount(); await click(pageButton());
-    override = url => url.pathname.endsWith("/timeline") ? Response.json(numbered([item("a", "secret-stale")])) : undefined;
-    await click(pageButton(1));
-    expect(main().textContent).not.toContain("secret-stale"); expect(main().textContent).toContain("Unable to load");
+  it("ignores a superseded append response after the route reloads", async () => {
+    await mount(); let resolve!: (response: Response) => void;
+    override = url => url.searchParams.get("page") === "2" ? new Promise<Response>(done => { resolve = done; }) : undefined;
+    await loadMore();
+    override = undefined;
+    await forceRemountAppAt(app!, "/projects/a/timeline"); await waitForApp(() => !!title());
+    await act(async () => resolve(Response.json(numbered([item("a", "secret-stale")]))));
+    expect(main().textContent).not.toContain("secret-stale"); expect(main().textContent).toContain("a first");
   });
 
   it.each([401, 403, 404])("clears private content if confirmed-create readback denies access %s", async status => {

@@ -12,8 +12,18 @@ describe("inbox archive and restore recovery through App", () => {
   let app: MountedApp | undefined; let calls: string[] = []; let bodies: unknown[] = [];
   let writeStatus = 200, detailStatus = 200, listStatus = 200; let wrongId = false, staleReceipt = false, malformedDetail = false; let detailVersion: string | undefined;
   let status = "inbox", updatedAt = version; let delay = false; let resolveWrite: (() => void) | undefined;
-  const row = () => ({ id: "row", clientKey: "key", kind: "text", content: "Private row", sourceUrl: null, status, promotedTaskId: null, promotedSubmissionId: null, createdAt: version, updatedAt });
+  // Total rows the numbered window serves across pages. The stub always fills a
+  // page exactly as `normalizeNumberedPage` requires, so it never advertises
+  // rows it cannot return.
+  let listTotal = 1;
+  const row = (index = 0) => ({ id: index === 0 ? "row" : `row-${index}`, clientKey: index === 0 ? "key" : `key-${index}`, kind: "text", content: index === 0 ? "Private row" : `Private row ${index}`, sourceUrl: null, status, promotedTaskId: null, promotedSubmissionId: null, createdAt: version, updatedAt });
   const main = () => app!.container.querySelector("main")!;
+  const renderedRows = () => main().querySelectorAll("tbody time").length;
+  const scrollToEnd = async () => {
+    const viewport = main().querySelector<HTMLDivElement>("div.overflow-auto");
+    expect(viewport).toBeTruthy();
+    await act(async () => { viewport!.dispatchEvent(new app!.browser.Event("scroll")); await new Promise(resolve => setTimeout(resolve, 0)); });
+  };
   const action = () => [...main().querySelectorAll<HTMLButtonElement>("button")].find(node => ["Archive", "Restore"].includes(node.textContent ?? ""))!;
   const recover = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   const click = async (node: HTMLButtonElement) => { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); };
@@ -48,14 +58,17 @@ describe("inbox archive and restore recovery through App", () => {
       }
       if (path === "/api/inbox/row") return detailStatus !== 200 ? apiError(detailStatus, "UNAVAILABLE", detailStatus >= 500) : Response.json({ ...row(), ...(malformedDetail ? { id: "wrong" } : {}), ...(detailVersion ? { updatedAt: detailVersion } : {}) });
       if (listStatus !== 200) return apiError(listStatus, "UNAVAILABLE", listStatus >= 500);
+      const requested = Number(url.searchParams.get("page") ?? 1);
       const matches = !url.searchParams.has("status") || url.searchParams.get("status") === status;
-      return Response.json({ items: matches ? [row()] : [], pagination: { page: Number(url.searchParams.get("page") ?? 1), pageSize: 20, total: matches ? 21 : 20, totalPages: matches ? 2 : 1 } });
+      const total = matches ? listTotal : 0, offset = (requested - 1) * 20;
+      return Response.json({ items: Array.from({ length: Math.max(0, Math.min(20, total - offset)) }, (_, index) => row(offset + index)), pagination: { page: requested, pageSize: 20, total, totalPages: total === 0 ? 0 : Math.ceil(total / 20) } });
     } }); await waitForApp(() => !!action());
   }
-  afterEach(async () => { await app?.unmount(); app = undefined; calls = []; bodies = []; writeStatus = detailStatus = listStatus = 200; wrongId = staleReceipt = malformedDetail = delay = false; status = "inbox"; updatedAt = version; resolveWrite = undefined; detailVersion = undefined; });
-  it("query navigation invalidates an unsubmitted decision without a marker", async () => {
+  afterEach(async () => { await app?.unmount(); app = undefined; calls = []; bodies = []; writeStatus = detailStatus = listStatus = 200; wrongId = staleReceipt = malformedDetail = delay = false; status = "inbox"; updatedAt = version; resolveWrite = undefined; detailVersion = undefined; listTotal = 1; });
+  it("status filter navigation invalidates an unsubmitted decision without a marker", async () => {
     await mount(); await click(action()); const stale = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
-    await navigate("/inbox?page=2"); await waitForApp(() => !!action()); await click(stale);
+    // The pager is not in the URL any more: the filter restarts the window at page one and replaces it.
+    await navigate("/inbox"); await waitForApp(() => !!action() && !main().querySelector('[role="alertdialog"]')); await click(stale);
     expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull(); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("cancel and route exit leave no write or recovery marker", async () => {
@@ -64,23 +77,42 @@ describe("inbox archive and restore recovery through App", () => {
     expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
     await click(action()); const stale = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await navigate("/unknown"); await click(stale); expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
-    await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action()); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
+    await navigate("/inbox?status=inbox"); await waitForApp(() => !!action()); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("archives with version and owned detail plus exact current page readback", async () => {
     await mount(); await confirmAction(); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null);
     expect(main().textContent).not.toContain("Private row");
     expect(bodies).toEqual([{ status: "archived", expectedUpdatedAt: version }]);
-    expect(calls).toEqual(["GET /api/inbox?page=2&pageSize=20&status=inbox", "PATCH /api/inbox/row", "GET /api/inbox/row", "GET /api/inbox?page=2&pageSize=20&status=inbox"]);
+    expect(calls).toEqual(["GET /api/inbox?page=1&pageSize=20&status=inbox", "PATCH /api/inbox/row", "GET /api/inbox/row", "GET /api/inbox?page=1&pageSize=20&status=inbox"]);
     expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
-    await navigate("/inbox?page=2&status=archived"); await waitForApp(() => action()?.textContent === "Restore");
+    await navigate("/inbox?status=archived"); await waitForApp(() => action()?.textContent === "Restore");
     await confirmAction(); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null); expect(bodies[1]).toEqual({ status: "inbox", expectedUpdatedAt: next });
     expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+  });
+  it("appends the next page when the window is scrolled to its end and stops at the last page", async () => {
+    listTotal = 21; await mount();
+    expect(renderedRows()).toBe(20);
+    expect(calls).toEqual(["GET /api/inbox?page=1&pageSize=20&status=inbox"]);
+    await scrollToEnd(); await waitForApp(() => renderedRows() === 21);
+    expect(calls).toEqual(["GET /api/inbox?page=1&pageSize=20&status=inbox", "GET /api/inbox?page=2&pageSize=20&status=inbox"]);
+    // Appending keeps one row per item: no duplicated page-one entries.
+    expect(new Set([...main().querySelectorAll("tbody tr")].map(node => node.textContent ?? "")).size).toBe(21);
+    await scrollToEnd();
+    expect(calls).toEqual(["GET /api/inbox?page=1&pageSize=20&status=inbox", "GET /api/inbox?page=2&pageSize=20&status=inbox"]);
+  });
+  it("restarts the window at page one and replaces it when the status filter changes", async () => {
+    listTotal = 21; await mount();
+    await scrollToEnd(); await waitForApp(() => renderedRows() === 21);
+    await navigate("/inbox?status=archived");
+    await waitForApp(() => renderedRows() === 0);
+    // The filter change replaces the accumulated window instead of appending to it.
+    expect(calls).toEqual(["GET /api/inbox?page=1&pageSize=20&status=inbox", "GET /api/inbox?page=2&pageSize=20&status=inbox", "GET /api/inbox?page=1&pageSize=20&status=archived"]);
   });
   it.each([409, 503])("retains unknown/conflicting write %s across forced teardown, recovers with GET only", async code => {
     await mount(); writeStatus = code; await confirmAction(); expect(action().disabled).toBe(true); expect(recover()).toBeTruthy();
     const saved = app!.browser.sessionStorage.getItem(key)!; expect(saved).not.toContain("Private row"); expect(saved).not.toContain('"status"');
     await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
-    await forceRemountAppAt(app!, "/unknown"); await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action());
+    await forceRemountAppAt(app!, "/unknown"); await navigate("/inbox?status=inbox"); await waitForApp(() => !!action());
     expect(action().disabled).toBe(true); expect(bodies).toHaveLength(1);
     await click(recover()); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null);
     expect(bodies).toHaveLength(1); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
@@ -160,6 +192,6 @@ describe("inbox archive and restore recovery through App", () => {
     await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
     await forceRemountAppAt(app!, "/unknown"); const count = calls.length; await act(async () => resolveWrite!());
     expect(calls).toHaveLength(count); expect(bodies).toHaveLength(1); expect(app!.browser.sessionStorage.getItem(key)).not.toBeNull();
-    await navigate("/inbox?page=2"); await waitForApp(() => !!action()); expect(action().disabled).toBe(true);
+    await navigate("/inbox"); await waitForApp(() => !!action()); expect(action().disabled).toBe(true);
   });
 });

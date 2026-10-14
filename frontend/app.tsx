@@ -80,7 +80,7 @@ import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, sa
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createTasksRequestController, loadTaskDetail, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
-import { createInbox, readCreatedInbox, loadInboxItem, loadInboxNumbered, parseInboxSearch, writeInboxSearch, promoteInboxTask, updateInboxStatus, type InboxPageRequest, type InboxItem } from "./lib/inbox-data";
+import { createInbox, readCreatedInbox, loadInboxItem, loadInboxNumbered, parseInboxSearch, writeInboxSearch, promoteInboxTask, updateInboxStatus, type InboxItem, type InboxStatus } from "./lib/inbox-data";
 import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendarEvent, readCreatedCalendar, loadCalendarNumbered, type CalendarEvent } from "./lib/calendar-data";
@@ -90,9 +90,9 @@ import { type FocusSession, loadFocusTransitionReceipt, loadCurrentFocus, loadFo
 import { loadWorkbenchReview } from "./lib/workbench-review-data";
 import { buildWorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
-import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
+import { BOARD_STATUSES, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
 import { createNotificationsRequestController, markNotificationRead, markVisibleNotificationsRead, type NotificationFilters, type NotificationSummary } from "./lib/notifications-data";
-import { notificationTargetHref, parseNotificationSearch, writeNotificationSearch, type NotificationQuery } from "./pages/notifications/notification-model";
+import { notificationTargetHref, parseNotificationSearch, writeNotificationSearch } from "./pages/notifications/notification-model";
 import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussionMessageResult, loadDiscussionMessages, loadDiscussionThread, loadDiscussionThreads, sendDiscussionMessage } from "./lib/discussions-data";
 import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
@@ -103,13 +103,13 @@ import { clearAdminMemberStatus, discardBlockedAdminMemberStatus, loadAdminMembe
 import { createAdminSpace, manageAdminSpace, loadAdminSpacesPage, loadAdminCollections, type AdminSpace, type AdminSpaceCommand } from "./lib/admin-spaces-data";
 import { clearAdminSpaceWrite, discardBlockedAdminSpaceWrite, loadAdminSpaceWrite, saveAdminSpaceWrite, type AdminSpaceWriteIntent } from "./lib/admin-space-write-intent";
 import { persistAdminSpaceDraft } from "./lib/admin-space-draft";
-import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
+import { createAdminAuditRequestController, type AdminAuditEvent, type AdminAuditPage } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
 import { discardBlockedReviewPeriod, loadReviewPeriod, persistReviewPeriod } from "./lib/review-period";
 import { loadAdminAnalytics, type AdminAnalyticsOverview, type LoadAdminAnalyticsInput } from "./lib/admin-analytics-data";
 import { ApiRequestError } from "./lib/api";
-import { createNumberedRequestController, parsePageSearch, writePageSearch, type SupportedPageSize } from "./lib/numbered-page";
+import { createNumberedRequestController, listPageSize, type SupportedPageSize } from "./lib/numbered-page";
 import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRoleMember, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
 import { clearAdminRoleWrite, discardBlockedAdminRoleWrite, loadAdminRoleWrite, saveAdminRoleWrite, type AdminRoleWriteIntent } from "./lib/admin-role-write-intent";
 import { persistAdminRoleDraft } from "./lib/admin-role-draft";
@@ -321,72 +321,70 @@ export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics 
   const initial = useMemo(() => analyticsUrlState(search), [search]);
   const [state, setState] = useState<AdminAnalyticsState>({ kind: "loading" });
   const [days, setDays] = useState(initial.days);
-  const [page, setPage] = useState(initial.page);
-  const [pageSize, setPageSize] = useState(initial.pageSize);
   const [pending, setPending] = useState(false);
   const [localError, setLocalError] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const pendingRef = useRef(true);
-  const queryRef = useRef(initial);
-  const sameQuery = (a: typeof initial, b: typeof initial) => a.days === b.days && a.page === b.page && a.pageSize === b.pageSize;
+  const daysRef = useRef(days);
+  const controllerRef = useRef<ReturnType<typeof createNumberedRequestController<{ days: number; page: number }, AdminAnalyticsOverview>> | null>(null);
 
-  useEffect(() => {
-    const onPopState = () => {
-      const next = analyticsUrlState(readWorkspaceLocation().search);
-      queryRef.current = next;
-      setDays(next.days);
-      setPage(next.page);
-      setPageSize(next.pageSize);
-    };
-    return subscribeWorkspaceLocation(onPopState);
-  }, []);
-
-  useEffect(() => {
-    queryRef.current = initial;
-    setDays(initial.days); setPage(initial.page); setPageSize(initial.pageSize);
-  }, [initial]);
-
-  useEffect(() => {
-    const snapshot = { days, page, pageSize };
-    queryRef.current = snapshot;
-    const controller = createNumberedRequestController(
-      (input: typeof snapshot, signal) => load({ ...input, signal }),
-    );
+  // A later page appends to the loaded window; the first page replaces it.
+  const loadPage = (targetPage: number) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    const snapshot = { days: daysRef.current, page: targetPage };
     setLocalError(false);
     pendingRef.current = true;
     setPending(true);
-    setState((previous) => previous.kind === "ready" && previous.data.range.days === days ? previous : { kind: "loading" });
+    setState((previous) => previous.kind === "ready" && previous.data.range.days === snapshot.days ? previous : { kind: "loading" });
     const request = controller.request(snapshot);
     void request.promise.then((data) => {
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot, queryRef.current)) return;
-      setState({ kind: "ready", data });
+      if (!controller.isCurrent(request.generation)) return;
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", data: { ...data, recentVisitors: { ...data.recentVisitors, items: [...previous.data.recentVisitors.items, ...data.recentVisitors.items] } } }
+        : { kind: "ready", data });
       pendingRef.current = false;
       setPending(false);
     }).catch((error: unknown) => {
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot, queryRef.current)) return;
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
       const denied = error instanceof ApiRequestError && (error.status === 401 || error.status === 403);
-      setState((previous) => denied ? { kind: "forbidden" } : previous.kind === "ready" && previous.data.range.days === days ? previous : { kind: "error" });
+      setState((previous) => denied ? { kind: "forbidden" } : previous.kind === "ready" ? previous : { kind: "error" });
       setLocalError(true);
       pendingRef.current = false;
       setPending(false);
     });
-    return () => controller.dispose();
-  }, [load, days, page, pageSize, refresh]);
+  };
 
-  const navigateState = (next: { days: number; page: number; pageSize: SupportedPageSize }) => {
-    const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, next));
-    params.set("days", String(next.days));
+  useEffect(() => {
+    const onLocationChange = () => setDays(analyticsUrlState(readWorkspaceLocation().search).days);
+    return subscribeWorkspaceLocation(onLocationChange);
+  }, []);
+
+  useEffect(() => {
+    daysRef.current = initial.days;
+    setDays(initial.days);
+  }, [initial]);
+
+  useEffect(() => {
+    daysRef.current = days;
+    const controller = createNumberedRequestController((input: { days: number; page: number }, signal: AbortSignal) => load({ ...input, pageSize: listPageSize, signal }));
+    controllerRef.current = controller;
+    loadPage(1);
+    return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
+    // loadPage reads the live query refs, not a render value
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, days, refresh]);
+
+  const changeDays = (nextDays: number) => {
+    const params = new URLSearchParams(readWorkspaceLocation().search);
+    params.set("days", String(nextDays));
     const nextSearch = params.toString();
-    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch ? `?${nextSearch}` : ""}`, () => {
-      queryRef.current = next;
-      setDays(next.days); setPage(next.page); setPageSize(next.pageSize);
-    });
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch ? `?${nextSearch}` : ""}`, () => setDays(nextDays));
   };
 
   return <AdminAnalyticsPage locale={locale} state={state} days={days} pending={pending} localError={localError}
-    onDaysChange={(nextDays) => navigateState({ days: nextDays, page: 1, pageSize })}
-    onPageChange={(nextPage) => navigateState({ ...analyticsUrlState(readWorkspaceLocation().search), page: nextPage })}
-    onPageSizeChange={(nextPageSize) => navigateState({ days, page: 1, pageSize: nextPageSize })}
+    onDaysChange={changeDays}
+    onLoadMore={() => { if (state.kind === "ready" && state.data.recentVisitors.pagination.page < state.data.recentVisitors.pagination.totalPages) loadPage(state.data.recentVisitors.pagination.page + 1); }}
     onRefresh={() => {
       if (pendingRef.current) return;
       pendingRef.current = true;
@@ -394,13 +392,12 @@ export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics 
     }} />;
 }
 
-function analyticsUrlState(search: string): { days: number; page: number; pageSize: SupportedPageSize } {
-  const pagination = parsePageSearch(search);
+function analyticsUrlState(search: string): { days: number } {
   const dayValues = new URLSearchParams(search).getAll("days");
   const rawDays = dayValues.length === 1 ? dayValues[0]! : "7";
   const parsedDays = /^[1-9]\d*$/u.test(rawDays) ? Number(rawDays) : 7;
   const days = Number.isSafeInteger(parsedDays) && parsedDays >= 1 && parsedDays <= 31 ? parsedDays : 7;
-  return { days, ...pagination };
+  return { days };
 }
 
 // Initial read recovery is distinct from replaying a mutation.
@@ -938,11 +935,9 @@ export function KnowledgeRoute(props: { locale: LocaleRuntime; search: string; m
   return <MemberKnowledgeRoute key={props.memberId ?? "anonymous"} {...props} />;
 }
 
-function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
-  const initial = useMemo(() => parsePageSearch(search), [search]);
-  const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
+function MemberKnowledgeRoute({ locale, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const [retryVersion, setRetryVersion] = useState(0);
-  const [urlVersion, setUrlVersion] = useState(0);
+  const [filterVersion, setFilterVersion] = useState(0);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: KnowledgePageResult["items"]; pagination: KnowledgePageResult["pagination"] } | { kind: "error"; message: string }>({ kind: "loading" });
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createKnowledgeRequestController> | null>(null);
@@ -970,7 +965,6 @@ function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRunt
   const restoredPeriod: ReviewPeriod = storedPeriod.kind === "ready" ? storedPeriod.period : "daily";
   const [reviewPeriod, setReviewPeriod] = useState<ReviewPeriod>(restoredPeriod);
   const [review, setReview] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewResult } | { kind: "error" }>({ kind: "loading" });
-  const queryRef = useRef({ page, pageSize });
   const denyRead = useCallback((error: unknown) => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
     // All page reads share the member boundary. Revoke sibling reads before any
@@ -1037,30 +1031,45 @@ function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRunt
       setActivityNextCursor(cursor); setActivityMoreError(true);
     }).finally(() => { if (activityController.current === controller) activityController.current = null; });
   };
-  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(readWorkspaceLocation().search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); setUrlVersion((value) => value + 1); }), []);
+  // The loaded window appends a later page to the rows already shown; page one replaces them.
+  const load = (targetPage: number) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    setPending(true); setLocalError(undefined);
+    const request = controller.request({ page: targetPage, pageSize: listPageSize, ...knowledgeFilters(readWorkspaceLocation().search) });
+    void request.promise.then((result) => {
+      if (deniedRef.current || !controller.isCurrent(request.generation)) return;
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", items: [...previous.items, ...result.items], pagination: result.pagination }
+        : { kind: "ready", items: result.items, pagination: result.pagination });
+      setPending(false);
+    }).catch((error: unknown) => {
+      if (deniedRef.current || !controller.isCurrent(request.generation) || isAbort(error) || denyRead(error)) return;
+      setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") });
+      setLocalError(frontendText(locale, "KNOWLEDGE_ERROR")); setPending(false);
+    });
+  };
+  // A filter change is a read-only re-query of the first page; the pager itself is not in the URL.
+  useEffect(() => subscribeWorkspaceLocation(() => setFilterVersion((value) => value + 1)), []);
   useEffect(() => {
     if (deniedRef.current) return;
     const controller = createKnowledgeRequestController(); controllerRef.current = controller;
-    const snapshot = { page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
-    const request = controller.request({ ...snapshot, ...knowledgeFilters(readWorkspaceLocation().search) });
-    void request.promise.then((result) => { if (!deniedRef.current && controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); } }).catch((error: unknown) => { if (!deniedRef.current && controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error) && !denyRead(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") }); setLocalError(frontendText(locale, "KNOWLEDGE_ERROR")); setPending(false); } });
+    load(1);
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [locale, page, pageSize, retryVersion, urlVersion, denyRead]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
-  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => { if (deniedRef.current) { deniedRef.current = false; setState({ kind: "loading" }); } setRetryVersion((value) => value + 1); }} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} activityMoreError={activityMoreError} onLoadMoreActivity={loadMoreActivity} recentError={recentError} favoritesError={favoritesError} researchError={researchError} notesError={notesError} activityError={activityError} onRetrySections={() => setSectionRetry((value) => value + 1)} review={review} onRetryReview={() => setReviewRetry(value => value + 1)} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live location, not a render value
+  }, [locale, retryVersion, filterVersion, denyRead]);
+  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => { if (deniedRef.current) { deniedRef.current = false; setState({ kind: "loading" }); } setRetryVersion((value) => value + 1); }} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1); }} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} activityMoreError={activityMoreError} onLoadMoreActivity={loadMoreActivity} recentError={recentError} favoritesError={favoritesError} researchError={researchError} notesError={notesError} activityError={activityError} onRetrySections={() => setSectionRetry((value) => value + 1)} review={review} onRetryReview={() => setReviewRetry(value => value + 1)} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
 }
 
 export function SearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   return <MemberSearchRoute key={memberId ?? "preview"} locale={locale} search={search} memberId={memberId} />;
 }
 
-function MemberSearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
-  const initialPage = useMemo(() => parsePageSearch(search), [search]);
+function MemberSearchRoute({ locale, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const [initialQuery] = useState(() => new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "");
   const [activeQuery, setActiveQuery] = useState(initialQuery);
-  const [page, setPage] = useState(initialPage.page); const [pageSize, setPageSize] = useState(initialPage.pageSize);
   const [retryVersion, setRetryVersion] = useState(0);
-  const [urlVersion, setUrlVersion] = useState(0);
+  const [filterVersion, setFilterVersion] = useState(0);
   const [state, setState] = useState<{
     kind: "loading";
   } | {
@@ -1072,10 +1081,11 @@ function MemberSearchRoute({ locale, search, memberId }: { locale: LocaleRuntime
   } | {
     kind: "error";
     message: string;
-  }>(() => activeQuery.trim() ? { kind: "loading" } : { kind: "ready", query: "", degraded: false, results: [], pagination: { page: 1, pageSize: initialPage.pageSize, total: 0, totalPages: 0 } });
+  }>(() => activeQuery.trim() ? { kind: "loading" } : { kind: "ready", query: "", degraded: false, results: [], pagination: { page: 1, pageSize: listPageSize, total: 0, totalPages: 0 } });
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createSearchRequestController> | null>(null);
-  const queryRef = useRef({ query: activeQuery, page, pageSize });
+  const queryTextRef = useRef(activeQuery);
+  queryTextRef.current = activeQuery;
   const [composerStored] = useState(() => memberId ? loadSearchComposerDraft(memberId) : { kind: "empty" as const });
   const [composerBlocked, setComposerBlocked] = useState(composerStored.kind === "blocked");
   const [composerNotice, setComposerNotice] = useState<string>();
@@ -1115,38 +1125,49 @@ function MemberSearchRoute({ locale, search, memberId }: { locale: LocaleRuntime
   useEffect(() => {
     const onPopState = () => {
       const next = new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "";
-      const pagination = parsePageSearch(readWorkspaceLocation().search);
       queryBaseline.current = next;
       queryDraft.set("query", next); queryDraft.checkpoint({ query: next });
       setActiveQuery(next);
-      queryRef.current = { query: next, ...pagination }; setPage(pagination.page); setPageSize(pagination.pageSize); setUrlVersion((value) => value + 1);
+      setFilterVersion((value) => value + 1);
     };
     return subscribeWorkspaceLocation(onPopState);
   }, []);
 
+  // The loaded window appends a later page to the results already shown; the first page replaces them.
+  const load = (targetPage: number) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    const normalized = queryTextRef.current.trim();
+    if (!normalized) {
+      setState({ kind: "ready", query: "", degraded: false, results: [], pagination: { page: 1, pageSize: listPageSize, total: 0, totalPages: 0 } }); setPending(false);
+      return;
+    }
+    setPending(true); setLocalError(undefined);
+    const request = controller.request({ query: normalized, page: targetPage, pageSize: listPageSize, ...searchFilters(readWorkspaceLocation().search) });
+    void request.promise.then((result) => {
+      if (!controller.isCurrent(request.generation)) return;
+      setState((previous) => previous.kind === "ready" && previous.query === normalized && targetPage > 1
+        ? { kind: "ready", query: normalized, degraded: result.degraded, results: [...previous.results, ...result.items], pagination: result.pagination }
+        : { kind: "ready", query: normalized, degraded: result.degraded, results: result.items, pagination: result.pagination });
+      setPending(false);
+    }).catch((error: unknown) => {
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
+      setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_SEARCH_UNAVAILABLE") });
+      setLocalError(frontendText(locale, "COMMON_SEARCH_UNAVAILABLE")); setPending(false);
+    });
+  };
   useEffect(() => {
     const controller = createSearchRequestController();
     controllerRef.current = controller;
-    const normalized = activeQuery.trim();
-    if (!normalized) {
-      setState({ kind: "ready", query: "", degraded: false, results: [], pagination: { page: 1, pageSize, total: 0, totalPages: 0 } }); setPending(false);
-      return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
-    }
-    const snapshot = { query: normalized, page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
-    const request = controller.request({ ...snapshot, ...searchFilters(readWorkspaceLocation().search) });
-    void request.promise.then((result) => {
-      if (controller.isCurrent(request.generation) && sameSearchQuery(snapshot, queryRef.current)) { setState({ kind: "ready", query: normalized, degraded: result.degraded, results: result.items, pagination: result.pagination }); setPending(false); }
-    }).catch((error: unknown) => {
-      if (controller.isCurrent(request.generation) && sameSearchQuery(snapshot, queryRef.current) && !isAbort(error)) {
-        setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_SEARCH_UNAVAILABLE") }); setLocalError(frontendText(locale, "COMMON_SEARCH_UNAVAILABLE")); setPending(false);
-      }
-    });
+    load(1);
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [activeQuery, locale, page, pageSize, retryVersion, urlVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live query ref and location, not render values
+  }, [activeQuery, locale, retryVersion, filterVersion]);
 
   const submit = () => {
     const normalized = queryDraft.current.current.query.trim();
-    const params = new URLSearchParams(readWorkspaceLocation().search); if (normalized) params.set("q", normalized); else params.delete("q"); params.delete("page");
+    const params = new URLSearchParams(readWorkspaceLocation().search); if (normalized) params.set("q", normalized); else params.delete("q");
+    params.delete("page"); params.delete("pageSize");
     const nextUrl = params.size ? `/search?${params.toString()}` : "/search";
     queryDraft.applyNavigation((onCommit, onSettled) => {
       const current = readWorkspaceLocation();
@@ -1154,11 +1175,9 @@ function MemberSearchRoute({ locale, search, memberId }: { locale: LocaleRuntime
       writeWorkspaceHistory(mode, nextUrl, () => {
         onCommit();
         setActiveQuery(normalized);
-        setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
       }, onSettled);
     });
   };
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = { query: activeQuery, ...next }; setPage(next.page); setPageSize(next.pageSize); }); };
   const applyView = (view: SavedViewItem) => {
     if (!saved.mayApply(view)) return;
     const normalized = view.filters.q.trim();
@@ -1170,11 +1189,10 @@ function MemberSearchRoute({ locale, search, memberId }: { locale: LocaleRuntime
     const nextUrl = `/search?${params.toString()}`;
     writeWorkspaceHistory("push", nextUrl, () => {
       setActiveQuery(normalized);
-      setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
     });
   };
   const discardComposer = () => { if (!memberId || !composerBlocked || !discardBlockedSearchComposerDraft(memberId)) return; setComposerBlocked(false); setComposerNotice(undefined); };
-  return <SearchPage locale={locale} query={queryDraft.fields.query} queryLocked={saved.locked || queryDraft.confirming || queryDraft.applicationPending} state={state} pending={pending} localError={localError} onQueryChange={(value) => queryDraft.edit("query", value)} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={<>{saved.confirmation}{queryDraft.confirmation}</>} savedViews={saved.items} savedViewPending={saved.locked || saved.recordBlocked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} savedViewRecordBlocked={saved.recordBlocked} onDiscardSavedViewRecord={saved.discardRecord} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} composerBlocked={composerBlocked} composerNotice={composerNotice} onDiscardComposer={discardComposer} />;
+  return <SearchPage locale={locale} query={queryDraft.fields.query} queryLocked={saved.locked || queryDraft.confirming || queryDraft.applicationPending} state={state} pending={pending} localError={localError} onQueryChange={(value) => queryDraft.edit("query", value)} onSubmit={submit} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1); }} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={<>{saved.confirmation}{queryDraft.confirmation}</>} savedViews={saved.items} savedViewPending={saved.locked || saved.recordBlocked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} savedViewRecordBlocked={saved.recordBlocked} onDiscardSavedViewRecord={saved.discardRecord} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} composerBlocked={composerBlocked} composerNotice={composerNotice} onDiscardComposer={discardComposer} />;
 }
 
 export function AgentRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
@@ -1474,30 +1492,35 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
 }
 
 export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
-  const initial = useMemo(() => parsePageSearch(search), [search]);
-  const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
   const [retryVersion, setRetryVersion] = useState(0);
-  const [urlVersion, setUrlVersion] = useState(0);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: MySubmissionItem[]; pagination: { page: number; pageSize: SupportedPageSize; total: number; totalPages: number } } | { kind: "error"; message: string }>({ kind: "loading" });
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createMySubmissionsRequestController> | null>(null);
-  const queryRef = useRef({ page, pageSize });
-  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(readWorkspaceLocation().search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); setUrlVersion((value) => value + 1); }), []);
+  // A later page appends to the loaded window; page 1 replaces it.
+  const load = (targetPage: number) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    setPending(true); setLocalError(undefined);
+    const status = new URLSearchParams(readWorkspaceLocation().search).get("status") ?? undefined;
+    const request = controller.request({ page: targetPage, pageSize: listPageSize, ...(status ? { status } : {}) });
+    void request.promise.then((result) => {
+      if (!controller.isCurrent(request.generation)) return;
+      setState((old) => old.kind === "ready" && targetPage > 1 ? { kind: "ready", items: [...old.items, ...result.items], pagination: result.pagination } : { kind: "ready", items: result.items, pagination: result.pagination });
+      setPending(false);
+    }).catch((error: unknown) => {
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
+      setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false);
+    });
+  };
   useEffect(() => {
     const controller = createMySubmissionsRequestController();
     controllerRef.current = controller;
-    const snapshot = { page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
-    const status = new URLSearchParams(readWorkspaceLocation().search).get("status") ?? undefined;
-    const request = controller.request({ ...snapshot, ...(status ? { status } : {}) });
-    void request.promise.then((result) => {
-      if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); }
-    }).catch((error: unknown) => {
-      if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
-    });
+    load(1);
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [locale, page, pageSize, retryVersion, urlVersion]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
-  return <MySubmissionsPage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live location, not a render value
+  }, [locale, retryVersion, search]);
+  return <MySubmissionsPage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1); }} />;
 }
 
 export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
@@ -1517,10 +1540,7 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
   const ownedNavigationRef = useRef(false);
   const leaveGuardRef = useRef<(() => void) | null>(null);
   const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
-  const initialPage = useMemo(() => parsePageSearch(search), [search]);
   const initialFilters = useMemo(() => taskFiltersFromSearch(search), [search]);
-  const [page, setPage] = useState(initialPage.page);
-  const [pageSize, setPageSize] = useState(initialPage.pageSize);
   const [filters, setFilters] = useState<TaskFilterState>(initialFilters);
   const [draftFilters, setDraftFilters] = useState<TaskFilterState>(initialFilters);
   const [retryVersion, setRetryVersion] = useState(0);
@@ -1532,10 +1552,9 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
   const actionPendingRef = useRef(false);
   const textFilterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controllerRef = useRef<ReturnType<typeof createTasksRequestController> | null>(null);
-  const queryRef = useRef({ page, pageSize, filters });
-  const sameQuery = (value: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }) =>
-    value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize
-      && JSON.stringify(value.filters) === JSON.stringify(queryRef.current.filters);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const sameFilters = (value: TaskFilterState) => JSON.stringify(value) === JSON.stringify(filtersRef.current);
   // Registered only while a list write is pending or unknown; call at every lock transition.
   const syncLeaveGuard = useCallback(() => {
     const locked = () => actionPendingRef.current || listRecoveringRef.current || listUnknownRef.current !== null;
@@ -1573,42 +1592,49 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
   useEffect(() => {
     const onPopState = () => {
       setActionError(undefined);
-      const pagination = parsePageSearch(readWorkspaceLocation().search);
       const nextFilters = taskFiltersFromSearch(readWorkspaceLocation().search);
       if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }
-      queryRef.current = { ...pagination, filters: nextFilters };
-      setPage(pagination.page); setPageSize(pagination.pageSize); setFilters(nextFilters); setDraftFilters(nextFilters); setRetryVersion((value) => value + 1);
+      setFilters(nextFilters); setDraftFilters(nextFilters); setRetryVersion((value) => value + 1);
     };
     return subscribeWorkspaceLocation(onPopState);
   }, []);
 
   useEffect(() => () => { if (textFilterTimerRef.current) clearTimeout(textFilterTimerRef.current); }, []);
 
+  // The loaded window appends a later page to the rows already shown; page one replaces them.
+  const load = (targetPage: number) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    setPending(true); setLocalLoadError(undefined);
+    const request = controller.request({ page: targetPage, pageSize: listPageSize, filters: filtersRef.current as TaskFilters });
+    void request.promise.then((data) => {
+      if (!controller.isCurrent(request.generation)) return;
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", data: { items: [...previous.data.items, ...data.items], pagination: data.pagination } }
+        : { kind: "ready", data });
+      setPending(false);
+    }).catch((error: unknown) => {
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
+      if (clearDeniedTasks(error)) return;
+      setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false);
+    });
+  };
   useEffect(() => {
     const controller = createTasksRequestController(); controllerRef.current = controller;
-    const snapshot = { page, pageSize, filters }; queryRef.current = snapshot; setPending(true); setLocalLoadError(undefined);
-    const request = controller.request({ page, pageSize, filters: filters as TaskFilters });
-    void request.promise.then((data) => {
-      if (controller.isCurrent(request.generation) && sameQuery(snapshot)) { setState({ kind: "ready", data }); setPending(false); }
-    }).catch((error: unknown) => {
-      if (controller.isCurrent(request.generation) && sameQuery(snapshot) && !isAbort(error)) {
-        if (clearDeniedTasks(error)) return;
-        setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
-        setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false);
-      }
-    });
+    load(1);
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [filters, locale, page, pageSize, retryVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live filters ref, not a render value
+  }, [filters, locale, retryVersion]);
 
-  const navigate = (next: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }, replace = false) => {
-    const url = taskSearch(next);
+  const navigate = (nextFilters: TaskFilterState, replace = false) => {
+    const url = taskSearch(nextFilters);
     // Only this list's own read-only query changes may pass while a write is pending or unknown.
     ownedNavigationRef.current = true;
     try { writeWorkspaceHistory(replace ? "replace" : "push", `/tasks${url}`, () => {
       setActionError(undefined);
       if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }
-      queryRef.current = next;
-      setPage(next.page); setPageSize(next.pageSize); setFilters(next.filters); setDraftFilters(next.filters);
+      setFilters(nextFilters); setDraftFilters(nextFilters);
     }); } finally { ownedNavigationRef.current = false; }
   };
   const changeTextFilters = (nextFilters: TaskFilterState) => {
@@ -1616,13 +1642,13 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
     if (textFilterTimerRef.current) clearTimeout(textFilterTimerRef.current);
     textFilterTimerRef.current = setTimeout(() => {
       textFilterTimerRef.current = null;
-      navigate({ page: 1, pageSize: queryRef.current.pageSize, filters: nextFilters }, true);
+      navigate(nextFilters, true);
     }, 300);
   };
   const mutate = async (intent: TaskWriteIntent, label: string) => {
     if (actionPendingRef.current || listUnknownRef.current || listRecoveringRef.current) return;
     if (!record(intent)) { setActionNotice(undefined); setActionError(frontendText(locale, "TASKS_WRITE_NOT_RECORDED")); return; }
-    const snapshot = { ...queryRef.current, filters: { ...queryRef.current.filters } };
+    const snapshot = { filters: { ...filtersRef.current } };
     actionPendingRef.current = true; syncLeaveGuard(); setActionPendingId(intent.taskId); setActionError(undefined); setActionNotice(undefined); setLocalLoadError(undefined);
     const markUnknown = (stuck: boolean) => {
       const pending = { intent, label }; listUnknownRef.current = pending; setListUnknown(pending);
@@ -1637,7 +1663,7 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       if (activeRef.current && !isAbort(error)) {
         if (cleared && error instanceof ApiRequestError && error.status === 409) {
           setActionError(frontendText(locale, "TASKS_ACTION_CONFLICT")); setRetryVersion((value) => value + 1);
-        } else if (cleared) { if (!clearDeniedTasks(error) && sameQuery(snapshot)) setActionError(frontendText(locale, "TASKS_ACTION_FAILED")); }
+        } else if (cleared) { if (!clearDeniedTasks(error) && sameFilters(snapshot.filters)) setActionError(frontendText(locale, "TASKS_ACTION_FAILED")); }
         // The server may have applied it; the unchanged row is not proof that it did not.
         else markUnknown(rejected);
       }
@@ -1645,15 +1671,15 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       return;
     }
     try {
-      if (!sameQuery(snapshot)) return;
+      if (!sameFilters(snapshot.filters)) return;
       const controller = controllerRef.current; if (!controller) return;
-      setPending(true); const request = controller.request({ page: snapshot.page, pageSize: snapshot.pageSize, filters: snapshot.filters as TaskFilters });
+      // A write refreshes the visible window from its first page; earlier appends are not provably current.
+      setPending(true); const request = controller.request({ page: 1, pageSize: listPageSize, filters: snapshot.filters as TaskFilters });
       const data = await request.promise;
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
-      if (data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: snapshot.page - 1 }, true);
-      else { setState({ kind: "ready", data }); setPending(false); }
+      if (!controller.isCurrent(request.generation) || !sameFilters(snapshot.filters)) return;
+      setState({ kind: "ready", data }); setPending(false);
     } catch (error: unknown) {
-      if (sameQuery(snapshot) && !isAbort(error) && !clearDeniedTasks(error)) { setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
+      if (sameFilters(snapshot.filters) && !isAbort(error) && !clearDeniedTasks(error)) { setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
     } finally { actionPendingRef.current = false; syncLeaveGuard(); setActionPendingId(null); }
   };
   const resolveListUnknown = async (mode: "check" | "retry") => {
@@ -1697,7 +1723,7 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       <Button variant="outline" disabled={listRecovering} onClick={() => void resolveListUnknown("check")}>{frontendText(locale, "TASKS_CHECK_WRITE")}</Button>
       <Button variant="outline" disabled={listRecovering} onClick={() => void resolveListUnknown("retry")}>{frontendText(locale, "TASKS_RETRY_WRITE")}</Button>
     </div>
-  </Alert>}{actionNotice && <p role="status" className="mb-4 text-sm">{actionNotice}</p>}<TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : listUnknown || listRecovering ? "unknown" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate({ op: "status", taskId: id, status, ...taskRowStatus(id) }, taskLabel(id))} onDelete={(id) => void mutate({ op: "delete", taskId: id }, taskLabel(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} memberId={memberId} {...(editor.restored ? { restored: editor.restored } : {})} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
+  </Alert>}{actionNotice && <p role="status" className="mb-4 text-sm">{actionNotice}</p>}<TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : listUnknown || listRecovering ? "unknown" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate(next)} onTextFilterChange={changeTextFilters} onLoadMore={() => { if (state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) load(state.data.pagination.page + 1); }} onStatusChange={(id, status: TaskStatus) => void mutate({ op: "status", taskId: id, status, ...taskRowStatus(id) }, taskLabel(id))} onDelete={(id) => void mutate({ op: "delete", taskId: id }, taskLabel(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} memberId={memberId} {...(editor.restored ? { restored: editor.restored } : {})} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
 }
 
 type TaskListUnknown = { intent: TaskWriteIntent; label: string };
@@ -1707,10 +1733,9 @@ function isDefiniteTaskRejection(error: unknown): boolean {
 
 export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
   const writeRecovery = usePlanningWriteRecovery(memberId, "INBOX", search);
-  const { page, pageSize, status } = parseInboxSearch(search);
-  const query = { page, pageSize, status };
-  const queryRef = useRef<InboxPageRequest>(query);
-  queryRef.current = query;
+  const [status, setStatus] = useState<InboxStatus | undefined>(() => parseInboxSearch(search).status);
+  const statusRef = useRef(status);
+  statusRef.current = status;
   const [storedTaskWrite] = useState(() => memberId ? loadTaskWrite(memberId) : { kind: "empty" as const });
   const [taskTarget, setTaskTarget] = useState<{ taskId: string; restored?: TaskWriteIntent } | null>(() => storedTaskWrite.kind === "ready" && storedTaskWrite.intent.op !== "create"
     ? { taskId: storedTaskWrite.intent.taskId, restored: storedTaskWrite.intent } : null);
@@ -1739,21 +1764,15 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
   const writingRef = useRef(false);
   const generationRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
-  const invalidate = useCallback(() => {
-    generationRef.current++; controllerRef.current?.abort();
-    pendingRef.current = true; setPending(true); setState({ kind: "loading" }); setActionError(undefined);
-  }, []);
   useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = parseInboxSearch(readWorkspaceLocation().search);
-    const current = queryRef.current;
-    if (next.page !== current.page || next.pageSize !== current.pageSize || next.status !== current.status) {
-      queryRef.current = next; invalidate();
-    }
-  }), [invalidate]);
+    const next = parseInboxSearch(readWorkspaceLocation().search).status;
+    if (next !== statusRef.current) { statusRef.current = next; setStatus(next); }
+  }), []);
   useEffect(() => {
-    const canonical = writeInboxSearch(search, { page, pageSize, status });
+    // The pager is not part of the URL: page and page-size parameters are stripped, the status filter is kept.
+    const canonical = writeInboxSearch(search, { page: 1, pageSize: listPageSize, status });
     if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
-  }, [search, page, pageSize, status]);
+  }, [search, status]);
   const clearReadFailure = useCallback(() => {
     setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
   }, [locale]);
@@ -1768,14 +1787,18 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     }
     clearReadFailure(); return true;
   }, [clearReadFailure, writeRecovery.deny]);
-  const refresh = useCallback(async (): Promise<boolean> => {
-    invalidate();
+  // The loaded window appends a later page to the rows already shown; page one replaces them.
+  const load = useCallback(async (targetPage: number): Promise<boolean> => {
+    generationRef.current += 1;
     const generation = generationRef.current;
-    const controller = new AbortController(); controllerRef.current = controller;
+    pendingRef.current = true; setPending(true);
+    const controller = new AbortController(); controllerRef.current?.abort(); controllerRef.current = controller;
     try {
-      const result = await loadInboxNumbered({ page, pageSize, status }, fetch, controller.signal);
+      const result = await loadInboxNumbered({ page: targetPage, pageSize: listPageSize, status: statusRef.current }, fetch, controller.signal);
       if (!activeRef.current || generation !== generationRef.current) return false;
-      setState({ kind: "ready", items: result.items, pagination: result.pagination });
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", items: [...previous.items, ...result.items], pagination: result.pagination }
+        : { kind: "ready", items: result.items, pagination: result.pagination });
       setTaskAccessReady(true);
       const stored = memberId ? loadTaskWrite(memberId) : { kind: "empty" as const };
       setTaskRecordBlocked(stored.kind === "blocked");
@@ -1791,16 +1814,20 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     } finally {
       if (activeRef.current && generation === generationRef.current) { pendingRef.current = false; setPending(false); }
     }
-  }, [page, pageSize, status, memberId, invalidate, clearDenied, clearReadFailure]);
+  }, [memberId, clearDenied, clearReadFailure]);
+  const refresh = useCallback(() => load(1), [load]);
   useEffect(() => {
-    activeRef.current = true; void refresh();
+    activeRef.current = true; void load(1);
     return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
-  }, [refresh, retryVersion]);
-  const navigate = (next: InboxPageRequest) => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live status ref, not a render value
+  }, [status, retryVersion]);
+  const navigate = (nextStatus: InboxStatus | undefined) => {
     if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
-    const nextSearch = writeInboxSearch(readWorkspaceLocation().search, next);
+    const nextSearch = writeInboxSearch(readWorkspaceLocation().search, { page: 1, pageSize: listPageSize, status: nextStatus });
     if (nextSearch === readWorkspaceLocation().search) return;
-    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch}`, invalidate);
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch}`, () => {
+      if (nextStatus !== statusRef.current) { statusRef.current = nextStatus; setStatus(nextStatus); }
+    });
   };
   const changeItem = async (item: InboxItem, operation: "status" | "task") => {
     if (!memberId || pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
@@ -1857,7 +1884,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
       const controller = new AbortController(); controllerRef.current?.abort(); controllerRef.current = controller;
       await readCreatedInbox(intent, fetch, controller.signal);
       if (!activeRef.current || generation !== generationRef.current) return false;
-      const result = await loadInboxNumbered(queryRef.current, fetch, controller.signal);
+      const result = await loadInboxNumbered({ page: 1, pageSize: listPageSize, status: statusRef.current }, fetch, controller.signal);
       if (!activeRef.current || generation !== generationRef.current) return false;
       setState({ kind: "ready", items: result.items, pagination: result.pagination });
       return true;
@@ -1874,19 +1901,12 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
       if (stored.kind === "ready" && stored.intent.op === "create") { setTaskCreatePending(stored.intent.taskId); return; }
       setTaskTarget(stored.kind === "ready" ? { taskId: stored.intent.taskId, restored: stored.intent } : { taskId: item.promotedTaskId });
     }}
-    onPageChange={next => navigate({ ...query, page: next })}
-    onPageSizeChange={next => navigate({ ...query, page: 1, pageSize: next })}
-    onFilterChange={next => navigate({ ...query, page: 1, status: next })} /></div>{taskTarget && taskAccessReady && <TaskEditor key={`${memberId}:${taskTarget.taskId ?? "new"}`} taskId={taskTarget.taskId} {...(taskTarget.restored ? { restored: taskTarget.restored } : {})} memberId={memberId} locale={locale} onClose={() => setTaskTarget(null)} onChanged={() => setRetryVersion(value => value + 1)} onDenied={error => { if (clearDenied(error)) setTaskTarget(null); }} />}</>;
+    onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) void load(state.pagination.page + 1); }}
+    onFilterChange={navigate} /></div>{taskTarget && taskAccessReady && <TaskEditor key={`${memberId}:${taskTarget.taskId ?? "new"}`} taskId={taskTarget.taskId} {...(taskTarget.restored ? { restored: taskTarget.restored } : {})} memberId={memberId} locale={locale} onClose={() => setTaskTarget(null)} onChanged={() => setRetryVersion(value => value + 1)} onDenied={error => { if (clearDenied(error)) setTaskTarget(null); }} />}</>;
 }
 
 export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
   const writeRecovery = usePlanningWriteRecovery(memberId, "GOALS", search);
-  const query = parsePageSearch(search);
-  const { page: requestedPage, pageSize } = query;
-  useEffect(() => {
-    const canonical = writePageSearch(search, { page: requestedPage, pageSize });
-    if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
-  }, [search, requestedPage, pageSize]);
   const [relationGoal, setRelationGoal] = useState<Goal | null>(null);
   const relationGoalRef = useRef<Goal | null>(null);
   const restoreGoalTaskFocus = useRef<string | null>(null);
@@ -1923,15 +1943,18 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
     stateRef.current = cleared; setState(cleared); return true;
   }, [locale, memberId, writeRecovery.deny]);
 
-  const refresh = useCallback(async (): Promise<boolean> => {
+  // The loaded window appends a later page to the rows already shown; page one replaces them.
+  const load = useCallback(async (targetPage: number): Promise<boolean> => {
     controllerRef.current?.abort();
     const controller = new AbortController(); controllerRef.current = controller;
     const generation = ++generationRef.current;
     pendingRef.current = true; setPending(true); setActionError(undefined);
     try {
-      const page = await loadNumberedGoals({ page: requestedPage, pageSize }, fetch, controller.signal);
+      const page = await loadNumberedGoals({ page: targetPage, pageSize: listPageSize }, fetch, controller.signal);
       if (!activeRef.current || generationRef.current !== generation) return false;
-      setState({ kind: "ready", items: page.items, pagination: page.pagination });
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", items: [...previous.items, ...page.items], pagination: page.pagination }
+        : { kind: "ready", items: page.items, pagination: page.pagination });
       return true;
     } catch (error: unknown) {
       if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return false;
@@ -1939,7 +1962,8 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
       setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
       setActionError(frontendText(locale, "GOALS_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
-  }, [locale, clearDeniedGoals, requestedPage, pageSize]);
+  }, [locale, clearDeniedGoals]);
+  const refresh = useCallback(() => load(1), [load]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -1979,13 +2003,6 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
 
-  const changePage = (page: number, size = pageSize) => {
-    if (relationGoalRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
-    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
-      pendingRef.current = true; setPending(true);
-    });
-  };
-
   const relationReadFailed = useCallback(() => {
     const cleared: GoalsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
     stateRef.current = cleared; setState(cleared);
@@ -2008,7 +2025,7 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
     onCreateLock={(locked) => { createLockedRef.current = locked; setCreateLocked(locked); }}
     onStatusChange={(goal: Goal, status) => void mutate(goal, () => setGoalStatus(goal.id, status, goal.updatedAt))}
     onProgressChange={(goal: Goal, progress) => void mutate(goal, () => setGoalProgress(goal.id, progress, goal.updatedAt))}
-    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />
+    onLoadMore={() => { if (state.kind === "ready" && state.pagination && state.pagination.page < state.pagination.totalPages) void load(state.pagination.page + 1); }} />
     {relationGoal && <GoalTasksEditor key={relationGoal.id} goalId={relationGoal.id} title={relationGoal.title} locale={locale} onDenied={clearDeniedGoals} onReadFailure={relationReadFailed} onClose={() => void closeRelations()} onBeginWrite={writeRecovery.begin} onFinishWrite={writeRecovery.finish} writeBlocked={writeRecovery.blocked} />}
   </>;
 }
@@ -2017,12 +2034,6 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
   const writeRecovery = usePlanningWriteRecovery(memberId, "PROJECTS", search);
   const statuses = new URLSearchParams(search).getAll("status");
   const status = statuses.length === 0 ? undefined : statuses.length === 1 ? statuses[0] : "invalid";
-  const query = parsePageSearch(search);
-  const { page: requestedPage, pageSize } = query;
-  useEffect(() => {
-    const canonical = writePageSearch(search, { page: requestedPage, pageSize });
-    if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
-  }, [search, requestedPage, pageSize]);
   const [state, setState] = useState<ProjectsPageState>({ kind: "loading" });
   const [relationProject, setRelationProject] = useState<Project>();
   const relationProjectRef = useRef<string | undefined>(undefined);
@@ -2061,13 +2072,14 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     return true;
   }, [cancelReads, locale, memberId, writeRecovery.deny]);
 
-  const refresh = useCallback(async (): Promise<boolean> => {
+  // The loaded window appends a later page to the rows already shown; page one replaces them.
+  const load = useCallback(async (targetPage: number): Promise<boolean> => {
     cancelReads();
     const generation = ++generationRef.current;
     const controller = new AbortController(); listControllerRef.current = controller;
     pendingRef.current = true; setPending(true); setSummaryPending([]); setActionError(undefined);
     try {
-      const page = await loadNumberedProjects({ page: requestedPage, pageSize, status }, fetch, controller.signal);
+      const page = await loadNumberedProjects({ page: targetPage, pageSize: listPageSize, status }, fetch, controller.signal);
       if (!activeRef.current || generationRef.current !== generation) return false;
       const entries = await Promise.all(page.items.map(async (project) => {
         try { return [project.id, await loadProjectSummary(project.id, fetch, controller.signal)] as const; }
@@ -2078,7 +2090,9 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
       }));
       if (!activeRef.current || generationRef.current !== generation) return false;
       const summaries = Object.fromEntries(entries.filter((entry) => entry[1] !== undefined)) as Record<string, ProjectSummary>;
-      setState({ kind: "ready", items: page.items, pagination: page.pagination, summaries });
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", items: [...previous.items, ...page.items], pagination: page.pagination, summaries: { ...previous.summaries, ...summaries } }
+        : { kind: "ready", items: page.items, pagination: page.pagination, summaries });
       return true;
     } catch (error: unknown) {
       if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return false;
@@ -2086,7 +2100,8 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
       setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
       setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
-  }, [locale, cancelReads, clearDeniedProjects, requestedPage, pageSize, status]);
+  }, [locale, cancelReads, clearDeniedProjects, status]);
+  const refresh = useCallback(() => load(1), [load]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -2146,13 +2161,6 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
 
-  const changePage = (page: number, size = pageSize) => {
-    if (relationProjectRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
-    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
-      pendingRef.current = true; setPending(true);
-    });
-  };
-
   const updateRelationSummary = useCallback((projectId: string, summary: ProjectSummary | undefined) => {
     if (!activeRef.current || relationProjectRef.current !== projectId || stateRef.current.kind !== "ready") return;
     const summaries = { ...stateRef.current.summaries };
@@ -2186,16 +2194,11 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     }}
     onStatusChange={(project: Project, status) => void mutate(project, () => setProjectStatus(project.id, status, project.updatedAt))}
     onOpenTimeline={(project) => writeWorkspaceHistory("push", `/projects/${encodeURIComponent(project.id)}/timeline`)}
-    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
+    onLoadMore={() => { if (state.kind === "ready" && state.pagination && state.pagination.page < state.pagination.totalPages) void load(state.pagination.page + 1); }} /></>;
 }
 
-export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" }: { locale: LocaleRuntime; projectId: string; memberId?: string; search?: string }) {
-  const { page: requestedPage, pageSize } = useMemo(() => parsePageSearch(search), [search]);
-  const writeRecovery = usePlanningWriteRecovery(memberId, `TIMELINE:${projectId}`, `${projectId}:${requestedPage}:${pageSize}`);
-  useEffect(() => {
-    const canonical = writePageSearch(search, { page: requestedPage, pageSize });
-    if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
-  }, [search, requestedPage, pageSize]);
+export function ProjectTimelineRoute({ locale, projectId, memberId }: { locale: LocaleRuntime; projectId: string; memberId?: string; search?: string }) {
+  const writeRecovery = usePlanningWriteRecovery(memberId, `TIMELINE:${projectId}`, projectId);
   const [state, setState] = useState<ProjectTimelinePageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
   const [createLocked, setCreateLocked] = useState(false);
@@ -2226,7 +2229,8 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
     stateRef.current = cleared; setState(cleared); return true;
   }, [locale, memberId, projectId, writeRecovery.deny]);
 
-  const refresh = useCallback(async (clearOnFailure = false, record?: PlanningWriteRecord, receiptVersion?: string): Promise<boolean> => {
+  // The loaded window appends a later page to the rows already shown; page one replaces them.
+  const load = useCallback(async (targetPage: number, clearOnFailure = false, record?: PlanningWriteRecord, receiptVersion?: string): Promise<boolean> => {
     controllerRef.current?.abort();
     const controller = new AbortController(); controllerRef.current = controller;
     const generation = ++generationRef.current;
@@ -2234,14 +2238,17 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
     try {
       const [project, page] = await Promise.all([
         loadProject(projectId, fetch, controller.signal),
-        loadNumberedProjectTimeline(projectId, { page: requestedPage, pageSize }, fetch, controller.signal),
+        loadNumberedProjectTimeline(projectId, { page: targetPage, pageSize: listPageSize }, fetch, controller.signal),
       ]);
       if (!activeRef.current || generationRef.current !== generation) return false;
       if (record) {
         const item = page.items.find(item => item.id === record.id);
         if (!item || !canonicalPlanningVersion(item.updatedAt) || Date.parse(item.updatedAt) < Math.max(Date.parse(record.expectedUpdatedAt), Date.parse(receiptVersion ?? record.expectedUpdatedAt))) throw new Error("TIMELINE_RECOVERY_VERSION_INVALID");
       }
-      const next: ProjectTimelinePageState = { kind: "ready", project, items: page.items, pagination: page.pagination };
+      const previous = stateRef.current;
+      const next: ProjectTimelinePageState = previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", project, items: [...previous.items, ...page.items], pagination: page.pagination }
+        : { kind: "ready", project, items: page.items, pagination: page.pagination };
       stateRef.current = next; setState(next);
       setActionError(statusNoticeRef.current ? frontendText(locale, statusNoticeRef.current) : undefined);
       if (record) writeRecovery.finish(record);
@@ -2255,7 +2262,8 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
       stateRef.current = next; setState(next);
       setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
-  }, [locale, projectId, requestedPage, pageSize, clearDenied, writeRecovery.finish]);
+  }, [locale, projectId, clearDenied, writeRecovery.finish]);
+  const refresh = useCallback((clearOnFailure = false, record?: PlanningWriteRecord, receiptVersion?: string) => load(1, clearOnFailure, record, receiptVersion), [load]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -2294,12 +2302,6 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
       return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
-  const changePage = (page: number, size = pageSize) => {
-    if (pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
-    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
-      pendingRef.current = true; setPending(true);
-    });
-  };
   return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || createLocked} refresh={() => refresh(true)} onDenied={clearDenied} /><ProjectTimelinePage createMemberId={memberId} createProjectId={projectId} locale={locale} state={state} pending={pending || writeRecovery.locked} createLocked={createLocked} actionError={actionError}
     onRetry={() => setRetryVersion(value => value + 1)}
     onBack={() => writeWorkspaceHistory("push", "/projects")}
@@ -2310,7 +2312,7 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
     onCreateLock={locked => { createLockedRef.current = locked; setCreateLocked(locked); }}
     onEdit={(item, content) => mutate(item, () => editProjectTimeline(projectId, item, content), "PROJECT_TIMELINE_EDIT_UNKNOWN")}
     onStatusChange={(item: ProjectTimelineItem, status: ProjectTimelineStatus) => void mutate(item, () => setProjectTimelineStatus(projectId, item.id, status, item.updatedAt))}
-    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
+    onLoadMore={() => { if (state.kind === "ready" && state.pagination && state.pagination.page < state.pagination.totalPages) void load(state.pagination.page + 1); }} /></>;
 }
 
 export function CalendarRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
@@ -2318,9 +2320,10 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
   const [captureLocked, setCaptureLocked] = useState(false);
   const captureLockedRef = useRef(false);
   const [defaultRange] = useState(defaultCalendarRange);
-  const { page, pageSize, from, to, status } = parseCalendarSearch(search, defaultRange);
-  const query = { page, pageSize, from, to, status };
-  const queryRef = useRef<CalendarQuery>(query); queryRef.current = query;
+  const { from, to, status } = parseCalendarSearch(search, defaultRange);
+  // The pager is not part of the URL: page and page-size are stripped, the range and status filter are kept.
+  const queryRef = useRef<CalendarQuery>({ page: 1, pageSize: listPageSize, from, to, status });
+  queryRef.current = { page: 1, pageSize: listPageSize, from, to, status };
   const [state, setState] = useState<CalendarPageState>({ kind: "loading" });
   const [pending, setPending] = useState(true);
   const [writing, setWriting] = useState(false);
@@ -2335,41 +2338,52 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
   useEffect(() => subscribeWorkspaceLocation(() => {
     const next = parseCalendarSearch(readWorkspaceLocation().search, defaultRange);
     const current = queryRef.current;
-    if (next.page !== current.page || next.pageSize !== current.pageSize || next.from !== current.from || next.to !== current.to || next.status !== current.status) {
-      queryRef.current = next; invalidate();
+    if (next.from !== current.from || next.to !== current.to || next.status !== current.status) {
+      queryRef.current = { page: 1, pageSize: listPageSize, from: next.from, to: next.to, status: next.status };
+      invalidate();
     }
   }), [defaultRange, invalidate]);
   useEffect(() => {
-    const canonical = writeCalendarSearch(search, { page, pageSize, from, to, status });
+    const canonical = writeCalendarSearch(search, { page: 1, pageSize: listPageSize, from, to, status });
     if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
-  }, [search, page, pageSize, from, to, status]);
+  }, [search, from, to, status]);
   const clearReadFailure = useCallback(() => setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }), [locale]);
   const clearDenied = useCallback((error: unknown) => {
     if (!(error instanceof ApiRequestError) || ![401, 403, 404].includes(error.status)) return false;
     if (error.status !== 404) writeRecovery.deny();
     clearReadFailure(); return true;
   }, [clearReadFailure, writeRecovery.deny]);
-  const refresh = useCallback(async (): Promise<boolean> => {
-    invalidate(); const generation = generationRef.current;
-    const controller = new AbortController(); controllerRef.current = controller;
+  // The loaded window appends a later page to the rows already shown; page one replaces them.
+  const load = useCallback(async (targetPage: number): Promise<boolean> => {
+    generationRef.current += 1;
+    const generation = generationRef.current;
+    pendingRef.current = true; setPending(true); setActionError(undefined);
+    const controller = new AbortController(); controllerRef.current?.abort(); controllerRef.current = controller;
     try {
-      const result = await loadCalendarNumbered({ page, pageSize, from, to, status }, fetch, controller.signal);
+      const result = await loadCalendarNumbered({ page: targetPage, pageSize: listPageSize, from, to, status }, fetch, controller.signal);
       if (!activeRef.current || generation !== generationRef.current) return false;
-      setState({ kind: "ready", items: result.items, pagination: result.pagination });
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", items: [...previous.items, ...result.items], pagination: result.pagination }
+        : { kind: "ready", items: result.items, pagination: result.pagination });
       return true;
     } catch (error: unknown) {
       if (!activeRef.current || generation !== generationRef.current || isAbort(error)) return false;
-      if (!clearDenied(error)) clearReadFailure();
+      if (!clearDenied(error)) {
+        setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+        setActionError(frontendText(locale, "CALENDAR_ACTION_FAILED"));
+      }
       return false;
     } finally { if (activeRef.current && generation === generationRef.current) { pendingRef.current = false; setPending(false); } }
-  }, [locale, page, pageSize, from, to, status, invalidate, clearDenied, clearReadFailure]);
+  }, [locale, from, to, status, clearDenied]);
+  const refresh = useCallback(() => load(1), [load]);
   useEffect(() => {
     activeRef.current = true; void refresh();
     return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
   }, [refresh, retryVersion]);
-  const navigate = (next: CalendarQuery) => {
+  // A range edit restarts the window; the pager never re-enters the URL.
+  const changeRange = (range: { from: string; to: string }) => {
     if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
-    const nextSearch = writeCalendarSearch(readWorkspaceLocation().search, next);
+    const nextSearch = writeCalendarSearch(readWorkspaceLocation().search, { page: 1, pageSize: listPageSize, ...range, ...(status ? { status } : {}) });
     if (nextSearch === readWorkspaceLocation().search) return;
     writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch}`, invalidate);
   };
@@ -2394,8 +2408,8 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
     } finally { writingRef.current = false; if (activeRef.current) setWriting(false); }
   };
   return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || writing || captureLocked} refresh={refresh} onDenied={clearDenied} onReadFailure={clearReadFailure} /><CalendarPage locale={locale} state={state} pending={pending || writing || captureLocked || writeRecovery.locked} createPending={pending || writing || writeRecovery.locked} actionError={actionError} range={{ from, to }}
-    onRangeChange={range => navigate({ ...query, ...range, page: 1 })}
-    onPageChange={next => navigate({ ...query, page: next })} onPageSizeChange={size => navigate({ ...query, page: 1, pageSize: size })}
+    onRangeChange={changeRange}
+    onLoadMore={() => { if (state.kind === "ready" && state.pagination && state.pagination.page < state.pagination.totalPages) void load(state.pagination.page + 1); }}
     onRetry={() => setRetryVersion(value => value + 1)}
     createMemberId={memberId} onCreateLock={locked => { captureLockedRef.current = locked; setCaptureLocked(locked); }}
     onCreate={input => {
@@ -2665,9 +2679,10 @@ export function WorkbenchReviewRoute({ locale, memberId }: { locale: LocaleRunti
 }
 
 export function NotificationsRoute({ locale, search, isAdmin = false, memberId }: { locale: LocaleRuntime; search: string; isAdmin?: boolean; memberId?: string }) {
-  const initial = useMemo(() => parseNotificationSearch(search), [search]);
   const [stored] = useState(() => memberId ? loadNotificationUpdate(memberId) : { kind: "empty" as const });
-  const [query, setQuery] = useState<NotificationQuery>(initial);
+  const [filters, setFilters] = useState<NotificationFilters>(() => parseNotificationSearch(search).filters);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
   const [state, setState] = useState<NotificationsPageState>({ kind: "loading" });
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
   const [pending, setPending] = useState(false);
@@ -2675,8 +2690,6 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
   const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
-  const queryRef = useRef(query);
-  queryRef.current = query;
   const controllerRef = useRef<ReturnType<typeof createNotificationsRequestController> | null>(null);
   const actionPendingRef = useRef(false);
   const activeRef = useRef(true);
@@ -2727,24 +2740,16 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
     syncLeaveGuard();
   };
 
-  useEffect(() => {
-    const controller = controllerRef.current ?? createNotificationsRequestController();
-    controllerRef.current = controller;
+  // The loaded window appends a later page to the rows already shown; page one replaces them.
+  const load = (targetPage: number) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
     readyRef.current = false;
     setPending(true);
     setState((current) => current.kind === "ready" ? current : { kind: "loading" });
-    const snapshot = query;
-    const request = controller.request(snapshot);
+    const request = controller.request({ page: targetPage, pageSize: listPageSize, filters: filtersRef.current });
     void request.promise.then(({ page, summary: nextSummary }) => {
-      if (!controller.isCurrent(request.generation) || !sameNotificationQuery(queryRef.current, snapshot)) return;
-      const lastPage = Math.max(1, page.pagination.totalPages);
-      if (snapshot.page > lastPage) {
-        const next = { ...snapshot, page: lastPage };
-        writeOwned("replace", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, next)}`, () => {
-          queryRef.current = next; setQuery(next);
-        });
-        return;
-      }
+      if (!controller.isCurrent(request.generation)) return;
       if (intentRef.current && memberId && !clearNotificationUpdate(memberId, intentRef.current)) {
         unknownRef.current = true;
         syncLeaveGuard();
@@ -2758,26 +2763,35 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
       unknownRef.current = false;
       syncLeaveGuard();
       readyRef.current = true;
-      setState({ kind: "ready", items: page.items, pagination: page.pagination });
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", items: [...previous.items, ...page.items], pagination: page.pagination }
+        : { kind: "ready", items: page.items, pagination: page.pagination });
       setSummary(nextSummary);
       setPending(false);
     }).catch((error: unknown) => {
-      if (!controller.isCurrent(request.generation) || !sameNotificationQuery(queryRef.current, snapshot) || isAbort(error)) return;
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
         clearRestrictedState(); return;
       }
       setSummary(null);
       setState({ kind: "error" }); setPending(false);
     });
-  }, [query, retryVersion, syncLeaveGuard, writeOwned]);
+  };
+  useEffect(() => {
+    const controller = createNotificationsRequestController();
+    controllerRef.current = controller;
+    load(1);
+    return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live filters ref, not a render value
+  }, [filters, retryVersion, syncLeaveGuard, writeOwned]);
 
   useEffect(() => {
     const onPopState = () => {
       locationEpochRef.current += 1;
       readyRef.current = false;
-      const next = parseNotificationSearch(readWorkspaceLocation().search);
+      const next = parseNotificationSearch(readWorkspaceLocation().search).filters;
       setActionError(undefined);
-      queryRef.current = next; setQuery(next);
+      setFilters(next);
     };
     return subscribeWorkspaceLocation(onPopState);
   }, []);
@@ -2805,10 +2819,10 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
     };
   }, [syncLeaveGuard]);
 
-  const navigate = (next: NotificationQuery, replace = false) => {
-    writeOwned(replace ? "replace" : "push", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, next)}`, () => {
+  const navigate = (nextFilters: NotificationFilters, replace = false) => {
+    writeOwned(replace ? "replace" : "push", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, { page: 1, pageSize: listPageSize, filters: nextFilters })}`, () => {
       readyRef.current = false; setActionError(undefined);
-      queryRef.current = next; setQuery(next);
+      setFilters(nextFilters);
     });
   };
 
@@ -2848,14 +2862,13 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
     locale={locale}
     state={state}
     summary={summary}
-    filters={query.filters}
+    filters={filters}
     pending={pending}
     actionPending={actionPending}
     actionError={actionError}
     onRetry={() => { invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) => value + 1); }}
-    onFilterChange={(filters: NotificationFilters) => navigate({ page: 1, pageSize: query.pageSize, filters })}
-    onPageChange={(page) => navigate({ ...query, page })}
-    onPageSizeChange={(pageSize) => navigate({ page: 1, pageSize, filters: query.filters })}
+    onFilterChange={(next: NotificationFilters) => navigate(next)}
+    onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1); }}
     recordBlocked={recordBlocked}
     onDiscardRecord={() => {
       if (!memberId || !discardBlockedNotificationUpdate(memberId)) return;
@@ -3052,18 +3065,13 @@ function sameDiscussionSearch(left: DiscussionSearch, right: DiscussionSearch): 
     && left.context?.kind === right.context?.kind && left.context?.id === right.context?.id;
 }
 
-function sameNotificationQuery(left: NotificationQuery, right: NotificationQuery): boolean {
-  return left.page === right.page && left.pageSize === right.pageSize
-    && left.filters.read === right.filters.read && left.filters.eventType === right.filters.eventType;
-}
-
-export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
-  const initial = useMemo(() => parseBoardSearch(search), [search]);
+export function BoardsRoute({ locale, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   // Without a member (preview) moves are not recorded; with one, an unknown move survives refresh in this tab.
   const [stored] = useState(() => memberId ? loadBoardMove(memberId) : { kind: "empty" as const });
   const restoredMove: BoardUnknownMove | null = stored.kind === "ready"
     ? { task: { id: stored.intent.taskId, title: stored.intent.title }, source: stored.intent.source, target: stored.intent.target } : null;
-  const [queries, setQueries] = useState<BoardPagination>(initial);
+  // Each column keeps its own loaded window; the pager is not part of the URL.
+  const [queries, setQueries] = useState<BoardPagination>(initialBoardQueries);
   const [columns, setColumns] = useState<BoardColumnStates>(initialBoardColumns);
   const [retryVersions, setRetryVersions] = useState<Record<BoardStatus, number>>(() => ({ todo: 0, doing: 0, blocked: 0, done: 0 }));
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
@@ -3085,14 +3093,13 @@ export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntim
   const unknownMoveRef = useRef<BoardUnknownMove | null>(restoredMove);
   const recordBlockedRef = useRef(stored.kind === "blocked");
   const recoveringRef = useRef(false);
-  const ownedQueryNavigationRef = useRef(false);
   const leaveGuardRef = useRef<(() => void) | null>(null);
   // Registered only while locked: an idle board keeps ordinary browser history behaviour.
   // Call synchronously at every lock transition so a same-event leave cannot pass.
   const syncLeaveGuard = useCallback(() => {
     const locked = () => actionPendingRef.current || recoveringRef.current || unknownMoveRef.current !== null;
     if (locked() && !leaveGuardRef.current) {
-      leaveGuardRef.current = registerWorkspaceLeaveGuard(() => ({ kind: locked() && !ownedQueryNavigationRef.current ? "block" : "allow" }));
+      leaveGuardRef.current = registerWorkspaceLeaveGuard(() => ({ kind: locked() ? "block" : "allow" }));
     } else if (!locked() && leaveGuardRef.current) {
       leaveGuardRef.current(); leaveGuardRef.current = null;
     }
@@ -3117,11 +3124,6 @@ export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntim
     columnsRef.current = cleared; setColumns(cleared);
     return true;
   }, [syncLeaveGuard]);
-  // Only this route's read-only column query changes may pass while a move is unresolved.
-  const writeOwnBoardHistory = useCallback((mode: "push" | "replace", url: string, onCommit: () => void) => {
-    ownedQueryNavigationRef.current = true;
-    try { writeWorkspaceHistory(mode, url, onCommit); } finally { ownedQueryNavigationRef.current = false; }
-  }, []);
 
   useEffect(() => {
     const owner = window;
@@ -3136,33 +3138,30 @@ export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntim
     };
   }, [syncLeaveGuard]);
 
-  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, writeOwnBoardHistory, setQueries, setColumns);
-  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, writeOwnBoardHistory, setQueries, setColumns);
-  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, writeOwnBoardHistory, setQueries, setColumns);
-  useBoardColumnRequest("done", queries.done, retryVersions.done, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, writeOwnBoardHistory, setQueries, setColumns);
-
-  useEffect(() => {
-    const onPopState = () => {
-      const next = parseBoardSearch(readWorkspaceLocation().search);
-      queriesRef.current = next; setActionError(undefined); setQueries(next);
-    };
-    return subscribeWorkspaceLocation(onPopState);
-  }, []);
+  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
+  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
+  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
+  useBoardColumnRequest("done", queries.done, retryVersions.done, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
 
   useEffect(() => {
     activeRef.current = true;
     return () => { activeRef.current = false; actionGenerationRef.current += 1; };
   }, []);
 
-  const navigate = (status: BoardStatus, next: { page: number; pageSize: SupportedPageSize }) => {
-    writeOwnBoardHistory("push", `/boards${writeBoardColumnSearch(readWorkspaceLocation().search, status, next)}`, () => {
-      setActionError(undefined);
-      const nextQueries = { ...queriesRef.current, [status]: next };
-      queriesRef.current = nextQueries; setQueries(nextQueries);
-    });
+  // Each column appends its own next page; the other three keep the window they already loaded.
+  const loadMore = (status: BoardStatus) => {
+    const column = columnsRef.current[status];
+    if (column.kind !== "ready" || column.pagination.page >= column.pagination.totalPages) return;
+    setQueries((current) => ({ ...current, [status]: { page: current[status].page + 1, pageSize: listPageSize } }));
   };
 
-  const refreshAllColumns = () => setRetryVersions((current) => ({ todo: current.todo + 1, doing: current.doing + 1, blocked: current.blocked + 1, done: current.done + 1 }));
+  // A refreshed column starts over from its first page; only an explicit end-of-list pull appends.
+  const reloadColumn = (status: BoardStatus) => {
+    const nextQueries = { ...queriesRef.current, [status]: { page: 1, pageSize: listPageSize } };
+    queriesRef.current = nextQueries; setQueries(nextQueries);
+    setRetryVersions((current) => ({ ...current, [status]: current[status] + 1 }));
+  };
+  const refreshAllColumns = () => { for (const status of BOARD_STATUSES) reloadColumn(status); };
   const statusText = (status: TaskItem["status"]) => frontendText(locale, taskStatusKey(status));
   const moveIntent = (pending: BoardUnknownMove): BoardMoveIntent => ({ taskId: pending.task.id, title: pending.task.title.slice(0, 500), source: pending.source, target: pending.target });
   const clearMoveRecord = (pending: BoardUnknownMove) => !memberId || clearBoardMove(memberId, moveIntent(pending));
@@ -3241,7 +3240,8 @@ export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntim
         unknownMoveRef.current = pending; syncLeaveGuard(); setUnknownMove(pending);
         setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK"));
       }
-      setRetryVersions((current) => ({ ...current, [source]: current[source] + 1, ...(isBoardStatus(target) ? { [target]: current[target] + 1 } : {}) }));
+      reloadColumn(source);
+      if (isBoardStatus(target) && target !== source) reloadColumn(target);
     } catch (error: unknown) {
       const rejected = isDefiniteBoardMoveRejection(error);
       const cleared = rejected && clearMoveRecord(pending);
@@ -3257,15 +3257,14 @@ export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntim
         if (sourceMatches) mutationOwnersRef.current[source] = null;
         if (targetMatches && delta.target) mutationOwnersRef.current[delta.target] = null;
         setColumns((current) => rollbackBoardMove(current, delta, sourceMatches, targetMatches));
-        setRetryVersions((current) => {
-          const next = { ...current };
-          if (!sourceMatches && needsBoardReplacement(source, delta.sourceQuery, queriesRef, requestStatesRef, columnsRef)) next[source] += 1;
-          if (delta.target && delta.targetChanged && !targetMatches
-            && needsBoardReplacement(delta.target, delta.targetQuery!, queriesRef, requestStatesRef, columnsRef)) next[delta.target] += 1;
-          if (sourceMatches && (requestStatesRef.current[source].pending || requestStatesRef.current[source].superseded)) next[source] += 1;
-          if (delta.target && targetMatches && (requestStatesRef.current[delta.target].pending || requestStatesRef.current[delta.target].superseded)) next[delta.target] += 1;
-          return next;
-        });
+        // Decide every replacement from the pre-reload query/state snapshot, then reload the affected columns.
+        const reloadSource = (!sourceMatches && needsBoardReplacement(source, delta.sourceQuery, queriesRef, requestStatesRef, columnsRef))
+          || (sourceMatches && (requestStatesRef.current[source].pending || requestStatesRef.current[source].superseded));
+        const reloadTarget = delta.target !== undefined && (
+          (delta.targetChanged && !targetMatches && needsBoardReplacement(delta.target, delta.targetQuery!, queriesRef, requestStatesRef, columnsRef))
+          || (targetMatches && (requestStatesRef.current[delta.target].pending || requestStatesRef.current[delta.target].superseded)));
+        if (reloadSource) reloadColumn(source);
+        if (reloadTarget && delta.target) reloadColumn(delta.target);
         if (rejected && cleared && error instanceof ApiRequestError && error.status === 409) {
           setActionError(frontendText(locale, "BOARDS_MOVE_CONFLICT")); refreshAllColumns();
         } else if (rejected && cleared) setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
@@ -3291,13 +3290,10 @@ export function BoardsRoute({ locale, search, memberId }: { locale: LocaleRuntim
     }}
     onCheckMove={() => void resolveUnknownMove("check")} onRetryMove={() => void resolveUnknownMove("retry")}
     onRetry={(status) => {
-      if (deniedRef.current) {
-        deniedRef.current = false;
-        setRetryVersions((current) => ({ todo: current.todo + 1, doing: current.doing + 1, blocked: current.blocked + 1, done: current.done + 1 }));
-      } else setRetryVersions((current) => ({ ...current, [status]: current[status] + 1 }));
+      if (deniedRef.current) { deniedRef.current = false; refreshAllColumns(); return; }
+      reloadColumn(status);
     }}
-    onPageChange={(status, page) => navigate(status, { page, pageSize: queries[status].pageSize })}
-    onPageSizeChange={(status, pageSize) => navigate(status, { page: 1, pageSize })}
+    onLoadMore={loadMore}
     onStatusChange={(task, status) => void move(task, status)} />;
 }
 
@@ -3311,7 +3307,6 @@ function useBoardColumnRequest(
   deniedRef: { current: boolean },
   controllersRef: { current: Partial<Record<BoardStatus, ReturnType<typeof createTasksRequestController>>> },
   clearDeniedBoard: (error: unknown) => boolean,
-  writeOwnBoardHistory: (mode: "push" | "replace", url: string, onCommit: () => void) => void,
   setQueries: Dispatch<SetStateAction<BoardPagination>>,
   setColumns: Dispatch<SetStateAction<BoardColumnStates>>,
 ) {
@@ -3332,16 +3327,12 @@ function useBoardColumnRequest(
       }
       requestStatesRef.current[status] = { revision, pending: false, superseded: false };
       mutationOwnersRef.current[status] = null;
-      const lastPage = Math.max(1, data.pagination.totalPages);
-      if (querySnapshot.page > lastPage) {
-        const nextQuery = { page: lastPage, pageSize: querySnapshot.pageSize };
-        writeOwnBoardHistory("replace", `/boards${writeBoardColumnSearch(readWorkspaceLocation().search, status, nextQuery)}`, () => {
-          const nextQueries = { ...queriesRef.current, [status]: nextQuery };
-          queriesRef.current = nextQueries; setQueries(nextQueries);
-        });
-        return;
-      }
-      setColumns((current) => ({ ...current, [status]: { kind: "ready", items: data.items, pagination: data.pagination, pending: false } }));
+      setColumns((current) => {
+        // Only the exact next page appends; any other read (retry, refresh after a move) replaces the window.
+        const previous = current[status];
+        const append = previous.kind === "ready" && querySnapshot.page === previous.pagination.page + 1;
+        return { ...current, [status]: { kind: "ready", items: append ? [...previous.items, ...data.items] : data.items, pagination: data.pagination, pending: false } };
+      });
     }).catch((error: unknown) => {
       if (!controller.isCurrent(request.generation) || requestStatesRef.current[status].revision !== revision || isAbort(error)) return;
       if (clearDeniedBoard(error)) return;
@@ -3355,7 +3346,7 @@ function useBoardColumnRequest(
       controller.dispose();
       if (controllersRef.current[status] === controller) delete controllersRef.current[status];
     };
-  }, [query.page, query.pageSize, retryVersion, setColumns, setQueries, status, clearDeniedBoard, writeOwnBoardHistory]);
+  }, [query.page, query.pageSize, retryVersion, setColumns, setQueries, status, clearDeniedBoard]);
 }
 
 // Status writes reject 4xx before committing; transport failures, 5xx, 408/429 and malformed receipts are unknown.
@@ -3365,6 +3356,11 @@ function isDefiniteBoardMoveRejection(error: unknown): boolean {
 
 function initialBoardColumns(): BoardColumnStates {
   return { todo: { kind: "loading" }, doing: { kind: "loading" }, blocked: { kind: "loading" }, done: { kind: "loading" } };
+}
+
+function initialBoardQueries(): BoardPagination {
+  const firstPage = { page: 1, pageSize: listPageSize };
+  return { todo: { ...firstPage }, doing: { ...firstPage }, blocked: { ...firstPage }, done: { ...firstPage } };
 }
 
 interface BoardRequestState { revision: number; pending: boolean; superseded: boolean }
@@ -3465,9 +3461,8 @@ function needsBoardReplacement(
 export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string; memberId?: string }) {
   return <ReviewDraftProvider locale={props.locale} memberId={props.memberId} preserveUnsent><ReviewQueueSession {...props} /></ReviewDraftProvider>;
 }
-function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
+function ReviewQueueSession({ locale, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const drafts = useReviewDrafts()!;
-  const initial = parsePageSearch(search); const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
@@ -3481,8 +3476,8 @@ function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntim
   const readRef = useRef<object | null>(null);
   const decisionRef = useRef<{ settled: boolean } | null>(null);
   const operationRef = useRef<ReviewOperation | null>(decisionStored.kind === "ready" ? decisionStored.intent : null);
-  const needsClampRef = useRef(false);
-  const [clampTarget, setClampTarget] = useState<{ source: { page: number; pageSize: SupportedPageSize }; page: number } | null>(null);
+  // Retrying a failed read repeats the page it asked for; a later page appends.
+  const requestedPageRef = useRef(1);
   const lifetimeRef = useRef({});
   const deniedRef = useRef(false);
   useEffect(() => {
@@ -3496,24 +3491,23 @@ function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntim
       unregister(); owner.removeEventListener("beforeunload", warn);
     };
   }, []);
-  const queryRef = useRef({ page, pageSize }); const sameQuery = (value: { page: number; pageSize: SupportedPageSize }) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize;
-  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(readWorkspaceLocation().search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }), []);
-  const read = async (controller: ReturnType<typeof createReviewQueueRequestController>, snapshot: { page: number; pageSize: SupportedPageSize }, afterDecision = false) => {
+  const read = async (controller: ReturnType<typeof createReviewQueueRequestController>, targetPage: number) => {
     if (readRef.current || controllerRef.current !== controller) return;
     const token = {}; readRef.current = token;
+    requestedPageRef.current = targetPage;
     const activeAtStart = decisionRef.current;
     setPending(true); setLocalError(undefined);
-    const request = controller.request(snapshot);
+    const request = controller.request({ page: targetPage, pageSize: listPageSize });
     try {
       const data = await request.promise;
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+      if (!controller.isCurrent(request.generation)) return;
       // A paginated pending queue cannot establish the outcome of a missing row.
       // Resolve that exact object before releasing its unknown-operation lock.
       const operation = operationRef.current;
       if (operation && !activeAtStart && !decisionRef.current) {
         const row = data.items.find((item) => item.id === operation.id);
         const status = row?.status ?? (await loadReviewDetail(operation.id)).detail.status;
-        if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+        if (!controller.isCurrent(request.generation)) return;
         if (["published", "rejected", "revision_requested"].includes(status)) {
           if (memberId && !clearReviewDecision(memberId, operation.id, operation)) {
             setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_STUCK"));
@@ -3524,13 +3518,11 @@ function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntim
         }
       }
       deniedRef.current = false;
-      setState({ kind: "ready", data });
-      if (!operationRef.current && (afterDecision || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) {
-        setClampTarget({ source: snapshot, page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)) });
-      }
-      needsClampRef.current = false;
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", data: { items: [...previous.data.items, ...data.items], pagination: data.pagination } }
+        : { kind: "ready", data });
     } catch (error: unknown) {
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot) || isAbort(error)) return;
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
         deniedRef.current = true;
         setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") });
@@ -3544,20 +3536,10 @@ function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntim
   };
   useEffect(() => {
     const controller = createReviewQueueRequestController(); controllerRef.current = controller;
-    const snapshot = { page, pageSize }; queryRef.current = snapshot;
-    void read(controller, snapshot);
+    void read(controller, 1);
     return () => { controller.dispose(); if (controllerRef.current === controller) { controllerRef.current = null; readRef.current = null; } };
-  }, [locale, page, pageSize]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }, replace = false) => { const url = `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`; writeWorkspaceHistory(replace ? "replace" : "push", url, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
-  // Admit empty-page repair only after React commits the acknowledged result,
-  // so stale row-level pending guards cannot veto the already-settled write.
-  useEffect(() => {
-    if (!clampTarget) return;
-    setClampTarget(null);
-    if (sameQuery(clampTarget.source) && !operationRef.current && !decisionRef.current) {
-      navigate({ page: clampTarget.page, pageSize: clampTarget.source.pageSize }, true);
-    }
-  }, [clampTarget]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read only needs the controller; locale pins the error text
+  }, [locale]);
   const review = async (id: string, action: ReviewDecision, details?: ReviewNoteInput, retryOperation?: ReviewOperation) => {
     if (blockedRef.current || decisionRef.current || readRef.current || state.kind !== "ready" || localError || completedId === id || (operationRef.current && operationRef.current !== retryOperation)) return;
     const actionController = controllerRef.current; if (!actionController) return;
@@ -3590,7 +3572,7 @@ function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntim
           return;
         }
         drafts.clear(id); operationRef.current = null; setRecordNotice(undefined); token.settled = true;
-        setDecisionState({ kind: "success", receipt }); setCompletedId(id); needsClampRef.current = true;
+        setDecisionState({ kind: "success", receipt }); setCompletedId(id);
       } catch (error: unknown) {
         if (ownsDecision()) {
           if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
@@ -3614,17 +3596,14 @@ function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntim
       }
       if (!ownsDecision()) return;
       const currentController = controllerRef.current;
-      if (currentController && !deniedRef.current) await read(currentController, { ...queryRef.current }, true);
+      if (currentController && !deniedRef.current) await read(currentController, 1);
     } finally {
       if (decisionRef.current === token) { decisionRef.current = null; setPendingId(null); }
     }
   };
-  const retryRead = (afterDecision = false) => {
+  const retryRead = () => {
     const controller = controllerRef.current;
-    if (controller && !decisionRef.current) {
-      if (afterDecision) needsClampRef.current = true;
-      void read(controller, { ...queryRef.current }, afterDecision);
-    }
+    if (controller && !decisionRef.current) void read(controller, requestedPageRef.current);
   };
   function discardRecord() {
     if (!memberId || !blockedRef.current || !discardBlockedCurrentReviewDecision(memberId)) return;
@@ -3633,15 +3612,13 @@ function ReviewQueueSession({ locale, search, memberId }: { locale: LocaleRuntim
   return <ReviewQueuePage onOpenDetail={(id) => writeWorkspaceHistory("push", `/admin/submissions/${encodeURIComponent(id)}`)} locale={locale} state={state}
     pendingId={pendingId} completedId={completedId} decisionState={decisionState} localError={recordNotice ?? localError} pending={pending || recordBlocked}
     decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord}
-    onRetry={() => retryRead()} onReloadDecision={() => retryRead(true)}
+    onRetry={() => retryRead()} onReloadDecision={() => retryRead()}
     onRetryDecision={() => { const operation = operationRef.current; if (operation && decisionState.kind === "error" && decisionState.recovery === "retry") void review(operation.id, operation.action, undefined, operation); }}
-    onReview={recordBlocked ? undefined : (id, action, details) => void review(id, action, details)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+    onReview={recordBlocked ? undefined : (id, action, details) => void review(id, action, details)}
+    onLoadMore={() => { const controller = controllerRef.current; if (controller && state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) void read(controller, state.data.pagination.page + 1); }} />;
 }
 
-export function AdminDuplicateRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
-  const initial = parsePageSearch(search);
-  const [page, setPage] = useState(initial.page);
-  const [pageSize, setPageSize] = useState(initial.pageSize);
+export function AdminDuplicateRoute({ locale, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminDuplicatePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [decisionStored] = useState(() => memberId ? loadAdminDuplicateDecisions(memberId) : { kind: "empty" as const });
   const blockedRef = useRef(decisionStored.kind === "blocked");
@@ -3653,7 +3630,7 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
   const [localError, setLocalError] = useState<string>();
   const [readVersion, setReadVersion] = useState(0);
   const controllerRef = useRef<ReturnType<typeof createAdminDuplicateRequestController> | null>(null);
-  const queryRef = useRef({ page, pageSize });
+  const requestedPageRef = useRef(1);
   const scopeRef = useRef({});
   const readRef = useRef<object | null>(null);
   const mutationRef = useRef<{ id: string } | null>(null);
@@ -3664,7 +3641,6 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
   const unresolvedWrites = useRef(new Map<string, AdminDuplicateCandidate>(decisionStored.kind === "ready" ? decisionStored.intents.map((intent) => [intent.submissionId, candidateFromAdminDuplicateIntent(intent)]) : []));
   const intentRef = useRef(new Map<string, AdminDuplicateIntent>(decisionStored.kind === "ready" ? decisionStored.intents.map((intent) => [intent.submissionId, intent]) : []));
   const acknowledgedRef = useRef(new Set<string>());
-  const needsClampRef = useRef(false);
   useEffect(() => {
     const owner = window;
     const locked = () => mutationRef.current !== null || unresolvedWrites.current.size > 0;
@@ -3674,9 +3650,8 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
     return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
   }, []);
   const syncLocks = () => setLockedIds([...needsReadRef.current]);
-  const sameQuery = (value: typeof queryRef.current) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize;
   const invalidateQuery = () => {
-    scopeRef.current = {}; needsClampRef.current = false;
+    scopeRef.current = {};
     controllerRef.current?.dispose(); controllerRef.current = null; readRef.current = null;
     setState({ kind: "loading" }); setPending(false); setLocalError(undefined);
   };
@@ -3688,28 +3663,27 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
     setState({ kind: "forbidden", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
     return true;
   };
-  const navigate = (next: typeof queryRef.current, replace = false) => {
-    writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => {
-      invalidateQuery(); queryRef.current = next;
-      setPage(next.page); setPageSize(next.pageSize);
-    });
-  };
-  const read = async (controller: NonNullable<typeof controllerRef.current>, snapshot: typeof queryRef.current, afterWrite = false) => {
+  const read = async (controller: NonNullable<typeof controllerRef.current>, targetPage: number, afterWrite = false) => {
     if ((!afterWrite && readRef.current) || controllerRef.current !== controller) return;
     const token = {}; readRef.current = token;
+    requestedPageRef.current = targetPage;
     const activeAtStart = mutationRef.current?.id;
     setPending(true); setLocalError(undefined);
-    const request = controller.request(snapshot);
+    const request = controller.request({ page: targetPage, pageSize: listPageSize });
     try {
       const data = await request.promise;
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
-      setState({ kind: "ready", data });
+      if (!controller.isCurrent(request.generation)) return;
+      // Publish the page before reconciliation so an invalid detail read cannot
+      // leave the previous window (and its stale rows) on screen.
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", data: { items: [...previous.data.items, ...data.items], pagination: data.pagination } }
+        : { kind: "ready", data });
       // A pending-only page cannot prove the outcome of an absent candidate.
       // Recover it through an authenticated detail GET, never by replaying POST.
       for (const [id, expected] of unresolvedWrites.current) {
         if (id === activeAtStart || id === mutationRef.current?.id) continue;
         const row = data.items.find(item => item.submissionId === id) ?? await loadAdminDuplicate(id);
-        if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+        if (!controller.isCurrent(request.generation)) return;
         if (row.canonicalSubmissionId !== expected.canonicalSubmissionId || row.canonicalSourceId !== expected.canonicalSourceId || row.canonicalSourceVersionId !== expected.canonicalSourceVersionId) throw new Error("DUPLICATE_RESPONSE_INVALID");
         const intent = intentRef.current.get(id);
         if (memberId && intent && !clearAdminDuplicateDecision(memberId, intent)) {
@@ -3725,10 +3699,8 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
         if (row.submissionId !== activeAtStart && row.submissionId !== mutationRef.current?.id && !acknowledgedRef.current.has(row.submissionId)) needsReadRef.current.delete(row.submissionId);
       }
       syncLocks();
-      if ((afterWrite || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)) }, true);
-      else { setState({ kind: "ready", data }); needsClampRef.current = false; }
     } catch (error: unknown) {
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot) || isAbort(error)) return;
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
       if (!deny(error)) {
         setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
         setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
@@ -3740,20 +3712,15 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
   const retryRead = () => {
     if (readRef.current || mutationRef.current) return;
     setState((old) => old.kind === "ready" ? old : { kind: "loading" });
-    if (controllerRef.current) void read(controllerRef.current, { ...queryRef.current });
+    if (controllerRef.current) void read(controllerRef.current, requestedPageRef.current);
     else { readRef.current = {}; setReadVersion((version) => version + 1); }
   };
-  useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = parsePageSearch(readWorkspaceLocation().search);
-    if (sameQuery(next)) return;
-    invalidateQuery(); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize);
-  }), []);
   useEffect(() => {
     const controller = createAdminDuplicateRequestController(); controllerRef.current = controller; readRef.current = null;
-    const snapshot = { page, pageSize }; queryRef.current = snapshot;
-    void read(controller, snapshot);
+    void read(controller, 1);
     return () => { invalidateQuery(); };
-  }, [locale, page, pageSize, readVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read only needs the controller; locale pins the error text
+  }, [locale, readVersion]);
   const decide = async (id: string, decision: DuplicateDecision) => {
     if (blockedRef.current || !controllerRef.current || readRef.current || mutationRef.current || needsReadRef.current.has(id)) return;
     const candidate = state.kind === "ready" ? state.data.items.find((item) => item.submissionId === id) : undefined;
@@ -3764,21 +3731,21 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
       return;
     }
     if (memberId) intentRef.current.set(id, intent);
-    const token = { id }; const scope = scopeRef.current; const actionQuery = { ...queryRef.current };
+    const token = { id }; const scope = scopeRef.current;
     mutationRef.current = token; needsReadRef.current.add(id); unresolvedWrites.current.set(id, candidate); syncLocks(); setPendingId(id); setLocalError(undefined); setRecordNotice(undefined);
     try {
       const receipt = await decideAdminDuplicate(id, decision);
-      if (scopeRef.current !== scope || !sameQuery(actionQuery)) return;
+      if (scopeRef.current !== scope) return;
       if (receipt.canonicalSubmissionId !== candidate.canonicalSubmissionId || receipt.canonicalSourceId !== candidate.canonicalSourceId || receipt.canonicalSourceVersionId !== candidate.canonicalSourceVersionId) throw new Error("DUPLICATE_RESPONSE_INVALID");
       if (memberId && !clearAdminDuplicateDecision(memberId, intent)) {
         setRecordNotice(frontendText(locale, "ADMIN_DUPLICATE_RECORD_STUCK"));
         return;
       }
       intentRef.current.delete(id);
-      unresolvedWrites.current.delete(id); acknowledgedRef.current.add(id); mutationRef.current = null; setPendingId(null); needsClampRef.current = true;
-      if (controllerRef.current) await read(controllerRef.current, actionQuery, true);
+      unresolvedWrites.current.delete(id); acknowledgedRef.current.add(id); mutationRef.current = null; setPendingId(null);
+      if (controllerRef.current) await read(controllerRef.current, 1, true);
     } catch (error: unknown) {
-      if (scopeRef.current === scope && sameQuery(actionQuery) && !deny(error)) setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+      if (scopeRef.current === scope && !deny(error)) setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
     } finally {
       if (mutationRef.current === token) { mutationRef.current = null; setPendingId(null); }
     }
@@ -3787,13 +3754,11 @@ export function AdminDuplicateRoute({ locale, search, memberId }: { locale: Loca
     if (!memberId || !blockedRef.current || !discardBlockedAdminDuplicate(memberId)) return;
     blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
   }
-  return <DuplicateQueuePage onLoadRetry={retryRead} locale={locale} state={state} pendingId={pendingId} pending={pending || recordBlocked} lockedIds={lockedIds} readRequired={!pendingId && lockedIds.some((id) => !acknowledgedRef.current.has(id) || (state.kind === "ready" && state.data.items.some((item) => item.submissionId === id)))} localError={recordNotice ?? localError} decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord} onDecision={recordBlocked ? undefined : (id, decision) => void decide(id, decision)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+  return <DuplicateQueuePage onLoadRetry={retryRead} locale={locale} state={state} pendingId={pendingId} pending={pending || recordBlocked} lockedIds={lockedIds} readRequired={!pendingId && lockedIds.some((id) => !acknowledgedRef.current.has(id) || (state.kind === "ready" && state.data.items.some((item) => item.submissionId === id)))} localError={recordNotice ?? localError} decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord} onDecision={recordBlocked ? undefined : (id, decision) => void decide(id, decision)}
+    onLoadMore={() => { const controller = controllerRef.current; if (controller && state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) void read(controller, state.data.pagination.page + 1); }} />;
 }
 
 export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMembers, update = updateMemberStatus, loadInvitations = loadAdminMemberInvitations, issueInvitation = issueAdminMemberInvitation, revokeInvitation = revokeAdminMemberInvitation }: { locale: LocaleRuntime; search: string; memberId?: string; load?: typeof loadAdminMembers; update?: typeof updateMemberStatus; loadInvitations?: typeof loadAdminMemberInvitations; issueInvitation?: typeof issueAdminMemberInvitation; revokeInvitation?: typeof revokeAdminMemberInvitation }) {
-  const initial = parsePageSearch(search);
-  const [page, setPage] = useState(initial.page);
-  const [pageSize, setPageSize] = useState(initial.pageSize);
   const [status, setStatus] = useState<"active" | "disabled" | undefined>(() => memberStatusSearch(search));
   const [statusStored] = useState(() => memberId ? loadAdminMemberStatuses(memberId) : { kind: "empty" as const });
   const blockedRef = useRef(statusStored.kind === "blocked");
@@ -3806,7 +3771,9 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
   const [actionError, setActionError] = useState<string>();
   const [readVersion, setReadVersion] = useState(0);
   const controllerRef = useRef<ReturnType<typeof createNumberedRequestController<Omit<LoadAdminMembersInput, "signal">, AdminMembersPage>> | null>(null);
-  const queryRef = useRef({ page, pageSize, status });
+  // Retrying a failed read repeats the page it asked for; a later page appends.
+  const requestedPageRef = useRef(1);
+  const queryRef = useRef({ status });
   const scopeRef = useRef({});
   const readRef = useRef<object | null>(null);
   const mutationsRef = useRef(new Map<string, object>());
@@ -3827,11 +3794,10 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
     owner.addEventListener("beforeunload", warn);
     return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
   }, []);
-  const needsClampRef = useRef(false);
-  const sameQuery = (value: typeof queryRef.current) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize && value.status === queryRef.current.status;
+  const sameQuery = (value: typeof queryRef.current) => value.status === queryRef.current.status;
   const syncPendingIds = () => setPendingIds([...new Set([...mutationsRef.current.keys(), ...needsReadRef.current])]);
   const invalidateQuery = () => {
-    scopeRef.current = {}; needsClampRef.current = false;
+    scopeRef.current = {};
     controllerRef.current?.dispose(); controllerRef.current = null; readRef.current = null;
     setState({ kind: "loading" }); setPending(false); setLocalError(undefined); setActionError(undefined);
   };
@@ -3842,30 +3808,31 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
     setState({ kind: "forbidden", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
     return true;
   };
-  const navigate = (next: typeof queryRef.current, replace = false) => {
+  const changeStatusFilter = (nextStatus: "active" | "disabled" | undefined) => {
     if (mutationsRef.current.size > 0) return;
-    const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, next));
-    if (next.status) params.set("status", next.status); else params.delete("status");
+    const params = new URLSearchParams(readWorkspaceLocation().search);
+    if (nextStatus) params.set("status", nextStatus); else params.delete("status");
     const serialized = params.toString();
     // This synchronous allowance is only for this route's read-only query change.
     // It neither clears unresolved intents nor permits a later/deferred leave.
     ownedQueryNavigation.current = true;
-    try { writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
-      invalidateQuery(); queryRef.current = next;
-      setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
+    try { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
+      invalidateQuery(); queryRef.current = { status: nextStatus };
+      setStatus(nextStatus);
     }); } finally { ownedQueryNavigation.current = false; }
   };
-  const read = async (controller: NonNullable<typeof controllerRef.current>, snapshot: typeof queryRef.current, afterWrite = false) => {
+  const read = async (controller: NonNullable<typeof controllerRef.current>, targetPage: number, afterWrite = false) => {
     if ((!afterWrite && readRef.current) || controllerRef.current !== controller) return;
     const token = {}; readRef.current = token;
+    requestedPageRef.current = targetPage;
     // A read that began while PATCH was pending cannot prove the post-write state,
     // even if its response arrives after PATCH settles on another URL scope.
     const activeAtStart = new Set(mutationsRef.current.keys());
     setPending(true); setLocalError(undefined); setActionError(undefined);
-    const request = controller.request(snapshot);
+    const request = controller.request({ page: targetPage, pageSize: listPageSize, status: queryRef.current.status });
     try {
       const data = await request.promise;
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+      if (!controller.isCurrent(request.generation)) return;
       for (const row of data.items) {
         if (!activeAtStart.has(row.id) && !mutationsRef.current.has(row.id)) {
           const intent = intentRef.current.get(row.id);
@@ -3879,10 +3846,11 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
         }
       }
       syncPendingIds();
-      if ((afterWrite || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)) }, true);
-      else { setState({ kind: "ready", data }); needsClampRef.current = false; }
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", data: { items: [...previous.data.items, ...data.items], pagination: data.pagination } }
+        : { kind: "ready", data });
     } catch (error: unknown) {
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot) || isAbort(error)) return;
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
       if (!deny(error)) {
         setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
         setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
@@ -3894,7 +3862,7 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
   const retryRead = () => {
     if (readRef.current) return;
     setState((old) => old.kind === "ready" ? old : { kind: "loading" });
-    if (controllerRef.current) void read(controllerRef.current, { ...queryRef.current });
+    if (controllerRef.current) void read(controllerRef.current, requestedPageRef.current);
     else { readRef.current = {}; setReadVersion((version) => version + 1); }
   };
   const [invitations, setInvitations] = useState<AdminMemberInvitation[]>([]);
@@ -3982,18 +3950,17 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
     }
   };
   useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = { ...parsePageSearch(readWorkspaceLocation().search), status: memberStatusSearch(readWorkspaceLocation().search) };
+    const next = { status: memberStatusSearch(readWorkspaceLocation().search) };
     if (sameQuery(next)) return;
-    invalidateQuery(); queryRef.current = next;
-    setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
+    invalidateQuery(); queryRef.current = next; setStatus(next.status);
   }), []);
   useEffect(() => {
     const controller = createNumberedRequestController((input: Omit<LoadAdminMembersInput, "signal">, signal) => load({ ...input, signal }));
     controllerRef.current = controller; readRef.current = null;
-    const snapshot = { page, pageSize, status }; queryRef.current = snapshot;
-    void read(controller, snapshot);
+    void read(controller, 1);
     return () => { invalidateQuery(); };
-  }, [load, locale, page, pageSize, status, readVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read only needs the controller; locale pins the error text
+  }, [load, locale, status, readVersion]);
   const changeStatus = async (id: string, nextStatus: "active" | "disabled") => {
     if (blockedRef.current || !controllerRef.current || readRef.current || mutationsRef.current.has(id) || needsReadRef.current.has(id)) return;
     const member = state.kind === "ready" ? state.data.items.find((item) => item.id === id) : undefined;
@@ -4015,9 +3982,9 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
       intentRef.current.delete(id);
       unresolvedWrites.current.delete(id);
       if (scopeRef.current !== scope || !sameQuery(actionQuery)) return;
-      mutationsRef.current.delete(id); syncPendingIds(); needsClampRef.current = true;
+      mutationsRef.current.delete(id); syncPendingIds();
       const controller = controllerRef.current;
-      if (controller) await read(controller, actionQuery, true);
+      if (controller) await read(controller, 1, true);
     } catch (error: unknown) {
       if (scopeRef.current === scope && sameQuery(actionQuery) && !deny(error)) setActionError(frontendText(locale, "ADMIN_MEMBER_STATUS_ERROR"));
     } finally {
@@ -4028,7 +3995,9 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
     if (!memberId || !blockedRef.current || !discardBlockedAdminMemberStatus(memberId)) return;
     blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
   }
-  return <MembersPage onLoadRetry={retryRead} locale={locale} status={status || ""} loading={state.kind === "loading"} forbidden={state.kind === "forbidden" || invitationForbidden} error={state.kind === "error" || state.kind === "forbidden" ? state.message : invitationForbidden ? frontendText(locale, "COMMON_UNABLE_TO_LOAD") : undefined} pageError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending || recordBlocked} pendingIds={pendingIds} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} actionError={recordNotice ?? actionError} statusRecordBlocked={recordBlocked} onDiscardStatusRecord={discardRecord} onStatusFilterChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} onStatusChange={recordBlocked ? undefined : changeStatus} invitations={invitations} invitationsPending={invitationsPending} invitationWritePending={invitationWritePending} invitationError={invitationError} invitationsError={invitationsError} issuedInvitation={issuedInvitation} onIssueInvitation={invitationForbidden || state.kind === "forbidden" ? undefined : issueInvitationFor} onRevokeInvitation={invitationForbidden || state.kind === "forbidden" ? undefined : revokeInvitationFor} onLoadInvitationsRetry={retryInvitations} />;
+  return <MembersPage onLoadRetry={retryRead} locale={locale} status={status || ""} loading={state.kind === "loading"} forbidden={state.kind === "forbidden" || invitationForbidden} error={state.kind === "error" || state.kind === "forbidden" ? state.message : invitationForbidden ? frontendText(locale, "COMMON_UNABLE_TO_LOAD") : undefined} pageError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending || recordBlocked} pendingIds={pendingIds} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} actionError={recordNotice ?? actionError} statusRecordBlocked={recordBlocked} onDiscardStatusRecord={discardRecord} onStatusFilterChange={(next) => changeStatusFilter(next || undefined)}
+    onLoadMore={() => { const controller = controllerRef.current; if (controller && state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) void read(controller, state.data.pagination.page + 1); }}
+    onStatusChange={recordBlocked ? undefined : changeStatus} invitations={invitations} invitationsPending={invitationsPending} invitationWritePending={invitationWritePending} invitationError={invitationError} invitationsError={invitationsError} issuedInvitation={issuedInvitation} onIssueInvitation={invitationForbidden || state.kind === "forbidden" ? undefined : issueInvitationFor} onRevokeInvitation={invitationForbidden || state.kind === "forbidden" ? undefined : revokeInvitationFor} onLoadInvitationsRetry={retryInvitations} />;
 }
 
 export function AdminSpacesRoute({ locale, memberId }: { locale: LocaleRuntime; memberId?: string }) {
@@ -4164,76 +4133,74 @@ export function AdminSpacesRoute({ locale, memberId }: { locale: LocaleRuntime; 
 }
 
 export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
-  const initial = parsePageSearch(search);
-  const [page, setPage] = useState(initial.page);
-  const [pageSize, setPageSize] = useState(initial.pageSize);
   const [action, setAction] = useState(() => new URLSearchParams(search).get("action") || undefined);
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; page: import("./lib/admin-audit-data").AdminAuditPage } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; page: AdminAuditPage } | { kind: "error"; message: string }>({ kind: "loading" });
   const [pending, setPending] = useState(false);
   const [localError, setLocalError] = useState<string | undefined>();
-  const [retryVersion, setRetryVersion] = useState(0);
   const pendingRef = useRef(false);
-  const queryRef = useRef({ page, pageSize, action });
+  const actionRef = useRef(action);
+  const controllerRef = useRef<ReturnType<typeof createAdminAuditRequestController> | null>(null);
+  // Retrying a failed read repeats the page it asked for; a later page appends.
+  const requestedPageRef = useRef(1);
 
-  useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = parsePageSearch(readWorkspaceLocation().search);
-    const nextAction = new URLSearchParams(readWorkspaceLocation().search).get("action") || undefined;
-    // Invalidate the old query immediately, before React cleans up its effect.
-    queryRef.current = { ...next, action: nextAction };
-    setPage(next.page); setPageSize(next.pageSize); setAction(nextAction);
-  }), []);
-
-  useEffect(() => {
-    const controller = createAdminAuditRequestController();
-    const snapshot = { page, pageSize, action };
-    queryRef.current = snapshot;
+  const load = (targetPage: number) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    requestedPageRef.current = targetPage;
     pendingRef.current = true;
     setPending(true); setLocalError(undefined);
-    const request = controller.request(snapshot);
-    const isCurrent = () => controller.isCurrent(request.generation)
-      && samePageQuery(snapshot, queryRef.current) && snapshot.action === queryRef.current.action;
+    const request = controller.request({ page: targetPage, pageSize: listPageSize, action: actionRef.current });
     void request.promise.then((data) => {
-      if (!isCurrent()) return;
-      setState({ kind: "ready", page: data });
+      if (!controller.isCurrent(request.generation)) return;
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", page: { items: [...previous.page.items, ...data.items], pagination: data.pagination } }
+        : { kind: "ready", page: data });
       pendingRef.current = false; setPending(false);
     }).catch((error: unknown) => {
-      if (!isCurrent() || isAbort(error)) return;
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
       const message = frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE");
       setState((old) => old.kind === "ready" ? old : { kind: "error", message });
       setLocalError(message);
       pendingRef.current = false; setPending(false);
     });
-    return () => controller.dispose();
-  }, [action, locale, page, pageSize, retryVersion]);
-
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => {
-    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => {
-      queryRef.current = { ...next, action }; setPage(next.page); setPageSize(next.pageSize);
-    });
   };
+
+  useEffect(() => subscribeWorkspaceLocation(() => {
+    const nextAction = new URLSearchParams(readWorkspaceLocation().search).get("action") || undefined;
+    // Invalidate the old query immediately, before React cleans up its effect.
+    actionRef.current = nextAction;
+    setAction(nextAction);
+  }), []);
+
+  useEffect(() => {
+    actionRef.current = action;
+    const controller = createAdminAuditRequestController();
+    controllerRef.current = controller;
+    load(1);
+    return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live action ref, not a render value
+  }, [action, locale]);
+
   const changeFilter = (nextAction: string) => {
-    const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, { page: 1, pageSize }));
+    const params = new URLSearchParams(readWorkspaceLocation().search);
     if (nextAction) params.set("action", nextAction); else params.delete("action");
     const nextSearch = params.toString();
     writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch ? `?${nextSearch}` : ""}`, () => {
-      queryRef.current = { page: 1, pageSize, action: nextAction || undefined };
-      setAction(nextAction || undefined); setPage(1);
+      actionRef.current = nextAction || undefined;
+      setAction(nextAction || undefined);
     });
   };
   const retry = () => {
     if (pendingRef.current) return;
-    pendingRef.current = true;
-    setPending(true); setRetryVersion((value) => value + 1);
+    load(requestedPageRef.current);
   };
-  return <AuditPage locale={locale} state={state} action={action || ""} pending={pending} localError={localError} onRetry={retry} onActionChange={changeFilter} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+  return <AuditPage locale={locale} state={state} action={action || ""} pending={pending} localError={localError} onRetry={retry} onActionChange={changeFilter}
+    onLoadMore={() => { if (state.kind === "ready" && state.page.pagination.page < state.page.pagination.totalPages) load(state.page.pagination.page + 1); }} />;
 }
 
 function memberStatusSearch(search: string): "active" | "disabled" | undefined { const value = new URLSearchParams(search).get("status"); return value === "active" || value === "disabled" ? value : undefined; }
 
 export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
-  const initial = parsePageSearch(search);
-  const [page, setPage] = useState(initial.page);
-  const [pageSize, setPageSize] = useState(initial.pageSize);
   const [status, setStatus] = useState<AdminAssetStatus | undefined>(() => assetStatusSearch(search));
   const [retryStored] = useState(() => memberId ? loadAdminAssetRetries(memberId) : { kind: "empty" as const });
   const blockedRef = useRef(retryStored.kind === "blocked");
@@ -4258,7 +4225,6 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
   const intentRef = useRef(new Set<string>(retryStored.kind === "ready" ? retryStored.intents.map((intent) => intent.id) : []));
   const ownedQueryNavigation = useRef(false);
   const leaveGuardRef = useRef<(() => void) | null>(null);
-  const needsClampRef = useRef(false);
   const releaseLeaveGuard = () => { leaveGuardRef.current?.(); leaveGuardRef.current = null; };
   const syncLeaveGuard = () => {
     // Register only while a signed-in retry is unresolved. A permanent guard would
@@ -4275,15 +4241,17 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
   };
   useEffect(() => { syncLeaveGuard(); return releaseLeaveGuard; }, []);
   const [readVersion, setReadVersion] = useState(0);
-  const queryRef = useRef({ page, pageSize, status });
-  const sameQuery = (value: typeof queryRef.current) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize && value.status === queryRef.current.status;
+  // Retrying a failed read repeats the page it asked for; a later page appends.
+  const requestedPageRef = useRef(1);
+  const queryRef = useRef({ status });
+  const sameQuery = (value: typeof queryRef.current) => value.status === queryRef.current.status;
   const syncPendingIds = () => { setPendingIds([...new Set([...mutationsRef.current.keys(), ...needsReadRef.current])]); syncLeaveGuard(); };
   const clearPreview = () => {
     previewAbort.current?.abort(); previewAbort.current = null;
     setPreview(null); setPreviewError(undefined); setPreviewLoading(false);
   };
   const invalidateQuery = () => {
-    scopeRef.current = {}; needsClampRef.current = false; controllerRef.current?.dispose(); controllerRef.current = null; readRef.current = null;
+    scopeRef.current = {}; controllerRef.current?.dispose(); controllerRef.current = null; readRef.current = null;
     clearPreview(); setState({ kind: "loading" }); setRequestPending(false); setLocalError(undefined); setRetryError(undefined);
   };
   const deny = (error: unknown) => {
@@ -4300,24 +4268,25 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
     setState({ kind: "forbidden", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
     return true;
   };
-  const navigate = (next: typeof queryRef.current, replace = false) => {
-    const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, next));
-    if (next.status) params.set("status", next.status); else params.delete("status");
+  const changeStatusFilter = (nextStatus: AdminAssetStatus | undefined) => {
+    const params = new URLSearchParams(readWorkspaceLocation().search);
+    if (nextStatus) params.set("status", nextStatus); else params.delete("status");
     const serialized = params.toString();
     ownedQueryNavigation.current = true;
-    try { writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
-      invalidateQuery(); queryRef.current = next;
-      setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
+    try { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
+      invalidateQuery(); queryRef.current = { status: nextStatus };
+      setStatus(nextStatus);
     }); } finally { ownedQueryNavigation.current = false; }
   };
-  const read = async (controller: NonNullable<typeof controllerRef.current>, snapshot: typeof queryRef.current, afterRetry = false) => {
+  const read = async (controller: NonNullable<typeof controllerRef.current>, targetPage: number, afterRetry = false) => {
     if ((!afterRetry && readRef.current) || controllerRef.current !== controller) return;
     const token = {}; readRef.current = token;
+    requestedPageRef.current = targetPage;
     setRequestPending(true); setLocalError(undefined); setRetryError(undefined);
-    const request = controller.request(snapshot);
+    const request = controller.request({ page: targetPage, pageSize: listPageSize, status: queryRef.current.status });
     try {
       const data = await request.promise;
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+      if (!controller.isCurrent(request.generation)) return;
       for (const row of data.items) {
         if (mutationsRef.current.has(row.id)) continue;
         const recorded = intentRef.current.has(row.id);
@@ -4330,10 +4299,11 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
         needsReadRef.current.delete(row.id);
       }
       syncPendingIds();
-      if ((afterRetry || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)) }, true);
-      else { setState({ kind: "ready", data }); needsClampRef.current = false; }
+      setState((previous) => previous.kind === "ready" && targetPage > 1
+        ? { kind: "ready", data: { items: [...previous.data.items, ...data.items], pagination: data.pagination } }
+        : { kind: "ready", data });
     } catch (error: unknown) {
-      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot) || isAbort(error)) return;
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
       if (!deny(error)) {
         setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
         setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
@@ -4345,21 +4315,20 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
   const retryRead = () => {
     if (readRef.current) return;
     setState((old) => old.kind === "ready" ? old : { kind: "loading" });
-    if (controllerRef.current) void read(controllerRef.current, { ...queryRef.current });
+    if (controllerRef.current) void read(controllerRef.current, requestedPageRef.current);
     else { readRef.current = {}; setReadVersion((version) => version + 1); }
   };
   useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = { ...parsePageSearch(readWorkspaceLocation().search), status: assetStatusSearch(readWorkspaceLocation().search) };
+    const next = { status: assetStatusSearch(readWorkspaceLocation().search) };
     if (sameQuery(next)) return;
-    invalidateQuery(); queryRef.current = next;
-    setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
+    invalidateQuery(); queryRef.current = next; setStatus(next.status);
   }), []);
   useEffect(() => {
     const controller = createAdminAssetsRequestController(); controllerRef.current = controller; readRef.current = null;
-    const snapshot = { page, pageSize, status }; queryRef.current = snapshot;
-    void read(controller, snapshot);
+    void read(controller, 1);
     return () => { invalidateQuery(); };
-  }, [locale, page, pageSize, status, readVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read only needs the controller; locale pins the error text
+  }, [locale, status, readVersion]);
   const retry = async (id: string) => {
     if (blockedRef.current || !controllerRef.current || readRef.current || mutationsRef.current.has(id) || needsReadRef.current.has(id)) return;
     if (memberId && !saveAdminAssetRetry(memberId, { id })) {
@@ -4372,9 +4341,9 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
     try {
       await retryAdminAsset(id);
       if (scopeRef.current !== scope || !sameQuery(actionQuery)) return;
-      mutationsRef.current.delete(id); syncPendingIds(); needsClampRef.current = true;
+      mutationsRef.current.delete(id); syncPendingIds();
       const controller = controllerRef.current;
-      if (controller) await read(controller, actionQuery, true);
+      if (controller) await read(controller, 1, true);
     } catch (error: unknown) {
       if (scopeRef.current === scope && sameQuery(actionQuery) && !deny(error)) setRetryError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
     } finally {
@@ -4398,12 +4367,11 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
       if (previewAbort.current === abort) { previewAbort.current = null; setPreviewLoading(false); }
     }
   };
-  return <AssetQueuePage onLoadRetry={retryRead} locale={locale} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} data={state.kind === "ready" ? state.data : undefined} localError={localError} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} pending={requestPending} pendingIds={pendingIds} status={status || ""} preview={preview} previewLoading={previewLoading} previewError={previewError} retryError={recordNotice ?? retryError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord} onRetry={recordBlocked ? undefined : (id) => void retry(id)} onPreview={(id) => void showPreview(id)} onStatusChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} />;
+  return <AssetQueuePage onLoadRetry={retryRead} locale={locale} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} data={state.kind === "ready" ? state.data : undefined} localError={localError} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} pending={requestPending} pendingIds={pendingIds} status={status || ""} preview={preview} previewLoading={previewLoading} previewError={previewError} retryError={recordNotice ?? retryError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord} onRetry={recordBlocked ? undefined : (id) => void retry(id)} onPreview={(id) => void showPreview(id)} onStatusChange={(next) => changeStatusFilter(next || undefined)}
+    onLoadMore={() => { const controller = controllerRef.current; if (controller && state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) void read(controller, state.data.pagination.page + 1); }} />;
 }
 
 function assetStatusSearch(search: string): AdminAssetStatus | undefined { const value = new URLSearchParams(search).get("status"); return value === "queued" || value === "processing" || value === "succeeded" || value === "failed_retryable" || value === "failed_terminal" ? value : undefined; }
-function samePageQuery(left: { page: number; pageSize: SupportedPageSize }, right: { page: number; pageSize: SupportedPageSize }): boolean { return left.page === right.page && left.pageSize === right.pageSize; }
-function sameSearchQuery(left: { query: string; page: number; pageSize: SupportedPageSize }, right: { query: string; page: number; pageSize: SupportedPageSize }): boolean { return left.query === right.query && samePageQuery(left, right); }
 function knowledgeFilters(search: string): Omit<LoadKnowledgePageInput, "page" | "pageSize" | "signal"> {
   const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined;
   const kind = value("kind");
@@ -4424,13 +4392,11 @@ function taskFiltersFromSearch(search: string): TaskFilterState {
     ...(params.get("q") ? { q: params.get("q")! } : {}),
   };
 }
-function taskSearch(input: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }): string {
+function taskSearch(filters: TaskFilterState): string {
   const params = new URLSearchParams();
   for (const key of ["status", "priority", "tag", "due", "q"] as const) {
-    const value = input.filters[key]; if (value) params.set(key, value);
+    const value = filters[key]; if (value) params.set(key, value);
   }
-  const pagination = new URLSearchParams(writePageSearch("", { page: input.page, pageSize: input.pageSize }));
-  for (const [key, value] of pagination) params.set(key, value);
   return params.size ? `?${params}` : "";
 }
 function isAbort(error: unknown): boolean { return error instanceof DOMException && error.name === "AbortError"; }

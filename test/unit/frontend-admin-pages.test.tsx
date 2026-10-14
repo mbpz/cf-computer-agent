@@ -73,17 +73,20 @@ describe("React administrator pages", () => {
     expect(assetPreviewModel({ assetId: "asset-1", markdown: "secret" })).toBeNull();
   });
 
-  it("renders disabled member status, spaces/collections, and bounded audit pagination", () => {
+  it("renders disabled member status, spaces/collections, and append-only audit rows", () => {
     const members = renderToStaticMarkup(<MembersPage members={[{ id: "m1", email: "a@example.com", role: "contributor", status: "disabled" }]} onStatusChange={vi.fn()} />);
     expect(members).toContain("Disabled");
     expect(members).toContain("Enable");
     const spaces = renderToStaticMarkup(<SpacesPage spaces={[{ id: "s1", name: "Personal", slug: "personal", collections: ["Docs"] }]} onCreate={vi.fn()} />);
     expect(spaces).toContain("Personal");
     expect(spaces).toContain("Docs");
-    const audit = renderToStaticMarkup(<AuditPage state={{ kind: "ready", page: { items: [{ id: "e1", action: "submission.created", actor: "a@example.com", createdAt: "2026-08-25" }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } } }} onPageChange={vi.fn()} />);
+    const audit = renderToStaticMarkup(<AuditPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} state={{ kind: "ready", page: { items: [{ id: "e1", action: "submission.created", actor: "a@example.com", createdAt: "2026-08-25" }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } } }} onLoadMore={vi.fn()} />);
     expect(audit).toContain("submission.created");
-    expect(audit).toContain('aria-label="Page 2"');
-    expect(audit).not.toContain("Load more");
+    expect(audit).toContain("a@example.com");
+    expect(audit).toContain("2026-08-25");
+    expect(audit).not.toContain("data-pagination-desktop");
+    expect(audit).not.toContain("data-pagination-mobile");
+    expect(audit).not.toContain('aria-label="Page 2"');
   });
 
   it("labels each member status action with its target email", () => {
@@ -97,8 +100,30 @@ describe("React administrator pages", () => {
     const html = renderToStaticMarkup(<AdminAnalyticsPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} days={14} state={{ kind: "ready", data: { range: { from: "2026-08-12", to: "2026-08-25", days: 14 }, totals: { pageViews: 12, uniqueVisitors: 4, loginUsers: 2 }, daily: [], breakdowns: { paths: [], regions: [], countries: [] }, recentVisitors: { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } } }} />);
     expect(html).toContain("Last 14 days");
     expect(html).toContain("Refresh");
+    expect(html).toContain("No activity recorded in this period.");
+    expect(html).toContain('data-page-state="empty"');
     expect(html).not.toContain("visitorHash");
     expect(html).not.toContain("undefined");
+    expect(html).not.toContain("data-pagination-desktop");
+    expect(html).not.toContain("data-pagination-mobile");
+    expect(html).not.toContain('aria-label="Page ');
+    expect(html).not.toContain("Rows per page");
+  });
+
+  it("renders recent analytics visitors as accumulating table rows without a numbered pager", () => {
+    const html = renderToStaticMarkup(<AdminAnalyticsPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} state={{ kind: "ready", data: { range: { from: "2026-08-20", to: "2026-08-26", days: 7 }, totals: { pageViews: 21, uniqueVisitors: 21, loginUsers: 1 }, daily: [], breakdowns: { paths: [], regions: [], countries: [] }, recentVisitors: { items: [{ occurredAt: "2026-08-26T00:00:00.000Z", path: "/guide", ip: "203.0.113.9", country: "US", region: null, city: null, colo: "IAD", userAgent: null, member: null }, { occurredAt: "2026-08-26T00:00:01.000Z", path: "/library", ip: "", country: null, region: null, city: null, colo: null, userAgent: null, member: { id: "m1", email: "member@example.com" } }], pagination: { page: 1, pageSize: 20, total: 40, totalPages: 2 } } } }} />);
+    expect(html).toContain('aria-label="Recent visitors"');
+    expect(html).toContain("/guide");
+    expect(html).toContain("203.0.113.9");
+    expect(html).toContain("Anonymous");
+    expect(html).toContain("member@example.com");
+    expect(html).toContain("IAD");
+    expect(html).toContain("21");
+    expect(html).not.toContain("undefined");
+    expect(html).not.toContain("data-pagination-desktop");
+    expect(html).not.toContain("data-pagination-mobile");
+    expect(html).not.toContain('aria-label="Page ');
+    expect(html).not.toContain('aria-current="page"');
   });
 
   it("localizes administrator copy through the shared locale runtime", () => {

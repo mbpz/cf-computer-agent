@@ -22,47 +22,81 @@ describe("notification inbox route", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
-  it("restores URL filters and resets the page when either filter changes", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
-      requests.push(String(input));
-      return String(input).endsWith("/summary") ? Response.json({ unread: 7 }) : pageResponse(String(input), "Initial");
+  it("restores URL filters, appends on end-of-list, and restarts page one when either filter changes", async () => {
+    const requests: Array<{ url: string; signal?: AbortSignal | null }> = [];
+    let holdAppend = false;
+    let resolveAppend!: (response: Response) => void;
+    const append = new Promise<Response>((resolve) => { resolveAppend = resolve; });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/summary")) return Response.json({ unread: 7 });
+      requests.push({ url, signal: init?.signal });
+      const params = new URL(url, "https://app.test").searchParams;
+      const page = Number(params.get("page"));
+      if (page === 2) {
+        if (holdAppend) return append;
+        return Response.json({ items: [notification({ id: "p2-0", payload: { title: "p2-0" } })], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } });
+      }
+      const readAt = params.get("read") === "true" ? "2026-08-30T01:00:00.000Z" : null;
+      const items = Array.from({ length: 20 }, (_unused, index) => notification({ id: `p1-${index}`, readAt, payload: { title: `p1-${index}` } }));
+      return Response.json({ items, pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } });
     });
     await renderRoute();
-    expect(requests.some((url) => url.includes("page=2") && url.includes("read=false") && url.includes("type=task.due"))).toBe(true);
+    // A stray ?page=2 in the URL is ignored: the first load is always page one with the URL filters.
+    expect(requests.map((request) => request.url)).toEqual(["/api/notifications?page=1&pageSize=20&read=false&type=task.due"]);
+    expect(container.textContent).toContain("p1-0");
 
+    // Scrolling to the end appends page two without dropping page one's rows.
+    holdAppend = true;
+    await scrollToEnd();
+    const appended = requests.at(-1)!;
+    expect(appended.url).toBe("/api/notifications?page=2&pageSize=20&read=false&type=task.due");
+    await act(async () => resolveAppend(Response.json({ items: [notification({ id: "p2-0", payload: { title: "p2-0" } })], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } })));
+    await flush();
+    expect(container.textContent).toContain("p1-0");
+    expect(container.textContent).toContain("p2-0");
+
+    // A filter change replaces the window at page one and aborts the superseded window.
+    holdAppend = false;
     await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
     expect(browser.location.search).toBe("?read=read&type=task.due");
+    expect(appended.signal?.aborted).toBe(true);
+    expect(requests.at(-1)!.url).toBe("/api/notifications?page=1&pageSize=20&read=true&type=task.due");
+    expect(container.textContent).toContain("p1-0");
+    expect(container.textContent).not.toContain("p2-0");
+
     await change(container.querySelector('[aria-label="Notification type"]') as HTMLSelectElement, "task.overdue"); await flush();
     expect(browser.location.search).toBe("?read=read&type=task.overdue");
+    expect(requests.at(-1)!.url).toBe("/api/notifications?page=1&pageSize=20&read=true&type=task.overdue");
 
+    const beforeBack = requests.length;
     await act(async () => { browser.history.back(); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
-    expect(requests.at(-2)).toContain("type=task.due");
+    expect(requests.slice(beforeBack).some((request) => request.url.endsWith("page=1&pageSize=20&read=true&type=task.due"))).toBe(true);
   });
 
-  it("aborts and ignores an older page generation after history restores a newer page", async () => {
+  it("aborts and ignores an older filtered generation after history restores a newer filter", async () => {
     let staleSignal: AbortSignal | undefined; let resolveStale!: (response: Response) => void;
     const stale = new Promise<Response>((resolve) => { resolveStale = resolve; });
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/summary")) return Response.json({ unread: 1 });
-      const page = Number(new URL(url, "https://app.test").searchParams.get("page"));
-      if (page === 2) { staleSignal = init?.signal ?? undefined; return stale; }
-      return pageResponse(url, page === 3 ? "Latest" : "Initial");
+      const read = new URL(url, "https://app.test").searchParams.get("read");
+      if (read === "false") { staleSignal = init?.signal ?? undefined; return stale; }
+      return pageResponse(url, read === "true" ? "Latest" : "Initial");
     });
     browser.history.replaceState({}, "", "/notifications");
     await renderRoute();
-    await act(async () => { browser.history.pushState({}, "", "/notifications?page=2"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await settle();
+    await act(async () => { browser.history.pushState({}, "", "/notifications?read=unread"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await settle();
     expect(staleSignal?.aborted).toBe(false);
-    await act(async () => { browser.history.pushState({}, "", "/notifications?page=3"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => { browser.history.pushState({}, "", "/notifications?read=read"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     expect(staleSignal?.aborted).toBe(true);
     expect(container.textContent).toContain("Latest");
-    await act(async () => resolveStale(pageResponse("/api/notifications?page=2&pageSize=20", "Stale"))); await flush();
+    await act(async () => resolveStale(pageResponse("/api/notifications?page=1&pageSize=20&read=false", "Stale"))); await flush();
     expect(container.textContent).not.toContain("Stale");
   });
 
   it("posts one read and bounded visible unread IDs, then refreshes server totals", async () => {
-    browser.history.replaceState({}, "", "/notifications?page=2");
+    browser.history.replaceState({}, "", "/notifications");
     const mutations: Array<{ path: string; body: string }> = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -71,7 +105,8 @@ describe("notification inbox route", () => {
         return path === "/api/notifications/read" ? Response.json({ marked: 1 }) : Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z" }));
       }
       if (path.endsWith("/summary")) return Response.json({ unread: 9 });
-      return Response.json({ items: [notification(), notification({ id: "already-read", readAt: "2026-08-30T01:00:00.000Z" })], pagination: { page: 2, pageSize: 20, total: 22, totalPages: 2 } });
+      const page = Number(new URL(path, "https://app.test").searchParams.get("page") ?? "1");
+      return Response.json({ items: [notification(), notification({ id: "already-read", readAt: "2026-08-30T01:00:00.000Z" })], pagination: { page, pageSize: 20, total: page === 1 ? 2 : 0, totalPages: page === 1 ? 1 : 0 } });
     });
     await renderRoute();
     await click("Mark as read"); await waitForText("Mark visible as read");
@@ -126,14 +161,14 @@ describe("notification inbox route", () => {
       if (path === "/api/navigation") throw new Error("navigation unavailable");
       if (path.endsWith("/summary")) return Response.json({ unread: 3 });
       requests.push(path);
-      return path.includes("page=2") ? filtered : pageResponse(path, "Default page");
+      return path.includes("read=false") && path.includes("type=task.due") ? filtered : pageResponse(path, "Default page");
     });
     const session = {
       member: { id: "member-1", email: "member@example.com", role: "contributor" as const },
       capabilities: ["knowledge:read"], permissionMask: "0x100000", logoutUrl: "/auth/logout",
     };
     await act(async () => root.render(<App />));
-    await waitForRequest(requests, (path) => path.includes("page=2") && path.includes("read=false") && path.includes("type=task.due"));
+    await waitForRequest(requests, (path) => path.includes("page=1") && path.includes("read=false") && path.includes("type=task.due"));
 
     const notificationsLink = container.querySelector("nav[data-shell-collaboration-navigation] a[href='/notifications']") as HTMLAnchorElement;
     expect(notificationsLink).not.toBeNull();
@@ -143,9 +178,8 @@ describe("notification inbox route", () => {
     expect(browser.location.pathname).toBe("/notifications");
     expect(browser.location.search).toBe("");
     expect(container.textContent).toContain("Default page");
-    expect(container.querySelector('[aria-label="Page 1"][aria-current="page"]')).not.toBeNull();
 
-    await act(async () => resolveFiltered(pageResponse("/api/notifications?page=2&pageSize=20", "Stale filtered page")));
+    await act(async () => resolveFiltered(pageResponse("/api/notifications?page=1&pageSize=20&read=false", "Stale filtered page")));
     await flush();
     expect(container.textContent).toContain("Default page");
     expect(container.textContent).not.toContain("Stale filtered page");
@@ -369,23 +403,39 @@ describe("notification inbox route", () => {
     expect(container.textContent).not.toContain("Unread 1");
   });
 
-  it("bounds repeated clicks and corrects an emptied unread last page after bulk read", async () => {
-    browser.history.replaceState({}, "", "/notifications?page=2&read=unread");
+  it("bounds repeated clicks and reloads page one after a bulk read without re-requesting an emptied last page", async () => {
+    browser.history.replaceState({}, "", "/notifications?read=unread");
+    const listRequests: string[] = [];
+    const bulkBodies: string[] = [];
     let posts = 0;
     let release!: (response: Response) => void;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
-      if (init?.method === "POST") { posts += 1; expect(JSON.parse(String(init.body))).toEqual({ ids: ["notification-last"] }); return new Promise<Response>((resolve) => { release = resolve; }); }
+      if (init?.method === "POST") { posts += 1; bulkBodies.push(String(init.body ?? "")); return new Promise<Response>((resolve) => { release = resolve; }); }
       if (path.endsWith("/summary")) return Response.json({ unread: posts ? 20 : 21 });
+      listRequests.push(path);
       const page = Number(new URL(path, "https://app.test").searchParams.get("page"));
-      return Response.json({ items: page === 2 ? (posts ? [] : [notification({ id: "notification-last" })]) : Array.from({ length: 20 }, (_, index) => notification({ id: `notification-${index}` })), pagination: { page, pageSize: 20, total: posts ? 20 : 21, totalPages: posts ? 1 : 2 } });
+      const items = posts
+        ? Array.from({ length: 20 }, (_unused, index) => notification({ id: `notification-${index}` }))
+        : page === 2 ? [notification({ id: "notification-last" })] : Array.from({ length: 20 }, (_unused, index) => notification({ id: `notification-${index}` }));
+      return Response.json({ items, pagination: { page, pageSize: 20, total: posts ? 20 : 21, totalPages: posts ? 1 : 2 } });
     });
     await renderRoute();
+    // The append makes the emptied last page visible before the bulk write.
+    await scrollToEnd();
+    expect(listRequests.filter((url) => url.includes("page=2"))).toHaveLength(1);
+    expect(container.querySelector('[data-notification-id="notification-last"]')).not.toBeNull();
+
     const bulk = [...container.querySelectorAll("button")].find((button) => button.textContent === "Mark visible as read") as HTMLButtonElement;
     await act(async () => { bulk.click(); bulk.click(); });
+    // Repeated clicks during one bulk write still send a single bounded id list.
     expect(posts).toBe(1);
+    expect(JSON.parse(bulkBodies[0]!)).toEqual({ ids: [...Array.from({ length: 20 }, (_unused, index) => `notification-${index}`), "notification-last"] });
+
     await act(async () => release(Response.json({ marked: 1 }))); await waitForText("Unread 20");
+    // The write reloads page one; the emptied last page must never be re-requested.
     expect(browser.location.search).toBe("?read=unread");
+    expect(listRequests.filter((url) => url.includes("page=2"))).toHaveLength(1);
     expect(container.querySelectorAll("[data-notification-id]")).toHaveLength(20);
     expect(container.querySelector('[data-notification-id="notification-last"]')).toBeNull();
     expect(posts).toBe(1);
@@ -550,6 +600,15 @@ describe("notification inbox route", () => {
   async function click(label: string) {
     const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label) as HTMLButtonElement;
     expect(button).toBeTruthy(); await act(async () => button.click());
+  }
+  async function scrollToEnd() {
+    const scroller = container.querySelector("div.overflow-auto") as HTMLElement;
+    expect(scroller).toBeTruthy();
+    await act(async () => {
+      scroller.scrollTop = scroller.scrollHeight;
+      scroller.dispatchEvent(new browser.Event("scroll", { bubbles: true }));
+    });
+    await flush();
   }
 });
 

@@ -57,8 +57,7 @@ describe("notification inbox model", () => {
       filters={{}}
       onRetry={vi.fn()}
       onFilterChange={vi.fn()}
-      onPageChange={vi.fn()}
-      onPageSizeChange={vi.fn()}
+      onLoadMore={vi.fn()}
       onMarkRead={vi.fn()}
       onMarkVisibleRead={vi.fn()}
       onOpen={vi.fn()}
@@ -79,8 +78,7 @@ describe("notification inbox page", () => {
         filters={{}}
         onRetry={vi.fn()}
         onFilterChange={vi.fn()}
-        onPageChange={vi.fn()}
-        onPageSizeChange={vi.fn()}
+        onLoadMore={vi.fn()}
         onMarkRead={vi.fn()}
         onMarkVisibleRead={vi.fn()}
         onOpen={vi.fn()}
@@ -91,13 +89,15 @@ describe("notification inbox page", () => {
       expect(html).not.toContain('href="/knowledge/knowledge-1"');
       expect(html).toContain(frontendText(locale, "NOTIFICATIONS_OPEN"));
       expect(html).not.toContain("javascript:");
+      expect(html).toContain('data-notification-id="notification-1" data-read="false"');
+      expect(html).toContain('data-notification-id="read-1" data-read="true"');
     }
   });
 
   it("explains read-only recovery in both locales without exposing stale summaries or actions", () => {
     for (const language of ["en", "zh-CN"] as const) {
       const locale = createLocaleRuntime({ navigatorLanguage: language });
-      const html = renderToStaticMarkup(<NotificationsPage locale={locale} state={{ kind: "recovery" }} summary={{ unread: 9 }} filters={{}} onRetry={vi.fn()} onFilterChange={vi.fn()} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} onMarkRead={vi.fn()} onMarkVisibleRead={vi.fn()} onOpen={vi.fn()} />);
+      const html = renderToStaticMarkup(<NotificationsPage locale={locale} state={{ kind: "recovery" }} summary={{ unread: 9 }} filters={{}} onRetry={vi.fn()} onFilterChange={vi.fn()} onLoadMore={vi.fn()} onMarkRead={vi.fn()} onMarkVisibleRead={vi.fn()} onOpen={vi.fn()} />);
       expect(html).toContain(frontendText(locale, "NOTIFICATIONS_RECOVERY_DESCRIPTION"));
       expect(html).toContain(frontendText(locale, "NOTIFICATIONS_RETRY"));
       expect(html).not.toContain(frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ"));
@@ -107,7 +107,7 @@ describe("notification inbox page", () => {
 
   it("renders localized loading, error, and empty recovery states", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
-    const base = { locale, summary: null, filters: {}, onRetry: vi.fn(), onFilterChange: vi.fn(), onPageChange: vi.fn(), onPageSizeChange: vi.fn(), onMarkRead: vi.fn(), onMarkVisibleRead: vi.fn(), onOpen: vi.fn() };
+    const base = { locale, summary: null, filters: {}, onRetry: vi.fn(), onFilterChange: vi.fn(), onLoadMore: vi.fn(), onMarkRead: vi.fn(), onMarkVisibleRead: vi.fn(), onOpen: vi.fn() };
     const loading = renderToStaticMarkup(<NotificationsPage {...base} state={{ kind: "loading" }} />);
     const error = renderToStaticMarkup(<NotificationsPage {...base} state={{ kind: "error" }} />);
     const empty = renderToStaticMarkup(<NotificationsPage {...base} summary={{ unread: 0 }} state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }} />);
@@ -117,25 +117,30 @@ describe("notification inbox page", () => {
     expect(empty).toContain(frontendText(locale, "NOTIFICATIONS_EMPTY"));
   });
 
-  it("marks only visible unread IDs and keeps complete server pagination", () => {
+  it("marks only visible unread IDs and reports the end of the appended window without a paginator", () => {
     const locale = createLocaleRuntime();
     const markVisible = vi.fn();
-    const html = renderToStaticMarkup(<NotificationsPage
-      locale={locale}
-      state={{ kind: "ready", items: [notification(), notification({ id: "read-1", readAt: "2026-08-30T01:00:00.000Z" })], pagination: { page: 2, pageSize: 20, total: 41, totalPages: 3 } }}
-      summary={{ unread: 9 }}
-      filters={{}}
-      onRetry={vi.fn()}
-      onFilterChange={vi.fn()}
-      onPageChange={vi.fn()}
-      onPageSizeChange={vi.fn()}
-      onMarkRead={vi.fn()}
-      onMarkVisibleRead={markVisible}
-    />);
-    expect(html).toContain("Total");
-    expect(html).toContain("41");
+    const props = {
+      locale,
+      summary: { unread: 9 },
+      filters: {},
+      onRetry: vi.fn(),
+      onFilterChange: vi.fn(),
+      onLoadMore: vi.fn(),
+      onMarkRead: vi.fn(),
+      onMarkVisibleRead: markVisible,
+      onOpen: vi.fn(),
+      state: { kind: "ready" as const, items: [notification(), notification({ id: "read-1", readAt: "2026-08-30T01:00:00.000Z" })], pagination: { page: 2, pageSize: 20 as const, total: 41, totalPages: 3 } },
+    };
+    const html = renderToStaticMarkup(<NotificationsPage {...props} />);
     expect(html).toContain(frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ"));
-    expect(html).toContain('aria-label="Page 3"');
+    expect(html).toContain(frontendText(locale, "NOTIFICATIONS_MARK_READ"));
+    expect(html).not.toContain("data-pagination-desktop");
+    expect(html).not.toContain("data-pagination-mobile");
+    expect(html).not.toContain('aria-label="Page 3"');
+    expect(html).not.toContain(frontendText(locale, "LIST_END_OF_LIST"));
+    const last = renderToStaticMarkup(<NotificationsPage {...props} state={{ ...props.state, pagination: { ...props.state.pagination, page: 3 } }} />);
+    expect(last).toContain(frontendText(locale, "LIST_END_OF_LIST"));
   });
 });
 

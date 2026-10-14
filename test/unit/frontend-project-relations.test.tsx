@@ -49,21 +49,32 @@ describe("project relation editing and readback", () => {
     await act(async () => button("Manage links").click());
     await waitForApp(() => editor()?.textContent?.includes("Goal 0") === true);
   }
+  const card = (id: string) => [...main().querySelectorAll("tr")].find(tr => tr.querySelector(`[data-project-id="${id}"]`))!;
   async function confirm() { const n = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(n).toBeTruthy(); await act(async () => n!.click()); }
-  async function next() { await act(async () => (editor().querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click()); await waitForApp(() => editor().textContent?.includes("Goal 22") === true); }
+  /** The editor appends by scrolling its table container to the bottom. */
+  async function next() {
+    const scroller = editor().querySelector("div.overflow-auto") as HTMLElement;
+    expect(scroller).toBeTruthy();
+    await act(async () => { scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new app!.browser.Event("scroll", { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 0)); });
+    await waitForApp(() => editor().textContent?.includes("Goal 22") === true);
+  }
   it("pages beyond previews, links/unlinks once, and reads fresh counts without changing manual progress", async () => {
     await mount(); await next();
-    expect(editor().textContent).not.toContain("Goal 0");
-    await act(async () => { [...editor().querySelectorAll("button")].filter(b => b.textContent === "Link").at(-1)!.click(); [...editor().querySelectorAll("button")].filter(b => b.textContent === "Link").at(-1)!.click(); }); await confirm();
-    await waitForApp(() => writes.length === 1 && !!button("Unlink", editor()));
+    expect(editor().textContent).toContain("Goal 0");
+    expect(editor().textContent).toContain("Goal 22");
+    await act(async () => [...editor().querySelectorAll("button")].filter(b => b.textContent === "Link").at(-1)!.click());
+    await confirm();
+    await waitForApp(() => writes.length === 1 && card("a").textContent!.includes("Goal 22"));
     expect(writes).toHaveLength(1);
     expect(sentVersions).toEqual(["2026-09-01T00:00:00.000Z"]);
     expect(main().textContent).toContain("37%");
-    expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("Goal 22");
+    // A write rebuilds the window from page one; the linked row returns when the next page appends.
+    await next();
+    await waitForApp(() => !!button("Unlink", editor()));
     await act(async () => button("Unlink", editor()).click()); await confirm();
     await waitForApp(() => writes.length === 2 && !button("Unlink", editor()));
     expect(sentVersions).toEqual(["2026-09-01T00:00:00.000Z", "2026-09-01T00:00:00.001Z"]);
-    expect(reads.filter(p => p.includes("page=2"))).toHaveLength(3);
+    expect(reads.filter(p => p.includes("page=2"))).toHaveLength(2);
   });
   it("switches relation kind back to page one and disables unrelated project writes", async () => {
     await mount(); await next();
@@ -84,6 +95,9 @@ describe("project relation editing and readback", () => {
     expect(main().textContent).not.toContain("1/0");
     readFailure = false;
     await act(async () => button("Retry links", editor()).click());
+    await waitForApp(() => editor().textContent?.includes("Goal 0") === true);
+    // The retry re-read page one; the linked row surfaces once the next page appends.
+    await next();
     await waitForApp(() => !!button("Unlink", editor()));
     expect(writes).toHaveLength(1); expect(editor().textContent).toContain("not confirmed");
   });
@@ -94,12 +108,12 @@ describe("project relation editing and readback", () => {
     await act(async () => button("Link", editor()).click()); await confirm();
     await waitForApp(() => !!button("Unlink", editor()));
     expect(writes).toEqual(["POST /api/projects/a/tasks"]);
-    expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("0/1");
-    expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("37%");
+    expect(card("a").textContent).toContain("0/1");
+    expect(card("a").textContent).toContain("37%");
     await act(async () => button("Unlink", editor()).click()); await confirm();
     await waitForApp(() => !button("Unlink", editor()));
     expect(writes.at(-1)).toBe("DELETE /api/projects/a/tasks/task-0");
-    expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("0/0");
+    expect(card("a").textContent).toContain("0/0");
   });
   it("holds the write lock across slow acknowledgement and readback", async () => {
     await mount(); let release!: () => void;
@@ -114,7 +128,10 @@ describe("project relation editing and readback", () => {
   it("ignores late page reads after closing and reopening the editor", async () => {
     await mount(); let release!: () => void;
     holdRead = new Promise<void>(resolve => { release = resolve; });
-    await act(async () => (editor().querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
+    await act(async () => {
+      const scroller = editor().querySelector("div.overflow-auto") as HTMLElement;
+      scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new app!.browser.Event("scroll", { bubbles: true }));
+    });
     await act(async () => button("Close links", editor()).click());
     holdRead = undefined;
     await act(async () => button("Manage links").click());
@@ -127,7 +144,7 @@ describe("project relation editing and readback", () => {
     await act(async () => button("Tasks", editor()).click());
     await waitForApp(() => !!button("Retry links", editor()));
     expect(editor().textContent).not.toContain("Task 0");
-    expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("Unable to load project counts.");
+    expect(card("a").textContent).toContain("Unable to load project counts.");
     malformed = false;
     await act(async () => button("Retry links", editor()).click());
     await waitForApp(() => editor().textContent?.includes("Task 0") === true);

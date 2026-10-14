@@ -44,12 +44,19 @@ describe("knowledge page read ownership and revocation", () => {
   const mount = async (memberId = "member-a") => { await act(async () => root.render(<KnowledgeRoute locale={locale} search="" memberId={memberId} />)); await flush(); };
   const click = async (selector: string) => { const target = container.querySelector<HTMLButtonElement>(selector); expect(target).not.toBeNull(); await act(async () => target!.click()); await flush(); };
   const more = () => click("[data-workspace-activity] button");
-  const next = () => click('[data-pagination-mobile] button[aria-label="Next page"]');
+  const scrollToEnd = async () => {
+    const scroller = container.querySelector("div.overflow-auto") as HTMLElement;
+    await act(async () => {
+      scroller.scrollTop = scroller.scrollHeight;
+      scroller.dispatchEvent(new browser.Event("scroll", { bubbles: true }));
+    });
+    await flush();
+  };
 
   it.each([401, 403])("clears all private sections on list %s and only recovers by explicit reads", async status => {
     await mount(); expect(container.textContent).toContain("Private recent title");
     respond = url => url.pathname === "/api/knowledge" ? deny(status) : reply(url);
-    await next();
+    await scrollToEnd();
     expect(container.textContent).not.toContain("Private list title");
     expect(container.textContent).not.toContain("Private recent title");
     expect(container.querySelector("[data-workspace-activity]")).toBeNull();
@@ -113,7 +120,7 @@ describe("knowledge page read ownership and revocation", () => {
 
   it("keeps ordinary list read failures recoverable without dropping existing rows", async () => {
     await mount(); respond = url => url.pathname === "/api/knowledge" ? deny(500) : reply(url);
-    await next(); expect(container.textContent).toContain("Private list title"); expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    await scrollToEnd(); expect(container.textContent).toContain("Private list title"); expect(container.querySelector('[role="alert"]')).not.toBeNull();
   });
 
   it("reserves activity append synchronously against same-event double clicks", async () => {

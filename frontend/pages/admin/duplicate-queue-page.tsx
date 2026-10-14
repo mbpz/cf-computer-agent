@@ -2,14 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { Card, CardContent } from "../../components/ui/card";
+import { DataTable } from "../../components/data-table";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminDuplicateCandidate, DuplicateDecision } from "../../lib/admin-duplicates-data";
 import type { AdminDuplicatePageResult } from "../../lib/admin-duplicates-data";
 import { useCreateDraft } from "../../lib/use-create-draft";
-import { DataPagination } from "../../components/data-pagination";
-import type { SupportedPageSize } from "../../lib/numbered-page";
 
 interface DuplicateQueuePageProps {
   onLoadRetry?: () => void;
@@ -23,11 +21,10 @@ interface DuplicateQueuePageProps {
   decisionRecordBlocked?: boolean;
   onDiscardDecisionRecord?: () => void;
   onDecision?: (id: string, decision: DuplicateDecision) => void;
-  onPageChange?: (page: number) => void;
-  onPageSizeChange?: (size: SupportedPageSize) => void;
+  onLoadMore?: () => void;
 }
 
-export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pending, lockedIds, readRequired, localError, decisionRecordBlocked = false, onDiscardDecisionRecord, onDecision, onPageChange, onPageSizeChange }: DuplicateQueuePageProps) {
+export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pending, lockedIds, readRequired, localError, decisionRecordBlocked = false, onDiscardDecisionRecord, onDecision, onLoadMore }: DuplicateQueuePageProps) {
   type Confirmation = { item: AdminDuplicateCandidate; decision: DuplicateDecision; data: AdminDuplicatePageResult };
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
@@ -52,6 +49,7 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
   const label = (decision: DuplicateDecision) => frontendText(locale, decision === "associate" ? "ADMIN_DUPLICATE_ASSOCIATE" : decision === "keep_separate" ? "ADMIN_DUPLICATE_KEEP_SEPARATE" : "ADMIN_DUPLICATE_REJECT");
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
   if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
+  const { items, pagination } = state.data;
   return <>
     <section className="space-y-5" inert={valid} aria-hidden={valid || undefined}>
       <div>
@@ -62,27 +60,39 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
       {localError && <p role="alert" className="text-sm text-destructive">{localError}</p>}
       {readRequired && <p role="status" className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_DUPLICATE_READ_REQUIRED")}</p>}
       {(localError || readRequired) && onLoadRetry && <Button type="button" variant="outline" disabled={pending || Boolean(pendingId)} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}
-      {state.data.items.length ? state.data.items.map((item: AdminDuplicateCandidate) => {
-        const itemPending = Boolean(!onDecision || pending || pendingId || lockedIds?.includes(item.submissionId) || item.decision !== "pending");
-        const target = item.submissionTitle.trim() || item.submissionId;
-        return <Card key={item.submissionId}>
-          <CardContent className="space-y-4 p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="font-medium">{item.submissionTitle}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_DUPLICATE_CANONICAL")}: {item.canonicalTitle}</p>
-              </div>
+      <DataTable
+        locale={locale}
+        rows={items}
+        rowId={(item) => item.submissionId}
+        ariaLabel={frontendText(locale, "ADMIN_DUPLICATE_TITLE")}
+        emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_DUPLICATE_EMPTY")} description={frontendText(locale, "ADMIN_DUPLICATE_DESCRIPTION")} />}
+        loading={pending}
+        hasMore={!localError && pagination.page < pagination.totalPages}
+        onLoadMore={onLoadMore}
+        rowHeight={104}
+        columns={[
+          { key: "candidate", header: frontendText(locale, "ADMIN_DUPLICATE_COLUMN_CANDIDATE"), cellClassName: "whitespace-normal", cell: (item) => <div className="py-1">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="line-clamp-1 font-medium">{item.submissionTitle}</h2>
               <Badge variant="warning">{frontendText(locale, "ADMIN_DUPLICATE_PENDING")}</Badge>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <p className="mt-1 text-xs text-muted-foreground">{item.submissionId}</p>
+          </div> },
+          { key: "canonical", header: frontendText(locale, "ADMIN_DUPLICATE_CANONICAL"), width: "40%", cellClassName: "whitespace-normal", cell: (item) => <div className="space-y-1 py-1">
+            <p className="line-clamp-1 text-sm"><span className="font-medium">{frontendText(locale, "ADMIN_DUPLICATE_CANONICAL")}: </span>{item.canonicalTitle}</p>
+            <p className="line-clamp-1 text-xs text-muted-foreground">{item.canonicalSubmissionId} · {item.canonicalSourceId} · {item.canonicalSourceVersionId}</p>
+          </div> },
+          { key: "decision", header: frontendText(locale, "ADMIN_DUPLICATE_COLUMN_ACTION"), width: "320px", cellClassName: "whitespace-normal", cell: (item) => {
+            const itemPending = Boolean(!onDecision || pending || pendingId || lockedIds?.includes(item.submissionId) || item.decision !== "pending");
+            const target = item.submissionTitle.trim() || item.submissionId;
+            return <div className="flex flex-wrap gap-2">
               <Button aria-label={`${label("associate")} ${target}`} size="sm" disabled={itemPending} onClick={() => request(item, "associate")}>{label("associate")}</Button>
               <Button aria-label={`${label("keep_separate")} ${target}`} size="sm" variant="outline" disabled={itemPending} onClick={() => request(item, "keep_separate")}>{label("keep_separate")}</Button>
               <Button aria-label={`${label("reject")} ${target}`} size="sm" variant="destructive" disabled={itemPending} onClick={() => request(item, "reject")}>{label("reject")}</Button>
-            </div>
-          </CardContent>
-        </Card>;
-      }) : <PageState kind="empty" title={frontendText(locale, "ADMIN_DUPLICATE_EMPTY")} description={frontendText(locale, "ADMIN_DUPLICATE_DESCRIPTION")} />}
-      <DataPagination {...state.data.pagination} locale={locale} pending={pending} onPageChange={(page) => onPageChange?.(page)} onPageSizeChange={(size) => onPageSizeChange?.(size)} />
+            </div>;
+          } },
+        ]}
+      />
     </section>
     <ConfirmAction open={valid} title={frontendText(locale, "ADMIN_DUPLICATE_CONFIRM_TITLE")}
       description={confirmation ? `${label(confirmation.decision)}: ${confirmation.item.submissionTitle} (${confirmation.item.submissionId}) → ${confirmation.item.canonicalTitle} (${confirmation.item.canonicalSubmissionId}; ${confirmation.item.canonicalSourceId}; ${confirmation.item.canonicalSourceVersionId}). ${frontendText(locale, "ADMIN_DUPLICATE_DECISION_IMPACT")}` : ""}

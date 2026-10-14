@@ -25,9 +25,9 @@ describe("task-backed boards route", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-  it("loads four bounded status pages and paginates only the selected column", async () => {
+  it("loads four bounded status pages and appends only the selected column at the end of its list", async () => {
     const requests: string[] = [];
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); requests.push(url); return boardPage(url, { todoTotal: 21 }); });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); requests.push(url); return pagedResponse(url, statusFromUrl(url) === "todo" ? 21 : 0, "Todo"); });
     await renderBoard();
 
     expect(requests).toHaveLength(4);
@@ -35,12 +35,10 @@ describe("task-backed boards route", () => {
     for (const url of requests) expect(url).toMatch(/page=1&pageSize=20&status=(todo|doing|blocked|done)$/u);
     expect(requests.some((url) => url.includes("canceled"))).toBe(false);
 
-    const todo = column("todo");
-    const pageTwo = todo.querySelector('[aria-label="Page 2"]') as HTMLButtonElement;
-    expect(pageTwo).toBeTruthy();
-    await act(async () => pageTwo.click()); await flush();
+    await scrollToEnd("todo");
     expect(requests).toHaveLength(5);
     expect(requests.at(-1)).toContain("page=2&pageSize=20&status=todo");
+    expect(boardTaskIds(column("todo"))).toHaveLength(21);
     for (const status of ["doing", "blocked", "done"]) expect(requests.filter((url) => statusFromUrl(url) === status)).toHaveLength(1);
   });
 
@@ -134,13 +132,16 @@ describe("task-backed boards route", () => {
     for (const status of ["todo", "doing", "blocked", "done"]) expect(requests.slice(before).filter((url) => statusFromUrl(url) === status).length).toBe(1);
   });
 
-  it("blocks leaving during an in-flight move while keeping its own column pagination", async () => {
+  it("blocks leaving during an in-flight move while the source column still appends its next page", async () => {
     let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST"
-      ? mutation : boardPage(String(input), { todoTitle: "Alpha", todoTotal: 41 }));
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return mutation;
+      const url = String(input); requests.push(url); return pagedResponse(url, statusFromUrl(url) === "todo" ? 41 : 0, "Alpha");
+    });
     await renderBoard();
-    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+    await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
 
     let result: string | undefined;
     await act(async () => { result = writeWorkspaceHistory("push", "/tasks"); });
@@ -150,10 +151,11 @@ describe("task-backed boards route", () => {
     browser.dispatchEvent(unload);
     expect(unload.defaultPrevented).toBe(true);
 
-    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
-    expect(browser.location.search).toBe("?todoPage=2");
+    await scrollToEnd("todo");
+    expect(browser.location.search).toBe("");
+    expect(requests.filter((url) => statusFromUrl(url) === "todo" && pageFromUrl(url) === 2)).toHaveLength(1);
 
-    await act(async () => resolveMutation(Response.json(task("doing", "Alpha", "todo-task")))); await flush();
+    await act(async () => resolveMutation(Response.json(task("doing", "Alpha", "todo-p1-0")))); await flush();
     await act(async () => { result = writeWorkspaceHistory("push", "/tasks"); });
     expect(result).toBe("committed");
   });
@@ -168,30 +170,30 @@ describe("task-backed boards route", () => {
       const url = String(input);
       if (init?.method === "POST") { posts += 1; return failure(); }
       gets.push(url);
-      if (url === "/api/tasks/todo-task") return detailResponse(task("doing", "Alpha", "todo-task"));
-      return boardPage(url, { todoTitle: "Alpha", todoTotal: 21 });
+      if (url === "/api/tasks/todo-p1-0") return detailResponse(task("doing", "Alpha p1.1", "todo-p1-0"));
+      return pagedResponse(url, statusFromUrl(url) === "todo" ? 21 : 0, "Alpha");
     });
     await renderBoard();
-    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing"); await flush();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing"); await flush();
 
     const alert = container.querySelector("[data-board-move-unknown]") as HTMLElement;
-    expect(alert.textContent).toContain("result of moving Alpha to Doing is unknown");
+    expect(alert.textContent).toContain("result of moving Alpha p1.1 to Doing is unknown");
     expect(container.textContent).not.toContain("Unable to move the task.");
-    expect((column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement).disabled).toBe(true);
-    expect(gets).not.toContain("/api/tasks/todo-task");
+    expect((column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement).disabled).toBe(true);
+    expect(gets).not.toContain("/api/tasks/todo-p1-0");
     let result: string | undefined;
     await act(async () => { result = writeWorkspaceHistory("push", "/tasks"); });
     expect(result).toBe("blocked");
     const unload = new browser.Event("beforeunload", { cancelable: true });
     browser.dispatchEvent(unload);
     expect(unload.defaultPrevented).toBe(true);
-    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
-    expect(browser.location.search).toBe("?todoPage=2");
+    await scrollToEnd("todo");
+    expect(browser.location.search).toBe("");
 
     const before = gets.length;
     await act(async () => buttonByText(container, "Check the result").click()); await flush();
     expect(posts).toBe(1);
-    expect(gets.slice(before)).toContain("/api/tasks/todo-task");
+    expect(gets.slice(before)).toContain("/api/tasks/todo-p1-0");
     expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
     expect(container.textContent).toContain("The move to Doing was saved.");
     for (const status of ["todo", "doing", "blocked", "done"]) expect(gets.slice(before).filter((url) => statusFromUrl(url) === status).length).toBe(1);
@@ -339,7 +341,7 @@ describe("task-backed boards route", () => {
     await act(async () => resolveMutation(errorResponse())); await flush();
 
     expect(boardTaskIds(column("doing"))).toEqual(originalTargetIds);
-    expect(column("doing").textContent).toContain("Total 20");
+    expect(columnTotal("doing")).toBe("20");
   });
 
   it("cancels from a visible source without requesting or rendering a canceled column", async () => {
@@ -435,33 +437,35 @@ describe("task-backed boards route", () => {
     expect(gets.filter((url) => statusFromUrl(url) === "doing")).toHaveLength(1);
   });
 
-  it("preserves authoritative source target and unrelated queries when a pending mutation fails", async () => {
+  it("preserves each column's appended window when a pending mutation fails", async () => {
     let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
+    const counters: Record<string, number> = {};
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return mutation;
-      const parsed = new URL(url, "https://app.test"); const status = statusFromUrl(url);
-      const page = Number(parsed.searchParams.get("page")); const pageSize = Number(parsed.searchParams.get("pageSize"));
-      if (status === "todo") return pageResponseFor(url, 41, page === 1 ? "Alpha" : "Todo authoritative");
-      if (status === "doing") return pageResponseFor(url, 21, pageSize === 50 ? "Doing 50 authoritative" : "Doing initial");
-      if (status === "blocked") return pageResponseFor(url, 21, page === 1 ? "Blocked initial" : "Blocked authoritative");
-      return pageResponseFor(url, 0, "Done");
+      const status = statusFromUrl(url)!; const page = pageFromUrl(url);
+      counters[status] = (counters[status] ?? 0) + 1;
+      if (status === "todo") return pagedResponse(url, 41, page === 1 ? (counters.todo === 1 ? "Alpha" : "Todo authoritative") : "Todo tail");
+      if (status === "doing") return pagedResponse(url, 41, page === 1 ? (counters.doing === 1 ? "Doing initial" : "Doing authoritative") : "Doing tail");
+      if (status === "blocked") return pagedResponse(url, 41, "Blocked");
+      return pagedResponse(url, 0, "Done");
     });
     await renderBoard();
-    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+    await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
 
-    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
-    await change(column("doing").querySelector('select[aria-label="Rows per page"]') as HTMLSelectElement, "50"); await flush();
-    await act(async () => (column("blocked").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
-    expect(browser.location.search).toBe("?todoPage=2&doingPageSize=50&blockedPage=2");
+    await scrollToEnd("todo");
+    await scrollToEnd("doing");
+    await scrollToEnd("blocked");
+    expect(browser.location.search).toBe("");
 
-    await act(async () => resolveMutation(errorResponse())); await flush();
-    expect(browser.location.search).toBe("?todoPage=2&doingPageSize=50&blockedPage=2");
-    expect(column("todo").textContent).toContain("Todo authoritative");
-    expect(column("todo").textContent).not.toContain("Alpha");
-    expect(column("doing").textContent).toContain("Doing 50 authoritative");
-    expect(column("blocked").textContent).toContain("Blocked authoritative");
+    await act(async () => resolveMutation(errorResponse())); await flush(); await flush();
+    expect(browser.location.search).toBe("");
+    expect(column("todo").textContent).toContain("Todo authoritative p1.1");
+    expect(column("todo").textContent).not.toContain("Alpha p1.1");
+    expect(column("todo").textContent).not.toContain("Todo tail");
+    expect(column("doing").textContent).toContain("Doing authoritative p1.1");
+    expect(column("blocked").textContent).toContain("Blocked p2.1");
   });
 
   it("replaces a same-query retry superseded by mutation failure instead of remaining pending", async () => {
@@ -471,51 +475,51 @@ describe("task-backed boards route", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return mutation;
-      if (statusFromUrl(url) !== "todo") return pageResponseFor(url, 0, "Empty");
+      if (statusFromUrl(url) !== "todo") return pagedResponse(url, 0, "Empty");
       todoAttempts += 1;
       if (todoAttempts === 2) return errorResponse();
       if (todoAttempts === 3) return never;
-      return pageResponseFor(url, 1, "Alpha");
+      return pagedResponse(url, 21, "Alpha");
     });
     await renderBoard();
-    await change(column("todo").querySelector('select[aria-label="Rows per page"]') as HTMLSelectElement, "50"); await flush();
+    await scrollToEnd("todo");
     expect(column("todo").textContent).toContain("Unable to load this task column.");
 
-    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+    await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
     await act(async () => buttonByText(column("todo"), "Try this column again").click()); await flush();
     expect(todoAttempts).toBe(3);
     expect(column("todo").querySelector('[aria-busy="true"]')).toBeTruthy();
 
     await act(async () => resolveMutation(errorResponse())); await flush(); await flush();
     expect(todoAttempts).toBe(4);
-    expect(column("todo").textContent).toContain("Alpha");
+    expect(column("todo").textContent).toContain("Alpha p1.1");
     expect(column("todo").querySelector('[aria-busy="true"]')).toBeNull();
   });
 
-  it("does not apply an old inverse after source query A to B to A loads a new incarnation", async () => {
+  it("does not apply an old inverse when the source window was replaced before the mutation failed", async () => {
     let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; }); let pageOneAttempts = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return mutation;
-      if (statusFromUrl(url) !== "todo") return pageResponseFor(url, 0, "Empty");
-      if (pageFromUrl(url) === 2) return pageResponseWithPrefix(url, 40, "page-b", "Page B");
+      if (statusFromUrl(url) !== "todo") return pagedResponse(url, 0, "Empty");
+      if (pageFromUrl(url) === 2) return errorResponse();
       pageOneAttempts += 1;
-      return pageOneAttempts === 1 ? pageResponseFor(url, 41, "Alpha") : pageResponseWithPrefix(url, 40, "new-a", "New A");
+      return pageOneAttempts === 1 ? pagedResponse(url, 41, "Alpha") : pageResponseWithPrefix(url, 40, "new-a", "New A");
     });
     await renderBoard();
-    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+    await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
 
-    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
-    await act(async () => (column("todo").querySelector('[aria-label="Page 1"]') as HTMLButtonElement).click()); await flush();
+    await scrollToEnd("todo");
+    await act(async () => buttonByText(column("todo"), "Try this column again").click()); await flush();
     expect(boardTaskIds(column("todo"))).toHaveLength(20);
     expect(boardTaskIds(column("todo"))[0]).toBe("new-a-0");
 
-    await act(async () => resolveMutation(errorResponse())); await flush();
+    await act(async () => resolveMutation(errorResponse())); await flush(); await flush();
     expect(boardTaskIds(column("todo"))).toHaveLength(20);
     expect(boardTaskIds(column("todo"))[0]).toBe("new-a-0");
     expect(boardTaskIds(column("todo"))).not.toContain("todo-task");
-    expect(column("todo").textContent).toContain("Total 40");
+    expect(columnTotal("todo")).toBe("40");
   });
 
   it("does not let an old failure inverse modify newer same-query authoritative data", async () => {
@@ -524,24 +528,24 @@ describe("task-backed boards route", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return mutation;
-      if (statusFromUrl(url) !== "todo") return pageResponseFor(url, 0, "Empty");
+      if (statusFromUrl(url) !== "todo") return pagedResponse(url, 0, "Empty");
       todoAttempts += 1;
       if (todoAttempts === 2) return errorResponse();
-      if (todoAttempts === 3) return pageResponseWithPrefix(url, 20, "new-authoritative", "New authoritative");
-      return pageResponseFor(url, 1, "Alpha");
+      if (todoAttempts >= 3) return pageResponseWithPrefix(url, 20, "new-authoritative", "New authoritative");
+      return pagedResponse(url, 21, "Alpha");
     });
     await renderBoard();
-    await change(column("todo").querySelector('select[aria-label="Rows per page"]') as HTMLSelectElement, "50"); await flush();
-    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+    await scrollToEnd("todo");
+    await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
     await act(async () => buttonByText(column("todo"), "Try this column again").click()); await flush();
     expect(boardTaskIds(column("todo"))).toHaveLength(20);
     expect(boardTaskIds(column("todo"))[0]).toBe("new-authoritative-0");
 
-    await act(async () => resolveMutation(errorResponse())); await flush();
+    await act(async () => resolveMutation(errorResponse())); await flush(); await flush();
     expect(boardTaskIds(column("todo"))).toHaveLength(20);
     expect(boardTaskIds(column("todo"))[0]).toBe("new-authoritative-0");
     expect(boardTaskIds(column("todo"))).not.toContain("todo-task");
-    expect(column("todo").textContent).toContain("Total 20");
+    expect(columnTotal("todo")).toBe("20");
   });
 
   it("does not let an old success refresh overwrite a later optimistic mutation", async () => {
@@ -596,66 +600,64 @@ describe("task-backed boards route", () => {
     root = createRoot(container);
   });
 
-  it("converges a contracted last source page with replace while preserving every other column query", async () => {
-    browser.history.replaceState({}, "", "/boards?todoPage=2&doingPageSize=50&blockedPage=2&donePageSize=100");
-    const replaceState = vi.spyOn(browser.history, "replaceState").mockClear(); const pushState = vi.spyOn(browser.history, "pushState").mockClear();
+  it("replaces the appended source window with the first page after a successful move", async () => {
     const requests: string[] = []; let succeeded = false; let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return mutation;
       requests.push(url); const status = statusFromUrl(url);
-      if (status === "todo") return pageResponseFor(url, succeeded ? 20 : 21, succeeded ? "Remaining todo" : "Last todo");
-      if (status === "done") return pageResponseFor(url, succeeded ? 101 : 100, "Done task");
-      if (status === "blocked") return pageResponseFor(url, 21, "Blocked task");
-      return pageResponseFor(url, 0, "Doing task");
+      if (status === "todo") return pagedResponse(url, 41, succeeded ? "Remaining todo" : "Alpha");
+      if (status === "done") return pagedResponse(url, 20, "Done task");
+      if (status === "blocked") return pagedResponse(url, 41, "Blocked task");
+      return pagedResponse(url, 0, "Doing task");
     });
     await renderBoard();
+    await scrollToEnd("todo");
+    expect(boardTaskIds(column("todo"))).toHaveLength(40);
 
-    await change(column("todo").querySelector('select[aria-label="Move Last todo from To do"]') as HTMLSelectElement, "done");
-    expect(column("todo").textContent).toContain("Total 20");
-    expect(column("done").textContent).toContain("Total 101");
-    expect(column("done").querySelector('[aria-label="Page 2"]')).toBeTruthy();
-
+    await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "done");
     succeeded = true;
-    await act(async () => resolveMutation(Response.json(task("done", "Last todo", "todo-task")))); await flush(); await flush(); await flush();
-    expect(requests.filter((url) => statusFromUrl(url) === "todo").map(pageFromUrl)).toEqual([2, 2, 1]);
-    expect(browser.location.search).toBe("?doingPageSize=50&blockedPage=2&donePageSize=100");
-    expect(replaceState).toHaveBeenCalledTimes(1);
-    expect(pushState).not.toHaveBeenCalled();
-    expect(column("todo").textContent).toContain("Remaining todo");
-    expect(column("todo").textContent).not.toContain("Last todo");
+    await act(async () => resolveMutation(Response.json(task("done", "Alpha", "todo-p1-0")))); await flush(); await flush(); await flush();
+
+    expect(requests.filter((url) => statusFromUrl(url) === "todo").map(pageFromUrl)).toEqual([1, 2, 1]);
+    expect(requests.filter((url) => statusFromUrl(url) === "blocked")).toHaveLength(1);
+    expect(browser.location.search).toBe("");
+    expect(column("todo").textContent).toContain("Remaining todo p1.1");
+    expect(column("todo").textContent).not.toContain("Alpha p2");
+    expect(boardTaskIds(column("todo"))).toHaveLength(20);
   });
 
-  it("keeps page two and exact totals when its only-item move fails", async () => {
-    browser.history.replaceState({}, "", "/boards?todoPage=2&donePageSize=100");
-    const replaceState = vi.spyOn(browser.history, "replaceState").mockClear(); let resolveMutation!: (response: Response) => void;
+  it("keeps the appended page and exact totals when its only-item move fails", async () => {
+    let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST"
       ? mutation
-      : statusFromUrl(String(input)) === "todo" ? pageResponseFor(String(input), 21, "Last todo")
-        : statusFromUrl(String(input)) === "done" ? pageResponseFor(String(input), 100, "Done task")
-          : pageResponseFor(String(input), 0, "Empty"));
+      : statusFromUrl(String(input)) === "todo" ? pagedResponse(String(input), 21, "Last todo")
+        : statusFromUrl(String(input)) === "done" ? pagedResponse(String(input), 20, "Done task")
+          : pagedResponse(String(input), 0, "Empty"));
     await renderBoard();
+    await scrollToEnd("todo");
+    const idsBefore = boardTaskIds(column("todo"));
+    expect(idsBefore).toHaveLength(21);
 
-    await change(column("todo").querySelector('select[aria-label="Move Last todo from To do"]') as HTMLSelectElement, "done");
-    await act(async () => resolveMutation(errorResponse())); await flush();
+    await change(column("todo").querySelector('select[aria-label="Move Last todo p2.1 from To do"]') as HTMLSelectElement, "done");
+    await act(async () => resolveMutation(errorResponse())); await flush(); await flush();
 
-    expect(browser.location.search).toBe("?todoPage=2&donePageSize=100");
-    expect(replaceState).not.toHaveBeenCalled();
-    expect(column("todo").textContent).toContain("Total 21");
-    expect(column("todo").textContent).toContain("Last todo");
-    expect(column("done").textContent).toContain("Total 100");
-    expect(column("done").querySelector('[aria-label="Page 2"]')).toBeNull();
+    expect(browser.location.search).toBe("");
+    expect(boardTaskIds(column("todo"))).toEqual(idsBefore);
+    expect(columnTotal("todo")).toBe("21");
+    expect(columnTotal("done")).toBe("20");
   });
 
-  it("converges an empty out-of-range popstate once without dropping other column keys", async () => {
-    const replaceState = vi.spyOn(browser.history, "replaceState").mockClear(); const requests: string[] = [];
+  it("ignores board page params pushed through browser history", async () => {
+    const requests: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const url = String(input); requests.push(url);
-      return statusFromUrl(url) === "todo" ? pageResponseFor(url, 20, "Todo") : pageResponseFor(url, 0, "Empty");
+      return statusFromUrl(url) === "todo" ? pagedResponse(url, 21, "Todo") : pagedResponse(url, 0, "Empty");
     });
     await renderBoard();
+    const before = requests.length;
 
     await act(async () => {
       browser.history.pushState({}, "", "/boards?todoPage=3&doingPageSize=50&donePageSize=100");
@@ -663,40 +665,46 @@ describe("task-backed boards route", () => {
     });
     await flush();
 
-    expect(requests.filter((url) => statusFromUrl(url) === "todo").map(pageFromUrl)).toEqual([1, 3, 1]);
-    expect(browser.location.search).toBe("?doingPageSize=50&donePageSize=100");
-    expect(replaceState).toHaveBeenCalledTimes(1);
+    expect(requests).toHaveLength(before);
+    expect(requests.map(pageFromUrl)).toEqual([1, 1, 1, 1]);
+    expect(boardTaskIds(column("todo"))).toHaveLength(20);
   });
 
-  it("aborts and ignores a stale column response after browser history restores a newer page", async () => {
+  it("aborts and ignores a superseded column read when a move reloads that window", async () => {
     let staleSignal: AbortSignal | undefined; let resolveStale!: (response: Response) => void;
     const stale = new Promise<Response>((resolve) => { resolveStale = resolve; });
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input); const status = statusFromUrl(url); const page = Number(new URL(url, "https://app.test").searchParams.get("page"));
-      if (status === "todo" && page === 2) { staleSignal = init?.signal ?? undefined; return stale; }
-      return boardPage(url, { todoTitle: page === 3 ? "Latest" : "Initial", todoTotal: page === 3 ? 41 : 1 });
+      const url = String(input);
+      if (init?.method === "POST") return Response.json(task("doing", "Alpha", "todo-p1-0"));
+      const status = statusFromUrl(url); const page = pageFromUrl(url);
+      if (status === "doing" && page === 2) { staleSignal = init?.signal ?? undefined; return stale; }
+      if (status === "todo") return pagedResponse(url, 1, "Alpha");
+      if (status === "doing") return pagedResponse(url, 41, "Doing");
+      return pagedResponse(url, 0, "Empty");
     });
     await renderBoard();
 
-    await act(async () => { browser.history.pushState({}, "", "/boards?todoPage=2"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await settle();
+    await scrollToEnd("doing");
     expect(staleSignal?.aborted).toBe(false);
-    await act(async () => { browser.history.pushState({}, "", "/boards?todoPage=3"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
-    expect(staleSignal?.aborted).toBe(true);
-    expect(column("todo").textContent).toContain("Latest");
 
-    await act(async () => resolveStale(pageResponse("todo", 2, 21, "Stale"))); await flush();
-    expect(column("todo").textContent).toContain("Latest");
-    expect(column("todo").textContent).not.toContain("Stale");
+    await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
+    await flush();
+    expect(staleSignal?.aborted).toBe(true);
+    expect(column("doing").textContent).toContain("Doing p1.1");
+
+    await act(async () => resolveStale(pagedResponse("/api/tasks?page=2&pageSize=20&status=doing", 41, "Stale"))); await flush();
+    expect(column("doing").textContent).toContain("Doing p1.1");
+    expect(column("doing").textContent).not.toContain("Stale");
   });
 
-  it("resets the selected column page when the current Boards menu re-enters its base URL", async () => {
+  it("ignores board page params on a deep link and keeps the base Boards URL clean on re-entry", async () => {
     browser.history.replaceState({}, "", "/boards?todoPage=2");
     const requests: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const path = String(input);
       if (path === "/api/navigation") throw new Error("navigation unavailable");
       requests.push(path);
-      return boardPage(path, { todoTotal: 21, todoTitle: path.includes("page=2") ? "Second page" : "First page" });
+      return pagedResponse(path, statusFromUrl(path) === "todo" ? 21 : 0, "First page");
     });
     const session = {
       member: { id: "member-1", email: "member@example.com", role: "contributor" as const },
@@ -714,17 +722,18 @@ describe("task-backed boards route", () => {
       </AppShell>;
     }
     await act(async () => root.render(<Harness />));
-    await waitForBoardRequest(requests, (path) => statusFromUrl(path) === "todo" && pageFromUrl(path) === 2);
+    await waitForBoardRequest(requests, (path) => statusFromUrl(path) === "todo" && pageFromUrl(path) === 1);
+    expect(requests.filter((path) => statusFromUrl(path) === "todo")).toHaveLength(1);
+    expect(column("todo").textContent).toContain("First page p1.1");
 
     const boardsLink = container.querySelector("nav[data-shell-collaboration-navigation] a[href='/boards']") as HTMLAnchorElement;
     expect(boardsLink).not.toBeNull();
     await act(async () => boardsLink.click());
-    await waitForBoardRequest(requests, (path) => statusFromUrl(path) === "todo" && pageFromUrl(path) === 1);
+    await flush();
 
     expect(browser.location.pathname).toBe("/boards");
     expect(browser.location.search).toBe("");
-    expect(column("todo").textContent).toContain("First page");
-    expect(column("todo").querySelector('[aria-label="Page 1"][aria-current="page"]')).not.toBeNull();
+    expect(column("todo").querySelector('[aria-label="Page 1"]')).toBeNull();
   });
 
   it.each([401, 403])("clears every column after a move is denied with %s", async (status) => {
@@ -744,11 +753,10 @@ describe("task-backed boards route", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.method ?? "GET").toBe("GET");
       const url = String(input); requests.push(url);
-      return denied && statusFromUrl(url) === "todo" ? deniedResponse(status) : pageResponseFor(url, 21, "Private");
+      return denied && statusFromUrl(url) === "todo" ? deniedResponse(status) : pagedResponse(url, 21, "Private");
     });
     await renderBoard(); denied = true;
-    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click());
-    await flush();
+    await scrollToEnd("todo");
     expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
     const count = requests.length;
     await act(async () => writeWorkspaceHistory("push", "/boards?doingPage=2")); await flush();
@@ -786,7 +794,7 @@ describe("task-backed boards route", () => {
       return deny ? deniedResponse(403) : pageResponseFor(url, 21, "Private");
     });
     await renderBoard(); deny = true;
-    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
+    await scrollToEnd("todo");
     expect(lateSignal?.aborted).toBe(true);
     await act(async () => resolveLate(pageResponse("doing", 1, 1, "Late private"))); await flush();
     expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
@@ -797,18 +805,18 @@ describe("task-backed boards route", () => {
     let deny = false;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") return new Promise<Response>((resolve) => { resolveMove = resolve; });
-      return deny ? deniedResponse(401) : pageResponseFor(String(input), 21, "Private");
+      return deny ? deniedResponse(401) : pagedResponse(String(input), 21, "Private");
     });
     await renderBoard();
-    await change(column("todo").querySelector('select[aria-label="Move Private from To do"]') as HTMLSelectElement, "doing");
+    await change(column("todo").querySelector('select[aria-label="Move Private p1.1 from To do"]') as HTMLSelectElement, "doing");
     deny = true;
-    await act(async () => (column("blocked").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
+    await scrollToEnd("blocked");
     expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
     deny = false;
     await act(async () => buttonByText(column("todo"), "Try this column again").click()); await flush();
     const recoveredIds = [...container.querySelectorAll("[data-board-task]")].map((element) => element.getAttribute("data-board-task"));
     expect(recoveredIds.length).toBeGreaterThan(0);
-    await act(async () => resolveMove(success ? Response.json(task("doing", "Private", "todo-task")) : errorResponse())); await flush();
+    await act(async () => resolveMove(success ? Response.json(task("doing", "Private", "todo-p1-0")) : errorResponse())); await flush();
     expect([...container.querySelectorAll("[data-board-task]")].map((element) => element.getAttribute("data-board-task"))).toEqual(recoveredIds);
   });
 
@@ -970,6 +978,19 @@ describe("task-backed boards route", () => {
   function column(status: string): HTMLElement {
     return container.querySelector(`[data-board-column="${status}"]`) as HTMLElement;
   }
+
+  function columnTotal(status: string): string | null {
+    return column(status).querySelector("div.bg-secondary")?.textContent ?? null;
+  }
+
+  async function scrollToEnd(status: string) {
+    const scroller = column(status).querySelector("div.overflow-auto") as HTMLElement;
+    await act(async () => {
+      scroller.scrollTop = scroller.scrollHeight;
+      scroller.dispatchEvent(new browser.Event("scroll", { bubbles: true }));
+    });
+    await flush();
+  }
 });
 
 async function waitForBoardRequest(requests: string[], predicate: (path: string) => boolean) {
@@ -1010,6 +1031,15 @@ function pageResponseWithPrefix(url: string, total: number, idPrefix: string, ti
   return Response.json({ items, pagination: { page, pageSize, total, totalPages: total === 0 ? 0 : Math.ceil(total / pageSize) } });
 }
 
+/** Like `pageResponseFor`, but every page gets distinct row ids so a column can append without duplicate React keys. */
+function pagedResponse(url: string, total: number, title: string): Response {
+  const parsed = new URL(url, "https://app.test"); const status = parsed.searchParams.get("status") as TaskItem["status"];
+  const page = Number(parsed.searchParams.get("page") ?? "1"); const pageSize = Number(parsed.searchParams.get("pageSize") ?? "20");
+  const offset = (page - 1) * pageSize; const count = Math.max(0, Math.min(pageSize, total - offset));
+  const items = Array.from({ length: count }, (_unused, index) => task(status, `${title} p${page}.${index + 1}`, `${status}-p${page}-${index}`));
+  return Response.json({ items, pagination: { page, pageSize, total, totalPages: total === 0 ? 0 : Math.ceil(total / pageSize) } });
+}
+
 function task(status: TaskItem["status"], title: string, id: string): TaskItem {
   return { id, title, notes: "", status, progress: 0, priority: "medium", dueAt: null, completedAt: null, createdAt: "2026-08-30T00:00:00.000Z", updatedAt: "2026-08-30T00:00:00.000Z" };
 }
@@ -1023,6 +1053,5 @@ function rejectedResponse(): Response { return Response.json({ error: { code: "T
 function detailResponse(item: TaskItem): Response { return Response.json({ task: item, tags: [], links: [] }); }
 async function change(select: HTMLSelectElement, value: string) { await act(async () => { select.value = value; select.dispatchEvent(new window.Event("change", { bubbles: true })); }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
-async function settle() { await act(async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
 
 function deniedResponse(status: number): Response { return Response.json({ error: { code: "FORBIDDEN", message: "denied", retryable: false } }, { status }); }

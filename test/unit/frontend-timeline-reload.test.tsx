@@ -75,7 +75,8 @@ describe("timeline persistent recovery through App", () => {
     await waitForApp(() => !!button("Retry original creation"));
     expect(title().value).toBe("Page-private draft"); expect(title().disabled).toBe(true);
     await act(async () => release()); expect(stored()).toBe(raw); expect(writes).toHaveLength(1);
-    expect(main().textContent).not.toContain("Private row");
+    // The pager is not part of the URL: the remounted route loads its first window.
+    expect(main().textContent).toContain("Private row");
     await forceRemountAppAt(app!, "/projects/p/timeline"); await waitForApp(() => !!title()); expect(title().value).toBe("Page-private draft"); expect(writes).toHaveLength(1);
   });
   it("cancels a late detail recovery on forced page remount and permits explicit GET review off-page", async () => {
@@ -86,7 +87,7 @@ describe("timeline persistent recovery through App", () => {
     await waitForApp(() => !!title()); await act(async () => release());
     expect(stored(statusKey)).toBe(barrier()); expect(title().disabled).toBe(true); expect(writes).toHaveLength(0);
     detailHold = undefined; await click(recovery()); await waitForApp(() => !title().disabled);
-    expect(stored(statusKey)).toBeNull(); expect(main().textContent).not.toContain("Private row"); expect(writes).toHaveLength(0);
+    expect(stored(statusKey)).toBeNull(); expect(main().textContent).toContain("Private row"); expect(writes).toHaveLength(0);
   });
   it.each(["throw", "drop"])("blocks create before network when storage %s", async mode => {
     await mount(); await fill("Draft"); vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { if (mode === "throw") throw Error("quota"); });

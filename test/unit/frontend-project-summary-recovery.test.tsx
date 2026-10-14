@@ -26,8 +26,15 @@ describe("project summary per-row recovery", () => {
   let journey: MountedApp | undefined;
   afterEach(async () => { await journey?.unmount(); journey = undefined; });
   const main = () => journey!.container.querySelector("main")!;
-  const card = (id: string) => main().querySelector(`[data-project-id="${id}"]`)!;
+  // Rows are split across cells: locate the whole row that owns this project's cell.
+  const row = (id: string) => [...main().querySelectorAll("tr")].find(tr => tr.querySelector(`[data-project-id="${id}"]`));
+  const card = (id: string) => row(id)!;
   const retry = (id: string) => card(id).querySelector('[data-summary-retry]') as HTMLButtonElement;
+  /** The list appends by scrolling its table container to the bottom. */
+  async function scrollToEnd() {
+    const scroller = main().querySelector("div.overflow-auto") as HTMLElement;
+    await act(async () => { scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new journey!.browser.Event("scroll", { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 0)); });
+  }
   const requests: string[] = [];
   async function mount(respond: (url: URL, init?: RequestInit) => Promise<Response> | Response) {
     requests.length = 0;
@@ -65,7 +72,7 @@ describe("project summary per-row recovery", () => {
       if (url.pathname !== "/api/projects/a/summary") return Response.json(validSummary);
       return ++reads === 1 ? apiError(500, "UNAVAILABLE", true) : new Promise<Response>((done) => { resolve = done; });
     });
-    await waitForApp(() => card("a") !== null);
+    await waitForApp(() => !!row("a"));
     await act(async () => { retry("a").click(); retry("a").click(); });
     expect(reads).toBe(2);
     expect(retry("a").disabled).toBe(true);
@@ -77,7 +84,7 @@ describe("project summary per-row recovery", () => {
     let reads = 0;
     await mount((url) => url.pathname === "/api/projects" ? Response.json({ items: [project("a"), project("b")], pagination: { page: 1, pageSize: 20, total: [project("a"), project("b")].length, totalPages: 1 } })
       : url.pathname === "/api/projects/a/summary" ? apiError(++reads === 1 ? 500 : status, "DENIED", false) : Response.json(validSummary));
-    await waitForApp(() => card("a") !== null);
+    await waitForApp(() => !!row("a"));
     await act(async () => retry("a").click());
     await waitForApp(() => main().querySelector('[data-page-state="error"]') !== null);
     expect(main().textContent).not.toContain("Project a");
@@ -86,14 +93,14 @@ describe("project summary per-row recovery", () => {
   });
   it("renders unavailable counts for a valid project ID matching an inherited property", async () => {
     await mount((url) => url.pathname === "/api/projects" ? Response.json({ items: [project("constructor")], pagination: { page: 1, pageSize: 20, total: [project("constructor")].length, totalPages: 1 } }) : apiError(500, "UNAVAILABLE", true));
-    await waitForApp(() => card("constructor") !== null);
+    await waitForApp(() => !!row("constructor"));
     expect(card("constructor").textContent).toContain("Unable to load project counts.");
   });
 
   it("treats malformed row counts as a local failure rather than failing healthy projects", async () => {
     await mount((url) => url.pathname === "/api/projects" ? Response.json({ items: [project("a"), project("b")], pagination: { page: 1, pageSize: 20, total: [project("a"), project("b")].length, totalPages: 1 } })
       : Response.json(url.pathname === "/api/projects/a/summary" ? { ...validSummary, taskCount: 1 } : validSummary));
-    await waitForApp(() => card("b") !== null);
+    await waitForApp(() => !!row("b"));
     expect(card("a").textContent).toContain("Unable to load project counts.");
     expect(card("b").textContent).toContain("2/3");
   });
@@ -111,7 +118,7 @@ describe("project summary per-row recovery", () => {
       if (!mutated) { oldSignal = init?.signal ?? undefined; return new Promise<Response>((done) => { resolveOld = done; }); }
       return Response.json({ ...validSummary, taskCount: 9 });
     });
-    await waitForApp(() => card("a") !== null);
+    await waitForApp(() => !!row("a"));
     await act(async () => retry("a").click());
     await act(async () => ([...card("b").querySelectorAll("button")].find((button) => button.textContent === "Complete") as HTMLButtonElement).click());
     expect(mutated).toBe(false);
@@ -143,7 +150,7 @@ describe("project summary per-row recovery", () => {
     expect(main().textContent).not.toContain("Linked goal");
   });
 
-  it("replaces a numbered page and retries only its failed summary", async () => {
+  it("appends a later page and retries only its failed summary", async () => {
     let failed = true;
     await mount((url) => {
       if (url.pathname === "/api/projects") {
@@ -153,10 +160,10 @@ describe("project summary per-row recovery", () => {
       }
       return url.pathname === "/api/projects/b/summary" && failed ? apiError(500, "UNAVAILABLE", true) : Response.json(validSummary);
     });
-    await waitForApp(() => card("first-0") !== null);
-    await act(async () => (main().querySelector('button[aria-label="Page 2"]') as HTMLButtonElement).click());
-    await waitForApp(() => card("b") !== null);
-    expect(card("first-0")).toBeNull();
+    await waitForApp(() => !!row("first-0"));
+    await scrollToEnd();
+    await waitForApp(() => !!row("b"));
+    expect(row("first-0")).toBeTruthy();
     expect(card("a").textContent).toContain("2/3");
     expect(card("b").textContent).toContain("Unable to load project counts.");
     const beforeRetry = requests.length;

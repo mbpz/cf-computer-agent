@@ -25,6 +25,7 @@ const MIRRORED = [
   "ResizeObserver",
   "requestAnimationFrame",
   "cancelAnimationFrame",
+  "getComputedStyle",
 ] as const;
 
 type GlobalScope = Record<string, unknown> & { window?: Record<string, unknown> };

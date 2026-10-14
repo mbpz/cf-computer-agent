@@ -19,41 +19,59 @@ describe("numbered admin routes", () => {
   beforeEach(() => { browser = new Window({ url: "https://app.test/admin/members" }); vi.stubGlobal("window", browser); historyDriver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-  it("restores member status and pagination from URL and aborts stale requests", async () => {
-    browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2&pageSize=20");
+  it("restores member status from URL, ignores numbered page inputs and aborts stale requests", async () => {
+    browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2&pageSize=50");
     const requests: Array<{ url: string; signal?: AbortSignal }> = [];
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { if (String(input).startsWith("/api/admin/member-invitations")) return Response.json({ items: [] }); requests.push({ url: String(input), signal: init?.signal || undefined }); return response("member", 2, 20, 21); });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith("/api/admin/member-invitations")) return Response.json({ items: [] });
+      requests.push({ url: String(input), signal: init?.signal || undefined });
+      const status = new URL(String(input), "https://app.test").searchParams.get("status") === "active" ? "active" : "disabled";
+      return Response.json({ items: [{ id: `member-${status}`, email: "member@example.test", role: "contributor", status }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+    });
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} />)); await flush();
-    expect(requests.at(-1)?.url).toContain("status=disabled"); expect(requests.at(-1)?.url).toContain("page=2");
+    // Numbered page inputs in the URL are ignored: the window always starts at page 1 of 20.
+    expect(requests.at(-1)?.url).toBe("/api/admin/members?page=1&pageSize=20&status=disabled");
     await locationChange("?status=active&pageSize=50");
-    expect(requests[0]?.signal?.aborted).toBe(true); expect(requests.at(-1)?.url).toContain("status=active"); expect(requests.at(-1)?.url).toContain("pageSize=50");
+    expect(requests[0]?.signal?.aborted).toBe(true);
+    expect(requests.at(-1)?.url).toBe("/api/admin/members?page=1&pageSize=20&status=active");
   });
 
-  it("persists audit action while changing numbered pages", async () => {
-    browser.history.replaceState({}, "", "/admin/audit?action=member.login&pageSize=20");
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => response("audit", String(input).includes("page=2") ? 2 : 1, 20, 21));
-    await act(async () => root.render(<AdminAuditRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await waitFor(() => container.querySelector('[aria-busy="true"]') === null);
-    expect(container.textContent).toContain("member.login");
-    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
-    await click('button[aria-label="Page 2"]'); await flush();
-    await waitFor(() => container.textContent?.includes("21–21") === true);
-    expect(browser.location.search).toContain("action=member.login"); expect(browser.location.search).toContain("page=2");
-    expect(container.textContent).toContain("21–21");
-    expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("2");
+  it("persists the audit action filter while appending the next page", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input); urls.push(url);
+      const params = new URL(url, "https://app.test").searchParams;
+      const page = Number(params.get("page"));
+      const rows = page === 2 ? 1 : 20;
+      return Response.json({ items: Array.from({ length: rows }, (_, index) => ({ id: `audit-${page}-${index}`, action: "member.login", actorKind: "system", createdAt: `page-${page}` })), pagination: { page, pageSize: 20, total: 21, totalPages: 2 } });
+    });
+    await act(async () => root.render(<AdminAuditRoute locale={locale()} search="" />));
+    await waitFor(() => container.querySelectorAll("tbody tr[data-selected]").length === 20);
+    // Filter change writes only the action param and refetches page 1 for it.
+    await changeSelect('select[aria-label="Audit action"]', "member.login");
+    await waitFor(() => urls.at(-1) === "/api/admin/audit-events?page=1&pageSize=20&action=member.login");
+    expect(browser.location.search).toBe("?action=member.login");
+    // Scrolling to the end appends page 2 with the action preserved.
+    await scrollToEnd();
+    await waitFor(() => urls.at(-1) === "/api/admin/audit-events?page=2&pageSize=20&action=member.login");
+    await waitFor(() => container.querySelectorAll("tbody tr[data-selected]").length === 21);
+    expect(container.textContent).toContain("page-1");
+    expect(container.textContent).toContain("page-2");
   });
 
-  it("renders an empty audit result with zero pagination", async () => {
+  it("renders an empty audit result without pagination controls", async () => {
     vi.stubGlobal("fetch", async () => response("audit", 1, 20, 0));
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search="" />)); await flush();
     await waitFor(() => container.querySelector('[data-page-state="empty"]') !== null);
     expect(container.querySelector('[data-page-state="empty"]')).not.toBeNull();
-    expect(container.textContent).toContain("0–0");
+    expect(container.querySelector('button[aria-label^="Page "]')).toBeNull();
+    expect(container.querySelector('select[aria-label="Rows per page"]')).toBeNull();
+    expect(container.querySelector('[aria-current="page"]')).toBeNull();
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
   it("retries an initial audit error with the same URL and suppresses duplicate clicks", async () => {
-    browser.history.replaceState({}, "", "/admin/audit?action=member.login&page=2&pageSize=50");
+    browser.history.replaceState({}, "", "/admin/audit?action=member.login");
     const requests = auditRequests();
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search={browser.location.search} />));
     requests[0]!.pending.reject(new Error("offline"));
@@ -61,15 +79,16 @@ describe("numbered admin routes", () => {
     const retry = container.querySelector('[role="alert"] button') as HTMLButtonElement | null;
     expect(retry).not.toBeNull();
     await act(async () => { retry!.click(); retry!.click(); });
+    // Numbered page inputs are ignored; the retried read repeats page 1 with only the action filter.
     expect(requests.map(({ url }) => url)).toEqual([
-      "/api/admin/audit-events?page=2&pageSize=50&action=member.login",
-      "/api/admin/audit-events?page=2&pageSize=50&action=member.login",
+      "/api/admin/audit-events?page=1&pageSize=20&action=member.login",
+      "/api/admin/audit-events?page=1&pageSize=20&action=member.login",
     ]);
     expect(container.querySelector('[role="alert"] button:disabled')).not.toBeNull();
-    requests[1]!.pending.resolve(response("audit", 2, 50, 51));
-    await waitFor(() => container.textContent?.includes("51–51") === true);
+    requests[1]!.pending.resolve(response("audit", 1, 20, 21));
+    await waitFor(() => container.querySelectorAll("tbody tr[data-selected]").length === 20);
     expect(container.querySelector('[role="alert"]')).toBeNull();
-    expect(browser.location.search).toBe("?action=member.login&page=2&pageSize=50");
+    expect(browser.location.search).toBe("?action=member.login");
   });
 
   it("retains the last audit page on pagination failure and retries the requested page", async () => {
@@ -77,65 +96,69 @@ describe("numbered admin routes", () => {
     const requests = auditRequests();
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search={browser.location.search} />));
     requests[0]!.pending.resolve(response("audit", 1, 20, 21));
-    await waitFor(() => container.textContent?.includes("1–20") === true);
-    await click('button[aria-label="Page 2"]');
+    await waitFor(() => container.querySelectorAll("tbody tr[data-selected]").length === 20);
+    // Scrolling to the end asks for page 2; nothing in the URL changes.
+    await scrollToEnd();
+    expect(requests).toHaveLength(2);
     expect(container.querySelector('select[aria-label="Audit action"]:disabled')).not.toBeNull();
-    expect(container.querySelector('button[aria-label="Page 2"]:disabled')).not.toBeNull();
     requests[1]!.pending.reject(new Error("offline"));
     await waitFor(() => container.querySelector('[role="alert"]') !== null);
-    expect(container.textContent).toContain("1–20");
+    // The first page is retained and no numbered range text is rendered.
+    expect(container.querySelectorAll("tbody tr[data-selected]").length).toBe(20);
+    expect(container.textContent).not.toMatch(/\d–\d/u);
     expect(container.querySelector('[role="alert"] button')).not.toBeNull();
     await click('[role="alert"] button');
     expect(requests[2]!.url).toBe("/api/admin/audit-events?page=2&pageSize=20&action=member.login");
     requests[2]!.pending.resolve(response("audit", 2, 20, 21));
-    await waitFor(() => container.textContent?.includes("21–21") === true);
+    await waitFor(() => container.querySelectorAll("tbody tr[data-selected]").length === 21);
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it("resets audit page for size/filter changes and restores query and data on back/forward", async () => {
-    browser.history.replaceState({}, "", "/admin/audit?action=member.login&page=2");
+  it("resets the audit list on filter changes and restores query and data on back/forward", async () => {
+    browser.history.replaceState({}, "", "/admin/audit?action=member.login");
     const urls: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const url = String(input); urls.push(url);
       const params = new URL(url, "https://app.test").searchParams;
-      return response("audit", Number(params.get("page")), Number(params.get("pageSize")) as 20 | 50, 51);
+      const action = params.get("action") ?? "";
+      const page = Number(params.get("page"));
+      return Response.json({ items: Array.from({ length: 20 }, (_, index) => ({ id: `audit-${action || "all"}-${page}-${index}`, action: action || "member.login", actorKind: "system", createdAt: `created:${action || "all"}:${page}` })), pagination: { page, pageSize: 20, total: 21, totalPages: 2 } });
     });
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search={browser.location.search} />));
-    await waitFor(() => container.textContent?.includes("21–40") === true);
-    await changeSelect('select[aria-label="Rows per page"]', "50");
-    await waitFor(() => container.textContent?.includes("1–50") === true);
-    expect(urls.at(-1)).toBe("/api/admin/audit-events?page=1&pageSize=50&action=member.login");
-    await click('button[aria-label="Page 2"]');
-    await waitFor(() => container.textContent?.includes("51–51") === true);
+    await waitFor(() => (container.querySelector("tbody tr[data-selected] time")?.textContent ?? "") === "created:member.login:1");
+    // A filter change refetches page 1 and only the action param is written.
     await changeSelect('select[aria-label="Audit action"]', "task.created");
-    await waitFor(() => container.textContent?.includes("1–50") === true);
-    expect(urls.at(-1)).toBe("/api/admin/audit-events?page=1&pageSize=50&action=task.created");
+    await waitFor(() => urls.at(-1) === "/api/admin/audit-events?page=1&pageSize=20&action=task.created");
+    expect(browser.location.search).toBe("?action=task.created");
+    await waitFor(() => (container.querySelector("tbody tr[data-selected] time")?.textContent ?? "") === "created:task.created:1");
     await act(async () => browser.history.back());
-    await waitFor(() => container.textContent?.includes("51–51") === true);
-    expect((container.querySelector('select[aria-label="Audit action"]') as HTMLSelectElement).value).toBe("member.login");
+    await waitFor(() => (container.querySelector('select[aria-label="Audit action"]') as HTMLSelectElement).value === "member.login");
+    await waitFor(() => (container.querySelector("tbody tr[data-selected] time")?.textContent ?? "") === "created:member.login:1");
     await act(async () => browser.history.forward());
-    await waitFor(() => container.textContent?.includes("1–50") === true);
-    expect((container.querySelector('select[aria-label="Audit action"]') as HTMLSelectElement).value).toBe("task.created");
+    await waitFor(() => (container.querySelector('select[aria-label="Audit action"]') as HTMLSelectElement).value === "task.created");
+    await waitFor(() => (container.querySelector("tbody tr[data-selected] time")?.textContent ?? "") === "created:task.created:1");
     await changeSelect('select[aria-label="Audit action"]', "");
-    await waitFor(() => urls.at(-1) === "/api/admin/audit-events?page=1&pageSize=50");
+    await waitFor(() => urls.at(-1) === "/api/admin/audit-events?page=1&pageSize=20");
     expect(new URLSearchParams(browser.location.search).has("action")).toBe(false);
   });
 
-  it.each(["success", "error"] as const)("ignores a late audit %s after a newer page has loaded", async (outcome) => {
+  it.each(["success", "error"] as const)("ignores a late audit %s after a newer filter result has loaded", async (outcome) => {
     browser.history.replaceState({}, "", "/admin/audit");
     const requests = auditRequests();
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search="" />));
-    await act(async () => {
-      browser.history.pushState({}, "", "/admin/audit?page=2");
-      browser.dispatchEvent(new browser.PopStateEvent("popstate"));
-    });
+    // A filter change invalidates the in-flight read and starts a fresh one.
+    await act(async () => { writeWorkspaceHistory("push", "/admin/audit?action=member.login"); });
+    await flush();
+    expect(requests).toHaveLength(2);
     expect(requests[0]!.signal?.aborted).toBe(true);
-    requests[1]!.pending.resolve(response("audit", 2, 20, 21));
-    await waitFor(() => container.textContent?.includes("21–21") === true);
-    if (outcome === "success") requests[0]!.pending.resolve(response("audit", 1, 20, 21));
+    requests[1]!.pending.resolve(Response.json({ items: Array.from({ length: 20 }, (_, index) => ({ id: `audit-fresh-${index}`, action: "member.login", actorKind: "system", createdAt: "fresh-page" })), pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }));
+    await waitFor(() => container.textContent?.includes("fresh-page") === true);
+    if (outcome === "success") requests[0]!.pending.resolve(Response.json({ items: [{ id: "audit-stale-0", action: "member.login", actorKind: "system", createdAt: "stale-page" }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }));
     else requests[0]!.pending.reject(new Error("late error"));
-    await act(async () => { await requests[0]!.pending.promise.catch(() => undefined); await new Promise((resolve) => setTimeout(resolve, 5)); });
-    expect(container.textContent).toContain("21–21");
+    await act(async () => { await requests[0]!.pending.promise.catch(() => undefined); });
+    await flush();
+    expect(container.textContent).toContain("fresh-page");
+    expect(container.textContent).not.toContain("stale-page");
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
@@ -149,26 +172,27 @@ describe("numbered admin routes", () => {
     requests[1]!.pending.resolve(response("audit", 1, 20, 0));
     await waitFor(() => container.querySelector('[data-page-state="empty"]') !== null);
     requests[0]!.pending.resolve(response("audit", 1, 20, 21));
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 5)); });
+    await act(async () => { await requests[0]!.pending.promise.catch(() => undefined); }); await flush();
     expect(container.querySelector('[data-page-state="empty"]')).not.toBeNull();
-    expect(container.textContent).toContain("0–0");
+    expect(container.querySelectorAll("tbody tr[data-selected]").length).toBe(0);
   });
 
-  it("ignores the old audit error arriving between URL navigation and effect cleanup", async () => {
+  it("ignores the old audit error arriving after URL navigation supersedes the read", async () => {
     browser.history.replaceState({}, "", "/admin/audit");
     const requests = auditRequests();
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search="" />));
-    await act(async () => {
-      browser.history.pushState({}, "", "/admin/audit?page=2");
-      browser.dispatchEvent(new browser.PopStateEvent("popstate"));
-      requests[0]!.pending.reject(new Error("old query failed"));
-      for (let index = 0; index < 12; index += 1) await Promise.resolve();
-    });
+    // A filter change replaces the in-flight read with a fresh one.
+    await act(async () => { writeWorkspaceHistory("push", "/admin/audit?action=member.login"); });
+    await flush();
     expect(requests).toHaveLength(2);
+    expect(requests[0]!.signal?.aborted).toBe(true);
+    requests[0]!.pending.reject(new Error("old query failed"));
+    await act(async () => { await requests[0]!.pending.promise.catch(() => undefined); });
+    await flush();
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
-    requests[1]!.pending.resolve(response("audit", 2, 20, 21));
-    await waitFor(() => container.textContent?.includes("21–21") === true);
+    requests[1]!.pending.resolve(response("audit", 1, 20, 21));
+    await waitFor(() => container.querySelectorAll("tbody tr[data-selected]").length === 20);
   });
 
   it("does not let a delayed mutation refresh overwrite a newer filter result", async () => {
@@ -186,31 +210,33 @@ describe("numbered admin routes", () => {
     expect(container.textContent).not.toContain("stale@example.test");
   });
 
-  it("backs up exactly one page and retries once when the filtered page becomes empty", async () => {
+  it("re-reads the first page after a member status write and replaces the loaded window", async () => {
     browser.history.replaceState({}, "", "/admin/members?status=disabled");
-    browser.history.pushState({}, "", "/admin/members?status=disabled&page=2");
+    const pushState = vi.spyOn(browser.history, "pushState").mockClear();
+    const inputs: LoadAdminMembersInput[] = [];
+    const load = async (input: LoadAdminMembersInput) => { inputs.push(input); return inputs.length === 1 ? memberPage(1, 20, 1, [member("m1", "disabled")]) : memberPage(1, 20, 1, [member("m1", "active")]); };
+    await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} load={load} update={async () => member("m1", "active")} />)); await flush();
+    await confirmMemberChange('button[aria-label="Enable m1@example.test"]'); await flush();
+    expect(inputs.map(({ page, pageSize, status }) => [page, pageSize, status])).toEqual([[1, 20, "disabled"], [1, 20, "disabled"]]);
+    expect(inputs).toHaveLength(2);
+    expect(container.querySelector('button[aria-label="Disable m1@example.test"]')).not.toBeNull();
+    expect(pushState).not.toHaveBeenCalled();
+    expect(browser.location.search).toBe("?status=disabled");
+  });
+
+  it("renders the empty state after a member status write without a history write", async () => {
+    browser.history.replaceState({}, "", "/admin/members?status=disabled");
     const pushState = vi.spyOn(browser.history, "pushState").mockClear();
     const replaceState = vi.spyOn(browser.history, "replaceState").mockClear();
     const inputs: LoadAdminMembersInput[] = [];
-    const load = async (input: LoadAdminMembersInput) => { inputs.push(input); if (inputs.length === 1) return memberPage(2, 20, 21, [member("last", "disabled")]); if (inputs.length === 2) return memberPage(2, 20, 20, []); return memberPage(1, 20, 20, Array.from({ length: 20 }, (_, index) => member(`m${index}`, "disabled"))); };
-    await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} load={load} update={async () => member("last", "active")} />)); await flush();
-    await confirmMemberChange('button'); await flush();
-    expect(inputs.map(({ page }) => page)).toEqual([2, 2, 1]);
-    expect(replaceState).toHaveBeenCalledTimes(1);
+    const load = async (input: LoadAdminMembersInput) => { inputs.push(input); return inputs.length === 1 ? memberPage(1, 20, 1, [member("m1", "disabled")]) : memberPage(1, 20, 0, []); };
+    await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} load={load} update={async () => member("m1", "active")} />)); await flush();
+    await confirmMemberChange('button[aria-label="Enable m1@example.test"]'); await flush();
+    expect(inputs.map(({ page, pageSize, status }) => [page, pageSize, status])).toEqual([[1, 20, "disabled"], [1, 20, "disabled"]]);
+    expect(container.querySelector('[data-page-state="empty"]')).not.toBeNull();
     expect(pushState).not.toHaveBeenCalled();
-    expect(browser.location.search).not.toContain("page=2");
-    await act(async () => browser.history.back()); await flush();
-    expect(browser.location.search).not.toContain("page=2");
-  });
-
-  it("backs up once and retries once when mutation leaves a total-zero page", async () => {
-    browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2");
-    const inputs: LoadAdminMembersInput[] = [];
-    const load = async (input: LoadAdminMembersInput) => { inputs.push(input); if (inputs.length === 1) return memberPage(2, 20, 21, [member("last", "disabled")]); return memberPage(input.page, 20, 0, []); };
-    await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} load={load} update={async () => member("last", "active")} />)); await flush();
-    await confirmMemberChange('button'); await flush();
-    expect(inputs.map(({ page }) => page)).toEqual([2, 2, 1]);
-    expect(browser.location.search).not.toContain("page=2");
+    expect(replaceState).not.toHaveBeenCalled();
+    expect(browser.location.search).toBe("?status=disabled");
   });
 
   it("keeps member data and shows a local error when mutation refresh fails", async () => {
@@ -298,10 +324,10 @@ describe("numbered admin routes", () => {
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it("recovers a failed member post-write read using GET only and replaces an empty filtered page", async () => {
-    browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2");
+  it("recovers a failed member post-write read using GET only and replaces the empty filtered page", async () => {
+    browser.history.replaceState({}, "", "/admin/members?status=disabled");
     const requests = memberRequests();
-    await renderMember(requests, memberPage(2, 20, 21, [member("m1", "disabled")]));
+    await renderMember(requests, memberPage(1, 20, 1, [member("m1", "disabled")]));
     await confirmMemberChange('button[aria-label="Enable m1@example.test"]');
     requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") }));
     await waitFor(() => requests.length === 3);
@@ -310,15 +336,17 @@ describe("numbered admin routes", () => {
     expect(container.textContent).toContain("m1@example.test");
     expect((container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement).disabled).toBe(true);
     const replace = vi.spyOn(browser.history, "replaceState").mockClear();
+    const push = vi.spyOn(browser.history, "pushState").mockClear();
     expect(container.querySelector('[role="alert"] button')).not.toBeNull();
     await click('[role="alert"] button');
-    requests[3]!.pending.resolve(Response.json(memberPage(2, 20, 20, [])));
-    await waitFor(() => requests.length === 5);
-    expect(requests[4]!.url).toBe("/api/admin/members?page=1&pageSize=20&status=disabled");
-    requests[4]!.pending.resolve(response("member", 1, 20, 20));
-    await waitFor(() => container.textContent?.includes("1–20") === true);
-    expect(replace).toHaveBeenCalledTimes(1);
-    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH", "GET", "GET", "GET"]);
+    requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 0, [])));
+    await waitFor(() => container.querySelector('[data-page-state="empty"]') !== null);
+    expect(requests).toHaveLength(4);
+    expect(requests[3]!.url).toBe("/api/admin/members?page=1&pageSize=20&status=disabled");
+    // Recovery is a read-only page-1 refetch: it never rewrites history.
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH", "GET", "GET"]);
   });
 
   it.each([401, 403])("clears private member rows after PATCH %s and recovers only with an explicit GET", async (status) => {
@@ -576,6 +604,8 @@ describe("numbered admin routes", () => {
     await click(selector); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
     await click('[data-confirm-action]');
   }
+  /** The DataTable body is the scroll container; near-bottom is always satisfied under happy-dom. */
+  async function scrollToEnd() { const scroller = container.querySelector("div.overflow-auto") as HTMLElement; await act(async () => { scroller.dispatchEvent(new browser.Event("scroll") as unknown as Event); }); await flush(); }
   async function click(selector: string) { const element = container.querySelector(selector) as HTMLButtonElement; await act(async () => element.click()); }
   async function changeSelect(selector: string, value: string) { const element = container.querySelector(selector) as HTMLSelectElement; await act(async () => { element.value = value; element.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
 });

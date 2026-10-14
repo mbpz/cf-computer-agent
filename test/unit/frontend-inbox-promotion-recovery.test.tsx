@@ -16,8 +16,18 @@ describe("inbox promotion recovery through App", () => {
   let taskBodies: unknown[] = []; let subtaskRows: unknown[] = []; let taskWriteStatus = 503;
   let writeStatus = 200, detailStatus = 200, listStatus = 200; let wrongId = false, staleReceipt = false, malformedDetail = false; let detailVersion: string | undefined;
   let status = "inbox", updatedAt = version; let delay = false; let resolveWrite: (() => void) | undefined;
-  const row = () => ({ id: "row", clientKey: "key", kind: "text", content: "Private row", sourceUrl: null, status, promotedTaskId: status === "promoted" ? "task-1" : null, promotedSubmissionId: null, createdAt: version, updatedAt });
+  // Total rows the numbered window serves across pages. The stub always fills a
+  // page exactly as `normalizeNumberedPage` requires, so it never advertises
+  // rows it cannot return.
+  let listTotal = 1;
+  const row = (index = 0) => ({ id: index === 0 ? "row" : `row-${index}`, clientKey: index === 0 ? "key" : `key-${index}`, kind: "text", content: index === 0 ? "Private row" : `Private row ${index}`, sourceUrl: null, status, promotedTaskId: status === "promoted" ? "task-1" : null, promotedSubmissionId: null, createdAt: version, updatedAt });
   const main = () => app!.container.querySelector("main")!;
+  const renderedRows = () => main().querySelectorAll("tbody time").length;
+  const scrollToEnd = async () => {
+    const viewport = main().querySelector<HTMLDivElement>("div.overflow-auto");
+    expect(viewport).toBeTruthy();
+    await act(async () => { viewport!.dispatchEvent(new app!.browser.Event("scroll")); await new Promise(resolve => setTimeout(resolve, 0)); });
+  };
   const action = () => [...main().querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === "Turn into task")!;
   const recover = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   const click = async (node: HTMLButtonElement) => { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); };
@@ -63,14 +73,17 @@ describe("inbox promotion recovery through App", () => {
       }
       if (path === "/api/inbox/row") return detailStatus !== 200 ? apiError(detailStatus, "UNAVAILABLE", detailStatus >= 500) : Response.json({ ...row(), ...(malformedDetail ? { id: "wrong" } : {}), ...(detailVersion ? { updatedAt: detailVersion } : {}) });
       if (listStatus !== 200) return apiError(listStatus, "UNAVAILABLE", listStatus >= 500);
+      const requested = Number(url.searchParams.get("page") ?? 1);
       const matches = !url.searchParams.has("status") || url.searchParams.get("status") === status;
-      return Response.json({ items: matches ? [row()] : [], pagination: { page: Number(url.searchParams.get("page") ?? 1), pageSize: 20, total: matches ? 21 : 20, totalPages: matches ? 2 : 1 } });
+      const total = matches ? listTotal : 0, offset = (requested - 1) * 20;
+      return Response.json({ items: Array.from({ length: Math.max(0, Math.min(20, total - offset)) }, (_, index) => row(offset + index)), pagination: { page: requested, pageSize: 20, total, totalPages: total === 0 ? 0 : Math.ceil(total / 20) } });
     } }); await waitForApp(() => listStatus === 200 ? !!action() : main().textContent!.includes("Unable to load"));
   }
-  afterEach(async () => { await app?.unmount(); app = undefined; calls = []; bodies = []; taskBodies = []; subtaskRows = []; taskWriteStatus = 503; writeStatus = detailStatus = listStatus = 200; wrongId = staleReceipt = malformedDetail = delay = false; status = "inbox"; updatedAt = version; resolveWrite = undefined; detailVersion = undefined; });
-  it("query navigation invalidates an unsubmitted decision without a marker", async () => {
+  afterEach(async () => { await app?.unmount(); app = undefined; calls = []; bodies = []; taskBodies = []; subtaskRows = []; taskWriteStatus = 503; writeStatus = detailStatus = listStatus = 200; wrongId = staleReceipt = malformedDetail = delay = false; status = "inbox"; updatedAt = version; resolveWrite = undefined; detailVersion = undefined; listTotal = 1; });
+  it("status filter navigation invalidates an unsubmitted decision without a marker", async () => {
     await mount(); await click(action()); const stale = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
-    await navigate("/inbox?page=2"); await waitForApp(() => !!action()); await click(stale);
+    // The pager is not in the URL any more: the filter restarts the window at page one and replaces it.
+    await navigate("/inbox"); await waitForApp(() => !!action() && !main().querySelector('[role="alertdialog"]')); await click(stale);
     expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull(); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("cancel and route exit leave no write or recovery marker", async () => {
@@ -79,20 +92,30 @@ describe("inbox promotion recovery through App", () => {
     expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
     await click(action()); const stale = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await navigate("/unknown"); await click(stale); expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
-    await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action()); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
+    await navigate("/inbox?status=inbox"); await waitForApp(() => !!action()); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("writes once, validates owned detail and refreshes the exact filtered page", async () => {
     await mount(); await confirmAction(); await waitForApp(() => !app!.browser.sessionStorage.getItem(key));
     expect(main().textContent).not.toContain("Private row");
     expect(bodies).toEqual([{ expectedUpdatedAt: version }]);
-    expect(calls).toEqual(["GET /api/inbox?page=2&pageSize=20&status=inbox", "POST /api/inbox/row/promote/task", "GET /api/inbox/row", "GET /api/inbox?page=2&pageSize=20&status=inbox"]);
+    expect(calls).toEqual(["GET /api/inbox?page=1&pageSize=20&status=inbox", "POST /api/inbox/row/promote/task", "GET /api/inbox/row", "GET /api/inbox?page=1&pageSize=20&status=inbox"]);
+  });
+  it("appends the next page on scroll and stops asking once the last page is loaded", async () => {
+    listTotal = 21; await mount();
+    expect(renderedRows()).toBe(20);
+    expect(calls).toEqual(["GET /api/inbox?page=1&pageSize=20&status=inbox"]);
+    await scrollToEnd(); await waitForApp(() => renderedRows() === 21);
+    expect(calls).toEqual(["GET /api/inbox?page=1&pageSize=20&status=inbox", "GET /api/inbox?page=2&pageSize=20&status=inbox"]);
+    expect(new Set([...main().querySelectorAll("tbody tr")].map(node => node.textContent ?? "")).size).toBe(21);
+    await scrollToEnd();
+    expect(calls).toEqual(["GET /api/inbox?page=1&pageSize=20&status=inbox", "GET /api/inbox?page=2&pageSize=20&status=inbox"]);
   });
   it.each([409, 503])("locks unknown result %s across forced teardown and recovers only by reading", async code => {
     await mount(); writeStatus = code; await confirmAction();
     expect(action().disabled).toBe(true); expect(recover()).toBeTruthy();
     expect(app!.browser.sessionStorage.getItem(key)).not.toContain("Private row");
     await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
-    await forceRemountAppAt(app!, "/unknown"); await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action());
+    await forceRemountAppAt(app!, "/unknown"); await navigate("/inbox?status=inbox"); await waitForApp(() => !!action());
     expect(action().disabled).toBe(true); await click(recover()); await waitForApp(() => !app!.browser.sessionStorage.getItem(key));
     expect(bodies).toHaveLength(1);
   });
@@ -109,13 +132,13 @@ describe("inbox promotion recovery through App", () => {
   const open = () => [...main().querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === "Open task");
   it("opens the promoted task through its owned detail API", async () => {
     await mount(); await confirmAction(); await waitForApp(() => !app!.browser.sessionStorage.getItem(key));
-    await navigate("/inbox?page=2&status=promoted"); await waitForApp(() => !!open()); await click(open()!);
+    await navigate("/inbox?status=promoted"); await waitForApp(() => !!open()); await click(open()!);
     await waitForApp(() => [...app!.browser.document.querySelectorAll("input")].some(node => node.value === "Target task"));
     expect(calls).toContain("GET /api/tasks/task-1");
   });
   it.each([403, 404])("does not expose target content when target read returns %s", async code => {
     await mount(); await confirmAction(); await waitForApp(() => !app!.browser.sessionStorage.getItem(key));
-    await navigate("/inbox?page=2&status=promoted"); await waitForApp(() => !!open()); detailStatus = code; await click(open()!);
+    await navigate("/inbox?status=promoted"); await waitForApp(() => !!open()); detailStatus = code; await click(open()!);
     await waitForApp(() => calls.includes("GET /api/tasks/task-1"));
     expect(app!.browser.document.body.textContent).not.toContain("Owned task notes");
     expect([...app!.browser.document.querySelectorAll("input")].some(node => node.value === "Target task")).toBe(false);
@@ -156,7 +179,7 @@ describe("inbox promotion recovery through App", () => {
   const taskButton = (label: string) => [...app!.browser.document.querySelectorAll("button")].find(button => button.textContent === label) as unknown as HTMLButtonElement;
   it("restores an actual uncertain subtask write after refresh without automatically replaying", async () => {
     await mount(); await confirmAction(); await waitForApp(() => !app!.browser.sessionStorage.getItem(key));
-    await navigate("/inbox?page=2&status=promoted"); await waitForApp(() => !!open()); await click(open()!);
+    await navigate("/inbox?status=promoted"); await waitForApp(() => !!open()); await click(open()!);
     await waitForApp(() => !!app!.browser.document.querySelector('[aria-label="Subtask title"]'));
     const input = app!.browser.document.querySelector('[aria-label="Subtask title"]') as unknown as HTMLInputElement;
     const propsKey = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
@@ -164,7 +187,7 @@ describe("inbox promotion recovery through App", () => {
     await click(taskButton("Add subtask")); await waitForApp(() => !!unknownTask());
     const original = app!.browser.sessionStorage.getItem(taskKey);
     expect(original).toContain("Pending child"); expect(taskBodies).toHaveLength(1);
-    await forceRemountAppAt(app!, "/inbox?page=2&status=promoted");
+    await forceRemountAppAt(app!, "/inbox?status=promoted");
     await waitForApp(() => !!unknownTask());
     expect(taskBodies).toHaveLength(1); expect(app!.browser.sessionStorage.getItem(taskKey)).toBe(original);
     taskWriteStatus = 409;

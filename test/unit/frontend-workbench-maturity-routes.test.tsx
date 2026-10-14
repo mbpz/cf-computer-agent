@@ -345,7 +345,7 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
   }
   if (state === "empty") {
     if (routeId === "environments") {
-      await waitForApp(() => journey.container.querySelector("main")?.textContent?.includes("No environments on this page.") === true);
+      await waitForApp(() => journey.container.querySelector("main")?.textContent?.includes("No environments.") === true);
       expect(journey.container.querySelector('main [data-environment-id]')).toBeNull();
       expect(journey.container.querySelector('main [role="alert"]')).toBeNull();
     } else if (routeId === "focus") {

@@ -9,7 +9,7 @@ vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 
 const version = "2026-10-10T00:00:00.000Z", next = "2026-10-10T00:00:00.001Z";
 const taskKey = "memory-garden:task-write:v1:alice";
-const route = "/inbox?page=2&status=promoted";
+const route = "/inbox?status=promoted";
 type Operation = { op: string; method: string; path: string; field?: string; value?: string; button: string; body: Record<string, unknown> };
 // Each expectation is independent of runTaskWrite/checkTaskWrite implementation.
 const operations: Operation[] = [
@@ -49,7 +49,7 @@ describe.each(operations)("Inbox target editor $op journey", operation => {
       if (path === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (path === "/api/telemetry/pageview") return new Response(null, { status: 204 });
       if (path === "/api/notifications/summary") return Response.json({ unread: 0 });
-      if (path === "/api/inbox") return Response.json({ items: [{ id: "row", clientKey: "key", kind: "text", content: "Private row", sourceUrl: null, status: "promoted", promotedTaskId: "task-1", promotedSubmissionId: null, createdAt: version, updatedAt: version }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } });
+      if (path === "/api/inbox") return Response.json({ items: [{ id: "row", clientKey: "key", kind: "text", content: "Private row", sourceUrl: null, status: "promoted", promotedTaskId: "task-1", promotedSubmissionId: null, createdAt: version, updatedAt: version }], pagination: { page: Number(url.searchParams.get("page") ?? 1), pageSize: 20, total: 1, totalPages: 1 } });
       expect(path).toMatch(/^\/api\/tasks\/task-1(?:\/|$)/);
       if (method !== "GET") {
         const pending = JSON.parse(app!.browser.sessionStorage.getItem(taskKey)!);

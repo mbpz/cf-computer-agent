@@ -2,7 +2,7 @@
 import React, { act, StrictMode } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { KnowledgeCard } from "../../frontend/components/knowledge/knowledge-card";
+import { KnowledgeShareButton } from "../../frontend/components/knowledge/knowledge-share-button";
 import { KnowledgePage } from "../../frontend/pages/knowledge-page";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -35,7 +35,7 @@ describe("knowledge card system share ownership", () => {
     const { createRoot } = await import("react-dom/client"); root = createRoot(host);
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
-  const render = async () => { await act(async () => root.render(<KnowledgeCard item={item} locale={locale} />)); };
+  const render = async () => { await act(async () => root.render(<KnowledgeShareButton item={item} locale={locale} />)); };
   const button = () => host.querySelector<HTMLButtonElement>("button")!;
   const click = async () => { await act(async () => button().click()); };
   const statuses = () => host.querySelectorAll('[role="status"]');
@@ -54,11 +54,14 @@ describe("knowledge card system share ownership", () => {
 
   it("keeps the same target pending across list item refreshes", async () => {
     const pending = deferred(); share.mockImplementation(() => pending.promise); await render(); await click();
-    await act(async () => root.render(<KnowledgeCard item={{ ...item, title: "Refreshed guide" }} locale={locale} />));
-    expect(button().disabled).toBe(true); expect(host.textContent).toContain("Refreshed guide");
+    await act(async () => root.render(<KnowledgeShareButton item={{ ...item, title: "Refreshed guide" }} locale={locale} />));
+    expect(button().disabled).toBe(true);
     await click(); expect(share).toHaveBeenCalledTimes(1);
     expect(share).toHaveBeenCalledWith({ title: "Private guide", url: "https://app.test/knowledge/knowledge-a" });
     await act(async () => pending.resolve()); expect(button().disabled).toBe(false);
+    // The refreshed item is what the next explicit share targets.
+    share.mockImplementation(async () => undefined); await click();
+    expect(share).toHaveBeenLastCalledWith({ title: "Refreshed guide", url: "https://app.test/knowledge/knowledge-a" });
   });
 
   it("clears an old success while the next explicitly confirmed share is pending", async () => {
@@ -110,7 +113,7 @@ describe("knowledge card system share ownership", () => {
 
   it("accepts a share after StrictMode effect setup and cleanup replay", async () => {
     const pending = deferred(); share.mockImplementation(() => pending.promise);
-    await act(async () => root.render(<StrictMode><KnowledgeCard item={item} locale={locale} /></StrictMode>));
+    await act(async () => root.render(<StrictMode><KnowledgeShareButton item={item} locale={locale} /></StrictMode>));
     await act(async () => { button().click(); button().click(); });
     expect(share).toHaveBeenCalledTimes(1); expect(button().disabled).toBe(true);
     await act(async () => pending.resolve());
@@ -119,7 +122,7 @@ describe("knowledge card system share ownership", () => {
 
   it("renders the Chinese pending state and restores the action on cancellation", async () => {
     const pending = deferred(); share.mockImplementation(() => pending.promise);
-    await act(async () => root.render(<KnowledgeCard item={item} locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })} />));
+    await act(async () => root.render(<KnowledgeShareButton item={item} locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })} />));
     await click(); expect(button().textContent).toBe("等待分享面板完成…");
     expect(button().getAttribute("aria-busy")).toBe("true");
     await act(async () => pending.reject(new DOMException("cancelled", "AbortError")));

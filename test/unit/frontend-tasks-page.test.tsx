@@ -6,14 +6,15 @@ import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { TasksPage } from "../../frontend/pages/tasks/tasks-page";
 
 describe("private tasks page", () => {
-  it("renders filters, accessible actions, and numbered pagination", () => {
+  it("renders filters, accessible actions, and an appended list", () => {
     const html = renderToStaticMarkup(<TasksPage filters={{ status: "doing" }} state={{ kind: "ready", items: [
       { id: "task-1", title: "Alpha", notes: "", status: "doing", progress: 20, priority: "high", dueAt: null, completedAt: null, createdAt: "", updatedAt: "" },
       { id: "task-4", title: "Alpha", notes: "", status: "todo", progress: 0, priority: "low", dueAt: null, completedAt: null, createdAt: "", updatedAt: "" },
       { id: "task-2", title: "Beta", notes: "", status: "done", progress: 100, priority: "medium", dueAt: null, completedAt: null, createdAt: "", updatedAt: "" },
       { id: "task-3", title: "   ", notes: "", status: "todo", progress: 0, priority: "low", dueAt: null, completedAt: null, createdAt: "", updatedAt: "" },
     ], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }} onDelete={vi.fn()} onStatusChange={vi.fn()} />);
-    expect(html).toContain("Alpha"); expect(html).toContain('aria-label="Status"'); expect(html).toContain('aria-label="Page 2"'); expect(html).not.toContain("Load more");
+    expect(html).toContain("Alpha"); expect(html).toContain("Beta"); expect(html).toContain('aria-label="Tasks"'); expect(html).toContain('aria-label="Status"');
+    expect(html).not.toContain('aria-label="Page '); expect(html).not.toContain("Load more");
     expect(html).toContain('aria-label="Complete: Alpha (task-1)"');
     expect(html).toContain('aria-label="Delete: Alpha (task-1)"');
     expect(html).toContain('aria-label="Complete: Alpha (task-4)"');
@@ -40,8 +41,7 @@ describe("private tasks page", () => {
 
     expect(loading).toContain('aria-busy="true"');
     expect(empty).toContain(frontendText(locale, "TASKS_EMPTY"));
-    expect(empty).toContain(frontendText(locale, "PAGINATION_TOTAL"));
-    expect(empty).toContain(frontendText(locale, "PAGINATION_VISIBLE"));
-    expect(empty).toContain("0–0");
+    expect(empty).not.toContain('aria-label="Page ');
+    expect(empty).not.toContain("Load more");
   });
 });

@@ -34,15 +34,15 @@ describe("frontend locale adapter", () => {
     expect(createLocaleRuntime({ navigatorLanguage: "zh-CN" }).t("PAGE_COMING_SOON_TITLE")).not.toBe("PAGE_COMING_SOON_TITLE");
   });
 
-  it("provides exact bilingual pagination keys and placeholders", () => {
+  it("provides exact bilingual list and cursor-pager keys", () => {
     const english = createLocaleRuntime({ navigatorLanguage: "en" });
     const chinese = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    expect(english.t("LIST_LOADING_MORE")).toBe("Loading more");
+    expect(chinese.t("LIST_LOADING_MORE")).toBe("正在加载更多");
+    expect(english.t("LIST_END_OF_LIST")).toBe("No more items");
+    expect(chinese.t("LIST_END_OF_LIST")).toBe("已加载全部");
     expect(english.t("PAGINATION_NAVIGATION")).toBe("Pagination navigation");
     expect(chinese.t("PAGINATION_NAVIGATION")).toBe("分页导航");
-    expect(english.t("PAGINATION_TOTAL")).toBe("Total");
-    expect(chinese.t("PAGINATION_TOTAL")).toBe("总计");
-    expect(english.t("PAGINATION_VISIBLE")).toBe("Visible");
-    expect(chinese.t("PAGINATION_VISIBLE")).toBe("当前显示");
     expect(english.t("PAGINATION_ROWS_PER_PAGE")).toBe("Rows per page");
     expect(chinese.t("PAGINATION_ROWS_PER_PAGE")).toBe("每页行数");
     expect(english.t("PAGINATION_PREVIOUS_PAGE")).toBe("Previous page");
@@ -51,8 +51,6 @@ describe("frontend locale adapter", () => {
     expect(chinese.t("PAGINATION_NEXT_PAGE")).toBe("下一页");
     expect(english.t("PAGINATION_PAGE_LABEL")).toBe("Page {page}");
     expect(chinese.t("PAGINATION_PAGE_LABEL")).toBe("第 {page} 页");
-    expect(english.t("PAGINATION_MOBILE_SUMMARY")).toBe("{page} / {totalPages}");
-    expect(chinese.t("PAGINATION_MOBILE_SUMMARY")).toBe("{page} / {totalPages}");
   });
 
   it("maps the active locale to a document language and fails safe to English", () => {

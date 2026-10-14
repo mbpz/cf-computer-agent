@@ -18,12 +18,16 @@ describe("React read-only user pages", () => {
     expect(empty).not.toContain("undefined");
   });
 
-  it("renders bounded knowledge pages and numbered pagination", () => {
-    const html = renderToStaticMarkup(<KnowledgePage state={{ kind: "ready", items: [{ id: "k1", title: "Guide", summary: "Short", publishedAt: "2026-08-25", tags: ["cf"] }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }} onPageChange={vi.fn()} />);
+  it("renders knowledge rows in an appending list without a numbered pager", () => {
+    const html = renderToStaticMarkup(<KnowledgePage state={{ kind: "ready", items: [{ id: "k1", title: "Guide", summary: "Short", publishedAt: "2026-08-25", tags: ["cf"] }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }} onLoadMore={vi.fn()} />);
     expect(html).toContain("Guide");
-    expect(html).toContain('aria-label="Page 2"');
-    expect(html).not.toContain("Load more");
+    expect(html).toContain('href="/knowledge/k1"');
+    expect(html).toContain("Short");
+    expect(html).toContain("2026-08-25");
+    expect(html).not.toContain('aria-label="Page 2"');
+    expect(html).toContain('aria-label="Published knowledge"');
     expect(html).toContain("cf");
+    expect(html).not.toContain("undefined");
   });
 
   it("offers retry actions for local reader pagination failures", () => {
@@ -128,11 +132,11 @@ describe("React read-only user pages", () => {
     expect(html).not.toContain("undefined");
   });
 
-  it("renders scoped submission status and numbered pagination", () => {
+  it("renders scoped submission status in a row list without a numbered pager", () => {
     const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{ id: "s1", title: "Guide", status: "review_pending" }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }} />);
     expect(html).toContain("Guide");
-    expect(html).toContain('aria-label="Page 2"');
-    expect(html).not.toContain("Load more submissions");
+    expect(html).toContain("review_pending");
+    expect(html).not.toContain('aria-label="Page 2"');
     expect(html).not.toContain("undefined");
   });
 });

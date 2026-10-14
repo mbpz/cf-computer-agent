@@ -11,6 +11,7 @@ import {
   type BoardColumnStates,
 } from "../../frontend/pages/boards/board-model";
 import { BoardsPage } from "../../frontend/pages/boards/boards-page";
+import { taskStatusKey } from "../../frontend/pages/tasks/tasks-model";
 import type { TaskItem } from "../../frontend/lib/tasks-data";
 
 describe("task-backed board model", () => {
@@ -38,12 +39,13 @@ describe("task-backed board model", () => {
 });
 
 describe("task-backed boards page", () => {
-  it("renders four localized columns, independent pagination, and excludes canceled tasks", () => {
+  it("renders four localized columns as independently scrolling tables without pagination controls", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
     const columns = readyColumns();
     columns.todo = ready([task("todo", "待办任务", "todo-1"), task("canceled", "不应出现", "canceled-1")], 21);
-    const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} />);
+    const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} onLoadMore={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} />);
 
+    expect(html).toContain("data-board-columns=");
     expect(BOARD_STATUSES.every((status) => html.includes(`data-board-column="${status}"`))).toBe(true);
     expect(html).toContain(frontendText(locale, "TASKS_STATUS_TODO"));
     expect(html).toContain(frontendText(locale, "TASKS_STATUS_DOING"));
@@ -51,7 +53,10 @@ describe("task-backed boards page", () => {
     expect(html).toContain(frontendText(locale, "TASKS_STATUS_DONE"));
     expect(html).toContain("待办任务");
     expect(html).not.toContain("不应出现");
-    expect((html.match(/aria-label="第 2 页"/gu) ?? [])).toHaveLength(1);
+    // Each column owns a distinguishable scroll region and keeps the task marker.
+    expect(BOARD_STATUSES.every((status) => html.includes(`aria-label="${frontendText(locale, "BOARDS_COLUMN_LIST")}: ${frontendText(locale, taskStatusKey(status))}"`))).toBe(true);
+    expect(html).toContain('data-board-task="todo-1"');
+    expect(html).not.toContain("data-pagination");
   });
 
   it("renders locale-backed loading, error, and empty states per column", () => {
@@ -62,7 +67,7 @@ describe("task-backed boards page", () => {
       blocked: ready([]),
       done: ready([task("done", "完成项", "done-1")]),
     };
-    const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} />);
+    const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} onLoadMore={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} />);
 
     expect(html).toContain(frontendText(locale, "BOARDS_COLUMN_LOADING"));
     expect(html).toContain(frontendText(locale, "BOARDS_COLUMN_ERROR"));
@@ -75,7 +80,7 @@ describe("task-backed boards page", () => {
     const locale = createLocaleRuntime();
     const columns = readyColumns();
     columns.doing = ready([task("doing", "Alpha", "task-alpha")]);
-    const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} actionPendingId="task-alpha" onPageChange={vi.fn()} onPageSizeChange={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} />);
+    const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} actionPendingId="task-alpha" onLoadMore={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} />);
 
     expect(html).toContain('aria-label="Move Alpha from Doing"');
     expect(html).toContain('<option value="todo">To do</option>');
@@ -84,6 +89,17 @@ describe("task-backed boards page", () => {
     expect(html).toContain('<option value="canceled">Canceled</option>');
     expect(html).toContain("disabled");
     expect(html).not.toContain("draggable=");
+  });
+
+  it("keeps the optimistic move marker while the pending column stays writable-blocked", () => {
+    const locale = createLocaleRuntime();
+    const columns = readyColumns();
+    columns.done = { ...ready([task("done", "Shipped", "task-done")]), pending: true };
+    const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} actionPendingId="task-other" onLoadMore={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} />);
+
+    expect(html).toContain('data-board-task="task-done"');
+    expect(html).not.toContain("data-optimistic");
+    expect(html).toContain("aria-busy");
   });
 });
 

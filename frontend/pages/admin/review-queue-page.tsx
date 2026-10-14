@@ -1,22 +1,20 @@
 import { useRef } from "react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { Card, CardContent } from "../../components/ui/card";
+import { DataTable } from "../../components/data-table";
 import { Skeleton } from "../../components/ui/skeleton";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
-import { DataPagination } from "../../components/data-pagination";
 import type { ReviewQueuePageResult } from "../../lib/admin-review-data";
-import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { ReviewDecision, ReviewNoteInput } from "../../components/review/review-detail-data";
 import { ReviewDecisionControls, ReviewDecisionFeedback, reviewDecisionLocked, type ReviewDecisionState } from "../../components/review/review-decision-controls";
 
-export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onReloadDecision, onOpenDetail, pendingId, completedId, decisionState = { kind: "idle" }, localError, pending, onPageChange, onPageSizeChange, locale, decisionRecordBlocked = false, onDiscardDecisionRecord }: {
+export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onReloadDecision, onOpenDetail, pendingId, completedId, decisionState = { kind: "idle" }, localError, pending, onLoadMore, locale, decisionRecordBlocked = false, onDiscardDecisionRecord }: {
   state: { kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string };
   onRetry?: () => void; onRetryDecision?: () => void; onReloadDecision?: () => void; onOpenDetail?: (id: string) => void;
   onReview?: (id: string, action: ReviewDecision, details?: ReviewNoteInput) => void;
   pendingId?: string | null; completedId?: string | null; decisionState?: ReviewDecisionState; localError?: string; pending?: boolean;
-  onPageChange?: (page: number) => void; onPageSizeChange?: (size: SupportedPageSize) => void; locale: LocaleRuntime;
+  onLoadMore?: () => void; locale: LocaleRuntime;
   decisionRecordBlocked?: boolean; onDiscardDecisionRecord?: () => void;
 }) {
   const confirmationLock = useRef<object | null>(null);
@@ -31,24 +29,35 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
     {decisionRecordBlocked && <div role="alert" data-review-decision-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardDecisionRecord}>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD")}</Button></div>}
     <ReviewDecisionFeedback allowUnknownReload state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onReloadDecision} />
     {localError && <><p role="alert" className="text-sm text-destructive">{localError}</p>{retry}</>}
-    {state.data.items.length ? state.data.items.map((item) => {
-      const disabled = Boolean(pending || pendingId || localError || locked);
-      const target = item.title?.trim() || item.id;
-      return <Card key={item.id}><CardContent className="space-y-4 p-4">
-        <div className="flex items-start justify-between gap-4"><div><h2 className="font-medium">
-          <a href={`/admin/submissions/${encodeURIComponent(item.id)}`} onClick={(event) => {
-            if (!onOpenDetail || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            event.preventDefault(); onOpenDetail(item.id);
-          }} className="hover:underline">{item.title?.trim() || frontendText(locale, "ADMIN_REVIEW_UNTITLED")}</a>
-        </h2><p className="mt-1 text-xs text-muted-foreground">{item.submitter || frontendText(locale, "ADMIN_REVIEW_SUBMITTER_UNAVAILABLE")}</p></div>
-          <Badge variant="outline">{item.status || frontendText(locale, "ADMIN_REVIEW_STATUS_UNAVAILABLE")}</Badge>
-        </div>
-        <ReviewDecisionControls decisionUnresolved={locked} confirmationLock={confirmationLock} disabled={disabled} terminal={completedId === item.id || Boolean(item.status && item.status !== "review_pending")}
-          pendingAction={pendingId === item.id && decisionState.kind === "pending" ? decisionState.action : undefined}
-          targetId={item.id} snapshot={state.data} targetLabel={target} locale={locale} onDecision={onReview ? (action, details) => onReview(item.id, action, details) : undefined} />
-      </CardContent></Card>;
-    }) : <PageState kind="empty" title={frontendText(locale, "ADMIN_REVIEW_EMPTY")} description={frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")} />}
-    <DataPagination {...state.data.pagination} locale={locale} pending={pending || Boolean(pendingId) || locked}
-      onPageChange={(page) => onPageChange?.(page)} onPageSizeChange={(size) => onPageSizeChange?.(size)} />
+    <DataTable
+      locale={locale}
+      rows={state.data.items}
+      rowId={(item) => item.id}
+      ariaLabel={frontendText(locale, "ADMIN_REVIEW_QUEUE_TITLE")}
+      emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_REVIEW_EMPTY")} description={frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")} />}
+      loading={pending}
+      hasMore={!localError && state.data.pagination.page < state.data.pagination.totalPages}
+      onLoadMore={onLoadMore}
+      rowHeight={104}
+      columns={[
+        { key: "item", header: frontendText(locale, "ADMIN_REVIEW_COLUMN_ITEM"), cellClassName: "whitespace-normal", cell: (item) => <div className="py-1">
+          <p className="font-medium">
+            <a href={`/admin/submissions/${encodeURIComponent(item.id)}`} onClick={(event) => {
+              if (!onOpenDetail || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault(); onOpenDetail(item.id);
+            }} className="hover:underline">{item.title?.trim() || frontendText(locale, "ADMIN_REVIEW_UNTITLED")}</a>
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{item.submitter || frontendText(locale, "ADMIN_REVIEW_SUBMITTER_UNAVAILABLE")}</p>
+        </div> },
+        { key: "status", header: frontendText(locale, "ADMIN_REVIEW_COLUMN_STATUS"), width: "180px", cellClassName: "whitespace-normal", cell: (item) => <Badge variant="outline">{item.status || frontendText(locale, "ADMIN_REVIEW_STATUS_UNAVAILABLE")}</Badge> },
+        { key: "actions", header: frontendText(locale, "ADMIN_REVIEW_COLUMN_ACTIONS"), width: "420px", cellClassName: "whitespace-normal", cell: (item) => {
+          const target = item.title?.trim() || item.id;
+          const disabled = Boolean(pending || pendingId || localError || locked);
+          return <ReviewDecisionControls decisionUnresolved={locked} confirmationLock={confirmationLock} disabled={disabled} terminal={completedId === item.id || Boolean(item.status && item.status !== "review_pending")}
+            pendingAction={pendingId === item.id && decisionState.kind === "pending" ? decisionState.action : undefined}
+            targetId={item.id} snapshot={state.data} targetLabel={target} locale={locale} onDecision={onReview ? (action, details) => onReview(item.id, action, details) : undefined} />;
+        } },
+      ]}
+    />
   </section>;
 }

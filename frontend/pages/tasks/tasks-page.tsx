@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { Card, CardContent } from "../../components/ui/card";
-import { DataPagination } from "../../components/data-pagination";
+import { DataTable } from "../../components/data-table";
 import { Input } from "../../components/ui/input";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -18,7 +17,7 @@ export type TasksPageState =
   | { kind: "error"; message: string }
   | { kind: "ready"; items: readonly TaskItem[]; pagination: Pagination };
 
-export function TasksPage({ state, filters, locale, pending = false, localLoadError, actionError, actionPendingId, onRetry, onFilterChange, onTextFilterChange, onPageChange, onPageSizeChange, onStatusChange, onDelete, onCreate, onOpen }: {
+export function TasksPage({ state, filters, locale, pending = false, localLoadError, actionError, actionPendingId, onRetry, onFilterChange, onTextFilterChange, onLoadMore, onStatusChange, onDelete, onCreate, onOpen }: {
   state: TasksPageState;
   filters: TaskFilterState;
   locale: LocaleRuntime;
@@ -31,8 +30,7 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
   onRetry?: () => void;
   onFilterChange?: (filters: TaskFilterState) => void;
   onTextFilterChange?: (filters: TaskFilterState) => void;
-  onPageChange?: (page: number) => void;
-  onPageSizeChange?: (pageSize: 20 | 50 | 100) => void;
+  onLoadMore?: () => void;
   onStatusChange?: (id: string, status: TaskStatus) => void;
   onDelete?: (id: string) => void;
 }) {
@@ -71,13 +69,39 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
     </div>
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
     {localLoadError && <div role="alert" className="flex items-center gap-3 text-sm text-destructive"><span>{localLoadError}</span><Button type="button" size="sm" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></div>}
-    {state.items.length ? <div className="space-y-3">{state.items.map((task) => {
-      const trimmedTitle = task.title.trim();
-      const taskLabel = trimmedTitle ? `${trimmedTitle} (${task.id})` : task.id;
-      const statusAction = frontendText(locale, task.status === "done" ? "TASKS_REOPEN" : "TASKS_COMPLETE");
-      return <Card key={task.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p>{onOpen && <Button variant="outline" disabled={Boolean(actionPendingId)} aria-label={`${frontendText(locale, "TASKS_EDIT")}: ${task.title ? `${task.title} (${task.id})` : task.id}`} onClick={() => onOpen(task.id)}>{frontendText(locale, "TASKS_EDIT")}</Button>}<Badge variant="outline">{frontendText(locale, taskStatusKey(task.status))}</Badge><Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge></div>{task.notes && <p className="mt-1 truncate text-sm text-muted-foreground">{task.notes}</p>}</div><div className="flex flex-wrap gap-2"><a href={contextDiscussionHref({ kind: "task", id: task.id })} className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium transition hover:bg-accent hover:text-accent-foreground">{frontendText(locale, "MESSAGES_DISCUSS")}</a><Button aria-label={`${statusAction}: ${taskLabel}`} size="sm" variant="outline" disabled={validConfirmation || actionPendingId != null} onClick={() => { if (!confirmationRef.current) onStatusChange?.(task.id, task.status === "done" ? "todo" : "done"); }}>{statusAction}</Button><Button aria-label={`${frontendText(locale, "TASKS_DELETE")}: ${taskLabel}`} size="sm" variant="destructive" disabled={validConfirmation || deleteBlocked} onClick={() => requestDelete(task)}>{frontendText(locale, "TASKS_DELETE")}</Button></div></CardContent></Card>;
-    })}</div> : <PageState kind="empty" title={frontendText(locale, "TASKS_EMPTY")} />}
-    <DataPagination {...state.pagination} locale={locale} pending={pending} onPageChange={(page) => onPageChange?.(page)} onPageSizeChange={(size) => onPageSizeChange?.(size)} />
+    <DataTable
+      locale={locale}
+      rows={state.items}
+      rowId={(task) => task.id}
+      ariaLabel={frontendText(locale, "TASKS_TITLE")}
+      emptyState={<PageState kind="empty" title={frontendText(locale, "TASKS_EMPTY")} />}
+      loading={pending}
+      hasMore={!localLoadError && state.pagination.page < state.pagination.totalPages}
+      onLoadMore={onLoadMore}
+      rowHeight={72}
+      columns={[
+        { key: "task", header: frontendText(locale, "TASKS_COLUMN_TASK"), cellClassName: "whitespace-normal", cell: (task) => <div className="py-1"><p className="line-clamp-1 font-medium">{task.title}</p>{task.notes && <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{task.notes}</p>}</div> },
+        { key: "status", header: frontendText(locale, "TASKS_STATUS"), width: "200px", cell: (task) => <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{frontendText(locale, taskStatusKey(task.status))}</Badge><Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge></div> },
+        { key: "due", header: frontendText(locale, "TASKS_DUE"), width: "180px", cell: (task) => {
+          if (!task.dueAt) return "—";
+          const date = new Date(task.dueAt);
+          if (!Number.isFinite(date.getTime())) return task.dueAt;
+          // Same two-way locale switch the other surfaces use; a fixed tag cannot throw.
+          return <time dateTime={task.dueAt}>{new Intl.DateTimeFormat(locale?.locale === "zh-CN" ? "zh-CN" : "en", { dateStyle: "medium" }).format(date)}</time>;
+        } },
+        { key: "actions", header: frontendText(locale, "TASKS_COLUMN_ACTIONS"), width: "360px", cell: (task) => {
+          const trimmedTitle = task.title.trim();
+          const taskLabel = trimmedTitle ? `${trimmedTitle} (${task.id})` : task.id;
+          const statusAction = frontendText(locale, task.status === "done" ? "TASKS_REOPEN" : "TASKS_COMPLETE");
+          return <div className="flex flex-wrap gap-2">
+            <a href={contextDiscussionHref({ kind: "task", id: task.id })} className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium transition hover:bg-accent hover:text-accent-foreground">{frontendText(locale, "MESSAGES_DISCUSS")}</a>
+            {onOpen && <Button variant="outline" size="sm" disabled={Boolean(actionPendingId)} aria-label={`${frontendText(locale, "TASKS_EDIT")}: ${task.title ? `${task.title} (${task.id})` : task.id}`} onClick={() => onOpen(task.id)}>{frontendText(locale, "TASKS_EDIT")}</Button>}
+            <Button aria-label={`${statusAction}: ${taskLabel}`} size="sm" variant="outline" disabled={validConfirmation || actionPendingId != null} onClick={() => { if (!confirmationRef.current) onStatusChange?.(task.id, task.status === "done" ? "todo" : "done"); }}>{statusAction}</Button>
+            <Button aria-label={`${frontendText(locale, "TASKS_DELETE")}: ${taskLabel}`} size="sm" variant="destructive" disabled={validConfirmation || deleteBlocked} onClick={() => requestDelete(task)}>{frontendText(locale, "TASKS_DELETE")}</Button>
+          </div>;
+        } },
+      ]}
+    />
   </section><ConfirmAction open={validConfirmation} title={frontendText(locale, "TASKS_DELETE_CONFIRM_TITLE")}
     description={`${confirmation?.task.title.trim() ? `${confirmation.task.title.trim()} (${confirmation.task.id})` : confirmation?.task.id || ""} — ${frontendText(locale, "TASKS_DELETE_IMPACT")}`}
     cancelLabel={frontendText(locale, "COMMON_CANCEL")} confirmLabel={frontendText(locale, "TASKS_DELETE_CONFIRM")} destructive

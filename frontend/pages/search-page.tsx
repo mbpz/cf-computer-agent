@@ -2,9 +2,9 @@ import { useState, type ReactNode } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { SearchResultList, type SearchResultItem } from "../components/search/search-result-list";
+import type { SearchResultItem } from "../lib/search-data";
 import { PageState } from "../components/ui/page-state";
-import { DataPagination } from "../components/data-pagination";
+import { DataTable } from "../components/data-table";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { SavedViewItem } from "../lib/saved-views-data";
 
@@ -13,13 +13,13 @@ export type SearchState =
   | { kind: "ready"; query?: string; degraded: boolean; results: readonly SearchResultItem[]; pagination: { page: number; pageSize: 20 | 50 | 100; total: number; totalPages: number } }
   | { kind: "error"; message: string };
 
-export function SearchPage({ state, locale, query, queryLocked = false, pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView, savedViewRecordBlocked = false, onDiscardSavedViewRecord, composerBlocked = false, composerNotice, onDiscardComposer }: {
+export function SearchPage({ state, locale, query, queryLocked = false, pending = false, localError, onQueryChange, onSubmit, onLoadMore, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView, savedViewRecordBlocked = false, onDiscardSavedViewRecord, composerBlocked = false, composerNotice, onDiscardComposer }: {
   state: SearchState;
   locale: LocaleRuntime;
   query?: string; queryLocked?: boolean;
   onQueryChange?: (query: string) => void;
   onSubmit?: () => void;
-  pending?: boolean; localError?: string; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: 20 | 50 | 100) => void;
+  pending?: boolean; localError?: string; onLoadMore?: () => void;
   onRetry?: () => void;
   savedViews?: readonly SavedViewItem[];
   onSaveView?: (name: string) => void;
@@ -63,8 +63,23 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
       : <>
         {localError && <div role="alert" className="flex items-center gap-3 text-sm text-destructive"><span>{localError}</span><Button type="button" variant="outline" size="sm" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></div>}
         {state.degraded && <PageState kind="degraded" title={frontendText(locale, "SEARCH_DEGRADED")} />}
-        {state.results.length ? <SearchResultList locale={locale} results={state.results} /> : <PageState kind="empty" title={frontendText(locale, "SEARCH_EMPTY")} />}
-        <DataPagination {...state.pagination} locale={locale} pending={pending} onPageChange={(page) => onPageChange?.(page)} onPageSizeChange={(size) => onPageSizeChange?.(size)} />
+        <DataTable
+          locale={locale}
+          rows={state.results}
+          rowId={(result) => result.id}
+          ariaLabel={frontendText(locale, "SEARCH_TITLE")}
+          emptyState={<PageState kind="empty" title={frontendText(locale, "SEARCH_EMPTY")} />}
+          loading={pending}
+          hasMore={!localError && state.pagination.page < state.pagination.totalPages}
+          onLoadMore={onLoadMore}
+          loadingMoreLabel={frontendText(locale, "SEARCH_LOADING_MORE")}
+          rowHeight={72}
+          columns={[
+            { key: "result", header: frontendText(locale, "SEARCH_COLUMN_RESULT"), cellClassName: "whitespace-normal", cell: (result) => <div className="py-1"><a href={result.href} className="line-clamp-1 font-medium hover:underline">{result.title?.trim() || frontendText(locale, "SEARCH_UNTITLED")}</a></div> },
+            { key: "excerpt", header: frontendText(locale, "SEARCH_COLUMN_EXCERPT"), width: "45%", cellClassName: "whitespace-normal", cell: (result) => <p className="line-clamp-1 py-1 text-sm text-muted-foreground">{result.snippet?.trim() || frontendText(locale, "SEARCH_NO_EXCERPT")}</p> },
+            { key: "matched", header: frontendText(locale, "SEARCH_MATCHED"), width: "220px", cellClassName: "whitespace-normal", cell: (result) => <div className="flex flex-wrap items-center gap-3 py-1">{result.matchedFields?.length ? <p className="line-clamp-1 text-xs text-muted-foreground">{frontendText(locale, "SEARCH_MATCHED")}: {result.matchedFields.join(", ")}</p> : null}{result.knowledgeItemId && <a href={`/agent?scope=items&knowledgeItemId=${encodeURIComponent(result.knowledgeItemId)}`} className="text-xs font-medium text-primary hover:underline">{frontendText(locale, "SEARCH_ASK_RESULT")}</a>}</div> },
+          ]}
+        />
       </>}
   </section>;
 }

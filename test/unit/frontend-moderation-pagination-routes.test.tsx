@@ -21,73 +21,85 @@ describe("moderation numbered routes", () => {
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   const queues = [
-    { name: "review", path: "/admin/submissions", render: (search: string) => <ReviewQueueRoute locale={locale()} search={search} />, item: (id: string) => ({ id, title: id, submitterId: "m1", status: "review_pending" }) },
-    { name: "assets", path: "/admin/assets", render: (search: string) => <AdminAssetsRoute locale={locale()} search={search} />, item: (id: string) => ({ asset: { id, originalName: id }, job: { status: "queued" } }) },
-    { name: "duplicates", path: "/admin/duplicates", render: (search: string) => <AdminDuplicateRoute locale={locale()} search={search} />, item: (id: string) => duplicate("pending", id) },
+    { name: "review", path: "/admin/submissions", filter: "", render: (search: string) => <ReviewQueueRoute locale={locale()} search={search} />, item: (id: string) => ({ id, title: id, submitterId: "m1", status: "review_pending" }) },
+    { name: "assets", path: "/admin/assets", filter: "status=queued", render: (search: string) => <AdminAssetsRoute locale={locale()} search={search} />, item: (id: string) => ({ asset: { id, originalName: id }, job: { status: "queued" } }) },
+    { name: "duplicates", path: "/admin/duplicates", filter: "", render: (search: string) => <AdminDuplicateRoute locale={locale()} search={search} />, item: (id: string) => duplicate("pending", id) },
   ] as const;
 
-  it.each(queues)("restores $name URL state on initialization and browser back/forward", async ({ path, render, item }) => {
-    browser.history.replaceState({}, "", `${path}?page=2&pageSize=20`); const gets: string[] = [];
+  it.each(queues)("restores $name URL state on initialization and browser back/forward", async ({ path, filter, render, item }) => {
+    browser.history.replaceState({}, "", `${path}?page=2&pageSize=20${filter ? `&${filter}` : ""}`); const gets: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); gets.push(url); return pageResponse(url, item); });
     await act(async () => root.render(render(browser.location.search))); await flush();
-    expect(queryOf(gets.at(-1)!, "page")).toBe("2");
-    await act(async () => { writeWorkspaceHistory("push", `${path}?pageSize=20`); }); await flush();
-    expect(queryOf(gets.at(-1)!, "page") || "1").toBe("1");
-    let delivered = 0;
-    const settle = async () => {
-      while (delivered < historyDriver.requests.length) {
-        expect(delivered).toBeLessThan(5);
-        const request = historyDriver.requests[delivered++];
-        await act(async () => { historyDriver.arrive(request.index); request.resolve(); }); await flush();
-      }
-    };
-    await act(async () => browser.history.back()); await flush(); await settle();
-    expect(queryOf(gets.at(-1)!, "page")).toBe("2");
-    await act(async () => browser.history.forward()); await flush(); await settle();
-    expect(queryOf(gets.at(-1)!, "page") || "1").toBe("1");
+    // page/pageSize in the URL are ignored: the queue always opens on page one.
+    expect(queryOf(gets.at(-1)!, "page")).toBe("1");
+    expect(queryOf(gets.at(-1)!, "pageSize")).toBe("20");
+    if (filter) expect(queryOf(gets.at(-1)!, filter.split("=")[0])).toBe(filter.split("=")[1]);
+    // Browser back/forward now carries only route filters; no page round-trips.
+    await act(async () => { writeWorkspaceHistory("push", path); }); await flush();
+    await act(async () => browser.history.back()); await flush();
+    if (filter) expect(queryOf(gets.at(-1)!, filter.split("=")[0])).toBe(filter.split("=")[1]);
+    await act(async () => browser.history.forward()); await flush();
+    expect(browser.location.search).not.toContain("page");
+    expect(browser.location.search).not.toContain("pageSize");
+    expect(gets.every((url) => queryOf(url, "page") === "1" && queryOf(url, "pageSize") === "20")).toBe(true);
   });
 
-  it.each(queues)("resets $name to page one with one history write when pageSize changes", async ({ path, render, item }) => {
-    browser.history.replaceState({}, "", `${path}?page=2`); const gets: string[] = []; const push = vi.spyOn(browser.history, "pushState").mockClear();
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); gets.push(url); return pageResponse(url, item); });
-    await act(async () => root.render(render(browser.location.search))); await flush(); push.mockClear();
-    await changeSelect('select[aria-label="Rows per page"]', "50");
-    expect(push).toHaveBeenCalledTimes(1); expect(browser.location.search).toBe("?pageSize=50");
-    expect(queryOf(gets.at(-1)!, "page") || "1").toBe("1"); expect(queryOf(gets.at(-1)!, "pageSize")).toBe("50");
+  it.each(queues)("appends the next $name page on scroll and stops at the last page", async ({ path, render, item }) => {
+    browser.history.replaceState({}, "", `${path}?page=2&pageSize=20`); const gets: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); gets.push(url);
+      const page = Number(queryOf(url, "page"));
+      return numbered(Array.from({ length: page === 1 ? 20 : 1 }, (_, index) => item(`item-${page}-${index}`)), page, 21);
+    });
+    await act(async () => root.render(render(browser.location.search))); await flush();
+    expect(gets.map((url) => queryOf(url, "page"))).toEqual(["1"]);
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(20);
+    await act(async () => { container.querySelector("div.overflow-auto")!.dispatchEvent(new browser.Event("scroll")); }); await flush();
+    expect(gets.map((url) => queryOf(url, "page"))).toEqual(["1", "2"]);
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(21);
+    expect(container.textContent).toContain("item-1-0"); expect(container.textContent).toContain("item-2-0");
+    await act(async () => { container.querySelector("div.overflow-auto")!.dispatchEvent(new browser.Event("scroll")); }); await flush();
+    expect(gets.map((url) => queryOf(url, "page"))).toEqual(["1", "2"]);
   });
 
   it("resets asset status to page one with one history write", async () => {
-    browser.history.replaceState({}, "", "/admin/assets?page=2&status=queued"); const gets: string[] = []; const push = vi.spyOn(browser.history, "pushState").mockClear();
+    browser.history.replaceState({}, "", "/admin/assets?status=queued"); const gets: string[] = []; const push = vi.spyOn(browser.history, "pushState").mockClear();
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); gets.push(url); return pageResponse(url, (id) => ({ asset: { id, originalName: id }, job: { status: "failed_retryable" } })); });
     await act(async () => root.render(<AdminAssetsRoute locale={locale()} search={browser.location.search} />)); await flush(); push.mockClear();
     await changeSelect('select[aria-label="Asset status"]', "failed_retryable");
     expect(push).toHaveBeenCalledTimes(1); expect(browser.location.search).toBe("?status=failed_retryable");
-    expect(queryOf(gets.at(-1)!, "status")).toBe("failed_retryable"); expect(queryOf(gets.at(-1)!, "page")).toBe("1");
+    expect(queryOf(gets.at(-1)!, "status")).toBe("failed_retryable");
+    expect(queryOf(gets.at(-1)!, "page")).toBe("1"); expect(queryOf(gets.at(-1)!, "pageSize")).toBe("20");
   });
 
   it("refreshes review actions through the current generation and replaces an empty page", async () => {
-    const gets: string[] = []; const replace = vi.spyOn(browser.history, "replaceState").mockClear();
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return rejected("review-1"); gets.push(url); return gets.length === 1 ? numbered([{ id: "review-1", title: "Review", submitterId: "m1", status: "review_pending" }], 2, 21) : numbered([], url.includes("page=2") ? 2 : 1, 0); });
+    browser.history.replaceState({}, "", "/admin/submissions"); const gets: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return rejected("review-1"); gets.push(url); return gets.length === 1 ? numbered([{ id: "review-1", title: "Review", submitterId: "m1", status: "review_pending" }], 1, 1) : numbered([], 1, 0); });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await clickButton("Reject"); await submitReview("Confirm rejection"); await flush();
-    expect(gets.map((url) => new URL(url, "https://app.test").searchParams.get("page") || "1")).toEqual(["2", "2", "1"]);
-    expect(replace).toHaveBeenCalledTimes(1); expect(browser.location.search).not.toContain("page=2");
+    expect(gets.map((url) => queryOf(url, "page"))).toEqual(["1", "1"]);
+    expect(gets.every((url) => queryOf(url, "pageSize") === "20")).toBe(true);
+    expect(browser.location.search).not.toContain("page");
+    expect(container.querySelector('[data-page-state="empty"]')).toBeTruthy();
   });
 
   it("preserves the asset filter while retry refresh backs up once", async () => {
-    browser.history.replaceState({}, "", "/admin/assets?status=failed_retryable&page=2"); const gets: string[] = []; const replace = vi.spyOn(browser.history, "replaceState").mockClear();
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return json({}); gets.push(url); return gets.length === 1 ? numbered([{ asset: { id: "asset-1", originalName: "broken.pdf" }, job: { status: "failed_retryable" } }], 2, 21) : numbered([], url.includes("page=2") ? 2 : 1, 0); });
+    browser.history.replaceState({}, "", "/admin/assets?status=failed_retryable"); const gets: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return json({}); gets.push(url); return gets.length === 1 ? numbered([{ asset: { id: "asset-1", originalName: "broken.pdf" }, job: { status: "failed_retryable" } }], 1, 1) : numbered([], 1, 0); });
     await act(async () => root.render(<AdminAssetsRoute locale={locale()} search={browser.location.search} />)); await flush();
     await retryAsset(); await flush();
-    expect(gets).toHaveLength(3); expect(gets.every((url) => url.includes("status=failed_retryable"))).toBe(true); expect(replace).toHaveBeenCalledTimes(1); expect(browser.location.search).toContain("status=failed_retryable"); expect(browser.location.search).not.toContain("page=2");
+    expect(gets).toHaveLength(2); expect(gets.every((url) => queryOf(url, "status") === "failed_retryable")).toBe(true);
+    expect(gets.every((url) => queryOf(url, "page") === "1" && queryOf(url, "pageSize") === "20")).toBe(true);
+    expect(browser.location.search).toContain("status=failed_retryable"); expect(browser.location.search).not.toContain("page");
   });
 
   it("does not expose cursor loading after a duplicate decision and corrects total zero", async () => {
-    browser.history.replaceState({}, "", "/admin/duplicates?page=2"); const gets: string[] = [];
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return json({ candidate: duplicate("associate") }); gets.push(url); return gets.length === 1 ? numbered([duplicate("pending")], 2, 21) : numbered([], url.includes("page=2") ? 2 : 1, 0); });
+    browser.history.replaceState({}, "", "/admin/duplicates"); const gets: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return json({ candidate: duplicate("associate") }); gets.push(url); return gets.length === 1 ? numbered([duplicate("pending")], 1, 1) : numbered([], 1, 0); });
     await act(async () => root.render(<AdminDuplicateRoute locale={locale()} search={browser.location.search} />)); await flush();
     expect(container.textContent).not.toContain("Load more"); await clickButton("Associate"); await clickButton("Confirm decision"); await flush();
-    expect(gets).toHaveLength(3); expect(browser.location.search).not.toContain("page=2");
+    expect(gets.map((url) => queryOf(url, "page"))).toEqual(["1", "1"]);
+    expect(browser.location.search).not.toContain("page");
+    expect(container.querySelector('[data-page-state="empty"]')).toBeTruthy();
   });
 
   it("does not let a late duplicate mutation overwrite a new session", async () => {
@@ -139,9 +151,9 @@ describe("moderation numbered routes", () => {
 
   it.each([401, 403])("clears private review rows and decisions on %i during a page read", async (status) => {
     let gets = 0;
-    vi.stubGlobal("fetch", async () => ++gets === 1 ? numbered([{ id: "private-review", title: "Private review", submitterId: "m1", status: "review_pending" }], 2, 21) : new Response(null, { status }));
+    vi.stubGlobal("fetch", async () => ++gets === 1 ? numbered(Array.from({ length: 20 }, (_, index) => ({ id: `private-review-${index}`, title: index === 0 ? "Private review" : `Private review ${index}`, submitterId: "m1", status: "review_pending" })), 1, 21) : new Response(null, { status }));
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await act(async () => { writeWorkspaceHistory("push", "/admin/submissions"); }); await flush();
+    await act(async () => { container.querySelector("div.overflow-auto")!.dispatchEvent(new browser.Event("scroll")); }); await flush();
     expect(container.textContent).not.toContain("Private review");
     expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
     expect(buttonNames().some((name) => name?.startsWith("Reject"))).toBe(false);
@@ -171,23 +183,22 @@ describe("moderation numbered routes", () => {
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await clickButton("Try again");
-    await act(async () => { writeWorkspaceHistory("push", "/admin/submissions"); }); await flush();
+    // Leaving the queue tears the route down; the in-flight retry is aborted.
+    await act(async () => { writeWorkspaceHistory("push", "/admin/submissions"); root.render(null); }); await flush();
     expect(signal?.aborted).toBe(true);
-    await act(async () => retry.resolve(numbered([{ id: "late", title: "Late stale retry", submitterId: "m1", status: "review_pending" }], 2, 21))); await flush();
-    expect(container.textContent).toContain("item-1-0"); expect(container.textContent).not.toContain("Late stale retry");
+    await act(async () => retry.resolve(numbered([{ id: "late", title: "Late stale retry", submitterId: "m1", status: "review_pending" }], 1, 1))); await flush();
+    // Back restores the queue, which re-reads page one and never shows the late retry.
     await act(async () => browser.history.back()); await flush();
-    for (let delivered = 0; delivered < historyDriver.requests.length; delivered++) {
-      expect(delivered).toBeLessThan(5); const request = historyDriver.requests[delivered]!;
-      await act(async () => { historyDriver.arrive(request.index); request.resolve(); }); await flush();
-    }
-    expect(queryOf(gets.at(-1)!, "page")).toBe("2"); expect(container.textContent).toContain("item-2-0");
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    expect(container.textContent).toContain("item-1-0"); expect(container.textContent).not.toContain("Late stale retry");
+    expect(gets.every((url) => queryOf(url, "page") === "1")).toBe(true);
   });
 
   it("ignores a late decision after forced session teardown and remount", async () => {
     const decision = deferred<Response>(); let gets = 0; let posts = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === "POST") { posts++; return decision.promise; } gets++; return pageResponse(String(input), (id) => ({ id, title: id, submitterId: "m1", status: "review_pending" })); });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    const reject = container.querySelector('button[aria-label="Reject item-2-0"]') as HTMLButtonElement;
+    const reject = container.querySelector('button[aria-label="Reject item-1-0"]') as HTMLButtonElement;
     await act(async () => { reject.click(); reject.click(); });
     const confirm = [...container.querySelectorAll("button")].find((item) => item.textContent === "Confirm rejection")!;
     await act(async () => { confirm.click(); confirm.click(); }); expect(posts).toBe(0);
@@ -196,7 +207,7 @@ describe("moderation numbered routes", () => {
     await act(async () => writeWorkspaceHistory("push", "/admin/submissions"));
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     expect((container.querySelector('button[aria-label="Reject item-1-0"]') as HTMLButtonElement).disabled).toBe(false);
-    await act(async () => decision.resolve(rejected("item-2-0"))); await flush();
+    await act(async () => decision.resolve(rejected("item-1-0"))); await flush();
     expect(gets).toBe(2); expect(container.textContent).toContain("item-1-0");
   });
 
@@ -216,11 +227,11 @@ describe("moderation numbered routes", () => {
   });
 
   it.each([401, 403])("clears the queue if the publication preview returns %i", async (status) => {
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/item-2-0") ? new Response(null, { status }) : pageResponse(String(input), (id) => ({ id, title: id, submitterId: "m1", status: "review_pending" })));
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/item-1-0") ? new Response(null, { status }) : pageResponse(String(input), (id) => ({ id, title: id, submitterId: "m1", status: "review_pending" })));
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await submitReview("Publish"); await flush();
     expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
-    expect(container.textContent).not.toContain("item-2-0");
+    expect(container.textContent).not.toContain("item-1-0");
   });
 
   it("retains notes and replays the exact queue decision explicitly after a lost response", async () => {
@@ -252,20 +263,20 @@ describe("moderation numbered routes", () => {
     expect((container.querySelector('button[aria-label="Reject Review"]') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("reloads a conflict without repeating the write and keeps page size and other query parameters", async () => {
-    browser.history.replaceState({}, "", "/admin/submissions?page=2&pageSize=50&view=pending");
+  it("reloads a conflict without repeating the write and keeps the route query parameters", async () => {
+    browser.history.replaceState({}, "", "/admin/submissions?view=pending");
     let gets = 0; let posts = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") { posts++; return new Response(null, { status: 409 }); }
       if (String(input).endsWith("/review-1")) return json({ preview: { submissionId: "review-1", title: "Review", submitterId: "m1", requestedSpaceId: "default", status: "rejected" } });
-      gets++; return json({ items: gets === 1 ? [{ id: "review-1", title: "Review", submitterId: "m1", status: "review_pending" }] : [], pagination: { page: gets < 3 ? 2 : 1, pageSize: 50, total: gets === 1 ? 51 : 0, totalPages: gets === 1 ? 2 : 0 } });
+      gets++; return json({ items: gets === 1 ? [{ id: "review-1", title: "Review", submitterId: "m1", status: "review_pending" }] : [], pagination: { page: 1, pageSize: 20, total: gets === 1 ? 1 : 0, totalPages: gets === 1 ? 1 : 0 } });
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await clickButton("Reject"); await submitReview("Confirm rejection"); await flush();
     expect(gets).toBe(1); expect(container.textContent).toContain("The submission state changed");
     await clickButton("Reload current state"); await flush();
-    expect(posts).toBe(1); expect(gets).toBe(3); expect(browser.location.search).toContain("pageSize=50"); expect(browser.location.search).toContain("view=pending");
-    expect(browser.location.search).not.toContain("page=2");
+    expect(posts).toBe(1); expect(gets).toBe(2); expect(browser.location.search).toContain("view=pending");
+    expect(browser.location.search).not.toContain("page");
   });
 
   it.each([401, 403])("clears queue content and form when an exact retry discovers revoked permissions (%i)", async (status) => {
@@ -367,8 +378,8 @@ describe("moderation numbered routes", () => {
       if (init?.method === "POST") return new Response(null, { status: ++posts === 1 ? 503 : 400 });
       if (String(input).endsWith("/review-1")) return ++detailReads === 1 ? reviewPreview() : late.promise;
       reads++;
-      if (queryOf(String(input), "page") === "1") return numbered([{ id: "review-new", title: "New page", submitterId: "member-1", status: "review_pending" }], 1, 1);
-      return numbered(reads === 1 ? [{ id: "review-1", title: "Review", submitterId: "member-1", status: "review_pending" }] : [], 2, reads === 1 ? 21 : 20);
+      if (reads > 2) return numbered([{ id: "review-new", title: "New page", submitterId: "member-1", status: "review_pending" }], 1, 1);
+      return numbered(reads === 1 ? [{ id: "review-1", title: "Review", submitterId: "member-1", status: "review_pending" }] : [], 1, reads === 1 ? 1 : 0);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await submitReview("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
@@ -418,7 +429,7 @@ describe("moderation numbered routes", () => {
   const assetRow = (id = "asset-1") => ({ asset: { id, originalName: `${id}.pdf` }, job: { status: "failed_retryable" } });
   const assetPreview = (id = "asset-1") => json({ assetId: id, originalName: `${id}.pdf`, markdown: "Private asset contents", warnings: [], lineCount: 1, parserSchemaVersion: "v1" });
   async function renderAssets() {
-    browser.history.replaceState({}, "", "/admin/assets?page=2&status=failed_retryable");
+    browser.history.replaceState({}, "", "/admin/assets?status=failed_retryable");
     await act(async () => root.render(<AdminAssetsRoute locale={locale()} search={browser.location.search} />)); await flush();
   }
 
@@ -546,15 +557,15 @@ describe("moderation numbered routes", () => {
     });
     await renderAssets(); await retryAsset();
     await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
-    await act(async () => { browser.history.pushState({}, "", "/admin/assets?page=2&status=failed_retryable"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => { browser.history.pushState({}, "", "/admin/assets?status=failed_retryable"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     expect(gets).toBe(3);
     await act(async () => mutation.resolve(status === 200 ? json({}) : new Response(null, { status }))); await flush();
-    expect(gets).toBe(3); expect(container.textContent).toContain("item-2-0.pdf");
+    expect(gets).toBe(3); expect(container.textContent).toContain("item-1-0.pdf");
     expect(container.querySelector('[data-page-state="forbidden"]')).toBeNull();
     // The new query's GET preceded completion of the old POST; it cannot resolve that outcome.
-    expect((container.querySelector('button[aria-label="Retry item-2-0.pdf"]') as HTMLButtonElement).disabled).toBe(true);
+    expect((container.querySelector('button[aria-label="Retry item-1-0.pdf"]') as HTMLButtonElement).disabled).toBe(true);
     await clickButton("Try again"); await flush(); expect(gets).toBe(4);
-    expect((container.querySelector('button[aria-label="Retry item-2-0.pdf"]') as HTMLButtonElement).disabled).toBe(false);
+    expect((container.querySelector('button[aria-label="Retry item-1-0.pdf"]') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("recovers a denied asset read once and ignores an older POST after recovery", async () => {
@@ -605,15 +616,15 @@ describe("moderation numbered routes", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") { posts++; return json({}); }
       gets++; urls.push(String(input));
-      if (gets === 1) return numbered([assetRow()], 2, 21);
+      if (gets === 1) return numbered([assetRow()], 1, 1);
       if (gets === 2) return new Response(null, { status: 500 });
-      return numbered([], Number(queryOf(String(input), "page")), 0);
+      return numbered([], 1, 0);
     });
     await renderAssets(); await retryAsset(); await flush(); await clickButton("Try again"); await flush();
-    expect(posts).toBe(1); expect(gets).toBe(4);
-    expect(urls.map((url) => queryOf(url, "page"))).toEqual(["2", "2", "2", "1"]);
+    expect(posts).toBe(1); expect(gets).toBe(3);
+    expect(urls.map((url) => queryOf(url, "page"))).toEqual(["1", "1", "1"]);
     expect(urls.every((url) => queryOf(url, "status") === "failed_retryable")).toBe(true);
-    expect(browser.location.search).not.toContain("page=2");
+    expect(browser.location.search).not.toContain("page");
   });
 
   async function submitReview(label: string) {await clickButton(label);await clickButton("Submit decision");}
@@ -647,11 +658,11 @@ describe("moderation numbered routes", () => {
     expect(container.textContent).toContain("asset-1.pdf");expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
-  it.each(["page","filter"])("discards asset retry confirmation on %s navigation", async kind => {
+  it.each(["filter change","filter clear"])("discards asset retry confirmation on %s navigation", async kind => {
     let posts=0;
     vi.stubGlobal("fetch",async (input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});} return pageResponse(String(input),assetRow);});
     await renderAssets();await clickButton("Retry");const old=container.querySelector('[data-confirm-action]') as HTMLButtonElement;
-    await act(async () => {browser.history.pushState({},"",kind === "page" ? "/admin/assets?page=1&status=failed_retryable" : "/admin/assets?page=2&status=queued");browser.dispatchEvent(new browser.PopStateEvent("popstate"));});await flush();
+    await act(async () => {browser.history.pushState({},"",kind === "filter change" ? "/admin/assets?status=queued" : "/admin/assets");browser.dispatchEvent(new browser.PopStateEvent("popstate"));});await flush();
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();await act(async () => old.click());expect(posts).toBe(0);
   });
 

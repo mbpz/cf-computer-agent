@@ -15,9 +15,9 @@ vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(valu
 vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
 const { Window } = await import("happy-dom");
 
-describe("private task numbered route", () => {
+describe("private tasks route", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(() => { browser = new Window({ url: "https://app.test/tasks?status=doing&page=2" }); vi.stubGlobal("window", browser); installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
+  beforeEach(() => { browser = new Window({ url: "https://app.test/tasks?status=doing" }); vi.stubGlobal("window", browser); installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
   afterEach(async () => { vi.useRealTimers(); await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   it.each(["cancel", "accept"] as const)("%s leaves task query side effects inside admitted navigation", async outcome => {
@@ -29,22 +29,24 @@ describe("private task numbered route", () => {
     try {
       const count = requests.length;
       await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
-      expect(browser.location.search).toBe("?status=doing&page=2");
+      expect(browser.location.search).toBe("?status=doing");
       expect(requests).toHaveLength(count); expect(requests[0]?.signal?.aborted).toBe(false);
       expect((container.querySelector('[aria-label="Priority"]') as HTMLSelectElement).value).not.toBe("high");
       await act(async () => decision[outcome]()); await flush();
-      if (outcome === "cancel") { expect(requests).toHaveLength(count); expect(browser.location.search).toBe("?status=doing&page=2"); }
+      if (outcome === "cancel") { expect(requests).toHaveLength(count); expect(browser.location.search).toBe("?status=doing"); }
       else { expect(requests).toHaveLength(count + 1); expect(requests.at(-1)?.url).toContain("priority=high"); expect(requests[0]?.signal?.aborted).toBe(true); }
     } finally { unregister(); }
   });
 
-  it("restores filters and page on popstate while aborting the stale request", async () => {
+  it("restores filters on popstate, aborts the stale request, and ignores URL page params", async () => {
     const requests: Array<{ url: string; signal?: AbortSignal }> = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); requests.push({ url, signal: init?.signal ?? undefined }); return taskPage(url); });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    expect(requests[0]?.url).toContain("status=doing"); expect(requests[0]?.url).toContain("page=2");
+    expect(requests[0]?.url).toContain("status=doing"); expect(requests[0]?.url).toContain("page=1"); expect(requests[0]?.url).toContain("pageSize=20");
     await act(async () => { browser.history.pushState({}, "", "/tasks?priority=high&pageSize=50"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
-    expect(requests[0]?.signal?.aborted).toBe(true); expect(requests.at(-1)?.url).toContain("priority=high"); expect(requests.at(-1)?.url).toContain("pageSize=50");
+    expect(requests[0]?.signal?.aborted).toBe(true);
+    expect(requests.at(-1)?.url).toContain("priority=high");
+    expect(requests.at(-1)?.url).toContain("page=1"); expect(requests.at(-1)?.url).toContain("pageSize=20"); expect(requests.at(-1)?.url).not.toContain("pageSize=50");
   });
 
   it("clears a stale action error when browser history restores a query", async () => {
@@ -76,37 +78,50 @@ describe("private task numbered route", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("replaces an empty mutation page with the preceding page once", async () => {
-    const urls: string[] = []; let deleted = false;
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); urls.push(url); if (init?.method === "DELETE") { deleted = true; return new Response(null, { status: 204 }); } return taskPage(url, deleted); });
+  it("refreshes the window from page 1 after a delete", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); urls.push(url); if (init?.method === "DELETE") return new Response(null, { status: 204 }); return taskPage(url); });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     const button = container.querySelector("button.bg-destructive") as HTMLButtonElement; expect(button).toBeTruthy();
     await act(async () => button.click()); await flush();
-    expect(deleted).toBe(false); await clickButton("Delete permanently"); await flush();
-    expect(browser.location.search).toContain("status=doing"); expect(browser.location.search).not.toContain("page=2");
-    expect(urls.filter((url) => url.startsWith("/api/tasks?")).length).toBe(3);
+    expect(urls.filter((url) => url.startsWith("/api/tasks?")).length).toBe(1);
+    await clickButton("Delete permanently"); await flush();
+    const lists = urls.filter((url) => url.startsWith("/api/tasks?"));
+    expect(lists).toHaveLength(2);
+    expect(lists.at(-1)).toContain("page=1"); expect(lists.at(-1)).toContain("pageSize=20");
+    expect(browser.location.search).toContain("status=doing"); expect(browser.location.search).not.toContain("page=");
   });
 
   it.each([
     ["Status", "blocked", "status"],
     ["Priority", "high", "priority"],
     ["Due", "today", "due"],
-  ])("synchronizes %s and resets the page", async (label, value, key) => {
+  ])("synchronizes %s into the URL", async (label, value, key) => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => taskPage(String(input)));
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     const control = container.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLSelectElement;
     await change(control, value); await flush();
     expect(browser.location.search).toContain(`${key}=${value}`);
-    expect(browser.location.search).not.toContain("page=2");
+    expect(browser.location.search).not.toContain("page=");
   });
 
-  it("resets page for pageSize with one history transition", async () => {
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => taskPage(String(input)));
-    const pushState = vi.spyOn(browser.history, "pushState").mockClear();
+  it("appends the next page of tasks on end-of-list without duplicating the first page", async () => {
+    const urls: string[] = [];
+    const pageFor = (url: string): Response => {
+      const page = Number(new URL(url, "https://app.test").searchParams.get("page") || "1");
+      const items = page === 1 ? Array.from({ length: 20 }, (_, index) => ({ ...createTask(`Alpha ${index}`), id: `task-alpha-${index}` })) : [createTask("Beta")];
+      return Response.json({ items, pagination: { page, pageSize: 20, total: 21, totalPages: 2 } });
+    };
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); urls.push(url); return pageFor(url); });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    await change(container.querySelector('[aria-label="Rows per page"]') as HTMLSelectElement, "50"); await flush();
-    expect(browser.location.search).toBe("?status=doing&pageSize=50");
-    expect(pushState).toHaveBeenCalledTimes(1);
+    const requestedPages = () => urls.filter((url) => url.startsWith("/api/tasks?")).map((url) => new URL(url, "https://app.test").searchParams.get("page"));
+    expect(requestedPages()).toEqual(["1"]);
+    expect(container.textContent).toContain("Alpha 0");
+    await scrollToEnd();
+    expect(requestedPages()).toEqual(["1", "2"]);
+    expect(container.textContent).toContain("Alpha 0"); expect(container.textContent).toContain("Beta");
+    await scrollToEnd();
+    expect(requestedPages()).toEqual(["1", "2"]);
   });
 
   it.each([["Search tasks", "q"], ["Tag", "tag"]])("debounces rapid %s changes into one replace transition and one request", async (label, key) => {
@@ -120,7 +135,7 @@ describe("private task numbered route", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(299); }); expect(gets).toBe(1);
     await act(async () => { await vi.advanceTimersByTimeAsync(1); }); await settle();
     expect(gets).toBe(2); expect(replaceState).toHaveBeenCalledTimes(1); expect(pushState).not.toHaveBeenCalled();
-    expect(browser.location.search).toContain(`${key}=alpha`); expect(browser.location.search).not.toContain("page=2");
+    expect(browser.location.search).toContain(`${key}=alpha`); expect(browser.location.search).not.toContain("page=");
     vi.useRealTimers();
   });
 
@@ -160,22 +175,35 @@ describe("private task numbered route", () => {
 
   it("preserves the current list while retrying a local failure", async () => {
     let gets = 0;
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { gets += 1; if (gets === 2) return errorResponse(); return taskPage(String(input), false, gets === 3 ? "Beta" : "Alpha"); });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      gets += 1;
+      if (gets === 2) return errorResponse();
+      const title = gets >= 3 ? "Beta" : "Alpha";
+      const items = Array.from({ length: 20 }, (_, index) => ({ ...createTask(`${title} ${index}`), id: `task-${title.toLowerCase()}-${index}` }));
+      return Response.json({ items, pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } });
+    });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    await clickButton("Page 1"); await flush();
-    expect(container.textContent).toContain("Alpha"); expect(container.querySelector('[role="alert"]')).toBeTruthy();
+    expect(container.textContent).toContain("Alpha 0");
+    await scrollToEnd();
+    expect(container.textContent).toContain("Alpha 0"); expect(container.querySelector('[role="alert"]')).toBeTruthy();
     await clickButton("Try search again"); await flush(); await flush();
-    expect(gets).toBe(3); expect(container.textContent).toContain("Beta");
+    expect(gets).toBe(3); expect(container.textContent).toContain("Beta 0"); expect(container.textContent).not.toContain("Alpha 0");
   });
 
   it.each([401, 403])("clears protected tasks when a list refresh returns %s", async (status) => {
+    const items = Array.from({ length: 20 }, (_, index) => ({ ...createTask(`Alpha ${index}`), id: `task-alpha-${index}` }));
     let gets = 0;
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => ++gets === 1 ? taskPage(String(input)) : Response.json({ error: { code: "DENIED", message: "private detail" } }, { status }));
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      gets += 1;
+      return gets === 1
+        ? Response.json({ items, pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } })
+        : Response.json({ error: { code: "DENIED", message: "private detail" } }, { status });
+    });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    expect(container.textContent).toContain("Alpha");
-    await clickButton("Page 1"); await flush();
-    expect(container.textContent).not.toContain("Alpha");
-    expect(container.querySelector('[aria-label="Complete: Alpha (task-alpha)"]')).toBeNull();
+    expect(container.textContent).toContain("Alpha 0");
+    await scrollToEnd();
+    expect(container.textContent).not.toContain("Alpha 0");
+    expect(container.querySelector('[aria-label="Complete: Alpha 0 (task-alpha-0)"]')).toBeNull();
     expect(container.textContent).toContain("Try search again");
     expect(container.textContent).not.toContain("private detail");
   });
@@ -223,7 +251,7 @@ describe("private task numbered route", () => {
     expect(gets).toBe(2);
     await act(async () => resolveMutation(Response.json({ error: { code: "DENIED" } }, { status: 403 }))); await flush();
     expect(container.textContent).not.toContain("Alpha");
-    await act(async () => resolveRead(taskPage(browser.location.href, false, "Late private title"))); await flush();
+    await act(async () => resolveRead(taskPage(browser.location.href, "Late private title"))); await flush();
     expect(container.textContent).not.toContain("Late private title");
     expect(container.textContent).toContain("Try search again");
   });
@@ -233,7 +261,7 @@ describe("private task numbered route", () => {
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") return mutation;
-      gets += 1; return taskPage(String(input), false, gets === 1 ? "Alpha" : "Latest");
+      gets += 1; return taskPage(String(input), gets === 1 ? "Alpha" : "Latest");
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await act(async () => (container.querySelector('[aria-label="Complete: Alpha (task-alpha)"]') as HTMLButtonElement).click());
@@ -501,10 +529,19 @@ describe("private task numbered route", () => {
     const button = [...container.querySelectorAll("button")].find((candidate) => candidate.getAttribute("aria-label") === name || candidate.textContent === name) as HTMLButtonElement;
     expect(button).toBeTruthy(); await act(async () => button.click());
   }
+
+  async function scrollToEnd() {
+    const scroller = container.querySelector("div.overflow-auto") as HTMLElement;
+    await act(async () => {
+      scroller.scrollTop = scroller.scrollHeight;
+      scroller.dispatchEvent(new browser.Event("scroll", { bubbles: true }));
+    });
+    await flush();
+  }
 });
 
 function createTask(title: string) { return { id: `task-${title.toLowerCase()}`, title, notes: "", status: "doing", progress: 10, priority: "high", dueAt: null, completedAt: null, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }; }
-function taskPage(url: string, empty = false, title = "Alpha"): Response { const params = new URL(url, "https://app.test").searchParams; const page = Number(params.get("page") || "1"); const pageSize = Number(params.get("pageSize") || "20"); const items = empty && page === 2 ? [] : [createTask(title)]; const total = empty || page === 1 ? 1 : 21; return Response.json({ items, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } }); }
+function taskPage(url: string, title = "Alpha"): Response { const params = new URL(url, "https://app.test").searchParams; const page = Number(params.get("page") || "1"); const pageSize = Number(params.get("pageSize") || "20"); return Response.json({ items: [createTask(title)], pagination: { page, pageSize, total: 1, totalPages: 1 } }); }
 function rejectedResponse(): Response { return Response.json({ error: { code: "TASK_TRANSITION_INVALID", message: "invalid", retryable: false } }, { status: 422 }); }
 function errorResponse(): Response { return Response.json({ error: { code: "TEST_ERROR", message: "failed", retryable: true } }, { status: 500 }); }
 async function change(control: HTMLInputElement | HTMLSelectElement, value: string) { await act(async () => {

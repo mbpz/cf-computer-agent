@@ -27,7 +27,7 @@ describe("calendar cancellation confirmation", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   async function mount(extra: Record<string, unknown> = {}) {
-    await act(async () => root.render(<CalendarPage locale={locale} state={ready} range={range} createMemberId="alice" onCancel={write} onRangeChange={() => {}} onPageChange={() => {}} onPageSizeChange={() => {}} {...extra} />));
+    await act(async () => root.render(<CalendarPage locale={locale} state={ready} range={range} createMemberId="alice" onCancel={write} onRangeChange={() => {}} onLoadMore={() => {}} {...extra} />));
   }
   const trigger = (index = 0) => container.querySelectorAll<HTMLButtonElement>('[aria-label="Cancel event"]')[index]!;
   function action(label: string) { const button = [...container.querySelectorAll("button")].find(node => node.textContent === label); expect(button, label).toBeDefined(); return button!; }

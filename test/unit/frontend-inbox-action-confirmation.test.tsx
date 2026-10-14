@@ -27,7 +27,7 @@ describe("inbox action confirmation", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   async function mount(extra: Record<string, unknown> = {}) {
-    await act(async () => root.render(<InboxPage locale={locale} state={ready} createMemberId="alice" onStatusChange={write} onPromoteTask={promote} onFilterChange={() => {}} onPageChange={() => {}} onPageSizeChange={() => {}} {...extra} />));
+    await act(async () => root.render(<InboxPage locale={locale} state={ready} createMemberId="alice" onStatusChange={write} onPromoteTask={promote} onFilterChange={() => {}} onLoadMore={() => {}} {...extra} />));
   }
   function action(label: string) { const button = [...container.querySelectorAll("button")].find(node => node.textContent === label); expect(button, label).toBeDefined(); return button!; }
   function confirm() { const button = container.querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(button).not.toBeNull(); return button!; }

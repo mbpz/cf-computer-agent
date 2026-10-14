@@ -167,18 +167,18 @@ describe("duplicate decision recovery", () => {
     expect(container.textContent).not.toContain("Canonical dup-1"); expect(action()).toBeNull();
   });
 
-  it("retains the acknowledged decision lock after its refresh fails, then clamps using GET only", async () => {
+  it("retains the acknowledged decision lock after its refresh fails and recovers with GET only", async () => {
     let gets = 0; let posts = 0; const pages: number[] = [];
     vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
       if (init?.method === "POST") { posts++; return json({candidate: duplicate("associate")}); }
       const page = Number(new URL(String(input), "https://app.test").searchParams.get("page")); pages.push(page);
-      if (++gets === 1) return numbered([duplicate()], 2, 21);
+      if (++gets === 1) return numbered([duplicate()]);
       if (gets === 2) return new Response(null, {status: 500});
-      return numbered([], page, 0);
+      return numbered([]);
     });
-    await render(2); await act(async () => action().click()); await click("Confirm decision"); await flush();
+    await render(); await act(async () => action().click()); await click("Confirm decision"); await flush();
     expect(action().disabled).toBe(true);
-    await click("Try again"); expect(pages).toEqual([2, 2, 2, 1]); expect(posts).toBe(1); expect(action()).toBeNull();
+    await click("Try again"); expect(pages).toEqual([1, 1, 1]); expect(posts).toBe(1); expect(action()).toBeNull();
   });
 
   it("does not treat stale pending data as permission to repeat an acknowledged decision", async () => {
@@ -203,10 +203,16 @@ describe("duplicate decision recovery", () => {
     expect(container.querySelector("[data-page-state=forbidden]")).toBeNull();
   });
 
-  it("clears the previous query's rows when a new query fails", async () => {
+  it("does not carry a previous render's rows into a mount whose read fails", async () => {
     let gets = 0;
     vi.stubGlobal("fetch", async () => ++gets === 1 ? numbered([duplicate()]) : new Response(null, {status: 500}));
-    await render(); await go(2); expect(action()).toBeNull(); expect(container.textContent).not.toContain("Canonical dup-1");
+    await render();
+    expect(container.textContent).toContain("Canonical dup-1");
+    await act(async () => root.render(null));
+    await render();
+    expect(action()).toBeNull();
+    expect(container.textContent).not.toContain("Canonical dup-1");
+    expect(container.querySelector('[data-page-state="error"]')).toBeTruthy();
   });
 
   it("coalesces manual recovery clicks and never replays a failed write", async () => {

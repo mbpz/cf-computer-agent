@@ -50,6 +50,12 @@ describe("goal task association journey", () => {
   const marker = () => app!.browser.sessionStorage.getItem("memory-garden:planning-write:v1:contributor-route-auditor:GOALS");
   const unload = () => { const event = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(event); return event.defaultPrevented; };
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
+  /** The editor appends by scrolling its table container to the bottom. */
+  async function next() {
+    const scroller = editor().querySelector("div.overflow-auto") as HTMLElement;
+    expect(scroller).toBeTruthy();
+    await act(async () => { scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new app!.browser.Event("scroll", { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 0)); });
+  }
   async function confirmWrite() { await click(confirm()); }
   it.each([false, true])("requires exact goal/task impact confirmation for linked=%s, with zero-write cancellation", async initial => {
     await mount(initial); const action = button(initial ? "Unlink" : "Link", editor()); const count = reads.length;
@@ -65,8 +71,9 @@ describe("goal task association journey", () => {
   });
   it("blocks captured close, pagination, duplicate row actions and navigation during the decision", async () => {
     await mount(); const action = captured(button("Link", editor())), close = captured(button("Close links", editor()));
-    const next = captured(editor().querySelector<HTMLButtonElement>('[aria-label="Next page"]')!); const count = reads.length;
-    await act(async () => { action(); close(); next(); action(); expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
+    const scroll = () => { const scroller = editor().querySelector("div.overflow-auto") as HTMLElement; scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new app!.browser.Event("scroll", { bubbles: true })); };
+    const count = reads.length;
+    await act(async () => { action(); close(); scroll(); action(); expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
     expect(editor()).toBeTruthy(); expect(confirm()).toBeTruthy(); expect(writes).toEqual([]); expect(reads).toHaveLength(count);
     await click(keep()); await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"));
   });
@@ -93,11 +100,12 @@ describe("goal task association journey", () => {
     await waitForApp(() => !button("Manage task links").disabled); expect(marker()).toBeNull(); expect(writes).toHaveLength(1);
     expect(unload()).toBe(false); await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"));
   });
-  it("rejects a captured old row after pagination and only confirms the new page target", async () => {
-    await mount(); const stale = captured(button("Link", editor())); await click(editor().querySelector<HTMLButtonElement>('[aria-label="Next page"]')!);
+  it("keeps a captured row handler bound to its own row after a later page appends", async () => {
+    await mount(); const first = captured(button("Link", editor())); await next();
     await waitForApp(() => editor()?.textContent?.includes("Private task 22") === true);
-    await act(async () => stale()); expect(confirm()).toBeNull(); expect(writes).toEqual([]);
-    await click(button("Link", editor())); await confirmWrite(); await waitForApp(() => !!button("Unlink", editor()));
+    // Appending keeps the earlier row loaded, so its captured handler still targets task 0.
+    await act(async () => first()); expect(confirm()).toBeTruthy(); await click(keep());
+    await click(editor().querySelector<HTMLButtonElement>('[aria-label="Link: Private task 20"]')!); await confirmWrite(); await waitForApp(() => !!button("Unlink", editor()));
     expect(writes).toHaveLength(1); expect(links.has("t-20")).toBe(true); expect(links.has("t-0")).toBe(false);
   });
   it("invalidates captured row handlers synchronously when closing", async () => {
@@ -124,9 +132,9 @@ describe("goal task association journey", () => {
   });
   it("paginates owned candidates and prevents other goal mutations while editing", async () => {
     await mount(); expect((main().querySelector('input[type="range"]') as HTMLInputElement).disabled).toBe(true);
-    await act(async () => (editor().querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
+    await next();
     await waitForApp(() => editor().textContent?.includes("Private task 22") === true);
-    expect(editor().textContent).not.toContain("Private task 0"); expect(reads.at(-1)).toContain("page=2");
+    expect(editor().textContent).toContain("Private task 0"); expect(reads.at(-1)).toContain("page=2");
   });
   it("deduplicates clicks and locks close until write/readback completes", async () => {
     await mount(); let release!: () => void; hold = new Promise(resolve => { release = resolve; });
@@ -162,7 +170,7 @@ describe("goal task association journey", () => {
   });
   it.each([401, 403, 404])("clears all private state on denied association read %i", async status => {
     await mount(); readFailure = status;
-    await act(async () => editor().querySelector<HTMLButtonElement>('[aria-label="Next page"]')!.click());
+    await next();
     await waitForApp(() => !editor()); expect(main().textContent).not.toContain("Private goal"); expect(main().textContent).not.toContain("Private task");
   });
   it("blocks route exit, ignores a late write after forced teardown and recovers by explicit GET without replay", async () => {

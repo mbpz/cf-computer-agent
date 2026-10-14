@@ -68,6 +68,12 @@ describe("Focus owned task selection through App", () => {
   }
   async function open() { await click(button("Choose task")); await waitForApp(() => !!button("Owned task 1") || !!main().querySelector('[role="alert"]') || main().textContent!.includes("No matching tasks")); }
   async function select() { await open(); await click(button("Owned task 1")); }
+  /** The picker appends by scrolling its table container to the bottom. */
+  async function scrollPicker() {
+    const scroller = main().querySelector("div.overflow-auto") as HTMLElement;
+    expect(scroller).toBeTruthy();
+    await act(async () => { scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new app!.browser.Event("scroll", { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 0)); });
+  }
   afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; receipt = null; receiptStatus = 0; seedStorage = []; delayedTransition = undefined; transitionStatus = 0; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals(); vi.restoreAllMocks();});
   const unload = () => { const event = new app!.browser.Event("beforeunload", {cancelable: true}); app!.browser.dispatchEvent(event); return event.defaultPrevented; };
   async function assertLocked() { await navigate("/settings"); expect(app!.browser.location.pathname).toBe("/focus"); expect(unload()).toBe(true); }
@@ -413,9 +419,11 @@ describe("Focus owned task selection through App", () => {
     const actions = calls.filter(c => c.path === "/api/tasks/task-1" || c.path === "/api/focus");
     expect(actions.map(c => c.method)).toEqual(["GET", "POST"]); expect(actions[1].body.taskId).toBe("task-1");
   });
-  it("paginates owned tasks and resets search to page one", async () => {
-    await mount(); await open(); await click(main().querySelector<HTMLButtonElement>('[aria-label="Next page"]')!); await waitForApp(() => !!button("Owned task 21"));
-    expect(button("Owned task 1")).toBeUndefined(); await input("  special  "); await click(button("Search tasks")); await waitForApp(() => !!button("Owned task 1"));
+  it("appends owned tasks on scroll and resets the window to page one on search", async () => {
+    await mount(); await open(); await scrollPicker(); await waitForApp(() => !!button("Owned task 21"));
+    expect(button("Owned task 1")).toBeDefined();
+    await input("  special  "); await click(button("Search tasks"));
+    await waitForApp(() => !!button("Owned task 1") && button("Owned task 21") === undefined);
     const requests = calls.filter(c => c.path.startsWith("/api/tasks?")); const last = new URL(requests.at(-1)!.path, "https://app.test");
     expect(last.searchParams.get("q")).toBe("special"); expect(last.searchParams.get("page")).toBe("1"); expect(last.searchParams.has("memberId")).toBe(false);
   });
@@ -426,13 +434,14 @@ describe("Focus owned task selection through App", () => {
   it.each([401,403,404])("does not POST when the selected task preflight returns %i", async status => {await mount(); await select(); detailStatus = status; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]') || main().textContent!.includes("Unable to load")); expect(calls.filter(c => c.path === "/api/tasks/task-1")).toHaveLength(1); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0); expect(main().querySelector('[data-focus-selected]')).toBeNull(); if(status === 404) expect(button("Start focus").disabled).toBe(true);});
   it("rejects a wrong-target preflight without writing", async () => {await mount(); await select(); wrongTarget = true; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]')); expect(calls.filter(c => c.path === "/api/tasks/task-1")).toHaveLength(1); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0); expect(button("Start focus").disabled).toBe(true);});
   it("invalidates selection if the task disappears between preflight and POST", async () => {await mount(); await select(); postStatus = 404; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]')); expect(button("Start focus").disabled).toBe(true); expect(main().textContent).toContain("Task is unavailable");});
-  it("changes page size using the shared pagination contract", async () => {
-    await mount(); await open(); await act(async () => {
-      const node = main().querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
-      node.value = "50"; node.dispatchEvent(new app!.browser.Event("change", {bubbles: true}));
-    });
+  it("offers no numbered pager and appends the next task page on scroll", async () => {
+    await mount(); await open();
+    expect(main().querySelector('select[aria-label="Rows per page"]')).toBeNull();
+    expect(main().querySelector('button[aria-label="Page 2"]')).toBeNull();
+    await scrollPicker();
     await waitForApp(() => !!button("Owned task 21"));
-    expect(calls.filter(c => c.path.startsWith("/api/tasks?")).at(-1)!.path).toContain("page=1&pageSize=50");
+    const requests = calls.filter(c => c.path.startsWith("/api/tasks?"));
+    expect(requests.map(c => new URL(c.path, "https://app.test").searchParams.get("page"))).toEqual(["1", "2"]);
     expect(button("Owned task 1")).toBeDefined();
   });
   it("ignores an old search response after a newer query succeeds", async () => {

@@ -1,5 +1,11 @@
 export const supportedPageSizes = [20, 50, 100] as const;
 export type SupportedPageSize = typeof supportedPageSizes[number];
+
+/**
+ * Window every infinite-scroll list fetches at a time. Rows accumulate, so the
+ * page size is no longer a user choice: pages are pulled until `totalPages`.
+ */
+export const listPageSize: SupportedPageSize = 20;
 export interface FrontendPageRequest { page: number; pageSize: SupportedPageSize; }
 export interface FrontendPageMetadata extends FrontendPageRequest { total: number; totalPages: number; }
 export interface FrontendNumberedPage<T> { items: T[]; pagination: FrontendPageMetadata; }

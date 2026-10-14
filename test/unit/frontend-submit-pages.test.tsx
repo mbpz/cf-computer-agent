@@ -34,7 +34,7 @@ describe("React submission and asset pages", () => {
   it("maps asset parser lifecycle and resubmission states", () => {
     expect(assetStatusModel({ status: "queued" })).toMatchObject({ tone: "info", label: "Queued" });
     expect(assetStatusModel({ status: "failed_terminal", lastErrorCode: "SOURCE_UNSUPPORTED" })).toMatchObject({ tone: "destructive", retryable: false });
-    const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{ id: "s1", title: "Guide", status: "needs_revision" }], nextCursor: null }} />);
+    const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{ id: "s1", title: "Guide", status: "needs_revision" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} />);
     expect(html).toContain("Needs revision");
     expect(html).toContain("Resubmit");
   });
@@ -45,13 +45,14 @@ describe("React submission and asset pages", () => {
       title: "Duplicate guide",
       status: "rejected",
       review: { decision: "rejected", reasonCode: "duplicate", note: "已有正式条目" },
-    }], nextCursor: null }} />);
+    }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} />);
     expect(html).toContain("Review reason");
     expect(html).toContain("Duplicate");
     expect(html).toContain("Reviewer note");
     expect(html).toContain("已有正式条目");
-    expect(html).toContain(">1<");
-    expect(html).toContain("1 / 1");
+    expect(html).not.toContain("data-pagination-desktop");
+    expect(html).not.toContain("data-pagination-mobile");
+    expect(html).toContain("No more items");
     expect(html).not.toContain("undefined");
     expect(html).not.toContain("reviewerId");
   });
