@@ -1,5 +1,6 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
 import { readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 const migrations = await readD1Migrations("migrations");
@@ -17,6 +18,10 @@ async function publicAssetPaths(directory: string, prefix = ""): Promise<string[
 }
 
 export default defineConfig({
+  resolve: {
+    // Mirrors vite.config.ts so frontend modules that import `@/...` resolve in tests.
+    alias: { "@": fileURLToPath(new URL("./frontend", import.meta.url)) },
+  },
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
@@ -39,6 +44,7 @@ export default defineConfig({
     }),
   ],
   test: {
+    setupFiles: ["test/setup/dom-globals.ts"],
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
     provide: {
       d1Migrations: migrations,

@@ -5,6 +5,7 @@ import { Skeleton } from "../../components/ui/skeleton";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminAnalyticsOverview } from "../../lib/admin-analytics-data";
 import { DataPagination } from "../../components/data-pagination";
+import { NumberTicker } from "../../components/motion/number-ticker";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 
 export type AdminAnalyticsState = { kind: "loading" } | { kind: "ready"; data: AdminAnalyticsOverview } | { kind: "error" } | { kind: "forbidden" };
@@ -26,7 +27,9 @@ export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, l
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
-  return <Card><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-semibold tabular-nums">{value}</p></CardContent></Card>;
+  // startOnView={false}: these cards are always above the fold, so arming on
+  // mount rolls the digits without depending on an intersection observer.
+  return <Card><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-semibold tabular-nums"><NumberTicker value={value} startOnView={false} /></p></CardContent></Card>;
 }
 
 function DailyChart({ rows, locale }: { rows: AdminAnalyticsOverview["daily"]; locale: LocaleRuntime }) {

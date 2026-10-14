@@ -45,7 +45,10 @@ describe("administration dashboard authoritative totals", () => {
     app = await mountAuthenticatedApp({ url: "https://app.test/admin", role: "admin", permissionMask: "0x0", fetch: fetcher(respond) });
   }
   const card = (key: Metric) => app!.container.querySelector(`[data-dashboard-metric="${key}"]`)!;
-  const value = (key: Metric) => card(key)?.querySelector("[data-metric-value]")?.textContent;
+  // The metric value is an animated digit roller whose visual digits are
+  // aria-hidden; the accessible (.sr-only) text carries the authoritative count,
+  // so assert that instead of the animated node's text content.
+  const value = (key: Metric) => card(key)?.querySelector("[data-metric-value] .sr-only")?.textContent;
   const click = async (selector: string, twice = false) => act(async () => {
     const button = app!.container.querySelector<HTMLButtonElement>(selector)!;
     expect(button).not.toBeNull(); button.click(); if (twice) button.click();

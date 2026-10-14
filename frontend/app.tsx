@@ -57,6 +57,8 @@ import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-
 import { ThreadPage, type ThreadPageState } from "./pages/messages/thread-page";
 import { LoginPage } from "./pages/login-page";
 import { PublicWorkbenchPage } from "./pages/workbench-landing/public-workbench-page";
+import { NotFoundGlitch } from "./components/motion/not-found/glitch";
+import { Loader } from "./components/motion/loader";
 import { SettingsPage } from "./pages/settings-page";
 import { GraphRoute } from "./pages/graph-page";
 import { ComingSoonPage } from "./pages/coming-soon-page";
@@ -191,7 +193,7 @@ export function App() {
   if (sessionError) return <LoginPage locale={locale} error={frontendText(locale, "APP_SIGN_IN_DESCRIPTION")} />;
   if (anonymous && pathname === "/") return <PublicWorkbenchPage locale={locale} />;
   if (anonymous) return <LoginPage locale={locale} />;
-  if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_LOADING_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_LOADING_DESCRIPTION")}</p></main>;
+  if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><Loader variant="dots" size={22} label={frontendText(locale, "APP_LOADING_TITLE")} /><h1 className="mt-3 text-2xl font-semibold">{frontendText(locale, "APP_LOADING_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_LOADING_DESCRIPTION")}</p></main>;
 
   const navigate = (path: string) => writeWorkspaceHistory("push", path);
   const logout = async (owner: AccountNetworkOwner) => {
@@ -928,7 +930,7 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
 }
 
 function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
-  return <section className="mx-auto max-w-xl py-16"><h1 className="text-2xl font-semibold">{frontendText(locale, "PAGE_NOT_FOUND_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "PAGE_NOT_FOUND_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/">{frontendText(locale, "PAGE_RETURN_HOME")}</a></section>;
+  return <NotFoundGlitch code="404" title={frontendText(locale, "PAGE_NOT_FOUND_TITLE")} description={frontendText(locale, "PAGE_NOT_FOUND_DESCRIPTION")} homeHref="/" homeLabel={frontendText(locale, "PAGE_RETURN_HOME")} />;
 }
 
 export function KnowledgeRoute(props: { locale: LocaleRuntime; search: string; memberId?: string }) {

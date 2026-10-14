@@ -1,6 +1,7 @@
 import { ArrowRight, Bell, Books, ChatCircleText, SquaresFour, Tray } from "@phosphor-icons/react";
 import { useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
 import { Button } from "../../components/ui/button";
+import { ScrollReveal } from "../../components/motion/scroll-reveal";
 import { syncDocumentLanguage, type LocaleRuntime } from "../../lib/i18n";
 import { readTheme, type ThemeMode } from "../../lib/theme";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
@@ -83,42 +84,48 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
           </figure>
         </section>
 
-        <section className="workbench-demo" aria-label={text("GUIDE_LABEL")} data-demo-step={state.step}>
-          <div className="workbench-demo-intro">
-            <p className="workbench-muted">{text("DEMO_DESCRIPTION")}</p>
-            <p className="workbench-muted">{text("INVITE_ONLY")}</p>
-          </div>
-          <div className="workbench-features" role="group" aria-label={text("HOTSPOTS_LABEL")}>
-            {features.map(({ id, label, icon: Icon }, index) => <Button key={id} ref={index === 0 ? firstFeature : undefined}
-              variant="outline" data-feature={id} aria-haspopup="dialog" aria-expanded={state.activeFeature === id}
-              onClick={() => dispatch({ type: "open", feature: id })}>
-              <Icon size={20} aria-hidden="true" /><span>{text(label)}</span>
-            </Button>)}
-          </div>
-          <ol className="workbench-progress" aria-label={text("GUIDE_LABEL")}>
-            {steps.map(step => <li key={step} aria-current={state.step === step ? "step" : undefined}>{text(stepLabels[step])}</li>)}
-          </ol>
-          <div className="workbench-guide-status" aria-live="polite">
-            {state.step === "overview" ? <p>{text("GUIDE_HINT")}</p>
-              : state.step === "complete" ? <><h2>{text("COMPLETE_TITLE")}</h2><p>{text("COMPLETE_DESCRIPTION")}</p></>
-              : state.step === "capture" ? <p>{text(state.captured ? "CAPTURE_DONE" : "CAPTURE_GATE")}</p>
-              : state.step === "action" ? <p>{text(state.taskDone ? "ACTION_DONE" : "ACTION_GATE")}</p>
-              : <p>{text(stepLabels[state.step])}</p>}
-          </div>
-          {!state.activeFeature && state.step !== "overview" && <div className="workbench-guide-controls">
-            {state.step !== "complete" && <Button data-demo-action="next" disabled={gated}
-              onClick={() => dispatch({ type: "next" })}>{text("NEXT")}<ArrowRight size={18} aria-hidden="true" /></Button>}
-            <Button variant="outline" data-demo-action="replay" onClick={() => dispatch({ type: "replay" })}>{text("REPLAY")}</Button>
-          </div>}
-        </section>
+        <ScrollReveal amount={0.15}>
+          <section className="workbench-demo" aria-label={text("GUIDE_LABEL")} data-demo-step={state.step}>
+            <div className="workbench-demo-intro">
+              <p className="workbench-muted">{text("DEMO_DESCRIPTION")}</p>
+              <p className="workbench-muted">{text("INVITE_ONLY")}</p>
+            </div>
+            <div className="workbench-features" role="group" aria-label={text("HOTSPOTS_LABEL")}>
+              {features.map(({ id, label, icon: Icon }, index) => <Button key={id} ref={index === 0 ? firstFeature : undefined}
+                variant="outline" data-feature={id} aria-haspopup="dialog" aria-expanded={state.activeFeature === id}
+                onClick={() => dispatch({ type: "open", feature: id })}>
+                <Icon size={20} aria-hidden="true" /><span>{text(label)}</span>
+              </Button>)}
+            </div>
+            <ol className="workbench-progress" aria-label={text("GUIDE_LABEL")}>
+              {steps.map(step => <li key={step} aria-current={state.step === step ? "step" : undefined}>{text(stepLabels[step])}</li>)}
+            </ol>
+            <div className="workbench-guide-status" aria-live="polite">
+              {state.step === "overview" ? <p>{text("GUIDE_HINT")}</p>
+                : state.step === "complete" ? <><h2>{text("COMPLETE_TITLE")}</h2><p>{text("COMPLETE_DESCRIPTION")}</p></>
+                : state.step === "capture" ? <p>{text(state.captured ? "CAPTURE_DONE" : "CAPTURE_GATE")}</p>
+                : state.step === "action" ? <p>{text(state.taskDone ? "ACTION_DONE" : "ACTION_GATE")}</p>
+                : <p>{text(stepLabels[state.step])}</p>}
+            </div>
+            {!state.activeFeature && state.step !== "overview" && <div className="workbench-guide-controls">
+              {state.step !== "complete" && <Button data-demo-action="next" disabled={gated}
+                onClick={() => dispatch({ type: "next" })}>{text("NEXT")}<ArrowRight size={18} aria-hidden="true" /></Button>}
+              <Button variant="outline" data-demo-action="replay" onClick={() => dispatch({ type: "replay" })}>{text("REPLAY")}</Button>
+            </div>}
+          </section>
+        </ScrollReveal>
 
-        <section className="workbench-flow" aria-labelledby="workbench-flow-title">
-          <h2 id="workbench-flow-title">{text("FLOW_TITLE")}</h2><p>{text("FLOW_DESCRIPTION")}</p>
-        </section>
-        <footer className="workbench-footer">
-          <div><h2>{text("PRIVACY_TITLE")}</h2><p>{text("PRIVACY_DESCRIPTION")}</p><p className="workbench-muted">{text("DEMO_DESCRIPTION")}</p></div>
-          <div><h2>{text("FOOTER_CTA")}</h2>{login}<p className="workbench-muted">{text("INVITE_ONLY")}</p></div>
-        </footer>
+        <ScrollReveal>
+          <section className="workbench-flow" aria-labelledby="workbench-flow-title">
+            <h2 id="workbench-flow-title">{text("FLOW_TITLE")}</h2><p>{text("FLOW_DESCRIPTION")}</p>
+          </section>
+        </ScrollReveal>
+        <ScrollReveal delay={0.08}>
+          <footer className="workbench-footer">
+            <div><h2>{text("PRIVACY_TITLE")}</h2><p>{text("PRIVACY_DESCRIPTION")}</p><p className="workbench-muted">{text("DEMO_DESCRIPTION")}</p></div>
+            <div><h2>{text("FOOTER_CTA")}</h2>{login}<p className="workbench-muted">{text("INVITE_ONLY")}</p></div>
+          </footer>
+        </ScrollReveal>
       </div>
     </div>
     <WorkbenchFeaturePanel locale={locale} state={state} dispatch={dispatch} />

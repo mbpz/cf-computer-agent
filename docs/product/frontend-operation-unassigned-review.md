@@ -29,15 +29,22 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 110 项，但 A01 
 
 下表“条件”与组内共同守卫叠加。状态提示、role、option、props 转发和监听器均保留；不是每一行都对应一次用户操作。未挂载项的条件均是假设调用者接线之后的源码条件，不能误读为当前正式页面已可用。
 
-## `frontend/app.tsx`（3）
+## `frontend/app.tsx`（2）
 
 入口为 [source:frontend/main.tsx] 的 App。App 先处理 sessionError、匿名首页/登录、会话加载，再挂载 AccountNetworkBoundary、AppShell、HistoryNavigationNotice。属于全局外层，不在以业务 root symbol 为起点的图中。SettingsPage 行是 props/spread 边界，不是新的保存动作。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:220:75` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:247:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
-| `frontend/app.tsx:931:250` | app-boundary | 路由 fallback 返回 NotFoundPage | 返回首页链接 href=/；需继续验证带脏草稿时的实际导航行为。 |
+| `frontend/app.tsx:222:75` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:249:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+
+## `frontend/components/agents/citations.tsx`（1）
+
+beUI citations 组件的落地副本，由 agent 答案面板（`frontend/components/agent/answer-panel.tsx`）消费其 `Citations` 折叠来源列表。唯一未归属候选是未被产品调用的内联角标组件 `Citation`（需要答案正文内嵌标记，当前答案正文是纯文本）。[source:frontend/components/agent/answer-panel.tsx]
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/agents/citations.tsx:81:5` | unmounted-ui | 仅当调用方渲染内联角标 `Citation` 时挂载；当前无调用点 | 锚点指向 `#<idPrefix>-<citationId>` 定位同页来源行；默认英文 `View citation {index}` 仅在该未接线组件内出现。 |
 
 ## `frontend/components/history-navigation-notice.tsx`（2）
 
@@ -47,6 +54,25 @@ App 外层挂载：[source:frontend/app.tsx]。无 fault 时返回 null；故障
 | --- | --- | --- | --- |
 | `frontend/components/history-navigation-notice.tsx:11:10` | app-boundary | 已登录 App 挂载且 history fault 非空 | role=alert 呈现历史导航故障；无写接口。 |
 | `frontend/components/history-navigation-notice.tsx:13:5` | app-boundary | 同上且 retrying 为 false 时点击 | retryWorkspaceHistory；等待期间禁用按钮，finally 清除 pending；失败仍不视为导航完成。 |
+
+## `frontend/components/motion/loader.tsx`（3）
+
+共用加载指示器。App 在会话读取期间挂载 dots variant；其余 variant 目前没有第一方调用点。三个候选都是状态/图形节点，没有回调、没有写接口。[source:frontend/app.tsx]
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/loader.tsx:65:5` | app-boundary | 传入 variant/size/label 后渲染；App 启动态以 dots 挂载 | role=status 加 aria-label 播报加载中；同 label 另以 sr-only 文本输出；不发请求。 |
+| `frontend/components/motion/loader.tsx:239:5` | unmounted-ui | 仅当 variant=morph 时才挂载 | motion.svg 带 role=img；循环 rotate/scale，reduced-motion 退化为 opacity 脉冲。 |
+| `frontend/components/motion/loader.tsx:354:5` | unmounted-ui | 仅当 variant=metaballs 时才挂载 | 静态 svg 带 role=img，帧数据由同模块计算；无交互。 |
+
+## `frontend/components/motion/not-found/shared.tsx`（2）
+
+路由 fallback 的 404 舞台与 CTA 行。原 `NotFoundPage` 内的返回首页链接已被 `NotFoundGlitch` 取代，该未归属坐标由 `frontend/app.tsx:931:250` 迁移到本文件；app.tsx 不再持有此候选。[source:frontend/components/motion/not-found/glitch.tsx]
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/not-found/shared.tsx:55:7` | app-boundary | 路由 fallback 渲染 404；homeHref 默认 `/` | motion.a 指向 homeHref；whileTap/whileHover 受 reduced-motion 与 hover 能力门控。 |
+| `frontend/components/motion/not-found/shared.tsx:65:9` | unmounted-ui | 仅当调用方传入 browseHref 时渲染 | 第二 CTA 当前没有调用点传 browseHref，因此不出现在工作台界面中。 |
 
 ## `frontend/components/shell/context-rail.tsx`（6）
 
@@ -302,8 +328,13 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `f734e5206d295e4a3b584f3e51a8f0ca8352d527a03b821b5a56923927b81206`
+- `frontend/app.tsx`: `ee67e974182f529eaf5d4014cd117db73ccad29ead8bbf0283963509d71afa27`
+- `frontend/components/agent/answer-panel.tsx`: `aacef68e378bab0307b095b1afa160fb2151de7ec7f06d53a7928b3f6c4aef70`
+- `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
+- `frontend/components/motion/loader.tsx`: `1ce4a393641bb366407ae43b28f31146008664fe9cdc43f2b687c259db745e84`
+- `frontend/components/motion/not-found/glitch.tsx`: `f63ed5577881f978c331ffd4552241abc90c71c14cd2bb5e2eafa2ed2556ef03`
+- `frontend/components/motion/not-found/shared.tsx`: `f98d45223967f45277bf89b659b308e63c784397d4da9c2830565b9bcfc508da`
 - `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
 - `frontend/components/ui/card.tsx`: `bb7f77ce45ee3fec21e25739c61d547900498a0117d3e12101e8932eae204b41`
 - `frontend/components/ui/tabs.tsx`: `1db24d455b581eae7de2ed76e1aa6cc01d0370fa8b9b221fca4d78207cdc9a77`
@@ -326,7 +357,7 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 - `frontend/features/environments/storage/reconcile-checkpoints.ts`: `465fc694b89e3da4750a3ee7b46ee41a141fbdc9dff3631ea4454d47f32ff636`
 - `frontend/lib/workspace-location.ts`: `b77ff862964645fe25610e09f79b8409740f72a85a5685d934adc7e0ff60b92d`
 - `frontend/main.tsx`: `8a56e4c9f5df8e80312df681a99b6f31457b752d9d94ad000e37f6a666ae1f62`
-- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `2c3c00e74e88b1b6ba3053b5feae3545078f68fa5392a0b8914eccc87509a878`
+- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `8dade45d323b9ca993abab52b7cf30e99e0f633f54a2ec936fb0780ce9a819c2`
 - `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `a1e4fd7990e6d5a80265496307d7c032115d91f3bac7a753952fc5c3970c794c`
 - `frontend/pages/workbench-landing/workbench-scene.tsx`: `78d8320376b3f6d1cb22254cbb01a638c73498000d11c7dd33a7d4e2db2604d2`
 - `frontend/public/sw.js`: `082532f5be99a67e9d755f9407d59e46359f0b247de2473400c20c229f7080d5`
@@ -340,3 +371,24 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 - `KnowledgeRoute` 现在是以成员为 key 的 `MemberKnowledgeRoute` 包装器；索引已沿包装器追踪到知识页、分页、分享和历史订阅，而非丢失原路由候选。新增的成员归属、共享撤权、区块取消、活动追加去重及显式复习重读均属于已归属的知识页。
 - 已检查实际 App 挂载、renderPage 身份/路径分支、KnowledgePage 回调和历史订阅；本次修改不扩大其他未归属组件的消费。更新上方 app 源码指纹及生成索引（270 源文件、1180 候选），不是仅改哈希绕过契约。
 - 本轮功能与源码映射见 [知识列表操作与读取恢复证据](./knowledge-list-operation-review-and-read-recovery-evidence.md)。本段仅更新源码审查，不增加父项完成数或声称原生验收。
+
+### 2026-10-14 前端交互动效层接入后重新审查
+
+- 本轮引入 `motion` 运行时并把 beUI 注册表源码（loader、scroll-reveal、not-found）落到 `frontend/components/motion/`，改动 shell、共享 UI 原语与落地页。当前索引为 278 文件 / 1208 候选 / 114 未归属（原 110）。
+- 迁移而非新增：`frontend/app.tsx` 的 NotFoundPage 返回首页链接被 `NotFoundGlitch` 取代，未归属坐标由 `frontend/app.tsx:931:250` 转移到 `frontend/components/motion/not-found/shared.tsx:55:7`（同级第二 CTA 为未接线项 `:65:9`）。app.tsx 的两个外层边界行为未变，仅因新增两行导入下移至 222:75、249:39。
+- 新增未归属来源：`frontend/components/motion/loader.tsx`（3，角色/图形节点，App 启动态挂载 dots）与 `frontend/components/motion/not-found/shared.tsx`（2）。两者均无网络写入。`frontend/components/motion/scroll-reveal.tsx` 归属落地页、`frontend/lib/ease.ts` 与 `frontend/lib/hooks/use-hover-capable.ts` 归属各自 caller，不计入未归属项。
+- 已逐项核对：`frontend/components/shell/app-shell.tsx`、`frontend/components/ui/button.tsx`、`dialog.tsx`、`sheet.tsx`、`components/shell/command-palette.tsx` 的候选数量与归属关系未变（`motion.a`／`motion.button`／`motion.div` 与原生标签同为一处候选），因此不需要新增未归属行；仅用动效替换交互表现，未增加可点击面。
+- 同步更新 `frontend/app.tsx`、`frontend/pages/workbench-landing/public-workbench-page.tsx` 指纹并新增上述三个 motion 来源指纹。本段只做源码对账，不代表生产发布、签名浏览器或原生验收。
+
+### 2026-10-14 agent 答案面板接入 beUI citations 后重新审查
+
+- 新增 beUI citations 落地文件（`frontend/components/agents/citations.tsx`、`agent-disclosure.tsx`、`frontend/lib/favicon.ts`、`frontend/lib/hooks/use-favicon.ts`），并把 `frontend/components/agent/answer-panel.tsx` 的来源列表从常开 `<div>` + `<h3>` 换成 `Citations` 折叠列表（`defaultOpen`，来源默认可见，用户可收起）。
+- 未归属候选 114 → **115**：仅新增 `frontend/components/agents/citations.tsx:81:5`，即未被调用的内联角标组件 `Citation`（需要答案正文内嵌标记，当前答案正文为纯文本），归为 `unmounted-ui`。其余新文件均经 `answer-panel.tsx` → `agent-page.tsx` → 路由 root 追踪为已归属，不新增未归属项。
+- 已逐项比较：本次无已文档化坐标被移除、无既有指纹漂移；仅新增该文件指纹，并新增其 caller `frontend/components/agent/answer-panel.tsx` 指纹。当前索引 282 文件 / 1211 候选 / 115 未归属。
+- 本轮同时否决了同批次另外两个候选：`code-block` 依赖 shiki 语法高亮与需要一个 React 代码组件挂载点，而阅读器代码块来自 markdown → 净化 HTML 的 `dangerouslySetInnerHTML`，接入需要重构渲染管线；`streaming-response` 需要真实逐 token 流，而当前前端未消费 `/api/agent/sessions/:id/stream`，用它会伪装不存在的流式能力。两者都不在本索引内新增源码。
+
+### 2026-10-14 admin 指标接入 beUI number-ticker 后重新审查
+
+- 新增 `frontend/components/motion/number-ticker.tsx`，并把它接到 `frontend/pages/admin/admin-dashboard-page.tsx` 的管理概览计数与 `frontend/pages/admin/analytics-page.tsx` 的三张统计卡。
+- 未归属集合不变，仍为 **115**：该组件的候选经管理页路由 root 追踪为已归属，没有新增未归属坐标、没有坐标移除、也没有既有指纹漂移，因此不新增未归属行与指纹。当前索引 283 文件 / 1211 候选 / 115 未归属（候选数与上轮相同：该组件不引入新的控件候选）。
+- 同批次另外三个候选被否决：`table`／`table-async` 需要 `@tanstack/react-table` 与 `@tanstack/react-virtual` 两个新依赖，并把承载分页、权限与恢复语义的 admin 列表改写为虚拟化表格，收益不足抵偿回归面；`heat-calendar` 的唯一候选数据源是 7／14／30 天的 `daily` 序列，而该页已有可读的柱状趋势图，替换会降低趋势可读性、并列展示又会同一数据两种图形；`expandable-tabs` 无调用点——通用 `Tabs` 原语在第一方源码中零消费。

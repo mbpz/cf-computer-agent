@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -7,6 +8,11 @@ import { workbenchLandingProvenance } from "./scripts/workbench-landing-provenan
 export default defineConfig({
   root: FRONTEND_BUILD.root,
   plugins: [react(), tailwindcss(), workbenchLandingProvenance()],
+  resolve: {
+    // Matches the `@/*` paths entry in tsconfig.json and the aliases declared in
+    // frontend/components.json that the shadcn registry installers write into.
+    alias: { "@": fileURLToPath(new URL("./frontend", import.meta.url)) },
+  },
   build: {
     outDir: FRONTEND_BUILD.outDir,
     emptyOutDir: true,

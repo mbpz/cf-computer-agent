@@ -1,5 +1,6 @@
 import { Button, buttonVariants } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { NumberTicker } from "../../components/motion/number-ticker";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 
 export type DashboardMetric = "pending" | "assets" | "members";
@@ -35,7 +36,7 @@ export function AdminDashboardPage({ metrics, locale, links, onRetry, onRefresh 
           <div aria-live="polite">
             {metric.kind === "loading" && <p data-page-state="loading" role="status" className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_METRIC_LOADING")}</p>}
             {metric.kind === "ready" && <div data-page-state={metric.total === 0 ? "empty" : "ready"}>
-              <p data-metric-value className="text-3xl font-semibold tabular-nums">{metric.total}</p>
+              <p data-metric-value className="text-3xl font-semibold tabular-nums"><NumberTicker value={metric.total} startOnView={false} /></p>
               {metric.total === 0 && <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_METRIC_EMPTY")}</p>}
             </div>}
             {metric.kind === "error" && <div role="alert" className="space-y-2"><p className="text-sm text-destructive">{frontendText(locale, "ADMIN_METRIC_ERROR")}</p>

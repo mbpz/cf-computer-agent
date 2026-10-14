@@ -80,12 +80,14 @@ describe("shadcn workspace shell", () => {
   it("focuses the command combobox and switches the resolved system theme", async () => {
     await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()}><p>Home</p></AppShell>));
     await act(async () => container.querySelector<HTMLButtonElement>('[data-command-palette-trigger]')!.click());
-    const input = container.querySelector<HTMLInputElement>('[role="combobox"]')!;
+    // The palette surface is portaled to the document body so the topbar's
+    // backdrop-filter cannot become its containing block; query it there.
+    const input = document.querySelector<HTMLInputElement>('[role="combobox"]')!;
     expect(input).not.toBeNull();
     expect(document.activeElement).toBe(input);
-    expect(input.getAttribute('aria-controls')).toBe(container.querySelector('[role="listbox"]')!.id);
+    expect(input.getAttribute('aria-controls')).toBe(document.querySelector('[role="listbox"]')!.id);
     document.documentElement.classList.add('dark');
-    await act(async () => container.querySelector<HTMLButtonElement>('[data-command-id="toggle-theme"]')!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-command-id="toggle-theme"]')!.click());
     expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
@@ -93,7 +95,7 @@ describe("shadcn workspace shell", () => {
     const onNavigate = vi.fn();
     await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Home</p></AppShell>));
     await act(async () => container.querySelector<HTMLButtonElement>('[data-command-palette-trigger]')!.click());
-    const command = container.querySelector<HTMLButtonElement>('[data-command-id="open-settings"]')!;
+    const command = document.querySelector<HTMLButtonElement>('[data-command-id="open-settings"]')!;
     await act(async () => command.focus());
     expect(document.activeElement).toBe(command);
     const enter = new browser.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
@@ -108,7 +110,7 @@ describe("shadcn workspace shell", () => {
     const onLogout = vi.fn();
     await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onLogout={onLogout} logoutPending><p>Home</p></AppShell>));
     await act(async () => container.querySelector<HTMLButtonElement>('[data-command-palette-trigger]')!.click());
-    expect(container.querySelector('[data-command-id="logout"]')).toBeNull();
+    expect(document.querySelector('[data-command-id="logout"]')).toBeNull();
     expect(onLogout).not.toHaveBeenCalled();
   });
 
