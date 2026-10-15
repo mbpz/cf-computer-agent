@@ -11,6 +11,16 @@ import { tmpdir } from 'node:os';
 import { verifyLandingAssets } from './workbench-landing-assets.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// The landing page self-hosts its display face because the CSP allows no external
+// origin. Pin the budget and the licence next to the other landing asset gates.
+test('vendors the landing display font within budget and keeps its licence', async () => {
+  const font = await readFile(resolve(root, 'frontend/public/fonts/Geist-Variable.woff2'));
+  assert.ok(font.byteLength <= 120 * 1024, `FONT_BUDGET: ${font.byteLength} bytes exceeds 122880`);
+  assert.equal(font.subarray(0, 4).toString('latin1'), 'wOF2', 'FONT_FORMAT: not a woff2 file');
+  const licence = await readFile(resolve(root, 'frontend/public/fonts/OFL.txt'), 'utf8');
+  assert.match(licence, /Copyright \(c\) 2023 Vercel/u, 'FONT_LICENCE: expected the SIL OFL notice');
+});
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const isRuntime = id => /(^|\/)workbench-scene-runtime\.[^/]+$/.test(id.replaceAll('\\', '/').split('?')[0]);
 const isThree = id => /(^|\/)node_modules\/three\//.test(id.replaceAll('\\', '/'));

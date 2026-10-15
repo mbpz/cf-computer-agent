@@ -1,6 +1,6 @@
 import { ArrowLeft, ArrowRight, Check, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type Dispatch } from "react";
-import { Button } from "../../components/ui/button";
+import { Button } from "../../components/motion/button/base";
 import { Card } from "../../components/ui/card";
 import { useFocusScope } from "../../components/ui/focus-scope";
 import type { LocaleRuntime } from "../../lib/i18n";

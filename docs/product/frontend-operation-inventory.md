@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：308；操作/转发候选：1265。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：310；操作/转发候选：1268。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -48,6 +48,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/inbox-create-form.tsx | 17 |
 | frontend/components/knowledge/knowledge-share-button.tsx | 3 |
 | frontend/components/motion/animated-toast-stack.tsx | 4 |
+| frontend/components/motion/button/base.tsx | 3 |
 | frontend/components/motion/checkbox.tsx | 1 |
 | frontend/components/motion/file-tree.tsx | 2 |
 | frontend/components/motion/loader.tsx | 3 |
@@ -318,6 +319,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/workbench-landing/workbench-scene.tsx | 9 |
 | frontend/pages/workbench-review-page.tsx | 14 |
 | frontend/public/sw.js | 3 |
+| frontend/public/theme-boot.js | 0 |
 | frontend/styles/token-contract.ts | 0 |
 
 ## 路由与共享入口候选映射
@@ -361,10 +363,10 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 46 | 无（不代表动态边界已核对） |
 | /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 67 | 无（不代表动态边界已核对） |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 96 | 无（不代表动态边界已核对） |
-| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 42 | 无（不代表动态边界已核对） |
+| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 47 | 无（不代表动态边界已核对） |
 | &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 16 | 无（不代表动态边界已核对） |
 
-尚未归入上述入口的候选：121。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
+尚未归入上述入口的候选：118。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
 
 ## frontend/app.tsx
 
@@ -713,6 +715,14 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 352:5 ToastItem | motion.li  | onDragEnd=(_, info) =&gt; { if (!canDismiss &#124;&#124; !onDismiss) return; if (Math.abs(info.offset.x) &gt; 72 &#124;&#124; Math.abs(info.velocity.x) &gt; … |  |
 | 480:17 ToastItem | button toast.action.label | onClick=() =&gt; toast.action?.onClick(toast); type="button" | {"kind":"branch","expression":"renderToast","branch":"false"}; {"kind":"branch","expression":"toast.action","branch":"true"} |
 | 494:15 ToastItem | button  | onClick=() =&gt; onDismiss?.(toast.id); type="button" | {"kind":"branch","expression":"renderToast","branch":"false"}; {"kind":"branch","expression":"canDismiss","branch":"true"} |
+
+## frontend/components/motion/button/base.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 105:7 Button | motion.button children | onPointerDown=handlePointerDown; type="button" | spread: rest |
+| 127:17 Button | motion.span  | onAnimationComplete=() =&gt; setRipples((prev) =&gt; prev.filter((x) =&gt; x.id !== r.id)) | {"kind":"branch","expression":"ripple && !reduce","branch":"true"}; {"kind":"repeat","expression":"ripples"} |
+| 172:7 ButtonLink | motion.a children |  | spread: rest |
 
 ## frontend/components/motion/checkbox.tsx
 
@@ -2241,7 +2251,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
 | 66:5 PublicWorkbenchPage | media?.addEventListener  | "change", apply |  |
-| 74:17 PublicWorkbenchPage | a text("LOGIN") | href="/login" |  |
+| 74:17 PublicWorkbenchPage | ButtonLink text("LOGIN") | href="/login" |  |
 | 79:9 PublicWorkbenchPage | a text("BRAND") | href="/" |  |
 | 81:11 PublicWorkbenchPage | select  | onChange=event =&gt; locale.setLocale(event.target.value) |  |
 | 83:13 PublicWorkbenchPage | option English |  |  |
@@ -2289,15 +2299,15 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 204:5 WorkbenchScene | document.addEventListener  | "visibilitychange", onVisibility |  |
-| 205:34 WorkbenchScene | media.addEventListener  | "change", onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"true"} |
-| 206:10 WorkbenchScene | media?.addListener  | onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"false"} |
-| 207:5 WorkbenchScene | connection?.addEventListener  | "change", onPreference |  |
-| 226:7 WorkbenchScene | window.addEventListener  | "resize", measure, { passive: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
-| 227:7 WorkbenchScene | window.addEventListener  | "scroll", measure, { passive: true, capture: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
-| 271:7 WorkbenchScene | p text(view.message).replace("{percent}", String(view.percent ?? 0)) |  |  |
-| 274:11 WorkbenchScene | button text(failed ? "SCENE_RETRY" : "SCENE_LOAD") | onClick=event =&gt; activate(event.currentTarget, "load"); type="button" | {"kind":"logical","expression":"view.status !== \"loading\" && view.status !== \"ready\"","operator":"&&"} |
-| 278:11 WorkbenchScene | button text("SCENE_STATIC_MODE") | onClick=event =&gt; activate(event.currentTarget, "useStatic"); type="button" | {"kind":"logical","expression":"view.status !== \"static\"","operator":"&&"} |
+| 206:5 WorkbenchScene | document.addEventListener  | "visibilitychange", onVisibility |  |
+| 207:34 WorkbenchScene | media.addEventListener  | "change", onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"true"} |
+| 208:10 WorkbenchScene | media?.addListener  | onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"false"} |
+| 209:5 WorkbenchScene | connection?.addEventListener  | "change", onPreference |  |
+| 228:7 WorkbenchScene | window.addEventListener  | "resize", measure, { passive: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
+| 229:7 WorkbenchScene | window.addEventListener  | "scroll", measure, { passive: true, capture: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
+| 273:7 WorkbenchScene | p text(view.message).replace("{percent}", String(view.percent ?? 0)) |  |  |
+| 281:11 WorkbenchScene | Button text(failed ? "SCENE_RETRY" : "SCENE_LOAD") | onClick=event =&gt; activate(event.currentTarget, "load") | {"kind":"logical","expression":"view.status !== \"loading\" && view.status !== \"ready\"","operator":"&&"} |
+| 285:11 WorkbenchScene | Button text("SCENE_STATIC_MODE") | onClick=event =&gt; activate(event.currentTarget, "useStatic") | {"kind":"logical","expression":"view.status !== \"static\"","operator":"&&"} |
 
 ## frontend/pages/workbench-review-page.tsx
 

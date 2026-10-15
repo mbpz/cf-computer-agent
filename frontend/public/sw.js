@@ -1,4 +1,4 @@
-const CACHE = "memory-garden-shell-v1";
+const CACHE = "memory-garden-shell-v2";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -15,7 +15,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(request).catch(() => caches.match("/index.html")));
     return;
   }
-  if (["script", "style", "font", "image"].includes(request.destination)) {
+  // Only content-hashed build output is safe to serve cache-first. Unhashed files
+  // (theme boot, manifest) must revalidate, otherwise the first paint can be pinned to
+  // an old theme script forever.
+  if (url.pathname.startsWith("/assets/") && ["script", "style", "font", "image"].includes(request.destination)) {
     event.respondWith(caches.match(request).then((cached) => cached ?? fetch(request).then((response) => {
       const copy = response.clone();
       void caches.open(CACHE).then((cache) => cache.put(request, copy));

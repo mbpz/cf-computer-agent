@@ -1,7 +1,7 @@
 import { ArrowRight, Bell, Books, ChatCircleText, SquaresFour, Tray } from "@phosphor-icons/react";
 import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { motion } from "motion/react";
-import { Button } from "../../components/ui/button";
+import { Button, ButtonLink } from "../../components/motion/button/base";
 import { ScrollReveal } from "../../components/motion/scroll-reveal";
 import { syncDocumentLanguage, type LocaleRuntime } from "../../lib/i18n";
 import { readTheme, type ThemeMode } from "../../lib/theme";
@@ -71,7 +71,7 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
   const gated = (state.step === "capture" && !state.captured) || (state.step === "action" && !state.taskDone);
   // The landing always routes to the sign-in page, which offers both the email + one-time-code
   // path and GitHub, and itself reports when GitHub is not configured.
-  const login = <a className="workbench-login" href="/login">{text("LOGIN")}</a>;
+  const login = <ButtonLink variant="secondary" size="md" href="/login">{text("LOGIN")}</ButtonLink>;
 
   return <main data-public-workbench-page data-workbench-landing className="workbench-landing" lang={language}>
     <div inert={state.activeFeature !== null}>
@@ -111,13 +111,13 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
                 </button>)}
               </div>
             </div>}
-            <figcaption className="workbench-demo-badge">{text("DEMO_BADGE")}</figcaption>
           </figure>
         </section>
 
         <ScrollReveal amount={0.15}>
           <section className="workbench-demo" aria-label={text("GUIDE_LABEL")} data-demo-step={state.step}>
             <div className="workbench-demo-intro">
+              <p className="workbench-demo-badge">{text("DEMO_BADGE")}</p>
               <p className="workbench-muted">{text("DEMO_DESCRIPTION")}</p>
               <p className="workbench-muted">{text("INVITE_ONLY")}</p>
             </div>

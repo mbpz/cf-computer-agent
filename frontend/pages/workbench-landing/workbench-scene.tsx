@@ -1,4 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Button } from "../../components/motion/button/base";
+import { Loader } from "../../components/motion/loader";
 import { createLocaleRuntime } from "../../lib/i18n";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
 import {
@@ -268,15 +270,20 @@ export function WorkbenchScene({ snapshot, onStatus }: { snapshot: SceneSnapshot
         <div ref={host} className="workbench-scene-host" data-scene-host aria-hidden="true"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
       </div>
-      <p className="workbench-scene-status" role="status" aria-live="polite" aria-atomic="true">{text(view.message).replace("{percent}", String(view.percent ?? 0))}</p>
+      <p className="workbench-scene-status" role="status" aria-live="polite" aria-atomic="true">
+        {view.status === "loading" && (
+          <span className="workbench-scene-loader" aria-hidden="true"><Loader variant="dots" size={14} /></span>
+        )}
+        {text(view.message).replace("{percent}", String(view.percent ?? 0))}
+      </p>
       <div className="workbench-scene-controls">
         {view.status !== "loading" && view.status !== "ready" && (
-          <button type="button" className="workbench-scene-button" data-scene-action={failed ? "retry" : "load"}
-            onClick={event => activate(event.currentTarget, "load")}>{text(failed ? "SCENE_RETRY" : "SCENE_LOAD")}</button>
+          <Button variant="secondary" size="sm" data-scene-action={failed ? "retry" : "load"}
+            onClick={event => activate(event.currentTarget, "load")}>{text(failed ? "SCENE_RETRY" : "SCENE_LOAD")}</Button>
         )}
         {view.status !== "static" && (
-          <button type="button" className="workbench-scene-button" data-scene-action="static"
-            onClick={event => activate(event.currentTarget, "useStatic")}>{text("SCENE_STATIC_MODE")}</button>
+          <Button variant="secondary" size="sm" data-scene-action="static"
+            onClick={event => activate(event.currentTarget, "useStatic")}>{text("SCENE_STATIC_MODE")}</Button>
         )}
       </div>
     </div>

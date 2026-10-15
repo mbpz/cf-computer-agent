@@ -7,6 +7,15 @@ const CONTRAST_PAIRS = Object.freeze([
   ["destructive", "background"],
 ]);
 
+// Pairs the public landing page actually renders: body copy, muted copy, its primary
+// button label and its accented surfaces.
+const LANDING_CONTRAST_PAIRS = Object.freeze([
+  ["foreground", "background"],
+  ["muted-foreground", "background"],
+  ["primary-foreground", "primary"],
+  ["accent-foreground", "accent"],
+]);
+
 function parseTheme(css, selector) {
   const match = css.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`, "u"));
   if (!match) throw new Error(`Missing ${selector} theme`);
@@ -33,8 +42,16 @@ function oklchToSrgb([lightness, chroma, hue]) {
   });
 }
 
+/**
+ * WCAG relative luminance. The sRGB channels must be linearised first: reading the
+ * gamma-encoded values understates every ratio, which made the landing palette look
+ * like it failed five pairs that actually clear 4.5:1.
+ */
 function contrastRatio(first, second) {
-  const luminance = (rgb) => 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  const luminance = (rgb) => {
+    const [r, g, b] = rgb.map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
   const firstLuminance = luminance(first);
   const secondLuminance = luminance(second);
   return (Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05);
@@ -52,4 +69,20 @@ export function assertWcagCss(css) {
   }
   if (!/:focus-visible\s*\{[^}]*outline\s*:\s*2px\s+solid\s+var\(--ring\)[^}]*outline-offset\s*:\s*2px/us.test(css)) throw new Error("Missing visible 2px focus ring");
   return { light: true, dark: true, focusVisible: true };
+}
+
+/**
+ * The public landing page carries its own warm palette. Verify it with the same rule,
+ * so those tokens cannot quietly sit outside the contrast contract again.
+ */
+export function assertLandingWcagCss(css) {
+  const themes = [["light", parseTheme(css, ".workbench-landing")], ["dark", parseTheme(css, ".dark .workbench-landing")]];
+  for (const [name, theme] of themes) {
+    for (const [foreground, background] of LANDING_CONTRAST_PAIRS) {
+      const foregroundValue = theme.get(foreground);
+      const backgroundValue = theme.get(background);
+      if (!foregroundValue || !backgroundValue || contrastRatio(oklchToSrgb(foregroundValue), oklchToSrgb(backgroundValue)) < 4.5) throw new Error(`Landing WCAG AA contrast failed: ${name} ${foreground}/${background}`);
+    }
+  }
+  return { light: true, dark: true };
 }

@@ -66,15 +66,9 @@ beUI 通知栈的落地副本，由 `frontend/lib/use-toast.tsx` 的 `ToastProvi
 | `frontend/components/motion/animated-toast-stack.tsx:480:17` | app-boundary | 通知带 action 且用户点击该按钮 | 调用调用方传入的 `action.onClick(toast)`；组件自身不执行写入。 |
 | `frontend/components/motion/animated-toast-stack.tsx:494:15` | app-boundary | canDismiss 为真且用户点击关闭 | 调用 `onDismiss(toast.id)`；`aria-label` 由调用方以本地化文案传入（`COMMON_DISMISS`）。 |
 
-## `frontend/components/motion/loader.tsx`（3）
+## `frontend/components/motion/loader.tsx`（0，2026-10-15 归属落地页）
 
-共用加载指示器。App 在会话读取期间挂载 dots variant；其余 variant 目前没有第一方调用点。三个候选都是状态/图形节点，没有回调、没有写接口。[source:frontend/app.tsx]
-
-| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
-| --- | --- | --- | --- |
-| `frontend/components/motion/loader.tsx:65:5` | app-boundary | 传入 variant/size/label 后渲染；App 启动态以 dots 挂载 | role=status 加 aria-label 播报加载中；同 label 另以 sr-only 文本输出；不发请求。 |
-| `frontend/components/motion/loader.tsx:239:5` | unmounted-ui | 仅当 variant=morph 时才挂载 | motion.svg 带 role=img；循环 rotate/scale，reduced-motion 退化为 opacity 脉冲。 |
-| `frontend/components/motion/loader.tsx:354:5` | unmounted-ui | 仅当 variant=metaballs 时才挂载 | 静态 svg 带 role=img，帧数据由同模块计算；无交互。 |
+落地页 3D 加载态现在直接挂载该组件的 `dots` variant（`workbench-scene.tsx`），因此本文件的三个候选全部归属落地页，不再计入未归属项。历史分类见文末变更说明。
 
 ## `frontend/components/motion/not-found/shared.tsx`（2）
 
@@ -353,7 +347,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
 - `frontend/components/motion/animated-toast-stack.tsx`: `bbfe97a6aa83e2acb5ea270fdf93bc3541764a7bbf80bc9e514e02566a6342e9`
-- `frontend/components/motion/loader.tsx`: `1ce4a393641bb366407ae43b28f31146008664fe9cdc43f2b687c259db745e84`
+- `frontend/components/motion/scroll-reveal.tsx`: `7853c47a57dc1ac4c9b41d744a2421c9473d0597555300e4a84d1e54407abc97`
 - `frontend/components/motion/not-found/glitch.tsx`: `f63ed5577881f978c331ffd4552241abc90c71c14cd2bb5e2eafa2ed2556ef03`
 - `frontend/components/motion/not-found/shared.tsx`: `f98d45223967f45277bf89b659b308e63c784397d4da9c2830565b9bcfc508da`
 - `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
@@ -378,11 +372,11 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/features/environments/storage/reconcile-checkpoints.ts`: `465fc694b89e3da4750a3ee7b46ee41a141fbdc9dff3631ea4454d47f32ff636`
 - `frontend/lib/use-toast.tsx`: `7156c51d16a4247a000682d67ce6c2784b77f09b35c374ca1abff8c6a1f94a87`
 - `frontend/lib/workspace-location.ts`: `b77ff862964645fe25610e09f79b8409740f72a85a5685d934adc7e0ff60b92d`
-- `frontend/main.tsx`: `8a56e4c9f5df8e80312df681a99b6f31457b752d9d94ad000e37f6a666ae1f62`
-- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `ba59d29a21f914da274c25d168e5f49ae826096ae66f4136704848a5d8a0bb06`
+- `frontend/main.tsx`: `9ba6f443d0f7da037015cb7f1d1b3444777989588c66429d3630a0c5fb500391`
+- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `b5c82dfd1973ea730e1bb28536966f32e189bd32237e489041868527fdd6a87f`
 - `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `19b47d756dd823d4934eacd11d364bb3602b7f8fa09e74e4e5db588affdd761b`
-- `frontend/pages/workbench-landing/workbench-scene.tsx`: `9356b5ac93e20d95b594e417638062a1719b6ac30dc79cccec4761d3e232fea5`
-- `frontend/public/sw.js`: `082532f5be99a67e9d755f9407d59e46359f0b247de2473400c20c229f7080d5`
+- `frontend/pages/workbench-landing/workbench-scene.tsx`: `bd5def5c4ef683d0ae1422e26180a8feeca67de86ef4ccbea79b3605cb3fef5a`
+- `frontend/public/sw.js`: `703801312e5cccba0cf162837b97878185fe03e18cdc2182c2fc4c5215923bad`
 - `tools/browser-vm/checkpoint-recovery-browser.mjs`: `06a498590a0c6e00c9cf5c91dff81de7a6aa3b01c4c9768aa718ebc0de3d9efe`
 - `tools/browser-vm/runtime-owner-browser.mjs`: `e5973069f711204d6ad79f011be6772e9243d403b6bb1ebd515ff361537c4c90`
 
@@ -398,7 +392,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 - 本轮引入 `motion` 运行时并把 beUI 注册表源码（loader、scroll-reveal、not-found）落到 `frontend/components/motion/`，改动 shell、共享 UI 原语与落地页。当前索引为 278 文件 / 1208 候选 / 114 未归属（原 110）。
 - 迁移而非新增：`frontend/app.tsx` 的 NotFoundPage 返回首页链接被 `NotFoundGlitch` 取代，未归属坐标由 `frontend/app.tsx:931:250` 转移到 `frontend/components/motion/not-found/shared.tsx:55:7`（同级第二 CTA 为未接线项 `:65:9`）。app.tsx 的两个外层边界行为未变，仅因新增两行导入下移至 222:75、249:39。
-- 新增未归属来源：`frontend/components/motion/loader.tsx`（3，角色/图形节点，App 启动态挂载 dots）与 `frontend/components/motion/not-found/shared.tsx`（2）。两者均无网络写入。`frontend/components/motion/scroll-reveal.tsx` 归属落地页、`frontend/lib/ease.ts` 与 `frontend/lib/hooks/use-hover-capable.ts` 归属各自 caller，不计入未归属项。
+- 新增未归属来源：`frontend/components/motion/loader.tsx`（3，角色/图形节点，App 启动态挂载 dots）与 `frontend/components/motion/not-found/shared.tsx`（2）。两者均无网络写入。2026-10-15：落地页 3D 加载态直接挂载 `loader.tsx` 的 dots，三个候选随之归属落地页，已从本文档移除。`frontend/components/motion/scroll-reveal.tsx` 归属落地页、`frontend/lib/ease.ts` 与 `frontend/lib/hooks/use-hover-capable.ts` 归属各自 caller，不计入未归属项。
 - 已逐项核对：`frontend/components/shell/app-shell.tsx`、`frontend/components/ui/button.tsx`、`dialog.tsx`、`sheet.tsx`、`components/shell/command-palette.tsx` 的候选数量与归属关系未变（`motion.a`／`motion.button`／`motion.div` 与原生标签同为一处候选），因此不需要新增未归属行；仅用动效替换交互表现，未增加可点击面。
 - 同步更新 `frontend/app.tsx`、`frontend/pages/workbench-landing/public-workbench-page.tsx` 指纹并新增上述三个 motion 来源指纹。本段只做源码对账，不代表生产发布、签名浏览器或原生验收。
 

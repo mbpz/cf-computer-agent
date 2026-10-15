@@ -159,11 +159,11 @@
 
 | 用途 | 半径 |
 |---|---|
-| 交互控件（按钮、输入、视图切换项） | `.375rem` |
+| 交互控件（按钮、输入、视图切换项） | 全胶囊（`999px`，beUI `button-base` 的形状语言） |
 | 成组容器（视图刻度条、工具栏） | `.5rem` |
 | 媒体与浮层（海报、3D 舞台、面板） | `.75rem` |
 
-写入 `workbench-landing.css` 顶部注释，并在评审中作为检查项；不再出现第四种半径。
+写入 `workbench-landing.css` 顶部注释，并在评审中作为检查项；不再出现第四种半径。共享的 shadcn 组件（如 `card`、`focus-scope`）自带 `--radius` 系列，属继承而非本页新增。
 
 ### 5.6 英雄区规格（技能 §4.7 硬指标）
 
@@ -198,15 +198,25 @@
 | **全局降级** | **新增**：应用根部 `MotionConfig reducedMotion="user"`，使滚动揭示与按钮弹簧在系统偏好为「减少动态」时自动退化为即时状态 |
 | 性能 | 只动 `transform` / `opacity`；不新增 `scroll` 监听（技能 §5.D 硬禁）；3D 保持按需懒加载与现有预算 |
 
-### 5.9 组件与 block 映射
+### 5.9 组件基准：beUI 优先（按用户指令）
+
+用户指令：**项目内尽可能直接使用 beUI 成熟组件，整体风格样式也按 beUI 设计。** 本节是该指令在公开落地页上的落地表，也是后续工作台 / 管理端的同一基准（后者由并行的 `2026-10-15-authenticated-workspace-design-research.md` 承接）。
+
+仓库现状（实测）：`frontend/components.json` 已配置 `registries["@beui"] = https://beui.dev/r/{name}.json`、`iconLibrary: phosphor`、`cssVariables: true`；实时注册表 143 项（112 组件 + 31 block）；仓库已有 11 个 beUI 组件：`motion/{button/base,loader,number-ticker,scroll-reveal,animated-toast-stack,file-tree,not-found/glitch,table}`、`agents/{agent-progress,citations,code-block}`。
 
 | 需求 | 采用 |
 |---|---|
-| 按钮 / 视图切换 / 面板 | 现有 `components/ui/button`、`.workbench-view`、`workbench-feature-panel`（保留） |
-| 滚动揭示 | 现有 `components/motion/scroll-reveal`（补 reduced-motion 接入） |
-| 图标 | 现有 `@phosphor-icons/react`（技能允许名单首位；统一 `strokeWidth`） |
-| 3D 舞台 | 现有 `workbench-scene`（本次已修：慢链路加载、取景、控件门控、拖拽重算） |
-| 可选增强 | 若需要更精致的加载/占位，可用 `beui` 的 `loader` / `thinking-shimmer`（纯复制源码，符合仓库「自有组件」路线） |
+| 全部按钮（英雄区 CTA、暂停、场景加载/重试/静态、引导下一步/重放、功能按钮、面板 8 处） | **beUI `motion/button/base`** 的 `Button`，登录入口用 `ButtonLink`（本次已切换；`variant`/`size` 与既有用法一一对应） |
+| 3D 加载中 | **beUI `motion/loader`**（`variant="dots"`，自带 `useReducedMotion`；用 `aria-hidden` 包裹避免与状态行形成嵌套直播区） |
+| 滚动揭示 | 已是 beUI `motion/scroll-reveal`（本次实测：减少动态下位移与模糊被移除，只保留纯透明度淡入） |
+| 引用 / 表格 / 代码 / 数字滚动 | 已装 beUI `citations`、`table`、`code-block`、`number-ticker`；面板的引用列表可后续换成 `citations` |
+| 语言切换 | 保留原生 `<select>`（`select` 会引入 lucide 与自绘 listbox；本页只有两种语言，且原生控件的可访问性与体积更优，符合技能对无障碍优先的约束） |
+| 视角刻度条 | 暂留现有 `layoutId` + `SPRING_LAYOUT` 手法（与 beUI 同源的做法）；候选替换为 beUI `tabs` 或 `shared-layout-bg` |
+| 功能面板 | 现为受控内联面板；候选替换为 beUI `drawer`（Radix Dialog 语义），需与页面状态机一起改，列入后续批次 |
+| 图标 | 统一 Phosphor（`components.json` 的 `iconLibrary`）；采纳任何带 lucide 的 beUI 组件时把图标替换为 Phosphor 等价项，避免两套图标族 |
+| 令牌 | 沿用仓库既有 shadcn 令牌（beUI 组件本身就基于这些令牌，例如 `bg-card`、`text-muted-foreground`），因此「按 beUI 设计」与现有 `globals.css` 体系一致，不需要第二套主题 |
+
+**形状语言的后果**：beUI 的按钮是胶囊形，故 `--landing-radius-control` 由 `.375rem` 改为 `999px`（§5.5 已同步）。原生 select 与刻度条项随之变为胶囊，视觉语言统一。
 
 ### 5.10 状态（技能 §4.5）
 
@@ -223,7 +233,7 @@
 
 | 门禁 | 需要做的对齐 |
 |---|---|
-| `scripts/wcag-contract.mjs` | 扩展为同时解析落地页的 token 块（当前只解析 `globals.css`），令 13 个 token 进入 4.5:1 校验 |
+| `scripts/wcag-contract.mjs` | **已实施**：新增 `assertLandingWcagCss` 解析落地页两个 token 块（`light` 与 `dark .workbench-landing`），并修正 `contrastRatio` 未对 sRGB 通道做线性化的问题。修正前该函数会低估所有比值（落地页 8 组里 5 组被误判为不达标）；修正后外壳 6 对 × 2 主题、落地页 4 对 × 2 主题全部通过。`scripts/wcag-contract.test.mjs` 增加落地页断言 |
 | `scripts/workbench-landing-assets.test.mjs` | 不变（海报尺寸/体积/模型预算保持） |
 | `scripts/workbench-landing-build.test.mjs` | 不变（场景 JS gzip ≤ 250KiB、three 必须懒加载） |
 | `frontend/styles/globals.css` 焦点环 | 保持 `:focus-visible` 2px `var(--ring)`（落地页 4px offset 可保留） |
@@ -236,12 +246,12 @@
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| P0 | `MotionConfig reducedMotion="user"` + 收敛间距/字号刻度 + 形状规则成文注释 | `npm run typecheck`、落地页单测、`npm run verify:wcag` |
-| P1 | 13 个 token 转 `oklch` + 扩展 `wcag-contract` 覆盖落地页 + 删除未用 `--muted` | `npm run verify:wcag` 必须仍通过，且新增 4 组配对断言 |
-| P2 | 自托管显示字体（子集 woff2）+ `font-display: swap` + 回退栈 | `npm run build`、CSP 头不变、字体体积断言 |
-| P3 | 预绘制主题脚本（消除暗色闪白） | 真实浏览器：暗色偏好下首帧无亮色闪烁（截图比对） |
-| P4 | 英雄区文案收敛（需你确认文案） | 1440×900 与 375×812 下首屏含 CTA、标题 ≤ 2 行、副文案 ≤ 4 行 |
-| P5 | 交付前预检矩阵逐项复核（见 §8） | 全部通过 |
+| P0（已完成） | `MotionConfig reducedMotion="user"` + 收敛间距/字号刻度 + 形状规则成文注释 | `npm run typecheck`、落地页单测、`npm run verify:wcag` |
+| P1（已完成） | 13 个 token 转 `oklch` + 扩展 `wcag-contract` 覆盖落地页 + 修正对比度数学；`--muted` 保留（共享组件仍经它解析，见 §5 注释） | `npm run verify:wcag` 通过，且新增落地页断言 |
+| P2（已完成） | 自托管显示字体 Geist（latin woff2，56.8KiB）+ `font-display: swap` + `<link rel=preload>`；预算与许可由 `workbench-landing-build.test.mjs` 门禁 | `npm run build`、`verify:landing` 100/100、真实浏览器 `document.fonts` 显示 loaded |
+| P3（已完成） | 预绘制主题脚本 `frontend/public/theme-boot.js`（同源同步脚本，CSP 允许）+ Service Worker 缓存范围收窄到 `/assets/`（避免旧脚本被永久缓存） | 阻断应用包后 `html.dark` 仍为真；再阻断 boot 脚本则为假 |
+| P4（按你的决定不做） | 英雄区文案收敛 | 文案保持原样 |
+| P5（进行中） | 交付前预检矩阵逐项复核（见 §8） | 逐项通过 |
 
 ---
 
@@ -255,11 +265,11 @@
 | 零破折号（页面可见处） | 通过（实测落地页 `workbench-copy.ts` 与页面组件中该字符出现 0 次；中点符号每行至多一次，仅用于隐私说明与示例标注） |
 | 页面主题锁定 | 通过（整页同一主题，无区块反色） |
 | 单一强调色一致 | 通过（墨绿贯穿） |
-| 形状锁定 | **待办**（规则隐含，未成文；见 §5.5） |
-| 按钮对比度 / CTA 不换行 | 通过（44px 最小高度；中文标签均单行） |
+| 形状锁定 | 通过（三档已写入 CSS 顶部注释与 §5.5；控件为 beUI 胶囊，成组 `.5rem`，媒体 `.75rem`） |
+| 按钮对比度 / CTA 不换行 | 通过（改用 beUI 尺寸档后：`sm` 32px、`md` 40px、`lg` 48px，均高于 WCAG 2.2 AA 的 24px 目标尺寸下限；中文标签均单行，面板内长标签由 `white-space: normal` 显式换行） |
 | 衬线纪律 / 高端米金禁忌色板 | 通过（不引入衬线；落地页为暖中性 + 墨绿，非米金+黄铜） |
 | 英雄区适配首屏、顶部 padding ≤ pt-24 | 通过（56px；首屏含两个 CTA） |
-| 英雄区文本元素 ≤ 4 | **待办**（现 6 个，见 §5.6 下沉方案） |
+| 英雄区文本元素 ≤ 4 | 通过（徽标已下沉到 demo 区标题行；实测 `.workbench-hero-copy` 内叶子文本节点 3 个，3D 舞台的状态行与控件归其自身区域） |
 | 眉毛配额 | 通过（0 个） |
 | 分栏标题禁令 / zigzag 上限 | 通过（无分栏标题，无 zigzag） |
 | CTA 意图不重复 | 通过（开始演示 / 探索工作台 / 登录，三个意图） |
@@ -273,7 +283,7 @@
 | 动效有动机、marquee 至多一条 | 通过（无 marquee） |
 | 导航单行、高度 ≤ 80px | 通过（80px 整） |
 | `min-h-100dvh` 而非 `h-screen` | 通过 |
-| 减少动态覆盖（MOTION > 3 必须） | **待办**（无 `MotionConfig`，见 §5.8） |
+| 减少动态覆盖（MOTION > 3 必须） | 通过（根部 `MotionConfig reducedMotion="user"`；实测 `ScrollReveal` 在减少动态下 `transform: none, filter: none`，常规态为 `translateY(16px) + blur(8px)`） |
 | 深色模式两套 token 且已测 | 通过（两套均在） |
 | 移动端塌陷显式声明 | 通过（767px 媒体查询） |
 | 图标来自允许库 | 通过（Phosphor） |

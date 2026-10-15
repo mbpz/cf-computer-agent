@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { MotionConfig } from "motion/react";
 import "./styles/globals.css";
 import { App } from "./app";
 
@@ -14,6 +15,10 @@ if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
 }
   createRoot(root as Parameters<typeof createRoot>[0]).render(
   <StrictMode>
-    <App />
+    {/* One app-wide switch: every Motion animation degrades to its end state when the
+        visitor asks for reduced motion, including the landing reveals and button springs. */}
+    <MotionConfig reducedMotion="user">
+      <App />
+    </MotionConfig>
   </StrictMode>,
 );

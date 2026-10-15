@@ -39,6 +39,7 @@
     "frontend/components/inbox-create-form.tsx",
     "frontend/components/knowledge/knowledge-share-button.tsx",
     "frontend/components/motion/animated-toast-stack.tsx",
+    "frontend/components/motion/button/base.tsx",
     "frontend/components/motion/checkbox.tsx",
     "frontend/components/motion/file-tree.tsx",
     "frontend/components/motion/loader.tsx",
@@ -309,6 +310,7 @@
     "frontend/pages/workbench-landing/workbench-scene.tsx",
     "frontend/pages/workbench-review-page.tsx",
     "frontend/public/sw.js",
+    "frontend/public/theme-boot.js",
     "frontend/styles/token-contract.ts"
   ],
   "routes": [
@@ -3668,7 +3670,12 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/components/ui/button.tsx:41:7",
+        "frontend/components/motion/button/base.tsx:105:7",
+        "frontend/components/motion/button/base.tsx:127:17",
+        "frontend/components/motion/button/base.tsx:172:7",
+        "frontend/components/motion/loader.tsx:65:5",
+        "frontend/components/motion/loader.tsx:239:5",
+        "frontend/components/motion/loader.tsx:354:5",
         "frontend/components/ui/card.tsx:5:37",
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
@@ -3701,15 +3708,15 @@
         "frontend/pages/workbench-landing/workbench-feature-panel.tsx:155:13",
         "frontend/pages/workbench-landing/workbench-feature-panel.tsx:156:13",
         "frontend/pages/workbench-landing/workbench-feature-panel.tsx:169:11",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:204:5",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:205:34",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:206:10",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:207:5",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:226:7",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:227:7",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:271:7",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:274:11",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:278:11"
+        "frontend/pages/workbench-landing/workbench-scene.tsx:206:5",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:207:34",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:208:10",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:209:5",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:228:7",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:229:7",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:273:7",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:281:11",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:285:11"
       ],
       "unresolvedSymbols": []
     },
@@ -3753,9 +3760,6 @@
     "frontend/components/motion/animated-toast-stack.tsx:352:5",
     "frontend/components/motion/animated-toast-stack.tsx:480:17",
     "frontend/components/motion/animated-toast-stack.tsx:494:15",
-    "frontend/components/motion/loader.tsx:65:5",
-    "frontend/components/motion/loader.tsx:239:5",
-    "frontend/components/motion/loader.tsx:354:5",
     "frontend/components/motion/not-found/shared.tsx:55:7",
     "frontend/components/motion/not-found/shared.tsx:65:9",
     "frontend/components/shell/context-rail.tsx:33:7",
@@ -10751,6 +10755,96 @@
           "branch": "true"
         }
       ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/button/base.tsx:105:7",
+      "path": "frontend/components/motion/button/base.tsx",
+      "owner": "Button",
+      "line": 105,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "motion.button",
+      "attributes": {
+        "ref": "ref",
+        "type": "\"button\"",
+        "whileTap": "reduce ? undefined : { scale: pressScale }",
+        "whileHover": "reduce || !canHover ? undefined : { scale: 1.02 }",
+        "transition": "SPRING_PRESS",
+        "onPointerDown": "handlePointerDown",
+        "className": "cn(\n          \"inline-flex items-center justify-center font-medium select-none\",\n          \"transition-colors\",\n          \"disabled:pointer-events-none disabled:opacity-50\",\n          ripple && \"relative overflow-hidden\",\n          VARIANT_CLASS[variant],\n          SIZE_CLASS[size],\n          className,\n        )"
+      },
+      "handlers": {
+        "onPointerDown": "handlePointerDown"
+      },
+      "spreads": [
+        "rest"
+      ],
+      "labels": [
+        "children"
+      ],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/button/base.tsx:127:17",
+      "path": "frontend/components/motion/button/base.tsx",
+      "owner": "Button",
+      "line": 127,
+      "column": 17,
+      "kind": "jsx",
+      "tag": "motion.span",
+      "attributes": {
+        "key": "r.id",
+        "className": "\"absolute rounded-full bg-current\"",
+        "style": "{\n                    left: r.x,\n                    top: r.y,\n                    width: r.size,\n                    height: r.size,\n                    x: \"-50%\",\n                    y: \"-50%\",\n                  }",
+        "initial": "{ scale: 0.05, opacity: 0.3 }",
+        "animate": "{ scale: 1, opacity: 0 }",
+        "exit": "{ opacity: 0 }",
+        "transition": "{ duration: 1.6, ease: EASE_OUT }",
+        "onAnimationComplete": "() =>\n                    setRipples((prev) => prev.filter((x) => x.id !== r.id))"
+      },
+      "handlers": {
+        "onAnimationComplete": "() =>\n                    setRipples((prev) => prev.filter((x) => x.id !== r.id))"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "ripple && !reduce",
+          "branch": "true"
+        },
+        {
+          "kind": "repeat",
+          "expression": "ripples"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/button/base.tsx:172:7",
+      "path": "frontend/components/motion/button/base.tsx",
+      "owner": "ButtonLink",
+      "line": 172,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "motion.a",
+      "attributes": {
+        "ref": "ref",
+        "whileTap": "reduce ? undefined : { scale: pressScale }",
+        "whileHover": "reduce || !canHover ? undefined : { scale: 1.02 }",
+        "transition": "SPRING_PRESS",
+        "className": "cn(\n          \"inline-flex items-center justify-center font-medium select-none\",\n          \"transition-colors\",\n          VARIANT_CLASS[variant],\n          SIZE_CLASS[size],\n          className,\n        )"
+      },
+      "handlers": {},
+      "spreads": [
+        "rest"
+      ],
+      "labels": [
+        "children"
+      ],
+      "context": [],
       "earlyReturns": []
     },
     {
@@ -45156,9 +45250,10 @@
       "line": 74,
       "column": 17,
       "kind": "jsx",
-      "tag": "a",
+      "tag": "ButtonLink",
       "attributes": {
-        "className": "\"workbench-login\"",
+        "variant": "\"secondary\"",
+        "size": "\"md\"",
         "href": "\"/login\""
       },
       "handlers": {},
@@ -46099,10 +46194,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:204:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:206:5",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 204,
+      "line": 206,
       "column": 5,
       "kind": "listener",
       "tag": "document.addEventListener",
@@ -46119,10 +46214,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:205:34",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:207:34",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 205,
+      "line": 207,
       "column": 34,
       "kind": "listener",
       "tag": "media.addEventListener",
@@ -46145,10 +46240,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:206:10",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:208:10",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 206,
+      "line": 208,
       "column": 10,
       "kind": "listener",
       "tag": "media?.addListener",
@@ -46170,10 +46265,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:207:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:209:5",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 207,
+      "line": 209,
       "column": 5,
       "kind": "listener",
       "tag": "connection?.addEventListener",
@@ -46190,10 +46285,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:226:7",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:228:7",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 226,
+      "line": 228,
       "column": 7,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -46217,10 +46312,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:227:7",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:229:7",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 227,
+      "line": 229,
       "column": 7,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -46244,10 +46339,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:271:7",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:273:7",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 271,
+      "line": 273,
       "column": 7,
       "kind": "jsx",
       "tag": "p",
@@ -46266,16 +46361,16 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:274:11",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:281:11",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 274,
+      "line": 281,
       "column": 11,
       "kind": "jsx",
-      "tag": "button",
+      "tag": "Button",
       "attributes": {
-        "type": "\"button\"",
-        "className": "\"workbench-scene-button\"",
+        "variant": "\"secondary\"",
+        "size": "\"sm\"",
         "data-scene-action": "failed ? \"retry\" : \"load\"",
         "onClick": "event => activate(event.currentTarget, \"load\")"
       },
@@ -46296,16 +46391,16 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:278:11",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:285:11",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 278,
+      "line": 285,
       "column": 11,
       "kind": "jsx",
-      "tag": "button",
+      "tag": "Button",
       "attributes": {
-        "type": "\"button\"",
-        "className": "\"workbench-scene-button\"",
+        "variant": "\"secondary\"",
+        "size": "\"sm\"",
         "data-scene-action": "\"static\"",
         "onClick": "event => activate(event.currentTarget, \"useStatic\")"
       },
@@ -46857,7 +46952,7 @@
       "event": "\"fetch\"",
       "arguments": [
         "\"fetch\"",
-        "(event) => {\n  const request = event.request;\n  const url = new URL(request.url);\n  if (request.method !== \"GET\" || url.origin !== self.location.origin || url.pathname.startsWith(\"/api/\") || url.pathname.startsWith(\"/auth/\")) return;\n  if (request.mode === \"navigate\") {\n    event.respondWith(fetch(request).catch(() => caches.match(\"/index.html\")));\n    return;\n  }\n  if ([\"script\", \"style\", \"font\", \"image\"].includes(request.destination)) {\n    event.respondWith(caches.match(request).then((cached) => cached ?? fetch(request).then((response) => {\n      const copy = response.clone();\n      void caches.open(CACHE).then((cache) => cache.put(request, copy));\n      return response;\n    })));\n  }\n}"
+        "(event) => {\n  const request = event.request;\n  const url = new URL(request.url);\n  if (request.method !== \"GET\" || url.origin !== self.location.origin || url.pathname.startsWith(\"/api/\") || url.pathname.startsWith(\"/auth/\")) return;\n  if (request.mode === \"navigate\") {\n    event.respondWith(fetch(request).catch(() => caches.match(\"/index.html\")));\n    return;\n  }\n  // Only content-hashed build output is safe to serve cache-first. Unhashed files\n  // (theme boot, manifest) must revalidate, otherwise the first paint can be pinned to\n  // an old theme script forever.\n  if (url.pathname.startsWith(\"/assets/\") && [\"script\", \"style\", \"font\", \"image\"].includes(request.destination)) {\n    event.respondWith(caches.match(request).then((cached) => cached ?? fetch(request).then((response) => {\n      const copy = response.clone();\n      void caches.open(CACHE).then((cache) => cache.put(request, copy));\n      return response;\n    })));\n  }\n}"
       ],
       "attributes": {},
       "handlers": {},
