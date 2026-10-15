@@ -1,5 +1,6 @@
 import { ArrowRight, Bell, Books, ChatCircleText, SquaresFour, Tray } from "@phosphor-icons/react";
-import { useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { motion } from "motion/react";
 import { Button } from "../../components/ui/button";
 import { ScrollReveal } from "../../components/motion/scroll-reveal";
 import { syncDocumentLanguage, type LocaleRuntime } from "../../lib/i18n";
@@ -8,7 +9,12 @@ import { landingText, type LandingCopyKey } from "./workbench-copy";
 import { demoReducer, initialDemoState, type DemoEvent, type DemoState, type DemoStep, type FeatureId } from "./workbench-demo-state";
 import { WorkbenchFeaturePanel } from "./workbench-feature-panel";
 import { WorkbenchScene } from "./workbench-scene";
+import { SCENE_TOUR_INTERVAL_MS, SCENE_VIEWS, type SceneViewId } from "./workbench-scene-config";
 import "./workbench-landing.css";
+
+const viewLabels: Record<SceneViewId, LandingCopyKey> = {
+  front: "SCENE_VIEW_FRONT", left: "SCENE_VIEW_LEFT", right: "SCENE_VIEW_RIGHT", high: "SCENE_VIEW_HIGH", low: "SCENE_VIEW_LOW",
+};
 
 const features = [
   { id: "capture", label: "STEP_CAPTURE", icon: Tray },
@@ -32,9 +38,21 @@ function landingReducer(previous: { demo: DemoState; cycleId: number }, event: D
 export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
   const language = useSyncExternalStore(locale.subscribe, () => locale.locale, () => locale.locale);
   const [{ demo: state, cycleId }, dispatch] = useReducer(landingReducer, undefined, () => ({ demo: initialDemoState(), cycleId: 0 }));
+  // The tour is presentation state: it orbits the camera so the whole animation is
+  // visible from several angles, and it follows the same pause as the animation.
+  const [view, setView] = useState<SceneViewId>(SCENE_VIEWS[0].id);
   const snapshot = useMemo(() => ({ feature: state.activeFeature, captured: state.captured,
-    taskDone: state.taskDone, citationId: state.citationId, paused: state.paused, reduceMotion: false, dark: false, cycleId }), [state, cycleId]);
+    taskDone: state.taskDone, citationId: state.citationId, paused: state.paused, reduceMotion: false, dark: false, cycleId, view }), [state, cycleId, view]);
   const firstFeature = useRef<HTMLButtonElement>(null);
+  useEffect(() => { setView(SCENE_VIEWS[0].id); }, [cycleId]);
+  useEffect(() => {
+    if (state.paused) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      setView(current => SCENE_VIEWS[(SCENE_VIEWS.findIndex(entry => entry.id === current) + 1) % SCENE_VIEWS.length].id);
+    }, SCENE_TOUR_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [state.paused]);
   useEffect(() => {
     let mode: ThemeMode = "system";
     try { mode = readTheme(window.localStorage); } catch { /* Storage may be blocked. */ }
@@ -78,8 +96,17 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
           </div>
           <figure className="workbench-studio">
             <WorkbenchScene snapshot={snapshot} />
-            <Button variant="ghost" size="sm" data-demo-action="pause" aria-pressed={state.paused}
-              onClick={() => dispatch({ type: "pause", value: !state.paused })}>{text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE")}</Button>
+            <div className="workbench-scene-controls">
+              <Button variant="ghost" size="sm" data-demo-action="pause" aria-pressed={state.paused}
+                onClick={() => dispatch({ type: "pause", value: !state.paused })}>{text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE")}</Button>
+              <div className="workbench-views" role="group" aria-label={text("SCENE_VIEWS_LABEL")} data-scene-tour={state.paused ? "paused" : "running"}>
+                {SCENE_VIEWS.map((entry) => <button key={entry.id} type="button" className="workbench-view" data-scene-view-button={entry.id}
+                  aria-pressed={view === entry.id} onClick={() => setView(entry.id)}>
+                  {view === entry.id && <motion.span layoutId="workbench-view-active" className="workbench-view-pill" aria-hidden="true" />}
+                  <span className="workbench-view-label">{text(viewLabels[entry.id])}</span>
+                </button>)}
+              </div>
+            </div>
             <figcaption className="workbench-demo-badge">{text("DEMO_BADGE")}</figcaption>
           </figure>
         </section>

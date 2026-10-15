@@ -186,3 +186,44 @@
 - 未做生产身份与真实 AI 绑定的浏览器验收：本地无可用 AI 绑定，端到端以流桩驱动。
 - SSE 在真实网络下的分块到达与中间代理缓冲未验证；帧按 `\n\n` 分隔、逐帧解析已由单元用例覆盖。
 - 未在真机 / Safari 复核；`prefers-reduced-motion` 路径由组件源码（`useReducedMotion`）保证，本轮未模拟。
+
+## 9. 第五批：落地页 3D 场景的视角巡游与 OrbitControls
+
+用户要求：3D 展示需要自动切换各个视角以完整看到动画；随后指定使用 `OrbitControls`。
+
+### 9.1 取舍
+
+| 决定 | 依据 |
+| --- | --- |
+| 相机由固定 `Vector3(1, 0.9, 1)` 偏移改为**视角表 + 自动巡游** | 原实现只按 feature 取景（`fit()`），朝向永远不变，动画只能从一个角度看到 |
+| 接入 three 官方 `OrbitControls`（无需新依赖） | 用户指定；拖拽环绕 + 缩放由成熟实现负责，极角限位 0.55–1.45 防翻转、`enablePan=false`、缩放限位 0.6–2.4 |
+| 取景与朝向分工 | 正交相机的取景只由视锥（`halfHeight`）决定，与距离无关：`fit()` 继续负责取景，`direction` 只负责朝向，二者不再互相覆盖；缩放距离留给访客 |
+| 巡游由页面驱动（每 6 秒换一个视角） | 刻度条的高亮始终与状态一致，重放回到首个视角；暂停按钮同时暂停动画与巡游 |
+| 视角刻度条 | 未采用 beUI `preview-rail`（392 行 + 4 个 hook ≈ 700 行，为 5 个刻度不成比例），改用仓库既有 `layoutId` + `SPRING_LAYOUT` 滑动底片手法（与 shell 导航同源） |
+
+### 9.2 变更
+
+- `workbench-scene-config.ts`：`SCENE_VIEWS`（正面/左侧/右侧/俯视/低角，方位角+仰角弧度）、`SCENE_TOUR_INTERVAL_MS=6000`、`SceneSnapshot.view`。
+- `workbench-scene-runtime.ts`：OrbitControls 所有权与朝向插值分离；视图切换在 `SCENE_BUDGET.transitionMs` 内平滑环绕；DEV 下写 `data-scene-view` / `data-scene-azimuth` 便于观测；**控件变更时同步重绘**（暂停时也重绘，否则“暂停即冻结拖拽”）；`draw()` 加重入保护；`dispose()` 释放控件。
+- `public-workbench-page.tsx`：巡游计时（标签页隐藏时跳过）、重放归位、视角刻度条（`role=group` + `aria-pressed`）。
+- `workbench-copy.ts` / `workbench-landing.css`：中英视角文案与刻度条样式。
+
+### 9.3 验证
+
+- `npm run typecheck` 0 错误；落地页测试 51/51；`npm run build` 全链通过（vite + 落地资源校验 + 密钥扫描 + legacy 审计 + `wrangler deploy --dry-run`，14 个资源文件）。
+- 本地 Worker（`wrangler dev --local`，即域名同款服务路径）：`/` 200 外壳（含新构建入口 `assets/index-e4IIsrH1.js`）、`/api/session` **401 `AUTH_REQUIRED`**、`/login` 与两个深链 200、3D 模型 200（650 KB）。
+- 真实浏览器（headless Chrome + 软件 WebGL，1440×900，CDP 截图比对）：匿名根渲染落地页（非登录页）、3D 自动加载出现 canvas、**7 秒后画面变化**（自动巡游换视角生效）、暂停后**指针拖拽改变画面**（OrbitControls 生效）。
+
+### 9.4 边界
+
+- 未做真机 / Safari / 触屏双指手势实测；`pointer coarse` 下的 `touch-action: pan-y` 只保证纵向滚动不被夺走，横向拖拽旋转未在触屏设备验证。
+- canvas 仍为 `aria-hidden`（装饰性、无键盘操作路径）；拖拽是可选的增强，3D 之外的全部演示内容与登录入口不依赖它。
+
+## 10. 域名「打不开页面」的排查结论（2026-10-15）
+
+按证据排序，**代码侧不是原因**：本地 Worker 已复现域名同款路径并全部 200/401 正常（见 9.3）。
+
+1. **最可能：域名上的版本落后于本地提交。** 生产由 Cloudflare Dashboard 从 `main` 构建（构建命令 `npm run build`、部署 `npx wrangler deploy`，记录于 `docs/operations/2026-09-19-remaining-work-checklist.md:72`）；本仓库近两批改动仍只存在于本地提交（未 push）→ 域名看不到新界面。修复：push 后等 Dashboard 构建，或用 `npm run build && npm run deploy`。
+2. **用错入口地址：** `wrangler.jsonc:3-10` 关闭了 `workers_dev` 与 `preview_urls`，只有 `memory.crgmhrc.asia`（`custom_domain`）能打开；workers.dev / Preview URL 必然打不开。这是既有的有意加固，不是缺陷。
+3. **会话接口不是 401：** 前端只有 `/api/session` 抛 `401 AUTH_REQUIRED` 才判定匿名并渲染落地页（`frontend/lib/session-state.ts:4-6`、`frontend/app.tsx:194-196`）；若返回 403 `MEMBER_DISABLED`（禁用成员）则按设计进入登录页，若返回 5xx 则进入错误态。
+4. **本地 `npm run deploy` 的陷阱（次要）：** `frontend/dist` 被 gitignore 且 `deploy` 本身不构建，直接从笔记本部署会发出陈旧产物（排查时实测本地 dist 时间戳早于两批源码）。Dashboard 路径不受影响。

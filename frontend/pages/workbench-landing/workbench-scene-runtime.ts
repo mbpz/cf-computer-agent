@@ -5,7 +5,18 @@ import {
 import type { BufferGeometry, Material, Mesh, Object3D, Texture } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
-import { ANIMATION_NODES, FEATURE_NODES, REQUIRED_ROOTS, SCENE_BUDGET, type SceneOptions, type SceneSnapshot, type WorkbenchSceneHandle } from "./workbench-scene-config";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { ANIMATION_NODES, FEATURE_NODES, REQUIRED_ROOTS, SCENE_BUDGET, SCENE_VIEWS, type SceneOptions, type SceneSnapshot, type SceneViewId, type WorkbenchSceneHandle } from "./workbench-scene-config";
+
+/**
+ * Unit vector from the framed centre towards the camera for one authored view.
+ * Direction only: `fit()` owns the framing, so a view change never rescales the
+ * model, it orbits it.
+ */
+function viewDirection(view: SceneViewId): Vector3 {
+  const entry = SCENE_VIEWS.find(candidate => candidate.id === view) ?? SCENE_VIEWS[0];
+  return new Vector3(Math.sin(entry.azimuth) * Math.cos(entry.elevation), Math.sin(entry.elevation), Math.cos(entry.azimuth) * Math.cos(entry.elevation)).normalize();
+}
 
 type LocalPose = Pick<Object3D, "position" | "quaternion" | "scale">;
 function copyPose(source: LocalPose): LocalPose {
@@ -73,6 +84,7 @@ async function loadModel(options: SceneOptions): Promise<GLTF> {
 export async function createWorkbenchScene(options: SceneOptions): Promise<WorkbenchSceneHandle> {
   const gltf = await loadModel(options);
   let renderer: WebGLRenderer | undefined;
+  let controls: OrbitControls | undefined;
   let observer: ResizeObserver | undefined;
   let disposed = false;
   let renderedFrames = 0;
@@ -91,6 +103,7 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
     removeVisibilityListener();
     renderer?.domElement.removeEventListener("webglcontextlost", contextLost);
     observer?.disconnect(); disposeObjects(gltf.scenes);
+    controls?.dispose();
     renderer?.dispose(); renderer?.forceContextLoss(); renderer?.domElement.remove();
     if (import.meta.env.DEV) for (const name of metricNames) options.host.removeAttribute(`data-scene-${name}`);
   }
@@ -121,19 +134,40 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
     const center = bounds.getCenter(new Vector3());
     const size = Math.max(bounds.getSize(new Vector3()).length(), 0.01);
     const camera = new OrthographicCamera(-size, size, size, -size, size / 1000, size * 10);
-    const offset = new Vector3(1, 0.9, 1).normalize().multiplyScalar(size * 3);
-    camera.position.copy(center).add(offset); camera.lookAt(center); camera.updateMatrixWorld(true);
+    const cameraDistance = size * 3;
+    const direction = viewDirection(SCENE_VIEWS[0].id);
+    camera.position.copy(center).addScaledVector(direction, cameraDistance); camera.lookAt(center); camera.updateMatrixWorld(true);
     const canvas = renderer.domElement;
     canvas.addEventListener("webglcontextlost", contextLost);
-    canvas.setAttribute("aria-hidden", "true"); canvas.style.pointerEvents = "none";
+    canvas.setAttribute("aria-hidden", "true"); canvas.style.pointerEvents = "auto";
     options.signal.throwIfAborted();
     options.host.append(canvas);
+    // Pointer orbit is optional for the visitor: the tour keeps moving on its own,
+    // and a drag simply takes over from where the tour left the camera.
+    controls = new OrbitControls(camera, canvas);
+    controls.target.copy(center);
+    controls.enableDamping = true; controls.dampingFactor = 0.08;
+    controls.enablePan = false;
+    controls.minPolarAngle = 0.55; controls.maxPolarAngle = 1.45;
+    controls.minZoom = 0.6; controls.maxZoom = 2.4;
+    let lastControlChange = 0;
+    let drawing = false;
+    controls.addEventListener("change", () => {
+      lastControlChange = performance.now();
+      if (disposed) return;
+      // A paused page still renders what the visitor does with the pointer: draw
+      // synchronously (re-entrancy guarded) instead of waiting for an animation
+      // frame the tour would never schedule while paused.
+      draw();
+      if (snapshot.paused) return;
+      cancelFrame(); frame = requestAnimationFrame(animate);
+    });
     canvas.style.width = "100%"; canvas.style.height = "100%"; canvas.style.display = "block";
     let snapshot: SceneSnapshot = { feature: null, captured: false, taskDone: false, citationId: null, paused: false, reduceMotion: false, dark: false };
     let visible = true;
     let width = 0, height = 0, aspect = 1;
     let halfHeight = size;
-    let transition: { from: Vector3; fromHeight: number; started: number } | undefined;
+    let transition: { from: Vector3; fromHeight: number; fromDirection: Vector3; started: number } | undefined;
     const actors = {
       capture: gltf.scene.getObjectByName(ANIMATION_NODES.capture)!,
       task: gltf.scene.getObjectByName(ANIMATION_NODES.task)!,
@@ -185,14 +219,24 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
       }
       return { target, height: Math.max(extentY, extentX / aspect, size / 20) * 1.16 };
     }
+    /** Frame the current target at the current scale; the orbit stays where the visitor left it. */
     function applyCamera() {
-      camera.position.copy(center).add(offset); camera.lookAt(center);
+      const delta = center.clone().sub(controls!.target);
+      camera.position.add(delta); controls!.target.copy(center);
       camera.left = -halfHeight * aspect; camera.right = halfHeight * aspect;
       camera.top = halfHeight; camera.bottom = -halfHeight;
-      camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
+      camera.updateProjectionMatrix(); controls!.update(); camera.updateMatrixWorld(true);
+    }
+    /** Face the tour's authored angle around the target, keeping the visitor's distance. */
+    function placeCamera() {
+      const distance = Math.max(camera.position.distanceTo(controls!.target), cameraDistance);
+      camera.position.copy(controls!.target).addScaledVector(direction, distance);
+      camera.lookAt(controls!.target);
+      controls!.update();
     }
     function draw() {
-      if (disposed || !canDraw()) return;
+      if (disposed || !canDraw() || drawing) return;
+      drawing = true;
       try {
         applyCamera(); renderer!.render(scene, camera);
         if (disposed) return;
@@ -201,15 +245,17 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
           const values = [info.render.calls, info.render.triangles, ++renderedFrames, info.memory.geometries, info.memory.textures, renderer!.getPixelRatio()];
           metricNames.forEach((name, i) => options.host.setAttribute(`data-scene-${name}`, String(values[i])));
         }
-      } catch { fail("render-error"); }
+      } catch { fail("render-error"); } finally { drawing = false; }
     }
     function snap(resetCycle = false) {
       cancelFrame(); transition = undefined;
+      direction.copy(viewDirection(snapshot.view ?? SCENE_VIEWS[0].id));
       if (resetCycle) {
         motions.clear();
         for (const [node, origin] of origins) applyPose(node, origin);
       } else settlePoses();
       const target = fit(); center.copy(target.target); halfHeight = target.height;
+      controls!.target.copy(center); placeCamera();
       draw();
     }
     function animate(timestamp: number) {
@@ -229,11 +275,13 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
         // Refit after applying descendant poses, not against their pre-animation bounds.
         const target = fit();
         center.lerpVectors(transition.from, target.target, eased);
+        direction.lerpVectors(transition.fromDirection, viewDirection(snapshot.view ?? SCENE_VIEWS[0].id), eased).normalize();
         halfHeight = transition.fromHeight + (target.height - transition.fromHeight) * eased;
+        controls!.target.copy(center); placeCamera();
         if (progress === 1) transition = undefined;
       }
       draw();
-      if ((transition || motions.size) && !disposed) frame = requestAnimationFrame(animate);
+      if ((transition || motions.size || performance.now() - lastControlChange < 600) && !disposed) frame = requestAnimationFrame(animate);
     }
     function resize() {
       if (disposed) return;
@@ -270,7 +318,12 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
         const changedCapture = next.captured !== snapshot.captured;
         const changedTask = next.taskDone !== snapshot.taskDone;
         const changedCitation = (next.citationId !== null) !== (snapshot.citationId !== null);
+        const changedView = (next.view ?? SCENE_VIEWS[0].id) !== (snapshot.view ?? SCENE_VIEWS[0].id);
         snapshot = { ...next };
+        if (import.meta.env.DEV) {
+          options.host.setAttribute("data-scene-view", snapshot.view ?? SCENE_VIEWS[0].id);
+          options.host.setAttribute("data-scene-azimuth", (Math.atan2(camera.position.x - controls!.target.x, camera.position.z - controls!.target.z) * 180 / Math.PI).toFixed(1));
+        }
         applyTheme();
         if (changedCycle) { assistantTurned = false; snap(true); return; }
         // One short acknowledgement per demo/replay cycle, never an idle loop.
@@ -281,8 +334,8 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
           if (changed) motions.set(node, { from: copyPose(node), to: targetPose(role), started: performance.now() });
         }
         if (!canDraw() || snapshot.paused || snapshot.reduceMotion) { snap(); return; }
-        if (changedFeature || changedCapture || changedTask || changedCitation || changedAssistant) {
-          transition = { from: center.clone(), fromHeight: halfHeight, started: performance.now() };
+        if (changedFeature || changedCapture || changedTask || changedCitation || changedAssistant || changedView) {
+          transition = { from: center.clone(), fromHeight: halfHeight, fromDirection: direction.clone(), started: performance.now() };
         }
         if (transition || motions.size) { cancelFrame(); frame = requestAnimationFrame(animate); }
         else draw();

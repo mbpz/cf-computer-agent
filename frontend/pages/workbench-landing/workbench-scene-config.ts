@@ -19,11 +19,30 @@ export const SCENE_BUDGET = {
   desktopDpr: 1.5, mobileDpr: 1, loadTimeoutMs: 8000, transitionMs: 380,
 } as const;
 
+/**
+ * Authored viewing angles the automatic tour orbits through, in radians around
+ * the model's up axis. The camera always looks at the framed feature, so a view
+ * changes only the direction the workbench is seen from — the whole animation
+ * can be watched instead of one fixed angle.
+ */
+export const SCENE_VIEWS = [
+  { id: "front", azimuth: 0.79, elevation: 0.55 },
+  { id: "left", azimuth: -0.55, elevation: 0.42 },
+  { id: "right", azimuth: 2.12, elevation: 0.5 },
+  { id: "high", azimuth: 0.4, elevation: 0.95 },
+  { id: "low", azimuth: -0.2, elevation: 0.18 },
+] as const;
+export type SceneViewId = (typeof SCENE_VIEWS)[number]["id"];
+/** How long one viewing angle stays before the tour moves on. */
+export const SCENE_TOUR_INTERVAL_MS = 6000;
+
 export interface SceneSnapshot {
   /** Page-owned start/replay epoch. Omitted means cycle 0; feature changes never reset a cycle. */
   cycleId?: number;
   feature: FeatureId | null; captured: boolean; taskDone: boolean;
   citationId: string | null; paused: boolean; reduceMotion: boolean; dark: boolean;
+  /** Viewing angle the tour is on. Omitted means the first authored view. */
+  view?: SceneViewId;
 }
 export interface WorkbenchSceneHandle {
   update(snapshot: SceneSnapshot): void;
