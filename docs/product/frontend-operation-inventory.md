@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：308；操作/转发候选：1264。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：308；操作/转发候选：1265。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -307,7 +307,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/tasks/tasks-model.ts | 0 |
 | frontend/pages/tasks/tasks-page.tsx | 19 |
 | frontend/pages/today-page.tsx | 6 |
-| frontend/pages/workbench-landing/public-workbench-page.tsx | 15 |
+| frontend/pages/workbench-landing/public-workbench-page.tsx | 16 |
 | frontend/pages/workbench-landing/workbench-copy.ts | 0 |
 | frontend/pages/workbench-landing/workbench-demo-data.ts | 0 |
 | frontend/pages/workbench-landing/workbench-demo-state.ts | 0 |
@@ -361,7 +361,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 46 | 无（不代表动态边界已核对） |
 | /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 67 | 无（不代表动态边界已核对） |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 96 | 无（不代表动态边界已核对） |
-| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 41 | 无（不代表动态边界已核对） |
+| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 42 | 无（不代表动态边界已核对） |
 | &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 16 | 无（不代表动态边界已核对） |
 
 尚未归入上述入口的候选：121。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
@@ -2240,21 +2240,22 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 62:5 PublicWorkbenchPage | media?.addEventListener  | "change", apply |  |
-| 70:17 PublicWorkbenchPage | a text("LOGIN") | href="/login" |  |
-| 75:9 PublicWorkbenchPage | a text("BRAND") | href="/" |  |
-| 77:11 PublicWorkbenchPage | select  | onChange=event =&gt; locale.setLocale(event.target.value) |  |
-| 79:13 PublicWorkbenchPage | option English |  |  |
-| 79:48 PublicWorkbenchPage | option 简体中文 |  |  |
-| 91:15 PublicWorkbenchPage | Button text("START") | onClick=() =&gt; dispatch({ type: "start" }) |  |
-| 94:15 PublicWorkbenchPage | Button text("EXPLORE") | onClick=() =&gt; firstFeature.current?.focus() |  |
-| 100:15 PublicWorkbenchPage | Button text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE") | onClick=() =&gt; dispatch({ type: "pause", value: !state.paused }) |  |
-| 102:15 PublicWorkbenchPage | div  |  |  |
-| 103:45 PublicWorkbenchPage | button  | onClick=() =&gt; setView(entry.id); type="button" | {"kind":"repeat","expression":"SCENE_VIEWS"} |
-| 120:13 PublicWorkbenchPage | div  |  |  |
-| 121:67 PublicWorkbenchPage | Button  | onClick=() =&gt; dispatch({ type: "open", feature: id }) | aria-expanded=state.activeFeature === id; {"kind":"repeat","expression":"features"} |
-| 138:45 PublicWorkbenchPage | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"}; {"kind":"logical","expression":"state.… |
-| 140:15 PublicWorkbenchPage | Button text("REPLAY") | onClick=() =&gt; dispatch({ type: "replay" }) | {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"} |
+| 66:5 PublicWorkbenchPage | media?.addEventListener  | "change", apply |  |
+| 74:17 PublicWorkbenchPage | a text("LOGIN") | href="/login" |  |
+| 79:9 PublicWorkbenchPage | a text("BRAND") | href="/" |  |
+| 81:11 PublicWorkbenchPage | select  | onChange=event =&gt; locale.setLocale(event.target.value) |  |
+| 83:13 PublicWorkbenchPage | option English |  |  |
+| 83:48 PublicWorkbenchPage | option 简体中文 |  |  |
+| 95:15 PublicWorkbenchPage | Button text("START") | onClick=() =&gt; dispatch({ type: "start" }) |  |
+| 98:15 PublicWorkbenchPage | Button text("EXPLORE") | onClick=() =&gt; firstFeature.current?.focus() |  |
+| 102:13 PublicWorkbenchPage | WorkbenchScene  | onStatus=setSceneStatus |  |
+| 104:15 PublicWorkbenchPage | Button text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE") | onClick=() =&gt; dispatch({ type: "pause", value: !state.paused }) | {"kind":"logical","expression":"sceneLive","operator":"&&"} |
+| 106:15 PublicWorkbenchPage | div  |  | {"kind":"logical","expression":"sceneLive","operator":"&&"} |
+| 107:45 PublicWorkbenchPage | button  | onClick=() =&gt; setView(entry.id); type="button" | {"kind":"logical","expression":"sceneLive","operator":"&&"}; {"kind":"repeat","expression":"SCENE_VIEWS"} |
+| 124:13 PublicWorkbenchPage | div  |  |  |
+| 125:67 PublicWorkbenchPage | Button  | onClick=() =&gt; dispatch({ type: "open", feature: id }) | aria-expanded=state.activeFeature === id; {"kind":"repeat","expression":"features"} |
+| 142:45 PublicWorkbenchPage | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"}; {"kind":"logical","expression":"state.… |
+| 144:15 PublicWorkbenchPage | Button text("REPLAY") | onClick=() =&gt; dispatch({ type: "replay" }) | {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"} |
 
 ## frontend/pages/workbench-landing/workbench-feature-panel.tsx
 
@@ -2281,22 +2282,22 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 117:3 loadModel | options.signal.addEventListener  | "abort", onAbort, { once: true } |  |
 | 197:5 createWorkbenchScene | canvas.addEventListener  | "webglcontextlost", contextLost |  |
 | 213:5 createWorkbenchScene | controls.addEventListener  | "change", () =&gt; { // Camera updates this module performs itself must not look like visitor input, // otherwise an idle page keeps a frame queued while the… |  |
-| 377:5 createWorkbenchScene | options.host.ownerDocument.addEventListener  | "visibilitychange", visibilityChanged |  |
-| 379:5 createWorkbenchScene | options.signal.addEventListener  | "abort", dispose, { once: true } |  |
+| 387:5 createWorkbenchScene | options.host.ownerDocument.addEventListener  | "visibilitychange", visibilityChanged |  |
+| 389:5 createWorkbenchScene | options.signal.addEventListener  | "abort", dispose, { once: true } |  |
 
 ## frontend/pages/workbench-landing/workbench-scene.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 198:5 WorkbenchScene | document.addEventListener  | "visibilitychange", onVisibility |  |
-| 199:34 WorkbenchScene | media.addEventListener  | "change", onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"true"} |
-| 200:10 WorkbenchScene | media?.addListener  | onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"false"} |
-| 201:5 WorkbenchScene | connection?.addEventListener  | "change", onPreference |  |
-| 220:7 WorkbenchScene | window.addEventListener  | "resize", measure, { passive: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
-| 221:7 WorkbenchScene | window.addEventListener  | "scroll", measure, { passive: true, capture: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
-| 265:7 WorkbenchScene | p text(view.message).replace("{percent}", String(view.percent ?? 0)) |  |  |
-| 268:11 WorkbenchScene | button text(failed ? "SCENE_RETRY" : "SCENE_LOAD") | onClick=event =&gt; activate(event.currentTarget, "load"); type="button" | {"kind":"logical","expression":"view.status !== \"loading\" && view.status !== \"ready\"","operator":"&&"} |
-| 272:11 WorkbenchScene | button text("SCENE_STATIC_MODE") | onClick=event =&gt; activate(event.currentTarget, "useStatic"); type="button" | {"kind":"logical","expression":"view.status !== \"static\"","operator":"&&"} |
+| 204:5 WorkbenchScene | document.addEventListener  | "visibilitychange", onVisibility |  |
+| 205:34 WorkbenchScene | media.addEventListener  | "change", onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"true"} |
+| 206:10 WorkbenchScene | media?.addListener  | onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"false"} |
+| 207:5 WorkbenchScene | connection?.addEventListener  | "change", onPreference |  |
+| 226:7 WorkbenchScene | window.addEventListener  | "resize", measure, { passive: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
+| 227:7 WorkbenchScene | window.addEventListener  | "scroll", measure, { passive: true, capture: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
+| 271:7 WorkbenchScene | p text(view.message).replace("{percent}", String(view.percent ?? 0)) |  |  |
+| 274:11 WorkbenchScene | button text(failed ? "SCENE_RETRY" : "SCENE_LOAD") | onClick=event =&gt; activate(event.currentTarget, "load"); type="button" | {"kind":"logical","expression":"view.status !== \"loading\" && view.status !== \"ready\"","operator":"&&"} |
+| 278:11 WorkbenchScene | button text("SCENE_STATIC_MODE") | onClick=event =&gt; activate(event.currentTarget, "useStatic"); type="button" | {"kind":"logical","expression":"view.status !== \"static\"","operator":"&&"} |
 
 ## frontend/pages/workbench-review-page.tsx
 

@@ -1,5 +1,5 @@
 import {
-  Box3, Color, DirectionalLight, HemisphereLight, OrthographicCamera,
+  Box3, Color, DirectionalLight, HemisphereLight, Matrix4, OrthographicCamera,
   Quaternion, Scene, Vector3, WebGLRenderer,
 } from "three";
 import type { BufferGeometry, Material, Mesh, Object3D, Texture } from "three";
@@ -266,16 +266,26 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
       }
     }
 
+    // Measuring must not allocate per frame, and the orientation comes from the
+    // authored view direction rather than from wherever the camera is aimed.
+    const ORIGIN = new Vector3(0, 0, 0);
+    const fitBasis = new Matrix4();
+    const fitOrientation = new Quaternion();
+    const fitPoint = new Vector3();
     function fit() {
       gltf.scene.updateMatrixWorld(true);
       const targetBounds = new Box3().setFromObject(snapshot.feature
         ? gltf.scene.getObjectByName(FEATURE_NODES[snapshot.feature])! : gltf.scene);
       const target = targetBounds.getCenter(new Vector3());
-      const inverse = camera.quaternion.clone().invert();
+      // Measure in the orientation this frame will use — the authored view direction —
+      // never the camera's current aim: snap() re-aims the camera right after fitting,
+      // so reading camera.quaternion here sized the frustum for the previous angle and
+      // let transformed models overflow it.
+      fitOrientation.setFromRotationMatrix(fitBasis.lookAt(direction, ORIGIN, camera.up)).invert();
       let extentX = 0, extentY = 0;
       for (const x of [targetBounds.min.x, targetBounds.max.x]) for (const y of [targetBounds.min.y, targetBounds.max.y]) for (const z of [targetBounds.min.z, targetBounds.max.z]) {
-        const point = new Vector3(x, y, z).sub(target).applyQuaternion(inverse);
-        extentX = Math.max(extentX, Math.abs(point.x)); extentY = Math.max(extentY, Math.abs(point.y));
+        fitPoint.set(x, y, z).sub(target).applyQuaternion(fitOrientation);
+        extentX = Math.max(extentX, Math.abs(fitPoint.x)); extentY = Math.max(extentY, Math.abs(fitPoint.y));
       }
       return { target, height: Math.max(extentY, extentX / aspect, size / 20) * 1.16 };
     }

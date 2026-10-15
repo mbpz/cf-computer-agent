@@ -8,7 +8,7 @@ import { readTheme, type ThemeMode } from "../../lib/theme";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
 import { demoReducer, initialDemoState, type DemoEvent, type DemoState, type DemoStep, type FeatureId } from "./workbench-demo-state";
 import { WorkbenchFeaturePanel } from "./workbench-feature-panel";
-import { WorkbenchScene } from "./workbench-scene";
+import { WorkbenchScene, type SceneStatus } from "./workbench-scene";
 import { SCENE_TOUR_INTERVAL_MS, SCENE_VIEWS, type SceneViewId } from "./workbench-scene-config";
 import "./workbench-landing.css";
 
@@ -41,18 +41,22 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
   // The tour is presentation state: it orbits the camera so the whole animation is
   // visible from several angles, and it follows the same pause as the animation.
   const [view, setView] = useState<SceneViewId>(SCENE_VIEWS[0].id);
+  // The tour and the pause control only act on a scene that exists: while the model is
+  // still loading, failed or replaced by the static preview there is nothing to orbit.
+  const [sceneStatus, setSceneStatus] = useState<SceneStatus>("poster");
+  const sceneLive = sceneStatus === "ready";
   const snapshot = useMemo(() => ({ feature: state.activeFeature, captured: state.captured,
     taskDone: state.taskDone, citationId: state.citationId, paused: state.paused, reduceMotion: false, dark: false, cycleId, view }), [state, cycleId, view]);
   const firstFeature = useRef<HTMLButtonElement>(null);
   useEffect(() => { setView(SCENE_VIEWS[0].id); }, [cycleId]);
   useEffect(() => {
-    if (state.paused) return;
+    if (state.paused || !sceneLive) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === "hidden") return;
       setView(current => SCENE_VIEWS[(SCENE_VIEWS.findIndex(entry => entry.id === current) + 1) % SCENE_VIEWS.length].id);
     }, SCENE_TOUR_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [state.paused]);
+  }, [state.paused, sceneLive]);
   useEffect(() => {
     let mode: ThemeMode = "system";
     try { mode = readTheme(window.localStorage); } catch { /* Storage may be blocked. */ }
@@ -95,8 +99,8 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
             </div>
           </div>
           <figure className="workbench-studio">
-            <WorkbenchScene snapshot={snapshot} />
-            <div className="workbench-scene-controls">
+            <WorkbenchScene snapshot={snapshot} onStatus={setSceneStatus} />
+            {sceneLive && <div className="workbench-scene-controls">
               <Button variant="ghost" size="sm" data-demo-action="pause" aria-pressed={state.paused}
                 onClick={() => dispatch({ type: "pause", value: !state.paused })}>{text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE")}</Button>
               <div className="workbench-views" role="group" aria-label={text("SCENE_VIEWS_LABEL")} data-scene-tour={state.paused ? "paused" : "running"}>
@@ -106,7 +110,7 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
                   <span className="workbench-view-label">{text(viewLabels[entry.id])}</span>
                 </button>)}
               </div>
-            </div>
+            </div>}
             <figcaption className="workbench-demo-badge">{text("DEMO_BADGE")}</figcaption>
           </figure>
         </section>

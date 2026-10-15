@@ -8,6 +8,7 @@ import {
 import { shouldAutoLoadScene } from "./workbench-scene-policy";
 
 type SceneStatus = "poster" | "loading" | "ready" | "error" | "timeout" | "static";
+export type { SceneStatus };
 type SceneView = { status: SceneStatus; message: LandingCopyKey; language: string; percent: number | null };
 type SceneController = { update(snapshot: SceneSnapshot): void; load(): void; useStatic(): void };
 type Connection = EventTarget & { saveData?: boolean };
@@ -25,10 +26,13 @@ function failureMessage(error: unknown): LandingCopyKey {
 }
 
 // Snapshot remains the only business-state input; the page owns pause and feature controls.
-export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
+// The status is reported upward so the page only offers controls for a scene that exists.
+export function WorkbenchScene({ snapshot, onStatus }: { snapshot: SceneSnapshot; onStatus?: (status: SceneStatus) => void }) {
   const root = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const controller = useRef<SceneController | null>(null);
+  const statusListener = useRef(onStatus);
+  statusListener.current = onStatus;
   const [view, setView] = useState<SceneView>({ status: "poster", message: "SCENE_IDLE", language: "en", percent: null });
   const [focusRequest, setFocusRequest] = useState<HTMLButtonElement | null>(null);
   const locale = useMemo(() => createLocaleRuntime({ navigatorLanguage: view.language }), [view.language]);
@@ -60,6 +64,7 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
     let manualRequest = false;
     let active: Attempt | undefined;
     let status: SceneStatus = "poster";
+    let reportedStatus: SceneStatus = "poster";
     let message: LandingCopyKey = "SCENE_IDLE";
     let percent: number | null = null;
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -74,6 +79,7 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
     });
     const publish = () => {
       if (!alive) return;
+      if (status !== reportedStatus) { reportedStatus = status; statusListener.current?.(status); }
       const language = element.closest("[lang]")?.getAttribute("lang") || document.documentElement.lang || "en";
       const next = { status, message: status === "ready" && currentSnapshot.paused ? "SCENE_PAUSED" as const : message, language, percent };
       setView(previous => previous.status === next.status && previous.message === next.message && previous.language === next.language && previous.percent === next.percent ? previous : next);

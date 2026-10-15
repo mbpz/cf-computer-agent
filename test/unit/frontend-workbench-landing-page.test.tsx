@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -43,7 +43,12 @@ const action = (name: string) => `button[data-demo-action="${name}"]`;
 describe("public knowledge studio", () => {
   it("sends a new scene cycle only for start and replay, not feature navigation or pause", () => {
     let snapshot: { cycleId?: number; feature: unknown; captured: boolean } | undefined;
-    vi.spyOn(scene, "WorkbenchScene").mockImplementation(props => { snapshot = props.snapshot; return null; });
+    // The page only offers its pause control and angle rail for a live scene.
+    vi.spyOn(scene, "WorkbenchScene").mockImplementation(props => {
+      snapshot = props.snapshot;
+      useEffect(() => { props.onStatus?.("ready"); }, []);
+      return null;
+    });
     act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />));
     expect(snapshot?.cycleId).toBe(0);
     click('button[data-feature="library"]');
@@ -83,14 +88,35 @@ describe("public knowledge studio", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(false);
     expect(browser.localStorage.length).toBe(0);
   });
-  it("exposes a controlled pause toggle alongside the scene", () => {
+  it("exposes a controlled pause toggle alongside a live scene", () => {
+    vi.spyOn(scene, "WorkbenchScene").mockImplementation(props => {
+      useEffect(() => { props.onStatus?.("ready"); }, []);
+      return null;
+    });
     act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />));
-    expect(host.querySelector('[data-scene-status]')).not.toBeNull();
     expect(host.querySelector('[data-demo-action="pause"]')?.getAttribute("aria-pressed")).toBe("false");
     click(action("pause"));
     expect(host.querySelector('[data-demo-action="pause"]')?.getAttribute("aria-pressed")).toBe("true");
     click(action("pause"));
     expect(host.querySelector('[data-demo-action="pause"]')?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("offers no pause control or angle rail until the scene reports itself live", () => {
+    vi.spyOn(scene, "WorkbenchScene").mockImplementation(() => null);
+    act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />));
+    expect(host.querySelector('[data-demo-action="pause"]')).toBeNull();
+    expect(host.querySelector('[data-scene-view-button]')).toBeNull();
+    expect(host.querySelector(".workbench-scene-controls")).toBeNull();
+
+    let report: ((value: "ready") => void) | undefined;
+    vi.spyOn(scene, "WorkbenchScene").mockImplementation(props => {
+      report = props.onStatus as ((value: "ready") => void) | undefined;
+      return null;
+    });
+    act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />));
+    act(() => report?.("ready"));
+    expect(host.querySelector('[data-demo-action="pause"]')).not.toBeNull();
+    expect(host.querySelector('[data-scene-view-button]')).not.toBeNull();
   });
   it("renders an honest Chinese static demo and the two-method sign-in entry without canvas", () => {
     const html = renderToStaticMarkup(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })} />);
