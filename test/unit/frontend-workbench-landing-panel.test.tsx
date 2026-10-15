@@ -6,6 +6,7 @@ import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { PublicWorkbenchPage } from "../../frontend/pages/workbench-landing/public-workbench-page";
 import { WorkbenchFeaturePanel } from "../../frontend/pages/workbench-landing/workbench-feature-panel";
 import { demoReducer, initialDemoState } from "../../frontend/pages/workbench-landing/workbench-demo-state";
+import { landingText } from "../../frontend/pages/workbench-landing/workbench-copy";
 
 // Match the repository's Happy DOM adapter for the Workers test pool.
 const vmContexts = new WeakSet<object>();
@@ -53,10 +54,16 @@ const action = (name: string) => `[data-demo-action="${name}"]`;
 describe("knowledge feature modal", () => {
   it("exposes one labelled, described modal and focuses inside it", () => {
     click("[data-trigger]");
-    const dialog = host.querySelector('[role="dialog"]')!;
+    const dialog = host.querySelector<HTMLElement>('aside[role="dialog"][aria-modal="true"]')!;
     expect(host.querySelectorAll('[aria-modal="true"]')).toHaveLength(1);
-    expect(document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent).toContain("sources");
-    expect(document.getElementById(dialog.getAttribute("aria-describedby")!)?.textContent).toContain("No live AI");
+    // The Drawer names the panel itself; the title/description wiring moved to
+    // the body div inside it.
+    expect(dialog.getAttribute("aria-label")).toBe(landingText(locale, "GUIDE_LABEL"));
+    expect(dialog.hasAttribute("aria-labelledby")).toBe(false);
+    expect(dialog.hasAttribute("aria-describedby")).toBe(false);
+    const body = dialog.querySelector<HTMLElement>(".workbench-feature-panel-body")!;
+    expect(document.getElementById(body.getAttribute("aria-labelledby")!)?.textContent).toContain("sources");
+    expect(document.getElementById(body.getAttribute("aria-describedby")!)?.textContent).toContain("No live AI");
     expect(dialog.contains(document.activeElement)).toBe(true);
   });
   it("closes via its explicit close button", () => {
@@ -68,7 +75,10 @@ describe("knowledge feature modal", () => {
     expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
   it("closes when the overlay itself is clicked", () => {
-    click("[data-trigger]"); click("[data-landing-overlay]");
+    click("[data-trigger]");
+    const backdrop = host.querySelector<HTMLButtonElement>(".workbench-landing-overlay")!;
+    expect(backdrop.getAttribute("aria-label")).toBe("Close");
+    click(".workbench-landing-overlay");
     expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
   it("does not close on an internal click", () => {
@@ -112,11 +122,13 @@ describe("knowledge feature modal", () => {
     document.body.style.overflow = "clip";
     click("[data-trigger]");
     expect(document.body.style.overflow).toBe("hidden");
-    key("Escape");
+    click('[data-demo-action="close"]');
     expect(document.body.style.overflow).toBe("clip");
+    document.body.style.overflow = "";
     click("[data-trigger]");
-    act(() => root.render(null));
-    expect(document.body.style.overflow).toBe("clip");
+    expect(document.body.style.overflow).toBe("hidden");
+    act(() => root.unmount());
+    expect(document.body.style.overflow).toBe("");
   });
   it("keeps focus stable when showing the answer, then focuses cited context and returns to that citation", () => {
     click("[data-trigger]"); click(action("show-answer"));

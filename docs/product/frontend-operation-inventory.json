@@ -41,12 +41,14 @@
     "frontend/components/motion/animated-toast-stack.tsx",
     "frontend/components/motion/button/base.tsx",
     "frontend/components/motion/checkbox.tsx",
+    "frontend/components/motion/drawer.tsx",
     "frontend/components/motion/file-tree.tsx",
     "frontend/components/motion/loader.tsx",
     "frontend/components/motion/not-found/glitch.tsx",
     "frontend/components/motion/not-found/shared.tsx",
     "frontend/components/motion/number-ticker.tsx",
     "frontend/components/motion/scroll-reveal.tsx",
+    "frontend/components/motion/select.tsx",
     "frontend/components/motion/shared-layout-bg.tsx",
     "frontend/components/motion/table/editable-cell.tsx",
     "frontend/components/motion/table/index.tsx",
@@ -60,6 +62,7 @@
     "frontend/components/motion/table/use-column-sort.ts",
     "frontend/components/motion/table/use-row-selection.ts",
     "frontend/components/motion/table/utils.ts",
+    "frontend/components/motion/tabs.tsx",
     "frontend/components/planning-create-form.tsx",
     "frontend/components/planning-status-confirmation.tsx",
     "frontend/components/planning-write-recovery.tsx",
@@ -209,6 +212,7 @@
     "frontend/lib/planning-create-intent.ts",
     "frontend/lib/planning-draft.ts",
     "frontend/lib/planning-write-recovery.ts",
+    "frontend/lib/presence-gate.tsx",
     "frontend/lib/project-relations-data.ts",
     "frontend/lib/projects-data.ts",
     "frontend/lib/reader-favorite-intent.ts",
@@ -3673,41 +3677,55 @@
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/button/base.tsx:172:7",
+        "frontend/components/motion/drawer.tsx:41:5",
+        "frontend/components/motion/drawer.tsx:62:13",
+        "frontend/components/motion/drawer.tsx:83:13",
         "frontend/components/motion/loader.tsx:65:5",
         "frontend/components/motion/loader.tsx:239:5",
         "frontend/components/motion/loader.tsx:354:5",
+        "frontend/components/motion/select.tsx:177:5",
+        "frontend/components/motion/select.tsx:178:5",
+        "frontend/components/motion/select.tsx:247:5",
+        "frontend/components/motion/select.tsx:380:5",
+        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/tabs.tsx:160:5",
+        "frontend/components/motion/tabs.tsx:226:9",
+        "frontend/components/motion/tabs.tsx:230:7",
+        "frontend/components/motion/tabs.tsx:242:9",
+        "frontend/components/motion/tabs.tsx:253:9",
+        "frontend/components/motion/tabs.tsx:279:7",
+        "frontend/components/motion/tabs.tsx:326:7",
         "frontend/components/ui/card.tsx:5:37",
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:66:5",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:74:17",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:79:9",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:81:11",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:83:13",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:83:48",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:95:15",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:98:15",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:102:13",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:104:15",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:106:15",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:107:45",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:124:13",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:125:67",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:142:45",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:144:15",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:83:10",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:86:5",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:90:9",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:95:9",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:98:9",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:114:13",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:118:11",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:126:13",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:138:13",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:144:81",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:155:13",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:156:13",
-        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:169:11",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:67:5",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:75:17",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:80:9",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:82:11",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:102:15",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:105:15",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:109:13",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:111:15",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:113:15",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:114:17",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:116:47",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:131:13",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:132:67",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:149:45",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:151:15",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:77:10",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:79:5",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:83:9",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:88:9",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:91:9",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:107:13",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:111:11",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:119:13",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:131:13",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:137:81",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:148:13",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:149:13",
+        "frontend/pages/workbench-landing/workbench-feature-panel.tsx:162:11",
         "frontend/pages/workbench-landing/workbench-scene.tsx:206:5",
         "frontend/pages/workbench-landing/workbench-scene.tsx:207:34",
         "frontend/pages/workbench-landing/workbench-scene.tsx:208:10",
@@ -10879,6 +10897,100 @@
       "earlyReturns": []
     },
     {
+      "id": "frontend/components/motion/drawer.tsx:41:5",
+      "path": "frontend/components/motion/drawer.tsx",
+      "owner": "Drawer",
+      "line": 41,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "\"keydown\"",
+      "arguments": [
+        "\"keydown\"",
+        "onKey"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!open",
+          "source": "if (!open) return;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/motion/drawer.tsx:62:13",
+      "path": "frontend/components/motion/drawer.tsx",
+      "owner": "Drawer",
+      "line": 62,
+      "column": 13,
+      "kind": "jsx",
+      "tag": "motion.button",
+      "attributes": {
+        "type": "\"button\"",
+        "aria-label": "\"Close\"",
+        "tabIndex": "dismissable ? 0 : -1",
+        "onClick": "() => dismissable && onOpenChange(false)",
+        "initial": "{ opacity: 0 }",
+        "animate": "{ opacity: 1 }",
+        "exit": "{ opacity: 0 }",
+        "transition": "{ duration: 0.25, ease: EASE_OUT }",
+        "className": "cn(\n                \"fixed inset-0 z-50 h-full w-full cursor-default bg-black/40 backdrop-blur-sm\",\n                backdropClassName,\n              )"
+      },
+      "handlers": {
+        "onClick": "() => dismissable && onOpenChange(false)"
+      },
+      "spreads": [
+        "gate"
+      ],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "open",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/drawer.tsx:83:13",
+      "path": "frontend/components/motion/drawer.tsx",
+      "owner": "Drawer",
+      "line": 83,
+      "column": 13,
+      "kind": "jsx",
+      "tag": "motion.aside",
+      "attributes": {
+        "role": "\"dialog\"",
+        "aria-modal": "\"true\"",
+        "aria-label": "ariaLabel",
+        "initial": "reduce ? { opacity: 0 } : { x: offscreen }",
+        "animate": "reduce ? { opacity: 1 } : { x: 0 }",
+        "exit": "reduce ? { opacity: 0 } : { x: offscreen }",
+        "transition": "reduce ? { duration: 0.2, ease: EASE_OUT } : SPRING_PANEL",
+        "className": "cn(\n                \"fixed inset-y-0 z-50 flex w-80 max-w-[85vw] flex-col bg-background shadow-2xl\",\n                side === \"right\"\n                  ? \"right-0 border-l border-border\"\n                  : \"left-0 border-r border-border\",\n                className,\n              )"
+      },
+      "handlers": {},
+      "spreads": [
+        "gate"
+      ],
+      "labels": [
+        "children"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "open",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
       "id": "frontend/components/motion/file-tree.tsx:319:5",
       "path": "frontend/components/motion/file-tree.tsx",
       "owner": "FileTree",
@@ -11052,6 +11164,135 @@
           "branch": "true"
         }
       ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/select.tsx:177:5",
+      "path": "frontend/components/motion/select.tsx",
+      "owner": "Select",
+      "line": 177,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "\"keydown\"",
+      "arguments": [
+        "\"keydown\"",
+        "onKey"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!open",
+          "source": "if (!open) return;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/motion/select.tsx:178:5",
+      "path": "frontend/components/motion/select.tsx",
+      "owner": "Select",
+      "line": 178,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "\"pointerdown\"",
+      "arguments": [
+        "\"pointerdown\"",
+        "onPointer"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!open",
+          "source": "if (!open) return;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/motion/select.tsx:247:5",
+      "path": "frontend/components/motion/select.tsx",
+      "owner": "SelectTrigger",
+      "line": 247,
+      "column": 5,
+      "kind": "jsx",
+      "tag": "motion.button",
+      "attributes": {
+        "type": "\"button\"",
+        "id": "ctx.triggerId",
+        "disabled": "ctx.disabled",
+        "aria-haspopup": "\"listbox\"",
+        "aria-expanded": "ctx.open",
+        "aria-controls": "ctx.listId",
+        "onClick": "() => ctx.setOpen(!ctx.open)",
+        "style": "{\n        borderTopLeftRadius: ctx.reduce || !isTop ? RADIUS : nearRadius,\n        borderTopRightRadius: ctx.reduce || !isTop ? RADIUS : nearRadius,\n        borderBottomLeftRadius: ctx.reduce || isTop ? RADIUS : nearRadius,\n        borderBottomRightRadius: ctx.reduce || isTop ? RADIUS : nearRadius,\n      }",
+        "className": "cn(\n        \"relative z-10 flex w-full items-center justify-between gap-2 border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors\",\n        \"hover:border-(--color-border-strong) focus-visible:ring-2 focus-visible:ring-foreground/20\",\n        \"disabled:pointer-events-none disabled:opacity-50\",\n        className,\n      )"
+      },
+      "handlers": {
+        "onClick": "() => ctx.setOpen(!ctx.open)"
+      },
+      "spreads": [],
+      "labels": [
+        "children"
+      ],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/select.tsx:380:5",
+      "path": "frontend/components/motion/select.tsx",
+      "owner": "SelectContent",
+      "line": 380,
+      "column": 5,
+      "kind": "jsx",
+      "tag": "motion.div",
+      "attributes": {
+        "ref": "panelRef",
+        "id": "ctx.listId",
+        "role": "\"listbox\"",
+        "aria-labelledby": "ctx.triggerId",
+        "aria-hidden": "!open",
+        "inert": "!open",
+        "style": "{\n        visibility: present ? undefined : \"hidden\",\n        maxHeight: present ? undefined : 0,\n        borderWidth: present ? undefined : 0,\n        y,\n        clipPath,\n        borderRadius,\n        opacity,\n        pointerEvents: open ? \"auto\" : \"none\",\n        marginTop: isTop ? 0 : GAP,\n        marginBottom: isTop ? GAP : 0,\n      }",
+        "className": "cn(\n        \"absolute left-0 right-0 z-20 overflow-hidden border border-border bg-background shadow-lg\",\n        isTop ? \"bottom-full\" : \"top-full\",\n        className,\n      )"
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/select.tsx:442:7",
+      "path": "frontend/components/motion/select.tsx",
+      "owner": "SelectItem",
+      "line": 442,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "role": "\"option\"",
+        "aria-selected": "selected",
+        "disabled": "disabled",
+        "onClick": "() => ctx.select(value)",
+        "className": "cn(\n          \"flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm outline-none transition-colors\",\n          selected\n            ? \"bg-muted text-foreground\"\n            : \"text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted\",\n          \"disabled:pointer-events-none disabled:opacity-50\",\n          className,\n        )"
+      },
+      "handlers": {
+        "onClick": "() => ctx.select(value)"
+      },
+      "spreads": [],
+      "labels": [
+        "children"
+      ],
+      "context": [],
       "earlyReturns": []
     },
     {
@@ -11892,6 +12133,205 @@
         }
       ],
       "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:160:5",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "TabsList",
+      "line": 160,
+      "column": 5,
+      "kind": "listener",
+      "tag": "viewport.addEventListener",
+      "event": "\"scroll\"",
+      "arguments": [
+        "\"scroll\"",
+        "measure",
+        "{ passive: true }"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!root || !viewport || !list",
+          "source": "if (!root || !viewport || !list) return;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:226:9",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "TabsList",
+      "line": 226,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "aria-label": "\"Scroll tabs left\"",
+        "aria-controls": "viewportId",
+        "disabled": "!edges.left",
+        "onClick": "() => scroll(-1)",
+        "className": "cn(controlClass, \"left-0 rounded-l-full\")"
+      },
+      "handlers": {
+        "onClick": "() => scroll(-1)"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "edges.overflow",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:230:7",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "TabsList",
+      "line": 230,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "motion.div",
+      "attributes": {
+        "ref": "viewportRef",
+        "id": "viewportId",
+        "layoutScroll": "true",
+        "className": "cn(\"w-full min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden\", edges.overflow && \"[border-radius:inherit]\")",
+        "style": "edges.overflow ? {\n          maskImage: `linear-gradient(to right, ${edges.left ? \"transparent, black 40px\" : \"black, black 0px\"}, ${edges.right ? \"black calc(100% - 40px), transparent\" : \"black 100%\"})`,\n        } : undefined",
+        "onFocusCapture": "(event) => {\n          if (event.target instanceof HTMLElement && event.target.getAttribute(\"role\") === \"tab\") reveal(event.target);\n        }"
+      },
+      "handlers": {
+        "onFocusCapture": "(event) => {\n          if (event.target instanceof HTMLElement && event.target.getAttribute(\"role\") === \"tab\") reveal(event.target);\n        }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:242:9",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "TabsList",
+      "line": 242,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "ref": "listRef",
+        "role": "\"tablist\"",
+        "className": "cn(listClasses[variant], \"w-max\", className)"
+      },
+      "handlers": {},
+      "spreads": [
+        "props"
+      ],
+      "labels": [
+        "children"
+      ],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:253:9",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "TabsList",
+      "line": 253,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "aria-label": "\"Scroll tabs right\"",
+        "aria-controls": "viewportId",
+        "disabled": "!edges.right",
+        "onClick": "() => scroll(1)",
+        "className": "cn(controlClass, \"right-0 rounded-r-full\")"
+      },
+      "handlers": {
+        "onClick": "() => scroll(1)"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "edges.overflow",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:279:7",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "TabsTrigger",
+      "line": 279,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "role": "\"tab\"",
+        "aria-selected": "active",
+        "onClick": "(event) => {\n          onClick?.(event);\n          if (!event.defaultPrevented) setValue(value);\n        }",
+        "className": "cn(\n          \"relative isolate px-3 pb-2.5 pt-1 -mb-px text-sm font-medium transition-colors min-h-[44px] inline-flex items-center whitespace-nowrap shrink-0\",\n          active ? \"text-foreground\" : \"text-muted-foreground hover:text-foreground\",\n          className,\n        )"
+      },
+      "handlers": {
+        "onClick": "(event) => {\n          onClick?.(event);\n          if (!event.defaultPrevented) setValue(value);\n        }"
+      },
+      "spreads": [
+        "props"
+      ],
+      "labels": [
+        "children"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "variant === \"underline\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:326:7",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "TabsTrigger",
+      "line": 326,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "role": "\"tab\"",
+        "aria-selected": "active",
+        "data-tabs-value": "value",
+        "onClick": "(event) => {\n          onClick?.(event);\n          if (!event.defaultPrevented) setValue(value);\n        }",
+        "className": "cn(\n          \"relative z-10 inline-flex items-center justify-center whitespace-nowrap bg-transparent px-3.5 py-1.5 text-sm font-medium outline-none\",\n          \"text-muted-foreground hover:text-foreground\",\n          radius,\n          className,\n        )"
+      },
+      "handlers": {
+        "onClick": "(event) => {\n          onClick?.(event);\n          if (!event.defaultPrevented) setValue(value);\n        }"
+      },
+      "spreads": [
+        "props"
+      ],
+      "labels": [
+        "children"
+      ],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "variant === \"underline\"",
+          "source": "if (variant === \"underline\") {\n    return (\n      <button\n        {...props}\n        type=\"button\"\n        role=\"tab\"\n        aria-selected={active}\n        onClick={(event) => {\n          onClick?.(event);\n          if (!event.defaultPrevented) setValue(value);\n        }}\n        className={cn(\n          \"relative isolate px-3 pb-2.5 pt-1 -mb-px text-sm font-medium transition-colors min-h-[44px] inline-flex items-center whitespace-nowrap shrink-0\",\n          active ? \"text-foreground\" : \"text-muted-foreground hover:text-foreground\",\n          className,\n        )}\n      >\n        {children}\n        {active ? (\n        <motion.span\n          layoutId={layoutId}\n          layout\n          className={cn(\n            \"absolute bottom-0 left-0 right-0 h-px bg-primary\",\n            indicatorClassName,\n          )}\n        />\n        ) : null}\n      </button>\n    );\n  }"
+        }
+      ]
     },
     {
       "id": "frontend/components/planning-create-form.tsx:45:5",
@@ -45224,10 +45664,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:66:5",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:67:5",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 66,
+      "line": 67,
       "column": 5,
       "kind": "listener",
       "tag": "media?.addEventListener",
@@ -45244,10 +45684,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:74:17",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:75:17",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 74,
+      "line": 75,
       "column": 17,
       "kind": "jsx",
       "tag": "ButtonLink",
@@ -45265,10 +45705,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:79:9",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:80:9",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 79,
+      "line": 80,
       "column": 9,
       "kind": "jsx",
       "tag": "a",
@@ -45285,21 +45725,19 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:81:11",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:82:11",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 81,
+      "line": 82,
       "column": 11,
       "kind": "jsx",
-      "tag": "select",
+      "tag": "Select",
       "attributes": {
-        "className": "\"workbench-locale\"",
-        "aria-label": "text(\"SWITCH_LANGUAGE\")",
         "value": "language",
-        "onChange": "event => locale.setLocale(event.target.value)"
+        "onValueChange": "value => locale.setLocale(value)"
       },
       "handlers": {
-        "onChange": "event => locale.setLocale(event.target.value)"
+        "onValueChange": "value => locale.setLocale(value)"
       },
       "spreads": [],
       "labels": [],
@@ -45307,48 +45745,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:83:13",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:102:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 83,
-      "column": 13,
-      "kind": "jsx",
-      "tag": "option",
-      "attributes": {
-        "value": "\"en\""
-      },
-      "handlers": {},
-      "spreads": [],
-      "labels": [
-        "English"
-      ],
-      "context": [],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:83:48",
-      "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
-      "owner": "PublicWorkbenchPage",
-      "line": 83,
-      "column": 48,
-      "kind": "jsx",
-      "tag": "option",
-      "attributes": {
-        "value": "\"zh-CN\""
-      },
-      "handlers": {},
-      "spreads": [],
-      "labels": [
-        "简体中文"
-      ],
-      "context": [],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:95:15",
-      "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
-      "owner": "PublicWorkbenchPage",
-      "line": 95,
+      "line": 102,
       "column": 15,
       "kind": "jsx",
       "tag": "Button",
@@ -45368,10 +45768,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:98:15",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:105:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 98,
+      "line": 105,
       "column": 15,
       "kind": "jsx",
       "tag": "Button",
@@ -45391,10 +45791,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:102:13",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:109:13",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 102,
+      "line": 109,
       "column": 13,
       "kind": "jsx",
       "tag": "WorkbenchScene",
@@ -45411,10 +45811,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:104:15",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:111:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 104,
+      "line": 111,
       "column": 15,
       "kind": "jsx",
       "tag": "Button",
@@ -45442,10 +45842,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:106:15",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:113:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 106,
+      "line": 113,
       "column": 15,
       "kind": "jsx",
       "tag": "div",
@@ -45468,26 +45868,49 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:107:45",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:114:17",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 107,
-      "column": 45,
+      "line": 114,
+      "column": 17,
       "kind": "jsx",
-      "tag": "button",
+      "tag": "Tabs",
       "attributes": {
-        "key": "entry.id",
-        "type": "\"button\"",
-        "className": "\"workbench-view\"",
-        "data-scene-view-button": "entry.id",
-        "aria-pressed": "view === entry.id",
-        "onClick": "() => setView(entry.id)"
+        "value": "view",
+        "onValueChange": "next => setView(next as SceneViewId)",
+        "variant": "\"pill\""
       },
       "handlers": {
-        "onClick": "() => setView(entry.id)"
+        "onValueChange": "next => setView(next as SceneViewId)"
       },
       "spreads": [],
       "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "sceneLive",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:116:47",
+      "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
+      "owner": "PublicWorkbenchPage",
+      "line": 116,
+      "column": 47,
+      "kind": "jsx",
+      "tag": "TabsTrigger",
+      "attributes": {
+        "key": "entry.id",
+        "value": "entry.id"
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "text(viewLabels[entry.id])"
+      ],
       "context": [
         {
           "kind": "logical",
@@ -45502,10 +45925,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:124:13",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:131:13",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 124,
+      "line": 131,
       "column": 13,
       "kind": "jsx",
       "tag": "div",
@@ -45521,10 +45944,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:125:67",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:132:67",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 125,
+      "line": 132,
       "column": 67,
       "kind": "jsx",
       "tag": "Button",
@@ -45551,10 +45974,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:142:45",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:149:45",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 142,
+      "line": 149,
       "column": 45,
       "kind": "jsx",
       "tag": "Button",
@@ -45585,10 +46008,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:144:15",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:151:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 144,
+      "line": 151,
       "column": 15,
       "kind": "jsx",
       "tag": "Button",
@@ -45614,20 +46037,24 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:83:10",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:77:10",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 83,
+      "line": 77,
       "column": 10,
       "kind": "jsx",
-      "tag": "div",
+      "tag": "Drawer",
       "attributes": {
-        "className": "\"workbench-landing-overlay\"",
-        "data-landing-overlay": "true",
-        "onClick": "event => {\n    if (event.target === event.currentTarget) close();\n  }"
+        "open": "active",
+        "onOpenChange": "open => { if (!open) close(); }",
+        "side": "\"right\"",
+        "dismissable": "true",
+        "ariaLabel": "text(\"GUIDE_LABEL\")",
+        "className": "\"workbench-feature-panel\"",
+        "backdropClassName": "\"workbench-landing-overlay\""
       },
       "handlers": {
-        "onClick": "event => {\n    if (event.target === event.currentTarget) close();\n  }"
+        "onOpenChange": "open => { if (!open) close(); }"
       },
       "spreads": [],
       "labels": [],
@@ -45640,26 +46067,32 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:86:5",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:79:5",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 86,
+      "line": 79,
       "column": 5,
       "kind": "jsx",
       "tag": "div",
       "attributes": {
         "ref": "focusRef",
-        "className": "\"workbench-feature-panel\"",
-        "role": "\"dialog\"",
-        "aria-modal": "\"true\"",
+        "className": "\"workbench-feature-panel-body\"",
+        "tabIndex": "-1",
         "aria-labelledby": "`${id}-title`",
-        "aria-describedby": "`${id}-description`",
-        "tabIndex": "-1"
+        "aria-describedby": "`${id}-description`"
       },
       "handlers": {},
       "spreads": [],
       "labels": [],
-      "context": [],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        }
+      ],
       "earlyReturns": [
         {
           "condition": "!state.activeFeature",
@@ -45668,10 +46101,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:90:9",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:83:9",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 90,
+      "line": 83,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -45687,7 +46120,15 @@
       },
       "spreads": [],
       "labels": [],
-      "context": [],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        }
+      ],
       "earlyReturns": [
         {
           "condition": "!state.activeFeature",
@@ -45696,10 +46137,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:95:9",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:88:9",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 95,
+      "line": 88,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -45718,6 +46159,13 @@
       ],
       "context": [
         {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
+        {
           "kind": "branch",
           "expression": "showingCitation && source && citation",
           "branch": "true"
@@ -45731,10 +46179,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:98:9",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:91:9",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 98,
+      "line": 91,
       "column": 9,
       "kind": "jsx",
       "tag": "h2",
@@ -45751,6 +46199,13 @@
       ],
       "context": [
         {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
+        {
           "kind": "branch",
           "expression": "showingCitation && source && citation",
           "branch": "true"
@@ -45764,10 +46219,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:114:13",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:107:13",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 114,
+      "line": 107,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -45785,6 +46240,13 @@
       ],
       "context": [
         {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
+        {
           "kind": "branch",
           "expression": "showingCitation && source && citation",
           "branch": "false"
@@ -45803,10 +46265,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:118:11",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:111:11",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 118,
+      "line": 111,
       "column": 11,
       "kind": "jsx",
       "tag": "p",
@@ -45821,6 +46283,13 @@
       ],
       "context": [
         {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
+        {
           "kind": "branch",
           "expression": "showingCitation && source && citation",
           "branch": "false"
@@ -45839,10 +46308,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:126:13",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:119:13",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 126,
+      "line": 119,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -45862,6 +46331,13 @@
         "text(\"OPEN_SOURCE\")"
       ],
       "context": [
+        {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
         {
           "kind": "branch",
           "expression": "showingCitation && source && citation",
@@ -45885,10 +46361,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:138:13",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:131:13",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 138,
+      "line": 131,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -45908,6 +46384,13 @@
       ],
       "context": [
         {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
+        {
           "kind": "branch",
           "expression": "showingCitation && source && citation",
           "branch": "false"
@@ -45926,10 +46409,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:144:81",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:137:81",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 144,
+      "line": 137,
       "column": 81,
       "kind": "jsx",
       "tag": "Button",
@@ -45949,6 +46432,13 @@
         "content.sources.find(document => document.id === item.sourceId)?.title"
       ],
       "context": [
+        {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
         {
           "kind": "branch",
           "expression": "showingCitation && source && citation",
@@ -45977,10 +46467,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:155:13",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:148:13",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 155,
+      "line": 148,
       "column": 13,
       "kind": "jsx",
       "tag": "p",
@@ -45994,6 +46484,13 @@
         "text(state.taskDone ? \"ACTION_DONE\" : \"ACTION_TODO\")"
       ],
       "context": [
+        {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
         {
           "kind": "branch",
           "expression": "showingCitation && source && citation",
@@ -46013,10 +46510,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:156:13",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:149:13",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 156,
+      "line": 149,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -46034,6 +46531,13 @@
       ],
       "context": [
         {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
+        {
           "kind": "branch",
           "expression": "showingCitation && source && citation",
           "branch": "false"
@@ -46052,10 +46556,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:169:11",
+      "id": "frontend/pages/workbench-landing/workbench-feature-panel.tsx:162:11",
       "path": "frontend/pages/workbench-landing/workbench-feature-panel.tsx",
       "owner": "WorkbenchFeaturePanel",
-      "line": 169,
+      "line": 162,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -46073,6 +46577,13 @@
         "text(\"NEXT\")"
       ],
       "context": [
+        {
+          "kind": "container",
+          "tag": "Drawer",
+          "attributes": {
+            "open": "active"
+          }
+        },
         {
           "kind": "branch",
           "expression": "showingCitation && source && citation",

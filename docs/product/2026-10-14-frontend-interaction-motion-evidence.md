@@ -264,3 +264,29 @@
 - **无场景时仍显示场景控件**：静态/超时/失败态下「暂停动画」与视角刻度条原本仍显示并继续轮转（实测 `status=timeout, canvas=false, pauseVisible=true, railActive=低角`）。现由 `WorkbenchScene` 通过 `onStatus` 上报状态，页面只在 `ready` 时渲染 `.workbench-scene-controls`，巡游计时器也只在 `ready` 时启动。
 - 真浏览器实测（本地 worker + 与线上同款产物）：阻断模型 → `status=error, canvas=false, pause=false, views=0, tour=null`；模型就绪 → `pause=true, views=5, tour=running`，9 秒后刻度条由「正面」自动切到「右侧」。
 - 页面测试改为「只在场景就绪时提供控件」并新增该门控断言；落地页单测 173/173。
+
+## 12. 落地页采用 beUI 作为组件与风格基准（2026-10-15）
+
+用户指令：项目内尽可能直接使用 beUI 成熟组件，整体风格样式也按 beUI 设计。组件映射与理由见 `docs/product/2026-10-15-landing-design-plan.md` §5.9。
+
+### 12.1 已替换（均为受控式接口，行为与状态机不变）
+
+| 表面 | beUI 组件 | 关键点 |
+| --- | --- | --- |
+| 全部按钮 | `motion/button/base`（`Button`、`ButtonLink`） | `variant`/`size` 与既有用法一一对应；`forwardRef` 支持列表里的 `ref`；`data-*` 钩子透传 |
+| 3D 加载中 | `motion/loader`（`dots`） | 自带 `useReducedMotion`；用 `aria-hidden` 包裹，避免与状态行形成嵌套直播区 |
+| 视角刻度条 | `motion/tabs`（`variant="pill"`） | 受控 `value`/`onValueChange` 直连页面 `view` 状态；触发器为 `role="tab"` + `aria-selected`。DOM 中的成对文本是组件用于遮罩动画的 `aria-hidden` 克隆 |
+| 功能面板 | `motion/drawer` | `aside[role="dialog"][aria-modal="true"]`、Esc、遮罩点击、body 滚动锁、reduced-motion 降级均由组件提供 |
+| 语言切换 | `motion/select` | 受控；可访问名由触发器内 `sr-only` 文本提供（组件不转发 `aria-label`） |
+| 形状语言 | beUI 胶囊 | `--landing-radius-control` 改为 `999px`，与成组 `.5rem`、媒体 `.75rem` 成文为闭合三档 |
+
+落地页保留自定义引用按钮列表：beUI `citations` 的条目是 `<a href>` 且没有单项点击回调，替换会丢掉「点击引用 → 面板切到来源」的演示交互。图标全仓仍只有 Phosphor（`tabs`/`select` 的 lucide 图标已换成 `CaretLeft/CaretRight`、`Check/CaretDown`）。
+
+### 12.2 过程中发现并修掉的两个既有缺陷
+
+1. **对比度门禁的数学不成立**：`scripts/wcag-contract.mjs` 的 `contrastRatio` 直接使用 gamma 编码通道，会系统性低估所有比值。落地页 13 个 token 转入契约后，同一批颜色被判 8 组里 5 组不达标，按 WCAG 定义的线性化亮度实为 8/8 通过。已修正为线性化，并新增 `assertLandingWcagCss` 覆盖落地页两个 token 块；外壳 6 对 × 2 主题、落地页 4 对 × 2 主题全部通过。
+2. **重复的 body 滚动锁**：面板自身保留了一份滚动锁，它捕获的是 beUI `Drawer` 已经写入的 `hidden`，清理顺序使其在 Drawer 恢复之后又写回 `hidden`，导致**每次关闭后页面被永久锁住**。真浏览器实测：关闭后 `document.body.style.overflow` 仍为 `hidden`。现由 Drawer 单一负责，实测 Esc 与遮罩关闭后均恢复为空，测试同步恢复「关闭即恢复、卸载即恢复」的完整断言。
+
+### 12.3 验证
+
+`npm run typecheck` 0 错误；落地页单测 174/174（含恢复后的强断言）；`verify:landing` 100/100（含字体预算与场景 JS 懒加载门禁）；真实浏览器（构建产物）：刻度条选择受控生效（正面 → 右侧）、语言选择真正切换文档语言（`lang=zh-CN`）、抽屉开合与两种关闭路径正确且解锁、`Geist Landing` 已加载、暗色首帧由 `theme-boot.js` 决定、减少动态下滚动揭示无位移无模糊。

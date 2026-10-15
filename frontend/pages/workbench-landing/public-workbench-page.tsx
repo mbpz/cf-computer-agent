@@ -1,8 +1,9 @@
 import { ArrowRight, Bell, Books, ChatCircleText, SquaresFour, Tray } from "@phosphor-icons/react";
 import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
-import { motion } from "motion/react";
 import { Button, ButtonLink } from "../../components/motion/button/base";
 import { ScrollReveal } from "../../components/motion/scroll-reveal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/motion/select";
+import { Tabs, TabsList, TabsTrigger } from "../../components/motion/tabs";
 import { syncDocumentLanguage, type LocaleRuntime } from "../../lib/i18n";
 import { readTheme, type ThemeMode } from "../../lib/theme";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
@@ -78,10 +79,16 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
       <header className="workbench-header workbench-container">
         <a className="workbench-brand" href="/">{text("BRAND")}</a>
         <div className="workbench-header-actions">
-          <select className="workbench-locale" aria-label={text("SWITCH_LANGUAGE")} value={language}
-            onChange={event => locale.setLocale(event.target.value)}>
-            <option value="en">English</option><option value="zh-CN">简体中文</option>
-          </select>
+          <Select value={language} onValueChange={value => locale.setLocale(value)}>
+            <SelectTrigger className="workbench-locale">
+              <span className="sr-only">{text("SWITCH_LANGUAGE")}</span>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="en">English</SelectItem>
+              <SelectItem value="zh-CN">简体中文</SelectItem>
+            </SelectContent>
+          </Select>
           {login}
         </div>
       </header>
@@ -104,11 +111,11 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
               <Button variant="ghost" size="sm" data-demo-action="pause" aria-pressed={state.paused}
                 onClick={() => dispatch({ type: "pause", value: !state.paused })}>{text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE")}</Button>
               <div className="workbench-views" role="group" aria-label={text("SCENE_VIEWS_LABEL")} data-scene-tour={state.paused ? "paused" : "running"}>
-                {SCENE_VIEWS.map((entry) => <button key={entry.id} type="button" className="workbench-view" data-scene-view-button={entry.id}
-                  aria-pressed={view === entry.id} onClick={() => setView(entry.id)}>
-                  {view === entry.id && <motion.span layoutId="workbench-view-active" className="workbench-view-pill" aria-hidden="true" />}
-                  <span className="workbench-view-label">{text(viewLabels[entry.id])}</span>
-                </button>)}
+                <Tabs value={view} onValueChange={next => setView(next as SceneViewId)} variant="pill">
+                  <TabsList>
+                    {SCENE_VIEWS.map(entry => <TabsTrigger key={entry.id} value={entry.id}>{text(viewLabels[entry.id])}</TabsTrigger>)}
+                  </TabsList>
+                </Tabs>
               </div>
             </div>}
           </figure>

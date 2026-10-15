@@ -373,7 +373,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/lib/use-toast.tsx`: `7156c51d16a4247a000682d67ce6c2784b77f09b35c374ca1abff8c6a1f94a87`
 - `frontend/lib/workspace-location.ts`: `b77ff862964645fe25610e09f79b8409740f72a85a5685d934adc7e0ff60b92d`
 - `frontend/main.tsx`: `9ba6f443d0f7da037015cb7f1d1b3444777989588c66429d3630a0c5fb500391`
-- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `b5c82dfd1973ea730e1bb28536966f32e189bd32237e489041868527fdd6a87f`
+- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `797896e7a11327b89eebdf03c802c55872bf2017517ebd94410f714793974866`
 - `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `19b47d756dd823d4934eacd11d364bb3602b7f8fa09e74e4e5db588affdd761b`
 - `frontend/pages/workbench-landing/workbench-scene.tsx`: `bd5def5c4ef683d0ae1422e26180a8feeca67de86ef4ccbea79b3605cb3fef5a`
 - `frontend/public/sw.js`: `703801312e5cccba0cf162837b97878185fe03e18cdc2182c2fc4c5215923bad`

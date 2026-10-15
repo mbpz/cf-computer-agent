@@ -38,6 +38,21 @@ function click(selector: string) {
   expect(button, selector).not.toBeNull();
   act(() => { button!.focus(); button!.click(); });
 }
+// The locale switcher is a custom listbox: open the trigger, then choose the
+// option whose row label matches. Options stay mounted while closed, so the
+// `aria-expanded` check keeps the choice a real interaction.
+function chooseLocale(label: string) {
+  const trigger = host.querySelector<HTMLButtonElement>(".workbench-locale");
+  expect(trigger, ".workbench-locale").not.toBeNull();
+  expect(trigger!.getAttribute("aria-expanded")).toBe("false");
+  click(".workbench-locale");
+  expect(trigger!.getAttribute("aria-expanded")).toBe("true");
+  const option = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+    .find(node => node.textContent?.includes(label));
+  expect(option, label).not.toBeNull();
+  act(() => { option!.focus(); option!.click(); });
+  expect(host.querySelector(".workbench-locale")?.textContent).toContain(label);
+}
 const action = (name: string) => `button[data-demo-action="${name}"]`;
 
 describe("public knowledge studio", () => {
@@ -105,7 +120,7 @@ describe("public knowledge studio", () => {
     vi.spyOn(scene, "WorkbenchScene").mockImplementation(() => null);
     act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />));
     expect(host.querySelector('[data-demo-action="pause"]')).toBeNull();
-    expect(host.querySelector('[data-scene-view-button]')).toBeNull();
+    expect(host.querySelector('.workbench-views [role="tab"]')).toBeNull();
     expect(host.querySelector(".workbench-scene-controls")).toBeNull();
 
     let report: ((value: "ready") => void) | undefined;
@@ -116,7 +131,9 @@ describe("public knowledge studio", () => {
     act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />));
     act(() => report?.("ready"));
     expect(host.querySelector('[data-demo-action="pause"]')).not.toBeNull();
-    expect(host.querySelector('[data-scene-view-button]')).not.toBeNull();
+    const tab = host.querySelector<HTMLButtonElement>('.workbench-views [role="tab"]');
+    expect(tab).not.toBeNull();
+    expect(tab!.getAttribute("aria-selected")).not.toBeNull();
   });
   it("renders an honest Chinese static demo and the two-method sign-in entry without canvas", () => {
     const html = renderToStaticMarkup(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })} />);
@@ -167,15 +184,15 @@ describe("public knowledge studio", () => {
     expect(browser.sessionStorage.length).toBe(0);
   });
 
-  it("switches the native locale control and preserves guided progress", () => {
+  it("switches the locale listbox and preserves guided progress", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "en" });
     act(() => root.render(<PublicWorkbenchPage locale={locale} />));
     click(action("start"));
     click(action("capture"));
     click(action("close"));
-    const select = host.querySelector<HTMLSelectElement>("select")!;
-    act(() => { select.value = "zh-CN"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    chooseLocale("简体中文");
     expect(host.querySelector("main")?.lang).toBe("zh-CN");
+    expect(host.querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')?.textContent).toContain("简体中文");
     expect(host.querySelector('[data-demo-step="capture"]')).not.toBeNull();
     expect(host.textContent).toContain("已在本地收集示例资料");
     click(action("next"));
@@ -184,9 +201,11 @@ describe("public knowledge studio", () => {
 
   it.each(["capture", "library", "answer", "action", "updates"])("opens the real %s feature button without advancing the guided journey", feature => {
     act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />));
+    expect(document.body.style.overflow).toBe("");
     const selector = `button[data-feature="${feature}"]`;
     click(selector);
     expect(host.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(document.body.style.overflow).toBe("hidden");
     expect(host.querySelector("main > div")?.hasAttribute("inert")).toBe(true);
     expect(host.querySelector('[data-demo-step="overview"]')).not.toBeNull();
     expect(host.querySelector(action("next"))).toBeNull();
@@ -213,11 +232,10 @@ describe("public knowledge studio", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "en" });
     act(() => root.render(<PublicWorkbenchPage locale={locale} />));
     expect(document.documentElement.lang).toBe("en");
-    const select = host.querySelector<HTMLSelectElement>("select")!;
-    act(() => { select.value = "zh-CN"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    chooseLocale("简体中文");
     expect(document.documentElement.lang).toBe("zh-CN");
     expect(locale.locale).toBe("zh-CN");
-    act(() => { select.value = "en"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    chooseLocale("English");
     expect(document.documentElement.lang).toBe("en");
   });
 

@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, Check, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type Dispatch } from "react";
 import { Button } from "../../components/motion/button/base";
+import { Drawer } from "../../components/motion/drawer";
 import { Card } from "../../components/ui/card";
 import { useFocusScope } from "../../components/ui/focus-scope";
 import type { LocaleRuntime } from "../../lib/i18n";
@@ -46,13 +47,6 @@ export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
   }, [active, state.activeFeature, focusRef]);
 
   useEffect(() => {
-    if (!active) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, [active]);
-
-  useEffect(() => {
     setSourceOpen(null);
     setAnswerVisible(false);
   }, [state.activeFeature]);
@@ -80,11 +74,10 @@ export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
   const gated = (state.step === "capture" && !state.captured) || (state.step === "action" && !state.taskDone);
   const gateText = state.step === "capture" ? "CAPTURE_GATE" : "ACTION_GATE";
 
-  return <div className="workbench-landing-overlay" data-landing-overlay onClick={event => {
-    if (event.target === event.currentTarget) close();
-  }}>
-    <div ref={focusRef} className="workbench-feature-panel" role="dialog" aria-modal="true"
-      aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`} tabIndex={-1}>
+  return <Drawer open={active} onOpenChange={open => { if (!open) close(); }} side="right" dismissable
+    ariaLabel={text("GUIDE_LABEL")} className="workbench-feature-panel" backdropClassName="workbench-landing-overlay">
+    <div ref={focusRef} className="workbench-feature-panel-body" tabIndex={-1}
+      aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}>
       <header className="workbench-panel-header">
         <p className="workbench-demo-badge">{text("DEMO_BADGE")}</p>
         <Button variant="ghost" size="icon" data-demo-action="close" aria-label={text("CLOSE_PANEL")} onClick={close}>
@@ -171,5 +164,5 @@ export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
         </footer>}
       </>}
     </div>
-  </div>;
+  </Drawer>;
 }

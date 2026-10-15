@@ -210,10 +210,11 @@
 | 3D 加载中 | **beUI `motion/loader`**（`variant="dots"`，自带 `useReducedMotion`；用 `aria-hidden` 包裹避免与状态行形成嵌套直播区） |
 | 滚动揭示 | 已是 beUI `motion/scroll-reveal`（本次实测：减少动态下位移与模糊被移除，只保留纯透明度淡入） |
 | 引用 / 表格 / 代码 / 数字滚动 | 已装 beUI `citations`、`table`、`code-block`、`number-ticker`；面板的引用列表可后续换成 `citations` |
-| 语言切换 | 保留原生 `<select>`（`select` 会引入 lucide 与自绘 listbox；本页只有两种语言，且原生控件的可访问性与体积更优，符合技能对无障碍优先的约束） |
-| 视角刻度条 | 暂留现有 `layoutId` + `SPRING_LAYOUT` 手法（与 beUI 同源的做法）；候选替换为 beUI `tabs` 或 `shared-layout-bg` |
-| 功能面板 | 现为受控内联面板；候选替换为 beUI `drawer`（Radix Dialog 语义），需与页面状态机一起改，列入后续批次 |
-| 图标 | 统一 Phosphor（`components.json` 的 `iconLibrary`）；采纳任何带 lucide 的 beUI 组件时把图标替换为 Phosphor 等价项，避免两套图标族 |
+| 语言切换 | **beUI `motion/select`**（受控 `value`/`onValueChange`；实测切换后 `document.documentElement.lang` 变为 `zh-CN`）。可访问名由触发器内的 `sr-only` 文本提供，因为该组件不转发 `aria-label` |
+| 视角刻度条 | **beUI `motion/tabs`**（`variant="pill"`，受控 `value`/`onValueChange` 直接对接页面 `view` 状态；触发器为 `role="tab"` + `aria-selected`）。触发器文本在 DOM 中成对出现，是组件用于遮罩动画的 `aria-hidden` 克隆，无误读风险 |
+| 功能面板 | **beUI `motion/drawer`**（`open`/`onOpenChange`/`side="right"`/`dismissable`），自带 `aside[role="dialog"][aria-modal="true"]`、Esc、遮罩点击关闭、body 滚动锁与 reduced-motion 降级；页面自身的焦点范围与 `inert` 逻辑保留。切换过程中发现并修掉一个既有缺陷：面板自身也有一份 body 滚动锁，它捕获的是 Drawer 已写入的 `hidden`，清理顺序导致**每次关闭后页面被永久锁住**；现由 Drawer 单一负责，测试恢复了「关闭即恢复、卸载即恢复」的完整断言 |
+| 引用列表 | **保留自定义按钮列表**：beUI `citations` 的条目渲染为 `<a href>` 且没有单项点击回调，替换会丢掉「点击引用 → 面板切到来源」的演示交互（有测试覆盖）。它是工作台展示真实引用来源时的正确组件，届时替换 |
+| 图标 | 统一 Phosphor（`components.json` 的 `iconLibrary`）。已采纳的 beUI 组件里，`tabs` 的 `ChevronLeft/Right` 与 `select` 的 `Check/ChevronDown` 已替换为 Phosphor 的 `CaretLeft/CaretRight`、`Check/CaretDown`，全仓仍只有一套图标族 |
 | 令牌 | 沿用仓库既有 shadcn 令牌（beUI 组件本身就基于这些令牌，例如 `bg-card`、`text-muted-foreground`），因此「按 beUI 设计」与现有 `globals.css` 体系一致，不需要第二套主题 |
 
 **形状语言的后果**：beUI 的按钮是胶囊形，故 `--landing-radius-control` 由 `.375rem` 改为 `999px`（§5.5 已同步）。原生 select 与刻度条项随之变为胶囊，视觉语言统一。

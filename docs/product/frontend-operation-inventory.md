@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：310；操作/转发候选：1268。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：314；操作/转发候选：1282。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -50,12 +50,14 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/motion/animated-toast-stack.tsx | 4 |
 | frontend/components/motion/button/base.tsx | 3 |
 | frontend/components/motion/checkbox.tsx | 1 |
+| frontend/components/motion/drawer.tsx | 3 |
 | frontend/components/motion/file-tree.tsx | 2 |
 | frontend/components/motion/loader.tsx | 3 |
 | frontend/components/motion/not-found/glitch.tsx | 0 |
 | frontend/components/motion/not-found/shared.tsx | 2 |
 | frontend/components/motion/number-ticker.tsx | 0 |
 | frontend/components/motion/scroll-reveal.tsx | 0 |
+| frontend/components/motion/select.tsx | 5 |
 | frontend/components/motion/shared-layout-bg.tsx | 2 |
 | frontend/components/motion/table/editable-cell.tsx | 1 |
 | frontend/components/motion/table/index.tsx | 6 |
@@ -69,6 +71,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/motion/table/use-column-sort.ts | 0 |
 | frontend/components/motion/table/use-row-selection.ts | 0 |
 | frontend/components/motion/table/utils.ts | 0 |
+| frontend/components/motion/tabs.tsx | 7 |
 | frontend/components/planning-create-form.tsx | 14 |
 | frontend/components/planning-status-confirmation.tsx | 1 |
 | frontend/components/planning-write-recovery.tsx | 4 |
@@ -218,6 +221,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/lib/planning-create-intent.ts | 0 |
 | frontend/lib/planning-draft.ts | 0 |
 | frontend/lib/planning-write-recovery.ts | 0 |
+| frontend/lib/presence-gate.tsx | 0 |
 | frontend/lib/project-relations-data.ts | 0 |
 | frontend/lib/projects-data.ts | 0 |
 | frontend/lib/reader-favorite-intent.ts | 0 |
@@ -308,7 +312,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/tasks/tasks-model.ts | 0 |
 | frontend/pages/tasks/tasks-page.tsx | 19 |
 | frontend/pages/today-page.tsx | 6 |
-| frontend/pages/workbench-landing/public-workbench-page.tsx | 16 |
+| frontend/pages/workbench-landing/public-workbench-page.tsx | 15 |
 | frontend/pages/workbench-landing/workbench-copy.ts | 0 |
 | frontend/pages/workbench-landing/workbench-demo-data.ts | 0 |
 | frontend/pages/workbench-landing/workbench-demo-state.ts | 0 |
@@ -363,7 +367,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 46 | 无（不代表动态边界已核对） |
 | /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 67 | 无（不代表动态边界已核对） |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 96 | 无（不代表动态边界已核对） |
-| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 47 | 无（不代表动态边界已核对） |
+| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 61 | 无（不代表动态边界已核对） |
 | &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 16 | 无（不代表动态边界已核对） |
 
 尚未归入上述入口的候选：118。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
@@ -730,6 +734,14 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | --- | --- | --- | --- |
 | 59:7 Checkbox | motion.button  | onClick=() =&gt; !disabled && onCheckedChange(!checked); type="button" | disabled=disabled |
 
+## frontend/components/motion/drawer.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 41:5 Drawer | window.addEventListener  | "keydown", onKey | earlier return: !open |
+| 62:13 Drawer | motion.button  | onClick=() =&gt; dismissable && onOpenChange(false); type="button" | {"kind":"branch","expression":"open","branch":"true"}; spread: gate |
+| 83:13 Drawer | motion.aside children |  | {"kind":"branch","expression":"open","branch":"true"}; spread: gate |
+
 ## frontend/components/motion/file-tree.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
@@ -751,6 +763,16 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | --- | --- | --- | --- |
 | 55:7 NotFoundActions | motion.a homeLabel | href=homeHref |  |
 | 65:9 NotFoundActions | motion.a browseLabel | href=browseHref | {"kind":"branch","expression":"browseHref","branch":"true"} |
+
+## frontend/components/motion/select.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 177:5 Select | window.addEventListener  | "keydown", onKey | earlier return: !open |
+| 178:5 Select | window.addEventListener  | "pointerdown", onPointer | earlier return: !open |
+| 247:5 SelectTrigger | motion.button children | onClick=() =&gt; ctx.setOpen(!ctx.open); type="button" | disabled=ctx.disabled; aria-expanded=ctx.open |
+| 380:5 SelectContent | motion.div  |  | aria-hidden=!open |
+| 442:7 SelectItem | button children | onClick=() =&gt; ctx.select(value); type="button" | disabled=disabled |
 
 ## frontend/components/motion/shared-layout-bg.tsx
 
@@ -808,6 +830,18 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 86:15 TableMenu | div  | onPointerDown=() =&gt; setCoords(null) | {"kind":"branch","expression":"open && typeof document !== \"undefined\"","branch":"true"} |
 | 90:15 TableMenu | motion.div  |  | {"kind":"branch","expression":"open && typeof document !== \"undefined\"","branch":"true"} |
 | 103:19 TableMenu | button item.icon / item.label | onClick=() =&gt; { setCoords(null); item.onSelect(); }; type="button" | {"kind":"branch","expression":"open && typeof document !== \"undefined\"","branch":"true"}; {"kind":"repeat","expression":"items"} |
+
+## frontend/components/motion/tabs.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 160:5 TabsList | viewport.addEventListener  | "scroll", measure, { passive: true } | earlier return: !root &#124;&#124; !viewport &#124;&#124; !list |
+| 226:9 TabsList | button  | onClick=() =&gt; scroll(-1); type="button" | disabled=!edges.left; {"kind":"logical","expression":"edges.overflow","operator":"&&"} |
+| 230:7 TabsList | motion.div  | onFocusCapture=(event) =&gt; { if (event.target instanceof HTMLElement && event.target.getAttribute("role") === "tab") reveal(event.target); } |  |
+| 242:9 TabsList | div children |  | spread: props |
+| 253:9 TabsList | button  | onClick=() =&gt; scroll(1); type="button" | disabled=!edges.right; {"kind":"logical","expression":"edges.overflow","operator":"&&"} |
+| 279:7 TabsTrigger | button children | onClick=(event) =&gt; { onClick?.(event); if (!event.defaultPrevented) setValue(value); }; type="button" | {"kind":"branch","expression":"variant === \"underline\"","branch":"true"}; spread: props |
+| 326:7 TabsTrigger | button children | onClick=(event) =&gt; { onClick?.(event); if (!event.defaultPrevented) setValue(value); }; type="button" | earlier return: variant === "underline"; spread: props |
 
 ## frontend/components/planning-create-form.tsx
 
@@ -2250,40 +2284,39 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 66:5 PublicWorkbenchPage | media?.addEventListener  | "change", apply |  |
-| 74:17 PublicWorkbenchPage | ButtonLink text("LOGIN") | href="/login" |  |
-| 79:9 PublicWorkbenchPage | a text("BRAND") | href="/" |  |
-| 81:11 PublicWorkbenchPage | select  | onChange=event =&gt; locale.setLocale(event.target.value) |  |
-| 83:13 PublicWorkbenchPage | option English |  |  |
-| 83:48 PublicWorkbenchPage | option 简体中文 |  |  |
-| 95:15 PublicWorkbenchPage | Button text("START") | onClick=() =&gt; dispatch({ type: "start" }) |  |
-| 98:15 PublicWorkbenchPage | Button text("EXPLORE") | onClick=() =&gt; firstFeature.current?.focus() |  |
-| 102:13 PublicWorkbenchPage | WorkbenchScene  | onStatus=setSceneStatus |  |
-| 104:15 PublicWorkbenchPage | Button text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE") | onClick=() =&gt; dispatch({ type: "pause", value: !state.paused }) | {"kind":"logical","expression":"sceneLive","operator":"&&"} |
-| 106:15 PublicWorkbenchPage | div  |  | {"kind":"logical","expression":"sceneLive","operator":"&&"} |
-| 107:45 PublicWorkbenchPage | button  | onClick=() =&gt; setView(entry.id); type="button" | {"kind":"logical","expression":"sceneLive","operator":"&&"}; {"kind":"repeat","expression":"SCENE_VIEWS"} |
-| 124:13 PublicWorkbenchPage | div  |  |  |
-| 125:67 PublicWorkbenchPage | Button  | onClick=() =&gt; dispatch({ type: "open", feature: id }) | aria-expanded=state.activeFeature === id; {"kind":"repeat","expression":"features"} |
-| 142:45 PublicWorkbenchPage | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"}; {"kind":"logical","expression":"state.… |
-| 144:15 PublicWorkbenchPage | Button text("REPLAY") | onClick=() =&gt; dispatch({ type: "replay" }) | {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"} |
+| 67:5 PublicWorkbenchPage | media?.addEventListener  | "change", apply |  |
+| 75:17 PublicWorkbenchPage | ButtonLink text("LOGIN") | href="/login" |  |
+| 80:9 PublicWorkbenchPage | a text("BRAND") | href="/" |  |
+| 82:11 PublicWorkbenchPage | Select  | onValueChange=value =&gt; locale.setLocale(value) |  |
+| 102:15 PublicWorkbenchPage | Button text("START") | onClick=() =&gt; dispatch({ type: "start" }) |  |
+| 105:15 PublicWorkbenchPage | Button text("EXPLORE") | onClick=() =&gt; firstFeature.current?.focus() |  |
+| 109:13 PublicWorkbenchPage | WorkbenchScene  | onStatus=setSceneStatus |  |
+| 111:15 PublicWorkbenchPage | Button text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE") | onClick=() =&gt; dispatch({ type: "pause", value: !state.paused }) | {"kind":"logical","expression":"sceneLive","operator":"&&"} |
+| 113:15 PublicWorkbenchPage | div  |  | {"kind":"logical","expression":"sceneLive","operator":"&&"} |
+| 114:17 PublicWorkbenchPage | Tabs  | onValueChange=next =&gt; setView(next as SceneViewId) | {"kind":"logical","expression":"sceneLive","operator":"&&"} |
+| 116:47 PublicWorkbenchPage | TabsTrigger text(viewLabels[entry.id]) |  | {"kind":"logical","expression":"sceneLive","operator":"&&"}; {"kind":"repeat","expression":"SCENE_VIEWS"} |
+| 131:13 PublicWorkbenchPage | div  |  |  |
+| 132:67 PublicWorkbenchPage | Button  | onClick=() =&gt; dispatch({ type: "open", feature: id }) | aria-expanded=state.activeFeature === id; {"kind":"repeat","expression":"features"} |
+| 149:45 PublicWorkbenchPage | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"}; {"kind":"logical","expression":"state.… |
+| 151:15 PublicWorkbenchPage | Button text("REPLAY") | onClick=() =&gt; dispatch({ type: "replay" }) | {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"} |
 
 ## frontend/pages/workbench-landing/workbench-feature-panel.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 83:10 WorkbenchFeaturePanel | div  | onClick=event =&gt; { if (event.target === event.currentTarget) close(); } | earlier return: !state.activeFeature |
-| 86:5 WorkbenchFeaturePanel | div  |  | earlier return: !state.activeFeature |
-| 90:9 WorkbenchFeaturePanel | Button  | onClick=close | earlier return: !state.activeFeature |
-| 95:9 WorkbenchFeaturePanel | Button text("BACK_TO_ANSWER") | onClick=() =&gt; dispatch({ type: "citation-back" }) | {"kind":"branch","expression":"showingCitation && source && citation","branch":"true"}; earlier return: !state.activeFeature |
-| 98:9 WorkbenchFeaturePanel | h2 source.title |  | {"kind":"branch","expression":"showingCitation && source && citation","branch":"true"}; earlier return: !state.activeFeature |
-| 114:13 WorkbenchFeaturePanel | Button text(state.captured ? "CAPTURE_DONE" : "CAPTURE_SELECT") | onClick=() =&gt; dispatch({ type: "capture" }) | disabled=state.captured; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {"kind":"logical","expression":"feature ===… |
-| 118:11 WorkbenchFeaturePanel | p text(state.captured ? "CAPTURE_DONE" : "CAPTURE_PENDING") |  | {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {"kind":"logical","expression":"feature === \"capture\"","operator":… |
-| 126:13 WorkbenchFeaturePanel | Button text("OPEN_SOURCE") | onClick=() =&gt; setSourceOpen(sourceOpen === item.id ? null : item.id) | aria-expanded=sourceOpen === item.id; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {"kind":"logical","expression"… |
-| 138:13 WorkbenchFeaturePanel | Button text("ANSWER_SHOW") | onClick=() =&gt; setAnswerVisible(true) | aria-expanded=answerVisible; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {"kind":"logical","expression":"feature… |
-| 144:81 WorkbenchFeaturePanel | Button text("SOURCE_LABEL") / : / content.sources.find(document =&gt; document.id === item.sourceId)?.title | onClick=() =&gt; dispatch({ type: "citation", id: item.id }) | {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {"kind":"logical","expression":"feature === \"answer\"","operator":"… |
-| 155:13 WorkbenchFeaturePanel | p text(state.taskDone ? "ACTION_DONE" : "ACTION_TODO") |  | {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {"kind":"logical","expression":"feature === \"action\"","operator":"… |
-| 156:13 WorkbenchFeaturePanel | Button text("ACTION_COMPLETE") | onClick=() =&gt; dispatch({ type: "complete-task" }) | disabled=state.taskDone; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {"kind":"logical","expression":"feature ===… |
-| 169:11 WorkbenchFeaturePanel | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {"kind":"logical","expression":"state.step === featu… |
+| 77:10 WorkbenchFeaturePanel | Drawer  | onOpenChange=open =&gt; { if (!open) close(); } | open=active; earlier return: !state.activeFeature |
+| 79:5 WorkbenchFeaturePanel | div  |  | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; earlier return: !state.activeFeature |
+| 83:9 WorkbenchFeaturePanel | Button  | onClick=close | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; earlier return: !state.activeFeature |
+| 88:9 WorkbenchFeaturePanel | Button text("BACK_TO_ANSWER") | onClick=() =&gt; dispatch({ type: "citation-back" }) | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"true"}; e… |
+| 91:9 WorkbenchFeaturePanel | h2 source.title |  | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"true"}; e… |
+| 107:13 WorkbenchFeaturePanel | Button text(state.captured ? "CAPTURE_DONE" : "CAPTURE_SELECT") | onClick=() =&gt; dispatch({ type: "capture" }) | disabled=state.captured; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && cita… |
+| 111:11 WorkbenchFeaturePanel | p text(state.captured ? "CAPTURE_DONE" : "CAPTURE_PENDING") |  | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; … |
+| 119:13 WorkbenchFeaturePanel | Button text("OPEN_SOURCE") | onClick=() =&gt; setSourceOpen(sourceOpen === item.id ? null : item.id) | aria-expanded=sourceOpen === item.id; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && s… |
+| 131:13 WorkbenchFeaturePanel | Button text("ANSWER_SHOW") | onClick=() =&gt; setAnswerVisible(true) | aria-expanded=answerVisible; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && … |
+| 137:81 WorkbenchFeaturePanel | Button text("SOURCE_LABEL") / : / content.sources.find(document =&gt; document.id === item.sourceId)?.title | onClick=() =&gt; dispatch({ type: "citation", id: item.id }) | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; … |
+| 148:13 WorkbenchFeaturePanel | p text(state.taskDone ? "ACTION_DONE" : "ACTION_TODO") |  | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; … |
+| 149:13 WorkbenchFeaturePanel | Button text("ACTION_COMPLETE") | onClick=() =&gt; dispatch({ type: "complete-task" }) | disabled=state.taskDone; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && cita… |
+| 162:11 WorkbenchFeaturePanel | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","br… |
 
 ## frontend/pages/workbench-landing/workbench-scene-runtime.ts
 
