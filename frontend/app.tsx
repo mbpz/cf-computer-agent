@@ -1383,7 +1383,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     if (recovery === "loading" && state.kind !== "loading") return <PageState kind="loading" title={frontendText(locale, "AGENT_RESTORING")} />;
     if (recovery === "error") return <PageState kind="error" title={frontendText(locale, "AGENT_RESTORE_FAILED")} description={frontendText(locale, "AGENT_RESTORE_FAILED_DETAIL")}><Button onClick={() => setRecoveryVersion((value) => value + 1)}>{frontendText(locale, "AGENT_RETRY")}</Button><a className="ml-4" href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
     const visibleConversation = state.kind === "ready" ? state.conversationId : undefined;
-    return <div className="space-y-6">
+    return <div className="flex flex-col gap-6 lg:h-full lg:min-h-0">
       {composerBlocked && <div role="alert" data-agent-composer-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "AGENT_COMPOSER_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardComposer}>{frontendText(locale, "AGENT_COMPOSER_RECORD_DISCARD")}</Button></div>}
       {composerNotice && <p role="alert">{composerNotice}</p>}
       {feedbackRecordBlocked && <div role="alert" data-agent-feedback-record-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "AGENT_FEEDBACK_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RECORD_DISCARD")}</Button></div>}
@@ -1394,7 +1394,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
       <AgentHistoryList locale={locale} />
     </div>;
   };
-  return <><div inert={questionDraft.confirming || sourceDraft.confirming ? true : undefined}>{content()}</div>{questionDraft.confirmation}{sourceDraft.confirmation}</>;
+  return <><div className="flex flex-col lg:h-full lg:min-h-0" inert={questionDraft.confirming || sourceDraft.confirming ? true : undefined}>{content()}</div>{questionDraft.confirmation}{sourceDraft.confirmation}</>;
 }
 
 export function SubmitRoute({ locale, memberId }: { locale: LocaleRuntime; memberId: string }) {
@@ -1727,7 +1727,7 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
   };
   const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;
   const discardRecord = () => { if (memberId && discardBlockedTaskWrite(memberId)) setRecordBlocked(false); };
-  return <><div inert={editor ? true : undefined}>{recordBlocked && <Alert variant="destructive" data-task-write-record-blocked="" className="mb-4">
+  return <><div className="flex flex-col lg:h-full lg:min-h-0" inert={editor ? true : undefined}>{recordBlocked && <Alert variant="destructive" data-task-write-record-blocked="" className="mb-4">
     <AlertTitle>{frontendText(locale, "TASKS_WRITE_RECORD_BLOCKED")}</AlertTitle>
     <div className="mt-3"><Button variant="outline" onClick={discardRecord}>{frontendText(locale, "TASKS_WRITE_RECORD_DISCARD")}</Button></div>
   </Alert>}{listUnknown && <Alert variant="destructive" data-task-list-unknown="" className="mb-4">
@@ -1878,7 +1878,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
       if (activeRef.current) setWriting(false);
     }
   };
-  return <><div inert={taskTarget && taskAccessReady ? true : undefined}>{taskRecordBlocked && <Alert variant="destructive" data-task-write-record-blocked="" className="mb-4">
+  return <><div className="flex flex-col lg:h-full lg:min-h-0" inert={taskTarget && taskAccessReady ? true : undefined}>{taskRecordBlocked && <Alert variant="destructive" data-task-write-record-blocked="" className="mb-4">
     <AlertTitle>{frontendText(locale, "TASKS_WRITE_RECORD_BLOCKED")}</AlertTitle>
     <div className="mt-3"><Button variant="outline" onClick={() => { if (memberId && discardBlockedTaskWrite(memberId)) setTaskRecordBlocked(false); }}>{frontendText(locale, "TASKS_WRITE_RECORD_DISCARD")}</Button></div>
   </Alert>}{taskCreatePending && taskAccessReady && <Alert data-task-create-recovery="" className="mb-4">

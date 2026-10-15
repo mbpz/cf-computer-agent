@@ -66,7 +66,7 @@
 
 ### 4.3 路由
 
-19 条列表路由同时提供两条路径：本地 `page` / `pageSize` 状态（不入 URL）、`onPageChange(page)` 替换窗口、`onPageSizeChange(size)` 回第 1 页替换、`onLoadMore()` 追加（窄视口）、`pagination` 元数据下传；筛选参数仍走 URL；写后回读一律回第 1 页替换窗口。路由的内容包裹层补齐高度链（`flex flex-col lg:h-full lg:min-h-0`）以便桌面铺满生效。
+19 条列表路由同时提供两条路径：本地 `page` / `pageSize` 状态（不入 URL）、`onPageChange(page)` 替换窗口、`onPageSizeChange(size)` 回第 1 页替换、`onLoadMore()` 追加（窄视口）、`pagination` 元数据下传；筛选参数仍走 URL；写后回读一律回第 1 页替换窗口。路由的页面包裹层补齐高度链（`flex flex-col lg:h-full lg:min-h-0`，含 `inert` 包装与 AI 助手页内部的 `space-y-6` 容器）以便桌面铺满生效；页面根同样为 `flex flex-col lg:h-full lg:min-h-0`。
 
 ### 4.4 服务端
 
@@ -94,6 +94,7 @@
 | --- | --- |
 | 桌面分页器 | `data-list-mode="desktop"`；分页器渲染为 `‹ Previous page 1 2 3 › Next page`；点下一页后窗口被**替换**（member1–20 → member21–40，无第 1 页残留）；0 控制台错误 |
 | 桌面铺满（DataTable 侧） | 表体滚动容器无内联高度、类为 `overflow-auto min-h-0 flex-1`（分页器在底部、表头吸顶的结构成立） |
+| 桌面铺满（真实 1440×900，系统 Chrome + CDP，独立于上面的窄面板） | `main` 900px 且 `pageScrolls: false`；表格根 `flex 1 1 0%` 占满页头/筛选之后的剩余高度（559px）；表体 `client 508 / scroll 1345` 即内部滚动；分页器紧贴表格下方（619–655）；`data-list-mode="desktop"`、0 控制台错误 |
 | 移动端（1022px，天然窄视口） | `data-list-mode="mobile"`、无分页器；表体滚动触底 20 → 40 行、40 个唯一邮箱、首行仍是 member1（无重复）；0 控制台错误 |
 | 知识检索融合行 | 输入框与视图标签条同一行（`sameLine: true`、`stripRightOfInput: true`）；折叠 30px（一行）↔ 展开 60px（两行）；`展开/收起` 按钮 `aria-expanded` false→true；9 个视图标签在两个状态下都在 DOM 中 |
 | 收集箱快速收集 | 右侧按钮 `data-inbox-capture-open` 存在且 `aria-expanded="false"`；点击后弹窗 `data-inbox-capture-dialog` 出现（497×400）、`aria-expanded="true"`；收集状态筛选与表尾分页器同时在场 |
@@ -107,7 +108,7 @@
 
 ## 6. 边界（未验证 / 有意取舍）
 
-- **桌面铺满的几何未能端到端测量**：本环境的浏览器面板固定 1022px 宽（<1024 的 `lg` 断点），`lg:` 前缀的高度链在窗口内不生效。已通过探针内联覆盖 `matchMedia` 验证了桌面分支的**行为**（分页器渲染、换页替换）与 `DataTable` 自身的铺满结构（无内联高度 + `flex-1`），但「表格底部与分页器贴在视口底边」的像素级结论需要 ≥1024px 的真实桌面浏览器，本轮未取得。
+- **铺满几何的观测条件**：omp 浏览器面板固定 1022px 宽（<1024 的 `lg` 断点），因此行为验证在面板内完成、几何验证改用系统 Chrome + CDP 建 1440×900 视口（见第 5 节）。已确认：页面不滚动、表格占满剩余高度、表体内部滚动、分页器紧贴表格下方。**页面在表格下方另有内容时（例如管理员成员页的邀请区）该内容保持在分页器之下**，此时分页器不贴视口底边——这是页面版式而非铺满缺陷。
 - **`tsconfig.json` 的 lib 增加 DOM**：vendored 表格/触摸工具是 DOM 组件，而 worker 门禁（`tsc --noEmit`）会经 `test/**/*.ts` 的导入图编译到它们。此前「worker 侧误用 DOM 会被编译器拦住」是一条隐式保证（仓库无对应显式检查），本批改为编译器不再拦截。要恢复应改门禁结构或新增显式检查，属独立工作。
 - `test/unit/markdown-renderer.test.ts` 与 `test/unit/m1-mutation-matrix.test.ts` 中 6 处 happy-dom 节点传参改为按调用签名窄化（仅类型层，无行为变化）。
 - 页码状态**不入 URL**：深链不携带 page/pageSize（筛选参数仍在 URL）；列表深链与页长选择不再可分享。
