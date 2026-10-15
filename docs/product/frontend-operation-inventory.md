@@ -2279,11 +2279,11 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 117:3 loadModel | options.signal.addEventListener  | "abort", onAbort, { once: true } |  |
-| 197:5 createWorkbenchScene | canvas.addEventListener  | "webglcontextlost", contextLost |  |
-| 213:5 createWorkbenchScene | controls.addEventListener  | "change", () =&gt; { // Camera updates this module performs itself must not look like visitor input, // otherwise an idle page keeps a frame queued while the… |  |
-| 387:5 createWorkbenchScene | options.host.ownerDocument.addEventListener  | "visibilitychange", visibilityChanged |  |
-| 389:5 createWorkbenchScene | options.signal.addEventListener  | "abort", dispose, { once: true } |  |
+| 120:3 loadModel | options.signal.addEventListener  | "abort", onAbort, { once: true } |  |
+| 200:5 createWorkbenchScene | canvas.addEventListener  | "webglcontextlost", contextLost |  |
+| 218:5 createWorkbenchScene | controls.addEventListener  | "change", () =&gt; { // Camera updates this module performs itself must not look like visitor input, // otherwise an idle page keeps a frame queued while the… |  |
+| 432:5 createWorkbenchScene | options.host.ownerDocument.addEventListener  | "visibilitychange", visibilityChanged |  |
+| 434:5 createWorkbenchScene | options.signal.addEventListener  | "abort", dispose, { once: true } |  |
 
 ## frontend/pages/workbench-landing/workbench-scene.tsx
 

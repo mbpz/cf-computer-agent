@@ -3857,11 +3857,11 @@
     "frontend/features/environments/storage/reconcile-checkpoints.ts:30:80",
     "frontend/lib/use-toast.tsx:29:7",
     "frontend/lib/workspace-location.ts:63:3",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:117:3",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:197:5",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:213:5",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:387:5",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:389:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:120:3",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:200:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:218:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:432:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:434:5",
     "frontend/public/sw.js:4:1",
     "frontend/public/sw.js:7:1",
     "frontend/public/sw.js:10:1"
@@ -45997,10 +45997,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:117:3",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:120:3",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "loadModel",
-      "line": 117,
+      "line": 120,
       "column": 3,
       "kind": "listener",
       "tag": "options.signal.addEventListener",
@@ -46018,10 +46018,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:197:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:200:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 197,
+      "line": 200,
       "column": 5,
       "kind": "listener",
       "tag": "canvas.addEventListener",
@@ -46038,17 +46038,17 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:213:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:218:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 213,
+      "line": 218,
       "column": 5,
       "kind": "listener",
       "tag": "controls.addEventListener",
       "event": "\"change\"",
       "arguments": [
         "\"change\"",
-        "() => {\n      // Camera updates this module performs itself must not look like visitor input,\n      // otherwise an idle page keeps a frame queued while the tour is at rest.\n      if (internalUpdate || drawing || disposed) return;\n      lastControlChange = performance.now();\n      // A paused page still renders what the visitor does with the pointer: draw\n      // synchronously (re-entrancy guarded) instead of waiting for an animation\n      // frame the tour would never schedule while paused.\n      draw();\n      if (snapshot.paused) return;\n      cancelFrame(); frame = requestAnimationFrame(animate);\n    }"
+        "() => {\n      // Camera updates this module performs itself must not look like visitor input,\n      // otherwise an idle page keeps a frame queued while the tour is at rest.\n      if (internalUpdate || drawing || disposed) return;\n      lastControlChange = performance.now();\n      orbitRefitPending = true;\n      // A paused page still renders what the visitor does with the pointer: draw\n      // synchronously (re-entrancy guarded) instead of waiting for an animation\n      // frame the tour would never schedule while paused.\n      draw();\n      if (snapshot.paused) {\n        // No animation loop while paused, but the frame is still re-measured once the\n        // visitor stops dragging, so queue exactly that one settle frame.\n        if (orbitRefitPending) { cancelFrame(); frame = requestAnimationFrame(animate); }\n        return;\n      }\n      cancelFrame(); frame = requestAnimationFrame(animate);\n    }"
       ],
       "attributes": {},
       "handlers": {},
@@ -46058,10 +46058,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:387:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:432:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 387,
+      "line": 432,
       "column": 5,
       "kind": "listener",
       "tag": "options.host.ownerDocument.addEventListener",
@@ -46078,10 +46078,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:389:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:434:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 389,
+      "line": 434,
       "column": 5,
       "kind": "listener",
       "tag": "options.signal.addEventListener",

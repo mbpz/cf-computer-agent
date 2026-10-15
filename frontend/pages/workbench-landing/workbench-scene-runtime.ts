@@ -53,6 +53,9 @@ function disposeObjects(roots: readonly Object3D[]): void {
 
 const GZIP_MAGIC = [0x1f, 0x8b] as const;
 
+/** How long a visitor's orbit keeps the animation loop alive after its last change. */
+const CONTROL_SETTLE_MS = 600;
+
 function isGzip(bytes: ArrayBuffer): boolean {
   const view = new Uint8Array(bytes, 0, Math.min(GZIP_MAGIC.length, bytes.byteLength));
   return view[0] === GZIP_MAGIC[0] && view[1] === GZIP_MAGIC[1];
@@ -208,6 +211,8 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
     controls.minZoom = 0.6; controls.maxZoom = 2.4;
     // No visitor input yet: a zero baseline would keep the animation loop alive at rest.
     let lastControlChange = Number.NEGATIVE_INFINITY;
+    // Set when the visitor moves the camera; the settle-time re-fit clears it.
+    let orbitRefitPending = false;
     let drawing = false;
     let internalUpdate = false;
     controls.addEventListener("change", () => {
@@ -215,11 +220,17 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
       // otherwise an idle page keeps a frame queued while the tour is at rest.
       if (internalUpdate || drawing || disposed) return;
       lastControlChange = performance.now();
+      orbitRefitPending = true;
       // A paused page still renders what the visitor does with the pointer: draw
       // synchronously (re-entrancy guarded) instead of waiting for an animation
       // frame the tour would never schedule while paused.
       draw();
-      if (snapshot.paused) return;
+      if (snapshot.paused) {
+        // No animation loop while paused, but the frame is still re-measured once the
+        // visitor stops dragging, so queue exactly that one settle frame.
+        if (orbitRefitPending) { cancelFrame(); frame = requestAnimationFrame(animate); }
+        return;
+      }
       cancelFrame(); frame = requestAnimationFrame(animate);
     });
     canvas.style.width = "100%"; canvas.style.height = "100%"; canvas.style.display = "block";
@@ -270,24 +281,44 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
     // authored view direction rather than from wherever the camera is aimed.
     const ORIGIN = new Vector3(0, 0, 0);
     const fitBasis = new Matrix4();
-    const fitOrientation = new Quaternion();
+    const fitAuthored = new Quaternion();
+    const fitInverse = new Quaternion();
     const fitPoint = new Vector3();
-    function fit() {
+    const fitCenter = new Vector3();
+    const fitBox = new Box3();
+    function fitTarget() {
       gltf.scene.updateMatrixWorld(true);
-      const targetBounds = new Box3().setFromObject(snapshot.feature
+      fitBox.setFromObject(snapshot.feature
         ? gltf.scene.getObjectByName(FEATURE_NODES[snapshot.feature])! : gltf.scene);
-      const target = targetBounds.getCenter(new Vector3());
+    }
+    /** Half-height that keeps the framed box inside the frame seen from this rotation. */
+    function measure(orientation: Quaternion): number {
+      fitInverse.copy(orientation).invert();
+      const target = fitBox.getCenter(fitCenter);
+      let extentX = 0, extentY = 0;
+      for (const x of [fitBox.min.x, fitBox.max.x]) for (const y of [fitBox.min.y, fitBox.max.y]) for (const z of [fitBox.min.z, fitBox.max.z]) {
+        fitPoint.set(x, y, z).sub(target).applyQuaternion(fitInverse);
+        extentX = Math.max(extentX, Math.abs(fitPoint.x)); extentY = Math.max(extentY, Math.abs(fitPoint.y));
+      }
+      return Math.max(extentY, extentX / aspect, size / 20) * 1.16;
+    }
+    function fit() {
+      fitTarget();
       // Measure in the orientation this frame will use — the authored view direction —
       // never the camera's current aim: snap() re-aims the camera right after fitting,
       // so reading camera.quaternion here sized the frustum for the previous angle and
       // let transformed models overflow it.
-      fitOrientation.setFromRotationMatrix(fitBasis.lookAt(direction, ORIGIN, camera.up)).invert();
-      let extentX = 0, extentY = 0;
-      for (const x of [targetBounds.min.x, targetBounds.max.x]) for (const y of [targetBounds.min.y, targetBounds.max.y]) for (const z of [targetBounds.min.z, targetBounds.max.z]) {
-        fitPoint.set(x, y, z).sub(target).applyQuaternion(fitOrientation);
-        extentX = Math.max(extentX, Math.abs(fitPoint.x)); extentY = Math.max(extentY, Math.abs(fitPoint.y));
-      }
-      return { target, height: Math.max(extentY, extentX / aspect, size / 20) * 1.16 };
+      fitBasis.lookAt(direction, ORIGIN, camera.up);
+      return { target: fitBox.getCenter(new Vector3()), height: measure(fitAuthored.setFromRotationMatrix(fitBasis)) };
+    }
+    /**
+     * Re-fit once the visitor's orbit has settled. The tour re-fits for its authored
+     * angles in snap(); an orbit owns its own angle, so the frame is measured against
+     * the camera as the visitor left it — otherwise a steep tilt clips the model.
+     */
+    function refitVisitor() {
+      fitTarget();
+      halfHeight = measure(camera.quaternion);
     }
     /** All camera moves this module performs run through here, never as visitor input. */
     function updateControls() {
@@ -328,6 +359,8 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
     }
     function snap(resetCycle = false) {
       cancelFrame(); transition = undefined;
+      // An authored view owns the frame; a pending visitor re-fit is stale.
+      orbitRefitPending = false;
       direction.copy(viewDirection(snapshot.view ?? SCENE_VIEWS[0].id));
       if (resetCycle) {
         motions.clear();
@@ -339,7 +372,14 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
     }
     function animate(timestamp: number) {
       frame = undefined;
-      if (disposed || !canDraw() || snapshot.paused || (!transition && !motions.size)) return;
+      if (disposed || !canDraw()) return;
+      if (snapshot.paused) {
+        if (orbitRefitPending) { orbitRefitPending = false; refitVisitor(); draw(); }
+        return;
+      }
+      // Nothing animated, no recent visitor input, no pending re-fit: nothing to do.
+      if (!transition && !motions.size && !orbitRefitPending
+        && performance.now() - lastControlChange >= CONTROL_SETTLE_MS) return;
       for (const [node, motion] of motions) {
         const progress = Math.min(1, Math.max(0, (timestamp - motion.started) / SCENE_BUDGET.transitionMs));
         const eased = progress * progress * (3 - 2 * progress);
@@ -360,7 +400,12 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
         if (progress === 1) transition = undefined;
       }
       draw();
-      if ((transition || motions.size || performance.now() - lastControlChange < 600) && !disposed) frame = requestAnimationFrame(animate);
+      if ((transition || motions.size || performance.now() - lastControlChange < CONTROL_SETTLE_MS) && !disposed) {
+        frame = requestAnimationFrame(animate);
+        return;
+      }
+      // The visitor's orbit settled: re-measure once for their angle, then rest.
+      if (orbitRefitPending && !disposed) { orbitRefitPending = false; refitVisitor(); draw(); }
     }
     function resize() {
       if (disposed) return;

@@ -712,6 +712,42 @@ describe("workbench scene lifecycle", () => {
   });
 });
 
+describe("visitor orbit framing", () => {
+  // The tour frames its authored angles; an orbit owns its own angle and must re-frame.
+  it("re-frames the visitor's own angle once the orbit settles", async () => {
+    const proto = browser.HTMLCanvasElement.prototype as unknown as Record<string, unknown>;
+    proto.setPointerCapture = () => {};
+    proto.releasePointerCapture = () => {};
+    gltf.scene.position.set(40, -12, 7); gltf.scene.scale.set(2, 3, 0.5); gltf.scene.rotation.y = 0.4;
+    const handle = await create(); tick();
+    const canvas = host.querySelector("canvas")!;
+    // OrbitControls derives rotation from the element's client size, which a detached
+    // Happy DOM canvas reports as zero.
+    Object.defineProperty(canvas, "clientWidth", { value: 900, configurable: true });
+    Object.defineProperty(canvas, "clientHeight", { value: 600, configurable: true });
+    const PointerEventCtor = ((browser as unknown as { PointerEvent?: unknown }).PointerEvent ?? browser.MouseEvent) as
+      new (type: string, init: Record<string, unknown>) => unknown;
+    const drag = (type: string, x: number, y: number) => (canvas as unknown as { dispatchEvent(event: unknown): boolean })
+      .dispatchEvent(new PointerEventCtor(type, {
+        pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 1, clientX: x, clientY: y, bubbles: true,
+      }));
+    drag("pointerdown", 200, 300);
+    for (let step = 1; step <= 8; step += 1) drag("pointermove", 200 + step * 8, 300 - step * 32);
+    drag("pointerup", 264, 44);
+    // Past the orbit settle window: the re-fit runs on the next queued frame.
+    tick(1000);
+    const { camera } = rendered();
+    const bounds = new Box3().setFromObject(gltf.scene);
+    for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) {
+      const projected = new Vector3(x, y, z).project(camera);
+      expect(Math.abs(projected.x)).toBeLessThan(0.96);
+      expect(Math.abs(projected.y)).toBeLessThan(0.96);
+    }
+    expect(frames.size).toBe(0);
+    handle.dispose();
+  });
+});
+
 describe("workbench model payload", () => {
   const payload = Buffer.from("glTF-fixture-for-parser");
 

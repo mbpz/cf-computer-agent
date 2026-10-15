@@ -260,7 +260,7 @@
 ### 11.4 同批修掉的两个既有缺陷
 
 - **取景溢出**：`fit()` 原先按**相机当时的朝向**（`camera.quaternion`）测量模型范围，而 `snap()` 紧接着在 `placeCamera()` 里把相机重新对准授权视角 → 拟合与最终取景不一致。实测：quat 由 `-0.131,0.476,0.072,0.866` 变为 `-0.251,0.37,0.104,0.888`，半高被算成 8.14 而实际需要 10.265（正是 `test/unit/frontend-workbench-landing-runtime.test.ts` 两个 "fits real transformed geometry" 断言的 1.087 / 0.966，且在含 OrbitControls 的提交之前就已失败）。现改为按**授权视角方向**（`Matrix4.lookAt(direction, 原点, camera.up)`）测量，并用闭包内临时量避免每帧分配；该文件 54/54 通过。
-  - 取舍：`fit()` 在每次视角切换时重算，所以巡游始终取满画面；访客手动拖拽到极端俯仰时不重算（极角限制在 0.55–1.45 弧度内），保持既有行为。
+  - 访客手动拖拽同样取满：输入停止（600ms 稳定窗口）后按**访客自己的朝向**重算一次取景（`refitVisitor`，测试 "re-frames the visitor's own angle once the orbit settles"），巡游切换视角时仍按授权方向重算。像素级实测（1440×900、暂停后拖到四个极端姿态，画布 766×479，留白单位 px）：默认 左124/右125/上39/下50，陡低角 150/150/42/47，俯视 58/59/97/105，侧向摆 53/53/137/97 —— 最小留白 39px（约 8%）且左右对称，无裁切。
 - **无场景时仍显示场景控件**：静态/超时/失败态下「暂停动画」与视角刻度条原本仍显示并继续轮转（实测 `status=timeout, canvas=false, pauseVisible=true, railActive=低角`）。现由 `WorkbenchScene` 通过 `onStatus` 上报状态，页面只在 `ready` 时渲染 `.workbench-scene-controls`，巡游计时器也只在 `ready` 时启动。
 - 真浏览器实测（本地 worker + 与线上同款产物）：阻断模型 → `status=error, canvas=false, pause=false, views=0, tour=null`；模型就绪 → `pause=true, views=5, tour=running`，9 秒后刻度条由「正面」自动切到「右侧」。
 - 页面测试改为「只在场景就绪时提供控件」并新增该门控断言；落地页单测 173/173。
