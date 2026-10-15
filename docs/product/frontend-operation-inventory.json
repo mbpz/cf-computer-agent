@@ -3672,19 +3672,21 @@
         "frontend/components/ui/card.tsx:5:37",
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:44:5",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:52:17",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:57:9",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:59:11",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:61:13",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:61:48",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:73:15",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:76:15",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:81:13",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:93:13",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:94:67",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:111:45",
-        "frontend/pages/workbench-landing/public-workbench-page.tsx:113:15",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:62:5",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:70:17",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:75:9",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:77:11",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:79:13",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:79:48",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:91:15",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:94:15",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:100:15",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:102:15",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:103:45",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:120:13",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:121:67",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:138:45",
+        "frontend/pages/workbench-landing/public-workbench-page.tsx:140:15",
         "frontend/pages/workbench-landing/workbench-feature-panel.tsx:83:10",
         "frontend/pages/workbench-landing/workbench-feature-panel.tsx:86:5",
         "frontend/pages/workbench-landing/workbench-feature-panel.tsx:90:9",
@@ -3854,10 +3856,11 @@
     "frontend/features/environments/storage/reconcile-checkpoints.ts:30:80",
     "frontend/lib/use-toast.tsx:29:7",
     "frontend/lib/workspace-location.ts:63:3",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:50:3",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:127:5",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:260:5",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:262:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:61:3",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:141:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:155:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:308:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:310:5",
     "frontend/public/sw.js:4:1",
     "frontend/public/sw.js:7:1",
     "frontend/public/sw.js:10:1"
@@ -45126,10 +45129,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:44:5",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:62:5",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 44,
+      "line": 62,
       "column": 5,
       "kind": "listener",
       "tag": "media?.addEventListener",
@@ -45146,10 +45149,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:52:17",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:70:17",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 52,
+      "line": 70,
       "column": 17,
       "kind": "jsx",
       "tag": "a",
@@ -45166,10 +45169,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:57:9",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:75:9",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 57,
+      "line": 75,
       "column": 9,
       "kind": "jsx",
       "tag": "a",
@@ -45186,10 +45189,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:59:11",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:77:11",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 59,
+      "line": 77,
       "column": 11,
       "kind": "jsx",
       "tag": "select",
@@ -45208,10 +45211,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:61:13",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:79:13",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 61,
+      "line": 79,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -45227,10 +45230,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:61:48",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:79:48",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 61,
+      "line": 79,
       "column": 48,
       "kind": "jsx",
       "tag": "option",
@@ -45246,10 +45249,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:73:15",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:91:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 73,
+      "line": 91,
       "column": 15,
       "kind": "jsx",
       "tag": "Button",
@@ -45269,10 +45272,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:76:15",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:94:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 76,
+      "line": 94,
       "column": 15,
       "kind": "jsx",
       "tag": "Button",
@@ -45292,11 +45295,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:81:13",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:100:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 81,
-      "column": 13,
+      "line": 100,
+      "column": 15,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -45317,10 +45320,59 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:93:13",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:102:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 93,
+      "line": 102,
+      "column": 15,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "className": "\"workbench-views\"",
+        "role": "\"group\"",
+        "aria-label": "text(\"SCENE_VIEWS_LABEL\")",
+        "data-scene-tour": "state.paused ? \"paused\" : \"running\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:103:45",
+      "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
+      "owner": "PublicWorkbenchPage",
+      "line": 103,
+      "column": 45,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "key": "entry.id",
+        "type": "\"button\"",
+        "className": "\"workbench-view\"",
+        "data-scene-view-button": "entry.id",
+        "aria-pressed": "view === entry.id",
+        "onClick": "() => setView(entry.id)"
+      },
+      "handlers": {
+        "onClick": "() => setView(entry.id)"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "repeat",
+          "expression": "SCENE_VIEWS"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:120:13",
+      "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
+      "owner": "PublicWorkbenchPage",
+      "line": 120,
       "column": 13,
       "kind": "jsx",
       "tag": "div",
@@ -45336,10 +45388,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:94:67",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:121:67",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 94,
+      "line": 121,
       "column": 67,
       "kind": "jsx",
       "tag": "Button",
@@ -45366,10 +45418,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:111:45",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:138:45",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 111,
+      "line": 138,
       "column": 45,
       "kind": "jsx",
       "tag": "Button",
@@ -45400,10 +45452,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:113:15",
+      "id": "frontend/pages/workbench-landing/public-workbench-page.tsx:140:15",
       "path": "frontend/pages/workbench-landing/public-workbench-page.tsx",
       "owner": "PublicWorkbenchPage",
-      "line": 113,
+      "line": 140,
       "column": 15,
       "kind": "jsx",
       "tag": "Button",
@@ -45907,10 +45959,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:50:3",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:61:3",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "loadModel",
-      "line": 50,
+      "line": 61,
       "column": 3,
       "kind": "listener",
       "tag": "options.signal.addEventListener",
@@ -45928,10 +45980,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:127:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:141:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 127,
+      "line": 141,
       "column": 5,
       "kind": "listener",
       "tag": "canvas.addEventListener",
@@ -45948,10 +46000,30 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:260:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:155:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 260,
+      "line": 155,
+      "column": 5,
+      "kind": "listener",
+      "tag": "controls.addEventListener",
+      "event": "\"change\"",
+      "arguments": [
+        "\"change\"",
+        "() => {\n      lastControlChange = performance.now();\n      if (disposed) return;\n      // A paused page still renders what the visitor does with the pointer: draw\n      // synchronously (re-entrancy guarded) instead of waiting for an animation\n      // frame the tour would never schedule while paused.\n      draw();\n      if (snapshot.paused) return;\n      cancelFrame(); frame = requestAnimationFrame(animate);\n    }"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:308:5",
+      "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
+      "owner": "createWorkbenchScene",
+      "line": 308,
       "column": 5,
       "kind": "listener",
       "tag": "options.host.ownerDocument.addEventListener",
@@ -45968,10 +46040,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:262:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:310:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 262,
+      "line": 310,
       "column": 5,
       "kind": "listener",
       "tag": "options.signal.addEventListener",

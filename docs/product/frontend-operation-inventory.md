@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：308；操作/转发候选：1261。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：308；操作/转发候选：1264。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -307,14 +307,14 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/tasks/tasks-model.ts | 0 |
 | frontend/pages/tasks/tasks-page.tsx | 19 |
 | frontend/pages/today-page.tsx | 6 |
-| frontend/pages/workbench-landing/public-workbench-page.tsx | 13 |
+| frontend/pages/workbench-landing/public-workbench-page.tsx | 15 |
 | frontend/pages/workbench-landing/workbench-copy.ts | 0 |
 | frontend/pages/workbench-landing/workbench-demo-data.ts | 0 |
 | frontend/pages/workbench-landing/workbench-demo-state.ts | 0 |
 | frontend/pages/workbench-landing/workbench-feature-panel.tsx | 13 |
 | frontend/pages/workbench-landing/workbench-scene-config.ts | 0 |
 | frontend/pages/workbench-landing/workbench-scene-policy.ts | 0 |
-| frontend/pages/workbench-landing/workbench-scene-runtime.ts | 4 |
+| frontend/pages/workbench-landing/workbench-scene-runtime.ts | 5 |
 | frontend/pages/workbench-landing/workbench-scene.tsx | 9 |
 | frontend/pages/workbench-review-page.tsx | 14 |
 | frontend/public/sw.js | 3 |
@@ -361,10 +361,10 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 46 | 无（不代表动态边界已核对） |
 | /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 67 | 无（不代表动态边界已核对） |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 96 | 无（不代表动态边界已核对） |
-| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 39 | 无（不代表动态边界已核对） |
+| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 41 | 无（不代表动态边界已核对） |
 | &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 16 | 无（不代表动态边界已核对） |
 
-尚未归入上述入口的候选：120。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
+尚未归入上述入口的候选：121。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
 
 ## frontend/app.tsx
 
@@ -2240,19 +2240,21 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 44:5 PublicWorkbenchPage | media?.addEventListener  | "change", apply |  |
-| 52:17 PublicWorkbenchPage | a text("LOGIN") | href="/login" |  |
-| 57:9 PublicWorkbenchPage | a text("BRAND") | href="/" |  |
-| 59:11 PublicWorkbenchPage | select  | onChange=event =&gt; locale.setLocale(event.target.value) |  |
-| 61:13 PublicWorkbenchPage | option English |  |  |
-| 61:48 PublicWorkbenchPage | option 简体中文 |  |  |
-| 73:15 PublicWorkbenchPage | Button text("START") | onClick=() =&gt; dispatch({ type: "start" }) |  |
-| 76:15 PublicWorkbenchPage | Button text("EXPLORE") | onClick=() =&gt; firstFeature.current?.focus() |  |
-| 81:13 PublicWorkbenchPage | Button text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE") | onClick=() =&gt; dispatch({ type: "pause", value: !state.paused }) |  |
-| 93:13 PublicWorkbenchPage | div  |  |  |
-| 94:67 PublicWorkbenchPage | Button  | onClick=() =&gt; dispatch({ type: "open", feature: id }) | aria-expanded=state.activeFeature === id; {"kind":"repeat","expression":"features"} |
-| 111:45 PublicWorkbenchPage | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"}; {"kind":"logical","expression":"state.… |
-| 113:15 PublicWorkbenchPage | Button text("REPLAY") | onClick=() =&gt; dispatch({ type: "replay" }) | {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"} |
+| 62:5 PublicWorkbenchPage | media?.addEventListener  | "change", apply |  |
+| 70:17 PublicWorkbenchPage | a text("LOGIN") | href="/login" |  |
+| 75:9 PublicWorkbenchPage | a text("BRAND") | href="/" |  |
+| 77:11 PublicWorkbenchPage | select  | onChange=event =&gt; locale.setLocale(event.target.value) |  |
+| 79:13 PublicWorkbenchPage | option English |  |  |
+| 79:48 PublicWorkbenchPage | option 简体中文 |  |  |
+| 91:15 PublicWorkbenchPage | Button text("START") | onClick=() =&gt; dispatch({ type: "start" }) |  |
+| 94:15 PublicWorkbenchPage | Button text("EXPLORE") | onClick=() =&gt; firstFeature.current?.focus() |  |
+| 100:15 PublicWorkbenchPage | Button text(state.paused ? "SCENE_RESUME" : "SCENE_PAUSE") | onClick=() =&gt; dispatch({ type: "pause", value: !state.paused }) |  |
+| 102:15 PublicWorkbenchPage | div  |  |  |
+| 103:45 PublicWorkbenchPage | button  | onClick=() =&gt; setView(entry.id); type="button" | {"kind":"repeat","expression":"SCENE_VIEWS"} |
+| 120:13 PublicWorkbenchPage | div  |  |  |
+| 121:67 PublicWorkbenchPage | Button  | onClick=() =&gt; dispatch({ type: "open", feature: id }) | aria-expanded=state.activeFeature === id; {"kind":"repeat","expression":"features"} |
+| 138:45 PublicWorkbenchPage | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"}; {"kind":"logical","expression":"state.… |
+| 140:15 PublicWorkbenchPage | Button text("REPLAY") | onClick=() =&gt; dispatch({ type: "replay" }) | {"kind":"logical","expression":"!state.activeFeature && state.step !== \"overview\"","operator":"&&"} |
 
 ## frontend/pages/workbench-landing/workbench-feature-panel.tsx
 
@@ -2276,10 +2278,11 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 50:3 loadModel | options.signal.addEventListener  | "abort", onAbort, { once: true } |  |
-| 127:5 createWorkbenchScene | canvas.addEventListener  | "webglcontextlost", contextLost |  |
-| 260:5 createWorkbenchScene | options.host.ownerDocument.addEventListener  | "visibilitychange", visibilityChanged |  |
-| 262:5 createWorkbenchScene | options.signal.addEventListener  | "abort", dispose, { once: true } |  |
+| 61:3 loadModel | options.signal.addEventListener  | "abort", onAbort, { once: true } |  |
+| 141:5 createWorkbenchScene | canvas.addEventListener  | "webglcontextlost", contextLost |  |
+| 155:5 createWorkbenchScene | controls.addEventListener  | "change", () =&gt; { lastControlChange = performance.now(); if (disposed) return; // A paused page still renders what the visitor does with the pointer: draw… |  |
+| 308:5 createWorkbenchScene | options.host.ownerDocument.addEventListener  | "visibilitychange", visibilityChanged |  |
+| 310:5 createWorkbenchScene | options.signal.addEventListener  | "abort", dispose, { once: true } |  |
 
 ## frontend/pages/workbench-landing/workbench-scene.tsx
 
