@@ -1,10 +1,12 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 
 const ROOT_NODES = ['MG_Desk', 'MG_Inbox', 'MG_Library', 'MG_Query', 'MG_Board', 'MG_Updates', 'MG_Assistant'];
 const ANIMATION_NODES = ['MG_CaptureCard', 'MG_CitationCard', 'MG_TaskCard'];
 const MODEL_LIMIT = 2 * 1024 * 1024;
+const MODEL_GZIP_LIMIT = 320 * 1024;
 const POSTER_LIMIT = 250 * 1024;
 const ASSET_DIR = 'frontend/assets/workbench-landing';
 const MATERIAL_EXTENSIONS = new Set([
@@ -305,6 +307,12 @@ export function verifyLandingAssets(root) {
   requireConstraint(typeof root === 'string' && root.length > 0, 'ASSET_ROOT', 'expected repository root path');
   const model = readAsset(root, `${ASSET_DIR}/workbench.glb`, MODEL_LIMIT, 'GLB_BUDGET');
   const inspection = inspectLandingGlb(model);
+  // The loader downloads the compressed twin, so a stale or unrelated stream would
+  // ship a broken scene while both files still looked present.
+  const modelGzip = readAsset(root, `${ASSET_DIR}/workbench.glb.gz`, MODEL_GZIP_LIMIT, 'GLB_GZIP_BUDGET');
+  let inflated;
+  try { inflated = gunzipSync(modelGzip); } catch { throw new Error('GLB_GZIP_INVALID: workbench.glb.gz is not a gzip stream'); }
+  requireConstraint(inflated.equals(model), 'GLB_GZIP_MISMATCH', 'workbench.glb.gz must inflate to workbench.glb byte for byte');
   const posters = [
     ['poster-desktop.webp', 1600, 1000],
     ['poster-mobile.webp', 900, 1100],
@@ -320,7 +328,7 @@ export function verifyLandingAssets(root) {
   try { report = JSON.parse(reportBytes.toString('utf8')); } catch { throw new Error('ASSET_PROVENANCE: invalid JSON source report'); }
   const provenance = object(report) ? report.provenance : undefined;
   requireConstraint(object(provenance) && provenance.kind === 'original-procedural-geometry' && provenance.generator === 'scripts/blender/workbench-landing.py' && Array.isArray(provenance.externalAssets) && provenance.externalAssets.length === 0, 'ASSET_PROVENANCE', 'expected provenance {kind:"original-procedural-geometry",generator:"scripts/blender/workbench-landing.py",externalAssets:[]}');
-  return { modelBytes: model.length, ...inspection, posters };
+  return { modelBytes: model.length, modelGzipBytes: modelGzip.length, ...inspection, posters };
 }
 
 function isMainModule() {

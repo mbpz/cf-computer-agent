@@ -89,7 +89,7 @@ export async function loadBuildGraph(manifestPath) {
   assert.ok(sceneExclusiveGzipBytes <= 250 * 1024, `SCENE_JS_BUDGET:${sceneExclusiveGzipBytes}`);
   // The public interface receives <repository>/frontend/dist/manifest.json.
   const repository = resolve(directory, '../..');
-  const assetNames = ['workbench.glb', 'poster-desktop.webp', 'poster-mobile.webp'];
+  const assetNames = ['workbench.glb', 'workbench.glb.gz', 'poster-desktop.webp', 'poster-mobile.webp'];
   const sourcePath = name => resolve(repository, 'frontend/assets/workbench-landing', name);
   const inspectedBytes = new Map(assetNames.map(name => [name, readFileSync(sourcePath(name))]));
   const assetReport = verifyLandingAssets(repository);
@@ -189,7 +189,8 @@ async function buildFixture(t, { eager = false, merged = false, cytoscapeEager =
     kind: 'original-procedural-geometry', generator: 'scripts/blender/workbench-landing.py', externalAssets: [],
   } }));
   for (const [name, bytes] of [
-    ['workbench.glb', fixtureGlb()], ['poster-desktop.webp', fixtureWebp(1600, 1000)], ['poster-mobile.webp', fixtureWebp(900, 1100)],
+    ['workbench.glb', fixtureGlb()], ['workbench.glb.gz', gzipSync(fixtureGlb())],
+    ['poster-desktop.webp', fixtureWebp(1600, 1000)], ['poster-mobile.webp', fixtureWebp(900, 1100)],
   ]) {
     manifest[`assets/workbench-landing/${name}`] = { file: `assets/${name}` };
     await writeFile(resolve(directory, `assets/${name}`), bytes);
@@ -231,6 +232,7 @@ test('regression: a real Vite build produces module provenance tied to emitted c
   await writeFile(resolve(frontend, 'pages/workbench-landing/workbench-scene-runtime.ts'), `
     export { scene } from 'three';
     export { default as model } from '../../assets/workbench-landing/workbench.glb?url';
+    export { default as modelGzip } from '../../assets/workbench-landing/workbench.glb.gz?url';
   `);
   const { build } = await import('vite');
   const { workbenchLandingProvenance } = await import('./workbench-landing-provenance.mjs');
@@ -315,7 +317,7 @@ test('regression: actual source assets must pass the asset inspector, not just f
 });
 
 test('regression: emitted assets must be byte-identical to inspected sources, including same-size mutations', async t => {
-  for (const name of ['workbench.glb', 'poster-desktop.webp', 'poster-mobile.webp']) await t.test(name, async t => {
+  for (const name of ['workbench.glb', 'workbench.glb.gz', 'poster-desktop.webp', 'poster-mobile.webp']) await t.test(name, async t => {
     const fixture = await buildFixture(t);
     const path = resolve(fixture.directory, `assets/${name}`);
     const bytes = await readFile(path);

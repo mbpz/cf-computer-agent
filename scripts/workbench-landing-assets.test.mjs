@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { gzipSync } from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -132,6 +133,7 @@ function fixtureRoot(t, { model = makeGlb(), desktop = webp(1600, 1000), mobile 
   mkdirSync(join(root, assetDir), { recursive: true });
   mkdirSync(join(root, 'design/workbench-landing'), { recursive: true });
   writeFileSync(join(root, assetDir, 'workbench.glb'), model);
+  writeFileSync(join(root, assetDir, 'workbench.glb.gz'), gzipSync(model));
   writeFileSync(join(root, assetDir, 'poster-desktop.webp'), desktop);
   writeFileSync(join(root, assetDir, 'poster-mobile.webp'), mobile);
   writeFileSync(join(root, 'design/workbench-landing/asset-report.json'), JSON.stringify(report ?? {
@@ -334,12 +336,22 @@ test('enforces GLB bytes from the actual buffer, not JSON declarations', () => {
 test('returns exact AssetReport using real files and ignores self-reported counts', t => {
   const root = fixtureRoot(t);
   assert.deepEqual(verifyLandingAssets(root), {
-    modelBytes: makeGlb().length, triangles: 1, nodeNames: allNodes, maxTextureDimension: 0,
+    modelBytes: makeGlb().length, modelGzipBytes: gzipSync(makeGlb()).length, triangles: 1, nodeNames: allNodes, maxTextureDimension: 0,
     posters: [
       { path: `${assetDir}/poster-desktop.webp`, bytes: 26, width: 1600, height: 1000 },
       { path: `${assetDir}/poster-mobile.webp`, bytes: 26, width: 900, height: 1100 },
     ],
   });
+});
+
+test('rejects a compressed model twin that does not inflate to the shipped model', t => {
+  const root = fixtureRoot(t);
+  writeFileSync(join(root, assetDir, 'workbench.glb.gz'), gzipSync(Buffer.from('unrelated bytes')));
+  assert.throws(() => verifyLandingAssets(root), /GLB_GZIP_MISMATCH/);
+  writeFileSync(join(root, assetDir, 'workbench.glb.gz'), Buffer.from([0x1f, 0x8b, 0x08, 0x00]));
+  assert.throws(() => verifyLandingAssets(root), /GLB_GZIP_INVALID/);
+  rmSync(join(root, assetDir, 'workbench.glb.gz'));
+  assert.throws(() => verifyLandingAssets(root), /ASSET_FILE.*workbench\.glb\.gz/);
 });
 
 test('enforces poster sizes and dimensions from both lossy and lossless headers', t => {

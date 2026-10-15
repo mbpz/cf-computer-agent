@@ -227,3 +227,37 @@
 2. **用错入口地址：** `wrangler.jsonc:3-10` 关闭了 `workers_dev` 与 `preview_urls`，只有 `memory.crgmhrc.asia`（`custom_domain`）能打开；workers.dev / Preview URL 必然打不开。这是既有的有意加固，不是缺陷。
 3. **会话接口不是 401：** 前端只有 `/api/session` 抛 `401 AUTH_REQUIRED` 才判定匿名并渲染落地页（`frontend/lib/session-state.ts:4-6`、`frontend/app.tsx:194-196`）；若返回 403 `MEMBER_DISABLED`（禁用成员）则按设计进入登录页，若返回 5xx 则进入错误态。
 4. **本地 `npm run deploy` 的陷阱（次要）：** `frontend/dist` 被 gitignore 且 `deploy` 本身不构建，直接从笔记本部署会发出陈旧产物（排查时实测本地 dist 时间戳早于两批源码）。Dashboard 路径不受影响。
+
+## 11. 第六批：修掉「3D 永远加载不出来」（慢链路的加载策略与资源投递）
+
+用户报告：线上始终显示「3D 加载超过 8 秒，已停止尝试」，3D 与视角巡游一直不出现。
+
+### 11.1 根因（2026-10-15 实测）
+
+| 证据 | 数值 |
+| --- | --- |
+| 线上 `GET /assets/workbench-jKGxDzq4.glb` | 650,596 字节，**无 `content-encoding`**（`model/gltf-binary` 不在边缘压缩列表；同页 JS 都有 `br`） |
+| 同一文件 gzip 后 | **185,804 字节**（省 71%） |
+| 三个资产的缓存头 | `public, max-age=0, must-revalidate` → 哈希文件名却不可复用，重试每次都重下 650KB |
+| 预算语义（`workbench-scene.tsx`） | 8 秒是**一次性总期限**且**包含模块下载**；低于约 100KB/s 的链路必然超时，重试也不会成功 |
+
+结论：不是站点坏了，而是**慢链路上按 ~800KB 传输 + 8 秒硬期限**的必然结果。
+
+### 11.2 修复
+
+- **模型预压缩**：新增 `frontend/assets/workbench-landing/workbench.glb.gz`（186KB），由 `scripts/workbench-landing-assets.mjs` 校验「必须逐字节解压回 `workbench.glb`」+ 体积上限；`workbench-landing-assets.test.mjs` 覆盖错配/非法 gzip/缺失；`workbench-landing-build.test.mjs` 保证构建产物的压缩孪生与源码一致。
+- **加载器自行解压，不依赖边缘头**：`workbench-scene-runtime.ts` 流式读取响应，按 gzip 魔数判断是否仍需解压，用 `DecompressionStream("gzip")` 解压；引擎不支持时回落到未压缩孪生（`SceneOptions.fallbackModelUrl`）。开发、预览、线上三条路径行为一致。
+- **按进度而不是墙钟判死**：`SCENE_BUDGET` 改为 `startupTimeoutMs`（首字节前的模块下载额度）、`stallTimeoutMs`（无新字节）、`absoluteTimeoutMs`（总量上限）、`tickMs`（轮询粒度）；`onProgress` 收到字节即刷新空闲时刻，并把下载百分比并入状态文案（新增 `SCENE_LOADING_PERCENT`，中英各一）；超时文案不再写死「8 秒」。
+- **哈希资产可长期缓存**：`src/app.ts` 的 `withAssetSecurityHeaders` 对 `/assets/<name>-<hash>.<ext>`（含 `.gz`）设 `public, max-age=31536000, immutable`；HTML 外壳仍 `no-store`，保持「部署后入口不陈旧」的既有约束。
+- 同时修掉上一批遗留的回归：OrbitControls 的 `change` 监听会在**自己渲染引发的事件**上排队新帧，破坏「静止时无挂起帧」不变量；现以 `internalUpdate`/`drawing` 区分自身更新与访客输入，`lastControlChange` 初值为 `-Infinity`（此前 0 会让静止也落在 600ms 保持窗口内）。
+
+### 11.3 验证
+
+- `npm run typecheck` 0 错误；`npm run build` 全链通过（资产 15 个文件）；smoke 87/87 + 14/14 + 30/30；`test/worker/app.test.ts` 33/33、`test/worker/assets.test.ts` 44/44；落地页单测 170/172（2 项见 11.4）。
+- 本地 worker（`wrangler dev --local`，与线上同款产物）+ 真 Chromium，**CDP 限速 20KB/s 并禁用缓存**（正是原来必死的条件）：模型实际传输 **186,104 字节 / 9331ms**，状态文案依次显示 62%→68%→73%→79%→85%→90%→95%，**第 32 秒进入 `ready`**（旧实现第 8 秒放弃），随后巡游继续换视角（左侧→俯视）。
+- 同一链路再次访问：两个资产 `transferSize: 0`（命中 `immutable` 缓存）→ 重试与二次访问不再重复下载。
+
+### 11.4 顺带发现（既有问题，不在本次改动范围）
+
+- `test/unit/frontend-workbench-landing-runtime.test.ts` 的 "fits real transformed geometry at 900x600 / 320x720" **在含 OrbitControls 的提交之前就已失败**（在 `HEAD~1` 上数值逐位相同：1.087 / 0.966 > 0.96）。本次未改阈值以免掩盖问题，应单独排查 `fit()` 与相机朝向的一致性。
+- 静态/超时态（无 canvas）时「暂停动画」与视角刻度条仍显示且继续轮转（实测 `status=timeout, canvas=false, pauseVisible=true, railActive=低角`），建议按场景是否存在来门控。

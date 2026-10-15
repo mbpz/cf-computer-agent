@@ -904,6 +904,9 @@ describe("Worker application", () => {
     const stylesheet = await SELF.fetch(`https://example.test/${stylesheetPath}`);
     expect(stylesheet.status).toBe(200);
     expectProtectedResponse(stylesheet);
+    // A hashed asset never changes under its own name, so a repeat visit — and a 3D
+    // retry after a slow first load — must not re-download it.
+    expect(stylesheet.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
   });
 
   it("keeps VM diagnostic permissions out of application shells and emitted entries", async () => {

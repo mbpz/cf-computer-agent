@@ -3700,15 +3700,15 @@
         "frontend/pages/workbench-landing/workbench-feature-panel.tsx:155:13",
         "frontend/pages/workbench-landing/workbench-feature-panel.tsx:156:13",
         "frontend/pages/workbench-landing/workbench-feature-panel.tsx:169:11",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:175:5",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:176:34",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:177:10",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:178:5",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:197:7",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:198:7",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:242:7",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:245:11",
-        "frontend/pages/workbench-landing/workbench-scene.tsx:249:11"
+        "frontend/pages/workbench-landing/workbench-scene.tsx:198:5",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:199:34",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:200:10",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:201:5",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:220:7",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:221:7",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:265:7",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:268:11",
+        "frontend/pages/workbench-landing/workbench-scene.tsx:272:11"
       ],
       "unresolvedSymbols": []
     },
@@ -3856,11 +3856,11 @@
     "frontend/features/environments/storage/reconcile-checkpoints.ts:30:80",
     "frontend/lib/use-toast.tsx:29:7",
     "frontend/lib/workspace-location.ts:63:3",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:61:3",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:141:5",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:155:5",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:308:5",
-    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:310:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:117:3",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:197:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:213:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:377:5",
+    "frontend/pages/workbench-landing/workbench-scene-runtime.ts:379:5",
     "frontend/public/sw.js:4:1",
     "frontend/public/sw.js:7:1",
     "frontend/public/sw.js:10:1"
@@ -45959,10 +45959,10 @@
       ]
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:61:3",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:117:3",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "loadModel",
-      "line": 61,
+      "line": 117,
       "column": 3,
       "kind": "listener",
       "tag": "options.signal.addEventListener",
@@ -45980,10 +45980,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:141:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:197:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 141,
+      "line": 197,
       "column": 5,
       "kind": "listener",
       "tag": "canvas.addEventListener",
@@ -46000,17 +46000,17 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:155:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:213:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 155,
+      "line": 213,
       "column": 5,
       "kind": "listener",
       "tag": "controls.addEventListener",
       "event": "\"change\"",
       "arguments": [
         "\"change\"",
-        "() => {\n      lastControlChange = performance.now();\n      if (disposed) return;\n      // A paused page still renders what the visitor does with the pointer: draw\n      // synchronously (re-entrancy guarded) instead of waiting for an animation\n      // frame the tour would never schedule while paused.\n      draw();\n      if (snapshot.paused) return;\n      cancelFrame(); frame = requestAnimationFrame(animate);\n    }"
+        "() => {\n      // Camera updates this module performs itself must not look like visitor input,\n      // otherwise an idle page keeps a frame queued while the tour is at rest.\n      if (internalUpdate || drawing || disposed) return;\n      lastControlChange = performance.now();\n      // A paused page still renders what the visitor does with the pointer: draw\n      // synchronously (re-entrancy guarded) instead of waiting for an animation\n      // frame the tour would never schedule while paused.\n      draw();\n      if (snapshot.paused) return;\n      cancelFrame(); frame = requestAnimationFrame(animate);\n    }"
       ],
       "attributes": {},
       "handlers": {},
@@ -46020,10 +46020,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:308:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:377:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 308,
+      "line": 377,
       "column": 5,
       "kind": "listener",
       "tag": "options.host.ownerDocument.addEventListener",
@@ -46040,10 +46040,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:310:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene-runtime.ts:379:5",
       "path": "frontend/pages/workbench-landing/workbench-scene-runtime.ts",
       "owner": "createWorkbenchScene",
-      "line": 310,
+      "line": 379,
       "column": 5,
       "kind": "listener",
       "tag": "options.signal.addEventListener",
@@ -46061,10 +46061,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:175:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:198:5",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 175,
+      "line": 198,
       "column": 5,
       "kind": "listener",
       "tag": "document.addEventListener",
@@ -46081,10 +46081,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:176:34",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:199:34",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 176,
+      "line": 199,
       "column": 34,
       "kind": "listener",
       "tag": "media.addEventListener",
@@ -46107,10 +46107,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:177:10",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:200:10",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 177,
+      "line": 200,
       "column": 10,
       "kind": "listener",
       "tag": "media?.addListener",
@@ -46132,10 +46132,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:178:5",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:201:5",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 178,
+      "line": 201,
       "column": 5,
       "kind": "listener",
       "tag": "connection?.addEventListener",
@@ -46152,10 +46152,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:197:7",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:220:7",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 197,
+      "line": 220,
       "column": 7,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -46179,10 +46179,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:198:7",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:221:7",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 198,
+      "line": 221,
       "column": 7,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -46206,10 +46206,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:242:7",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:265:7",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 242,
+      "line": 265,
       "column": 7,
       "kind": "jsx",
       "tag": "p",
@@ -46222,16 +46222,16 @@
       "handlers": {},
       "spreads": [],
       "labels": [
-        "text(view.message)"
+        "text(view.message).replace(\"{percent}\", String(view.percent ?? 0))"
       ],
       "context": [],
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:245:11",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:268:11",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 245,
+      "line": 268,
       "column": 11,
       "kind": "jsx",
       "tag": "button",
@@ -46258,10 +46258,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:249:11",
+      "id": "frontend/pages/workbench-landing/workbench-scene.tsx:272:11",
       "path": "frontend/pages/workbench-landing/workbench-scene.tsx",
       "owner": "WorkbenchScene",
-      "line": 249,
+      "line": 272,
       "column": 11,
       "kind": "jsx",
       "tag": "button",

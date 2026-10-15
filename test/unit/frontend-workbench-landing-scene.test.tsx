@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SceneOptions, SceneSnapshot, WorkbenchSceneHandle } from "../../frontend/pages/workbench-landing/workbench-scene-config";
+import { LANDING_MODEL_GZIP_URL, LANDING_MODEL_URL, SCENE_BUDGET } from "../../frontend/pages/workbench-landing/workbench-scene-config";
 import { WorkbenchScene } from "../../frontend/pages/workbench-landing/workbench-scene";
 
 // Same Workerd/Happy DOM boundary as the existing frontend tests; no evaluated scripts.
@@ -185,7 +186,7 @@ describe("bounded workbench scene wrapper", () => {
     if (failure === "error") {
       await act(async () => requests[0].result.reject(new Error("load failed")));
     } else {
-      await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(SCENE_BUDGET.startupTimeoutMs); });
     }
     await flush();
     expect(status()).toBe(failure);
@@ -339,9 +340,9 @@ describe("bounded workbench scene wrapper", () => {
     await click("load"); expect(requests).toHaveLength(2);
   });
 
-  it("stops a pending runtime after exactly eight seconds and ignores its late handle", async () => {
+  it("stops a pending runtime after the startup allowance and ignores its late handle", async () => {
     await start();
-    await act(async () => { await vi.advanceTimersByTimeAsync(7999); }); expect(status()).toBe("loading");
+    await act(async () => { await vi.advanceTimersByTimeAsync(SCENE_BUDGET.startupTimeoutMs - 1); }); expect(status()).toBe("loading");
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(status()).toBe("timeout"); expect(requests[0].options.signal.aborted).toBe(true);
     expect(container.querySelector("picture")).not.toBeNull();
@@ -349,10 +350,10 @@ describe("bounded workbench scene wrapper", () => {
     expect(late.disposals).toBe(1); expect(canvas()).toBeNull(); expect(status()).toBe("timeout");
   });
 
-  it("includes a delayed module import in the same eight-second deadline", async () => {
+  it("includes a delayed module import in the same startup allowance", async () => {
     moduleGate = deferred<void>(); await mount(); await intersect(true);
     expect(imports).toBe(1); expect(status()).toBe("loading"); expect(requests).toHaveLength(0);
-    await act(async () => { await vi.advanceTimersByTimeAsync(6000); moduleGate.resolve(); }); await flush();
+    await act(async () => { await vi.advanceTimersByTimeAsync(SCENE_BUDGET.startupTimeoutMs - 2000); moduleGate.resolve(); }); await flush();
     expect(requests).toHaveLength(1);
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
     expect(status()).toBe("timeout"); expect(requests[0].options.signal.aborted).toBe(true);
@@ -365,7 +366,7 @@ describe("bounded workbench scene wrapper", () => {
     await mount(); await intersect(true); expect(status()).toBe("loading");
     // Simulate synchronous work blocking the event loop: elapsed time advances,
     // but the timer task has not run before this promise's microtask continuation.
-    elapsed = 8001;
+    elapsed = SCENE_BUDGET.startupTimeoutMs + 1;
     if (boundary === "module") {
       await act(async () => moduleGate.resolve()); await flush();
       expect(requests).toHaveLength(0);
@@ -378,9 +379,39 @@ describe("bounded workbench scene wrapper", () => {
 
   it("does not create a runtime when its module resolves after timeout", async () => {
     moduleGate = deferred<void>(); await mount(); await intersect(true);
-    await act(async () => { await vi.advanceTimersByTimeAsync(8000); }); expect(status()).toBe("timeout");
+    await act(async () => { await vi.advanceTimersByTimeAsync(SCENE_BUDGET.startupTimeoutMs); }); expect(status()).toBe("timeout");
     await act(async () => moduleGate.resolve()); await flush();
     expect(requests).toHaveLength(0); expect(canvas()).toBeNull();
+  });
+
+  it("keeps a slow download alive while bytes keep arriving past the startup allowance", async () => {
+    await start();
+    const attempt = requests[0];
+    // Eight stall-window strides exceed the old fixed budget by an order of magnitude;
+    // progress, not elapsed time, is what keeps the attempt legitimate.
+    for (let step = 1; step <= 8; step += 1) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(SCENE_BUDGET.stallTimeoutMs - 1000); });
+      await act(async () => { attempt.options.onProgress?.(step * 20000, 200000); });
+    }
+    expect(status()).toBe("loading");
+    await ready();
+    expect(status()).toBe("ready");
+  });
+
+  it("publishes the downloaded share and stops only once the download stalls", async () => {
+    await start();
+    const attempt = requests[0];
+    await act(async () => { attempt.options.onProgress?.(50000, 200000); });
+    expect(container.textContent).toContain("25%");
+    await act(async () => { await vi.advanceTimersByTimeAsync(SCENE_BUDGET.stallTimeoutMs + 1000); });
+    expect(status()).toBe("timeout");
+    expect(attempt.options.signal.aborted).toBe(true);
+  });
+
+  it("requests the compressed model and keeps the uncompressed twin as its fallback", async () => {
+    await start();
+    expect(requests[0].options.modelUrl).toBe(LANDING_MODEL_GZIP_URL);
+    expect(requests[0].options.fallbackModelUrl).toBe(LANDING_MODEL_URL);
   });
 
   it("falls back on a module import failure without retrying automatically", async () => {
@@ -426,7 +457,7 @@ describe("bounded workbench scene wrapper", () => {
   });
 
   it("never lets stale handles insert a canvas into the new attempt", async () => {
-    await start(); await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    await start(); await act(async () => { await vi.advanceTimersByTimeAsync(SCENE_BUDGET.startupTimeoutMs); });
     await click("retry"); await ready(1);
     const current = canvas(); const late = await ready(0);
     expect(late.disposals).toBe(1); expect(canvas()).toBe(current);
@@ -445,7 +476,7 @@ describe("bounded workbench scene wrapper", () => {
   it("settles an offscreen load as hidden, without restarting its deadline", async () => {
     await start(); await intersect(false); await ready();
     expect(status()).toBe("ready"); expect(canvas()?.dataset.visible).toBe("false");
-    await act(async () => { await vi.advanceTimersByTimeAsync(8000); }); expect(status()).toBe("ready");
+    await act(async () => { await vi.advanceTimersByTimeAsync(SCENE_BUDGET.startupTimeoutMs); }); expect(status()).toBe("ready");
   });
 
   it("forwards the newest controlled snapshot after pending load and subsequent changes without rebuilding", async () => {

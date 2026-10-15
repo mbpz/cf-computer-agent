@@ -2278,25 +2278,25 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 61:3 loadModel | options.signal.addEventListener  | "abort", onAbort, { once: true } |  |
-| 141:5 createWorkbenchScene | canvas.addEventListener  | "webglcontextlost", contextLost |  |
-| 155:5 createWorkbenchScene | controls.addEventListener  | "change", () =&gt; { lastControlChange = performance.now(); if (disposed) return; // A paused page still renders what the visitor does with the pointer: draw… |  |
-| 308:5 createWorkbenchScene | options.host.ownerDocument.addEventListener  | "visibilitychange", visibilityChanged |  |
-| 310:5 createWorkbenchScene | options.signal.addEventListener  | "abort", dispose, { once: true } |  |
+| 117:3 loadModel | options.signal.addEventListener  | "abort", onAbort, { once: true } |  |
+| 197:5 createWorkbenchScene | canvas.addEventListener  | "webglcontextlost", contextLost |  |
+| 213:5 createWorkbenchScene | controls.addEventListener  | "change", () =&gt; { // Camera updates this module performs itself must not look like visitor input, // otherwise an idle page keeps a frame queued while the… |  |
+| 377:5 createWorkbenchScene | options.host.ownerDocument.addEventListener  | "visibilitychange", visibilityChanged |  |
+| 379:5 createWorkbenchScene | options.signal.addEventListener  | "abort", dispose, { once: true } |  |
 
 ## frontend/pages/workbench-landing/workbench-scene.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 175:5 WorkbenchScene | document.addEventListener  | "visibilitychange", onVisibility |  |
-| 176:34 WorkbenchScene | media.addEventListener  | "change", onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"true"} |
-| 177:10 WorkbenchScene | media?.addListener  | onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"false"} |
-| 178:5 WorkbenchScene | connection?.addEventListener  | "change", onPreference |  |
-| 197:7 WorkbenchScene | window.addEventListener  | "resize", measure, { passive: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
-| 198:7 WorkbenchScene | window.addEventListener  | "scroll", measure, { passive: true, capture: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
-| 242:7 WorkbenchScene | p text(view.message) |  |  |
-| 245:11 WorkbenchScene | button text(failed ? "SCENE_RETRY" : "SCENE_LOAD") | onClick=event =&gt; activate(event.currentTarget, "load"); type="button" | {"kind":"logical","expression":"view.status !== \"loading\" && view.status !== \"ready\"","operator":"&&"} |
-| 249:11 WorkbenchScene | button text("SCENE_STATIC_MODE") | onClick=event =&gt; activate(event.currentTarget, "useStatic"); type="button" | {"kind":"logical","expression":"view.status !== \"static\"","operator":"&&"} |
+| 198:5 WorkbenchScene | document.addEventListener  | "visibilitychange", onVisibility |  |
+| 199:34 WorkbenchScene | media.addEventListener  | "change", onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"true"} |
+| 200:10 WorkbenchScene | media?.addListener  | onPreference | {"kind":"branch","expression":"media?.addEventListener","branch":"false"} |
+| 201:5 WorkbenchScene | connection?.addEventListener  | "change", onPreference |  |
+| 220:7 WorkbenchScene | window.addEventListener  | "resize", measure, { passive: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
+| 221:7 WorkbenchScene | window.addEventListener  | "scroll", measure, { passive: true, capture: true } | {"kind":"branch","expression":"typeof IntersectionObserver !== \"undefined\"","branch":"false"} |
+| 265:7 WorkbenchScene | p text(view.message).replace("{percent}", String(view.percent ?? 0)) |  |  |
+| 268:11 WorkbenchScene | button text(failed ? "SCENE_RETRY" : "SCENE_LOAD") | onClick=event =&gt; activate(event.currentTarget, "load"); type="button" | {"kind":"logical","expression":"view.status !== \"loading\" && view.status !== \"ready\"","operator":"&&"} |
+| 272:11 WorkbenchScene | button text("SCENE_STATIC_MODE") | onClick=event =&gt; activate(event.currentTarget, "useStatic"); type="button" | {"kind":"logical","expression":"view.status !== \"static\"","operator":"&&"} |
 
 ## frontend/pages/workbench-review-page.tsx
 

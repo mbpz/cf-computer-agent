@@ -1,6 +1,12 @@
 import type { FeatureId } from "./workbench-demo-state";
 
 export const LANDING_MODEL_URL = new URL("../../assets/workbench-landing/workbench.glb", import.meta.url).href;
+/**
+ * Pre-compressed twin of LANDING_MODEL_URL. The uncompressed model is 74% larger
+ * on the wire and the edge does not compress `model/gltf-binary`, so the loader
+ * fetches this one and inflates it in-page when the browser did not.
+ */
+export const LANDING_MODEL_GZIP_URL = new URL("../../assets/workbench-landing/workbench.glb.gz", import.meta.url).href;
 export const LANDING_POSTER_DESKTOP_URL = new URL("../../assets/workbench-landing/poster-desktop.webp", import.meta.url).href;
 export const LANDING_POSTER_MOBILE_URL = new URL("../../assets/workbench-landing/poster-mobile.webp", import.meta.url).href;
 
@@ -14,9 +20,17 @@ export const ANIMATION_NODES = {
   capture: "MG_CaptureCard", citation: "MG_CitationCard", task: "MG_TaskCard",
 } as const;
 export const SCENE_BUDGET = {
-  modelBytes: 2 * 1024 * 1024, posterBytes: 250 * 1024, runtimeGzipBytes: 250 * 1024,
+  modelBytes: 2 * 1024 * 1024, modelGzipBytes: 320 * 1024, posterBytes: 250 * 1024, runtimeGzipBytes: 250 * 1024,
   triangles: 60_000, drawCalls: 80, textureSize: 1024,
-  desktopDpr: 1.5, mobileDpr: 1, loadTimeoutMs: 8000, transitionMs: 380,
+  desktopDpr: 1.5, mobileDpr: 1, transitionMs: 380,
+  /**
+   * An attempt ends when it stops making progress, never when a fixed wall-clock
+   * budget runs out: a slow link that keeps delivering bytes is not a failure, and a
+   * stalled one is. The module download precedes the first model byte, so the phase
+   * before progress gets its own allowance, and the absolute cap keeps a slow but
+   * endless delivery bounded.
+   */
+  startupTimeoutMs: 30_000, stallTimeoutMs: 15_000, absoluteTimeoutMs: 120_000, tickMs: 1000,
 } as const;
 
 /**
@@ -51,5 +65,9 @@ export interface WorkbenchSceneHandle {
 }
 export interface SceneOptions {
   host: HTMLElement; modelUrl: string; signal: AbortSignal;
+  /** Uncompressed twin, used only when the engine cannot inflate in-page. */
+  fallbackModelUrl?: string;
+  /** Reports decoded download progress so a slow link stays visibly alive. */
+  onProgress?: (loadedBytes: number, totalBytes: number) => void;
   onFailure(reason: "context-lost" | "render-error"): void;
 }

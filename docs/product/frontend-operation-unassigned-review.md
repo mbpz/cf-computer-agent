@@ -301,11 +301,11 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:61:3` | public-dynamic | 场景启动并进入 loadModel，options.signal 被取消 | 中止模型加载/解析等待，清理迟到资源。 |
-| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:141:5` | public-dynamic | 模型就绪并建立 canvas，收到 webglcontextlost | contextLost 进入失败/清理路径，交给外层显示回退。 |
-| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:155:5` | public-dynamic | OrbitControls 建立后，访客拖拽/缩放或巡游插值触发 change | 同步重绘当前视角（含暂停时），并把帧循环续到阻尼结束；不发网络请求，不写业务状态。 |
-| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:308:5` | public-dynamic | 场景成功初始化，document visibilitychange | 停止不可见帧或恢复允许绘制的场景，不触发网络写入。 |
-| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:310:5` | public-dynamic | 场景成功初始化，options.signal 被取消 | dispose 释放渲染、监听器及模型资源。 |
+| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:117:3` | public-dynamic | 场景启动并进入 loadModel，options.signal 被取消 | 中止模型加载/解析等待，清理迟到资源。 |
+| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:197:5` | public-dynamic | 模型就绪并建立 canvas，收到 webglcontextlost | contextLost 进入失败/清理路径，交给外层显示回退。 |
+| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:213:5` | public-dynamic | OrbitControls 建立后，访客拖拽/缩放或巡游插值触发 change | 同步重绘当前视角（含暂停时），并把帧循环续到阻尼结束；不发网络请求，不写业务状态。 |
+| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:377:5` | public-dynamic | 场景成功初始化，document visibilitychange | 停止不可见帧或恢复允许绘制的场景，不触发网络写入。 |
+| `frontend/pages/workbench-landing/workbench-scene-runtime.ts:379:5` | public-dynamic | 场景成功初始化，options.signal 被取消 | dispose 释放渲染、监听器及模型资源。 |
 
 ## `frontend/public/sw.js`（3）
 
@@ -380,8 +380,8 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/lib/workspace-location.ts`: `b77ff862964645fe25610e09f79b8409740f72a85a5685d934adc7e0ff60b92d`
 - `frontend/main.tsx`: `8a56e4c9f5df8e80312df681a99b6f31457b752d9d94ad000e37f6a666ae1f62`
 - `frontend/pages/workbench-landing/public-workbench-page.tsx`: `5d29099b420ebda30561fd9c3bf95f61e318d5f0764c3c7ac65a1fd95530b50c`
-- `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `172851f0e39493df07f05e2a5f95a9b96d5b31bd0e0e65b23549f6a80138c3cd`
-- `frontend/pages/workbench-landing/workbench-scene.tsx`: `78d8320376b3f6d1cb22254cbb01a638c73498000d11c7dd33a7d4e2db2604d2`
+- `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `ccea4acad9e62fb358c2f8e6ba686deb21569e3c6fcbd7f2aad2e66dfeb8d65b`
+- `frontend/pages/workbench-landing/workbench-scene.tsx`: `0fa0a730f99fa5694897ced1ce12be039815d57220c4671b5786e319c7df12cd`
 - `frontend/public/sw.js`: `082532f5be99a67e9d755f9407d59e46359f0b247de2473400c20c229f7080d5`
 - `tools/browser-vm/checkpoint-recovery-browser.mjs`: `06a498590a0c6e00c9cf5c91dff81de7a6aa3b01c4c9768aa718ebc0de3d9efe`
 - `tools/browser-vm/runtime-owner-browser.mjs`: `e5973069f711204d6ad79f011be6772e9243d403b6bb1ebd515ff361537c4c90`

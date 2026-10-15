@@ -60,7 +60,9 @@ describe("React workspace assets", () => {
   it("serves the real hashed public studio binaries without making APIs public", async () => {
     const manifestResponse = await SELF.fetch("https://example.test/manifest.json");
     const manifest = await manifestResponse.json() as Record<string, { file: string }>;
-    for (const source of ["workbench.glb", "poster-desktop.webp", "poster-mobile.webp"]) {
+    const sizes: Record<string, number> = {};
+    let compressedBytes = new Uint8Array();
+    for (const source of ["workbench.glb", "workbench.glb.gz", "poster-desktop.webp", "poster-mobile.webp"]) {
       const key = Object.keys(manifest).find(value => value.endsWith(`/workbench-landing/${source}`));
       expect(key, `missing built asset ${source}`).toBeTruthy();
       const file = manifest[key!].file;
@@ -68,8 +70,14 @@ describe("React workspace assets", () => {
       expect(response.status, file).toBe(200);
       expect(response.headers.get("content-type"), file).not.toContain("text/html");
       const bytes = new Uint8Array(await response.arrayBuffer());
+      sizes[source] = bytes.length;
       const header = new TextDecoder().decode(bytes.slice(0, 12));
-      if (source.endsWith(".glb")) {
+      if (source.endsWith(".glb.gz")) {
+        // The browser inflates this itself, so the wire bytes must be a real gzip stream.
+        expect(response.headers.get("content-type")).toMatch(/^(application\/gzip|application\/octet-stream)(;|$)/);
+        expect([bytes[0], bytes[1]]).toEqual([0x1f, 0x8b]);
+        compressedBytes = bytes;
+      } else if (source.endsWith(".glb")) {
         expect(response.headers.get("content-type")).toMatch(/^(model\/gltf-binary|application\/octet-stream)(;|$)/);
         expect(header.slice(0, 4)).toBe("glTF");
       } else {
@@ -78,6 +86,8 @@ describe("React workspace assets", () => {
         expect(header.slice(8, 12)).toBe("WEBP");
       }
     }
+    // Shipping the uncompressed model is what made slow links time out on the edge.
+    expect(compressedBytes.length).toBeLessThan(sizes["workbench.glb"]! * 0.5);
     for (const path of ["/assets/missing-studio-model.glb", "/assets/missing-studio-poster.webp"]) {
       expect((await SELF.fetch(`https://example.test${path}`)).status).toBe(404);
     }

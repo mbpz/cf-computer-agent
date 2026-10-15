@@ -51,6 +51,62 @@ function disposeObjects(roots: readonly Object3D[]): void {
   images.forEach(image => image.close());
 }
 
+const GZIP_MAGIC = [0x1f, 0x8b] as const;
+
+function isGzip(bytes: ArrayBuffer): boolean {
+  const view = new Uint8Array(bytes, 0, Math.min(GZIP_MAGIC.length, bytes.byteLength));
+  return view[0] === GZIP_MAGIC[0] && view[1] === GZIP_MAGIC[1];
+}
+
+/**
+ * Reads the body while reporting progress. A slow link must stay visibly alive:
+ * the attempt deadline watches for stalled bytes, not for elapsed wall time.
+ */
+async function readModelBytes(response: Response, options: SceneOptions, aborted: Promise<never>): Promise<ArrayBuffer> {
+  const report = options.onProgress;
+  const body = response.body;
+  if (!report || !body) return Promise.race([response.arrayBuffer(), aborted]);
+  const total = Number(response.headers.get("content-length") ?? 0);
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for (;;) {
+    const { done, value } = await Promise.race([reader.read(), aborted]);
+    if (done) break;
+    if (!value) continue;
+    chunks.push(value);
+    length += value.byteLength;
+    report(length, total);
+  }
+  const merged = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
+  return merged.buffer;
+}
+
+/** Fetches the uncompressed twin for engines that cannot inflate in-page. */
+async function readFallbackModel(options: SceneOptions, aborted: Promise<never>): Promise<ArrayBuffer> {
+  const url = options.fallbackModelUrl;
+  if (!url) throw new Error("MODEL_INFLATE_UNSUPPORTED");
+  const response = await Promise.race([fetch(url, { signal: options.signal }), aborted]);
+  options.signal.throwIfAborted();
+  if (!response.ok) throw new Error(`MODEL_HTTP_${response.status}`);
+  return readModelBytes(response, options, aborted);
+}
+
+/**
+ * Returns GLB bytes. The model ships pre-compressed because the edge does not
+ * compress `model/gltf-binary`; the browser only decodes it when a response
+ * carried `content-encoding`, so the gzip magic decides.
+ */
+async function readModelPayload(response: Response, options: SceneOptions, aborted: Promise<never>): Promise<ArrayBuffer> {
+  const bytes = await readModelBytes(response, options, aborted);
+  if (!isGzip(bytes)) return bytes;
+  if (typeof DecompressionStream !== "function") return readFallbackModel(options, aborted);
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return Promise.race([new Response(stream).arrayBuffer(), aborted]);
+}
+
 async function loadModel(options: SceneOptions): Promise<GLTF> {
   options.signal.throwIfAborted();
   let onAbort!: () => void;
@@ -63,7 +119,7 @@ async function loadModel(options: SceneOptions): Promise<GLTF> {
     const response = await Promise.race([fetch(options.modelUrl, { signal: options.signal }), aborted]);
     options.signal.throwIfAborted();
     if (!response.ok) throw new Error(`MODEL_HTTP_${response.status}`);
-    const bytes = await Promise.race([response.arrayBuffer(), aborted]);
+    const bytes = await readModelPayload(response, options, aborted);
     options.signal.throwIfAborted();
     const parsed = new GLTFLoader().parseAsync(bytes, new URL(".", new URL(options.modelUrl, options.host.ownerDocument.baseURI)).href)
       .then(gltf => {
@@ -150,11 +206,15 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
     controls.enablePan = false;
     controls.minPolarAngle = 0.55; controls.maxPolarAngle = 1.45;
     controls.minZoom = 0.6; controls.maxZoom = 2.4;
-    let lastControlChange = 0;
+    // No visitor input yet: a zero baseline would keep the animation loop alive at rest.
+    let lastControlChange = Number.NEGATIVE_INFINITY;
     let drawing = false;
+    let internalUpdate = false;
     controls.addEventListener("change", () => {
+      // Camera updates this module performs itself must not look like visitor input,
+      // otherwise an idle page keeps a frame queued while the tour is at rest.
+      if (internalUpdate || drawing || disposed) return;
       lastControlChange = performance.now();
-      if (disposed) return;
       // A paused page still renders what the visitor does with the pointer: draw
       // synchronously (re-entrancy guarded) instead of waiting for an animation
       // frame the tour would never schedule while paused.
@@ -219,20 +279,29 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
       }
       return { target, height: Math.max(extentY, extentX / aspect, size / 20) * 1.16 };
     }
+    /** All camera moves this module performs run through here, never as visitor input. */
+    function updateControls() {
+      internalUpdate = true;
+      try { controls!.update(); } finally { internalUpdate = false; }
+    }
     /** Frame the current target at the current scale; the orbit stays where the visitor left it. */
     function applyCamera() {
+      // Apply the visitor's pending orbit/zoom first: the controls must never
+      // re-derive the camera after fit() measured the frame's frustum.
+      updateControls();
       const delta = center.clone().sub(controls!.target);
       camera.position.add(delta); controls!.target.copy(center);
       camera.left = -halfHeight * aspect; camera.right = halfHeight * aspect;
       camera.top = halfHeight; camera.bottom = -halfHeight;
-      camera.updateProjectionMatrix(); controls!.update(); camera.updateMatrixWorld(true);
+      camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
     }
     /** Face the tour's authored angle around the target, keeping the visitor's distance. */
     function placeCamera() {
+      updateControls();
       const distance = Math.max(camera.position.distanceTo(controls!.target), cameraDistance);
       camera.position.copy(controls!.target).addScaledVector(direction, distance);
       camera.lookAt(controls!.target);
-      controls!.update();
+      camera.updateMatrixWorld(true);
     }
     function draw() {
       if (disposed || !canDraw() || drawing) return;

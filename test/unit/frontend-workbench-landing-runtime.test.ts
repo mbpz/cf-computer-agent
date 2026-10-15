@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { gzipSync } from "node:zlib";
 import type { DOMRect, HTMLElement, ResizeObserver } from "happy-dom";
 import {
   Box3, BoxGeometry, Group, Mesh, MeshStandardMaterial, OrthographicCamera, Scene, Texture, Vector3,
@@ -697,7 +698,9 @@ describe("workbench scene lifecycle", () => {
     const handle = await create(); tick();
     expect(host.querySelectorAll("canvas")).toHaveLength(1);
     expect(host.querySelector("canvas")?.getAttribute("aria-hidden")).toBe("true");
-    expect(host.querySelector("canvas")?.style.pointerEvents).toBe("none");
+    // The visitor orbits the scene, so the canvas must accept pointer input inside
+    // the pointer-events:none host that keeps the poster clickable.
+    expect(host.querySelector("canvas")?.style.pointerEvents).toBe("auto");
     expect(rendered().scene.getObjectByName("MG_Desk")).toBeDefined();
     expect(frames.size).toBe(0);
     handle.dispose(); handle.dispose();
@@ -706,5 +709,43 @@ describe("workbench scene lifecycle", () => {
     expect(geometryDisposed).toHaveBeenCalledTimes(1);
     expect(materialDisposed).toHaveBeenCalledTimes(1);
     expect(observers[0].disconnect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("workbench model payload", () => {
+  const payload = Buffer.from("glTF-fixture-for-parser");
+
+  // The model ships pre-compressed because the edge does not compress model/gltf-binary.
+  it("inflates the compressed model before parsing and reports download progress", async () => {
+    const compressed = gzipSync(payload);
+    fetchModel.mockResolvedValue(new Response(compressed));
+    const progress: number[] = [];
+    const handle = await createWorkbenchScene({
+      host, modelUrl: "/compressed.glb.gz", fallbackModelUrl: "/plain.glb", signal: controller.signal, onFailure,
+      onProgress: (loaded: number) => progress.push(loaded),
+    });
+    live.push(handle);
+    expect(fetchModel.mock.calls.map(call => call[0])).toEqual(["/compressed.glb.gz"]);
+    expect(Buffer.from(boundary.parse.mock.calls[0][0] as ArrayBuffer).equals(payload)).toBe(true);
+    expect(progress.at(-1)).toBe(compressed.length);
+  });
+
+  it("falls back to the uncompressed model when the engine cannot inflate in-page", async () => {
+    fetchModel.mockResolvedValueOnce(new Response(gzipSync(payload))).mockResolvedValueOnce(new Response(payload));
+    vi.stubGlobal("DecompressionStream", undefined);
+    const handle = await createWorkbenchScene({
+      host, modelUrl: "/compressed.glb.gz", fallbackModelUrl: "/plain.glb", signal: controller.signal, onFailure,
+    });
+    live.push(handle);
+    expect(fetchModel.mock.calls.map(call => call[0])).toEqual(["/compressed.glb.gz", "/plain.glb"]);
+    expect(Buffer.from(boundary.parse.mock.calls[0][0] as ArrayBuffer).equals(payload)).toBe(true);
+  });
+
+  it("parses a plain payload without fetching a twin", async () => {
+    fetchModel.mockResolvedValue(new Response(payload));
+    const handle = await createWorkbenchScene({ host, modelUrl: "/plain.glb", signal: controller.signal, onFailure });
+    live.push(handle);
+    expect(fetchModel.mock.calls.map(call => call[0])).toEqual(["/plain.glb"]);
+    expect(Buffer.from(boundary.parse.mock.calls[0][0] as ArrayBuffer).equals(payload)).toBe(true);
   });
 });

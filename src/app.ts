@@ -175,7 +175,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
           const assetRequest = knownWorkspaceRoute(url.pathname)
             ? new Request(new URL("/", url), request)
             : request;
-          return withAssetSecurityHeaders(await env.ASSETS.fetch(assetRequest), context.requestId);
+          return withAssetSecurityHeaders(await env.ASSETS.fetch(assetRequest), context.requestId, request);
         }
 
         const services = createRequestServices(env, ctx, context, dependencies);
@@ -552,13 +552,20 @@ function getQuestion(value: unknown): string {
   return typeof question === "string" ? question : "";
 }
 
-function withAssetSecurityHeaders(response: Response, requestId: string): Response {
+/** Vite content-hashes every emitted asset, so its name changes whenever its bytes do. */
+const IMMUTABLE_ASSET = /^\/assets\/[^/]+-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9.]+$/u;
+
+function withAssetSecurityHeaders(response: Response, requestId: string, request: Request): Response {
   const headers = new Headers(response.headers);
   // The HTML shell contains the hashed React entrypoint. Never let an edge
   // cache keep an older shell after a deployment, otherwise browser actions
   // (such as the POST-only logout control) can be wired to a stale bundle.
   if (headers.get("content-type")?.toLowerCase().startsWith("text/html") === true) {
     headers.set("cache-control", "no-store");
+  } else if (IMMUTABLE_ASSET.test(new URL(request.url).pathname)) {
+    // A hashed asset can never change under its own name, so a repeat visit — and a
+    // manual 3D retry after a slow first load — must not download it again.
+    headers.set("cache-control", "public, max-age=31536000, immutable");
   }
   // Cloudflare Web Analytics may inject its beacon into HTML responses. Keep
   // the script and reporting endpoints explicitly allowlisted instead of

@@ -2,18 +2,19 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createLocaleRuntime } from "../../lib/i18n";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
 import {
-  LANDING_MODEL_URL, LANDING_POSTER_DESKTOP_URL, LANDING_POSTER_MOBILE_URL,
+  LANDING_MODEL_GZIP_URL, LANDING_MODEL_URL, LANDING_POSTER_DESKTOP_URL, LANDING_POSTER_MOBILE_URL,
   SCENE_BUDGET, type SceneSnapshot, type WorkbenchSceneHandle,
 } from "./workbench-scene-config";
 import { shouldAutoLoadScene } from "./workbench-scene-policy";
 
 type SceneStatus = "poster" | "loading" | "ready" | "error" | "timeout" | "static";
-type SceneView = { status: SceneStatus; message: LandingCopyKey; language: string };
+type SceneView = { status: SceneStatus; message: LandingCopyKey; language: string; percent: number | null };
 type SceneController = { update(snapshot: SceneSnapshot): void; load(): void; useStatic(): void };
 type Connection = EventTarget & { saveData?: boolean };
 type Attempt = {
   abort: AbortController; host: HTMLDivElement;
-  timer?: ReturnType<typeof setTimeout>; handle?: WorkbenchSceneHandle;
+  startedAt: number; progressAt: number; delivered: boolean; percent: number | null;
+  timer?: ReturnType<typeof setInterval>; handle?: WorkbenchSceneHandle;
 };
 
 function failureMessage(error: unknown): LandingCopyKey {
@@ -28,7 +29,7 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
   const root = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const controller = useRef<SceneController | null>(null);
-  const [view, setView] = useState<SceneView>({ status: "poster", message: "SCENE_IDLE", language: "en" });
+  const [view, setView] = useState<SceneView>({ status: "poster", message: "SCENE_IDLE", language: "en", percent: null });
   const [focusRequest, setFocusRequest] = useState<HTMLButtonElement | null>(null);
   const locale = useMemo(() => createLocaleRuntime({ navigatorLanguage: view.language }), [view.language]);
   const text = (key: LandingCopyKey) => landingText(locale, key);
@@ -60,6 +61,7 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
     let active: Attempt | undefined;
     let status: SceneStatus = "poster";
     let message: LandingCopyKey = "SCENE_IDLE";
+    let percent: number | null = null;
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     const connection = (navigator as Navigator & { connection?: Connection }).connection;
     const effectiveSnapshot = (): SceneSnapshot => ({
@@ -73,8 +75,8 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
     const publish = () => {
       if (!alive) return;
       const language = element.closest("[lang]")?.getAttribute("lang") || document.documentElement.lang || "en";
-      const next = { status, message: status === "ready" && currentSnapshot.paused ? "SCENE_PAUSED" as const : message, language };
-      setView(previous => previous.status === next.status && previous.message === next.message && previous.language === next.language ? previous : next);
+      const next = { status, message: status === "ready" && currentSnapshot.paused ? "SCENE_PAUSED" as const : message, language, percent };
+      setView(previous => previous.status === next.status && previous.message === next.message && previous.language === next.language && previous.percent === next.percent ? previous : next);
     };
     const dispose = (handle: WorkbenchSceneHandle) => {
       // Cleanup must still finish if a renderer fails during its own disposal.
@@ -108,10 +110,21 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
     const start = () => {
       attempted = true;
       manualRequest = false;
-      const deadline = performance.now() + SCENE_BUDGET.loadTimeoutMs;
-      const attempt: Attempt = { abort: new AbortController(), host: document.createElement("div") };
+      const startedAt = performance.now();
+      const attempt: Attempt = {
+        abort: new AbortController(), host: document.createElement("div"),
+        startedAt, progressAt: startedAt, delivered: false, percent: null,
+      };
+      // Progress, not elapsed time, decides whether an attempt is failing: the module
+      // download and a slow model delivery both keep a slow link legitimate, so the
+      // allowance before the first byte differs from the one between bytes. The
+      // monotonic clock is checked both by the polling timer and at every await, so a
+      // late result is still rejected when timer callbacks were blocked.
       const expire = () => {
-        if (performance.now() < deadline) return false;
+        const now = performance.now();
+        const idle = now - attempt.progressAt;
+        if (now - attempt.startedAt < SCENE_BUDGET.absoluteTimeoutMs
+          && idle < (attempt.delivered ? SCENE_BUDGET.stallTimeoutMs : SCENE_BUDGET.startupTimeoutMs)) return false;
         fail(attempt, "SCENE_TIMEOUT", true);
         return true;
       };
@@ -120,14 +133,23 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
       canvasHost.append(attempt.host);
       active = attempt;
       status = "loading"; message = "SCENE_LOADING"; publish();
-      // One total deadline, including the module download; never reset for GLB loading.
-      attempt.timer = setTimeout(() => fail(attempt, "SCENE_TIMEOUT", true), SCENE_BUDGET.loadTimeoutMs);
+      attempt.timer = setInterval(expire, SCENE_BUDGET.tickMs);
       void (async () => {
         try {
           const runtime = await import("./workbench-scene-runtime");
           if (!isCurrent(attempt) || expire()) return;
           const handle = await runtime.createWorkbenchScene({
-            host: attempt.host, modelUrl: LANDING_MODEL_URL, signal: attempt.abort.signal,
+            host: attempt.host, modelUrl: LANDING_MODEL_GZIP_URL, fallbackModelUrl: LANDING_MODEL_URL, signal: attempt.abort.signal,
+            onProgress: (loadedBytes, totalBytes) => {
+              if (!isCurrent(attempt)) return;
+              attempt.delivered = true;
+              attempt.progressAt = performance.now();
+              if (totalBytes <= 0) return;
+              const next = Math.min(99, Math.max(1, Math.round((loadedBytes / totalBytes) * 100)));
+              if (next === attempt.percent) return;
+              attempt.percent = next; percent = next;
+              status = "loading"; message = "SCENE_LOADING_PERCENT"; publish();
+            },
             onFailure: reason => fail(attempt, reason === "context-lost" ? "SCENE_CONTEXT_LOST" : "SCENE_ERROR"),
           });
           if (!isCurrent(attempt)) { dispose(handle); return; }
@@ -136,6 +158,7 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
           forward(attempt);
           if (!isCurrent(attempt) || expire()) return;
           clearTimeout(attempt.timer);
+          percent = null;
           status = "ready"; message = "SCENE_READY"; publish();
         } catch (error) { if (!expire()) fail(attempt, failureMessage(error)); }
       })();
@@ -239,7 +262,7 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
         <div ref={host} className="workbench-scene-host" data-scene-host aria-hidden="true"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
       </div>
-      <p className="workbench-scene-status" role="status" aria-live="polite" aria-atomic="true">{text(view.message)}</p>
+      <p className="workbench-scene-status" role="status" aria-live="polite" aria-atomic="true">{text(view.message).replace("{percent}", String(view.percent ?? 0))}</p>
       <div className="workbench-scene-controls">
         {view.status !== "loading" && view.status !== "ready" && (
           <button type="button" className="workbench-scene-button" data-scene-action={failed ? "retry" : "load"}
