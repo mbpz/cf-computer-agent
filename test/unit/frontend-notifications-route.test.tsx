@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, NotificationsRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { stubListViewport } from "../helpers/list-viewport";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -23,6 +24,7 @@ describe("notification inbox route", () => {
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   it("restores URL filters, appends on end-of-list, and restarts page one when either filter changes", async () => {
+    stubListViewport(browser, "mobile");
     const requests: Array<{ url: string; signal?: AbortSignal | null }> = [];
     let holdAppend = false;
     let resolveAppend!: (response: Response) => void;
@@ -404,6 +406,7 @@ describe("notification inbox route", () => {
   });
 
   it("bounds repeated clicks and reloads page one after a bulk read without re-requesting an emptied last page", async () => {
+    stubListViewport(browser, "mobile");
     browser.history.replaceState({}, "", "/notifications?read=unread");
     const listRequests: string[] = [];
     const bulkBodies: string[] = [];

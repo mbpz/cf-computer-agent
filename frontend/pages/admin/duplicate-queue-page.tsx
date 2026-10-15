@@ -7,6 +7,7 @@ import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminDuplicateCandidate, DuplicateDecision } from "../../lib/admin-duplicates-data";
 import type { AdminDuplicatePageResult } from "../../lib/admin-duplicates-data";
+import type { SupportedPageSize } from "../../lib/numbered-page";
 import { useCreateDraft } from "../../lib/use-create-draft";
 
 interface DuplicateQueuePageProps {
@@ -21,10 +22,12 @@ interface DuplicateQueuePageProps {
   decisionRecordBlocked?: boolean;
   onDiscardDecisionRecord?: () => void;
   onDecision?: (id: string, decision: DuplicateDecision) => void;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: SupportedPageSize) => void;
   onLoadMore?: () => void;
 }
 
-export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pending, lockedIds, readRequired, localError, decisionRecordBlocked = false, onDiscardDecisionRecord, onDecision, onLoadMore }: DuplicateQueuePageProps) {
+export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pending, lockedIds, readRequired, localError, decisionRecordBlocked = false, onDiscardDecisionRecord, onDecision, onPageChange, onPageSizeChange, onLoadMore }: DuplicateQueuePageProps) {
   type Confirmation = { item: AdminDuplicateCandidate; decision: DuplicateDecision; data: AdminDuplicatePageResult };
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
@@ -51,7 +54,7 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
   if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
   const { items, pagination } = state.data;
   return <>
-    <section className="space-y-5" inert={valid} aria-hidden={valid || undefined}>
+    <section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={valid} aria-hidden={valid || undefined}>
       <div>
         <h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_DUPLICATE_TITLE")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_DUPLICATE_DESCRIPTION")}</p>
@@ -67,8 +70,12 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
         ariaLabel={frontendText(locale, "ADMIN_DUPLICATE_TITLE")}
         emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_DUPLICATE_EMPTY")} description={frontendText(locale, "ADMIN_DUPLICATE_DESCRIPTION")} />}
         loading={pending}
+        pagination={pagination}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
         hasMore={!localError && pagination.page < pagination.totalPages}
         onLoadMore={onLoadMore}
+        fill
         rowHeight={104}
         columns={[
           { key: "candidate", header: frontendText(locale, "ADMIN_DUPLICATE_COLUMN_CANDIDATE"), cellClassName: "whitespace-normal", cell: (item) => <div className="py-1">

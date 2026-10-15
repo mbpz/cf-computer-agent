@@ -432,11 +432,15 @@ export async function routeMemberApi(
     requireCapability(principal, "submission:read-own");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     const member = requireMember(principal);
-    requireExactQuery(url, ["page", "pageSize", "status"]);
+    requireExactQuery(url, ["page", "pageSize", "status", "from", "to"]);
     const status = url.searchParams.get("status");
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
     return jsonResponse(await services.submissions.listOwn(member.memberId, {
-      ...parseNumberedPageRequest(url, ["status"]),
+      ...parseNumberedPageRequest(url, ["status", "from", "to"]),
       ...(status === null ? {} : { status: status as SubmissionStatusFilter }),
+      ...(from === null ? {} : { from }),
+      ...(to === null ? {} : { to }),
     }), 200, context.requestId);
   }
 

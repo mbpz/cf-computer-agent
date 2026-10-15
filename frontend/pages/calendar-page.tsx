@@ -1,6 +1,6 @@
 import { CalendarRangeFilter } from "../components/calendar-range-filter";
 import type { CalendarRange } from "../lib/calendar-query";
-import type { FrontendPageMetadata } from "../lib/numbered-page";
+import type { FrontendPageMetadata, SupportedPageSize } from "../lib/numbered-page";
 import { CalendarBlank, Clock, Plus, X } from "@phosphor-icons/react";
 import { CalendarCreateForm, type CalendarCreateCallbacks } from "../components/calendar-create-form";
 import { useCalendarCancelConfirmation, formatCalendarRange } from "../components/calendar-cancel-confirmation";
@@ -15,14 +15,16 @@ import { PageState } from "../components/ui/page-state";
 
 export type CalendarPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; items: readonly CalendarEvent[]; pagination?: FrontendPageMetadata };
 
-export function CalendarPage({ locale, state, pending = false, actionError, onRetry, onCreate, onCancel, range, onRangeChange, onLoadMore, createPending, createMemberId, onCreateReadback, onCreateDenied, onCreateLock }: { locale: LocaleRuntime; state: CalendarPageState; pending?: boolean; actionError?: string; onRetry?: () => void; createPending?: boolean; onCancel?: (event: CalendarEvent) => void; range?: CalendarRange; onRangeChange?: (range: CalendarRange) => void; onLoadMore?: () => void } & CalendarCreateCallbacks) {
+export function CalendarPage({ locale, state, pending = false, actionError, onRetry, onCreate, onCancel, range, onRangeChange, onLoadMore, onPageChange, onPageSizeChange, createPending, createMemberId, onCreateReadback, onCreateDenied, onCreateLock }: { locale: LocaleRuntime; state: CalendarPageState; pending?: boolean; actionError?: string; onRetry?: () => void; createPending?: boolean; onCancel?: (event: CalendarEvent) => void; range?: CalendarRange; onRangeChange?: (range: CalendarRange) => void; onLoadMore?: () => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void } & CalendarCreateCallbacks) {
   const confirmation = useCalendarCancelConfirmation({ locale, items: state.kind === "ready" ? state.items : undefined,
     pagination: state.kind === "ready" ? state.pagination : undefined, memberId: createMemberId, range,
     blocked: pending || !!createPending, onCancel });
   const controlsPending = pending || !!createPending || confirmation.open;
   const loadMore = () => { if (controlsPending || confirmation.isOpen()) return; onLoadMore?.(); };
+  const changePage = (page: number) => { if (controlsPending || confirmation.isOpen()) return; onPageChange?.(page); };
+  const changePageSize = (pageSize: SupportedPageSize) => { if (controlsPending || confirmation.isOpen()) return; onPageSizeChange?.(pageSize); };
   if (state.kind === "error") return <PageState kind="error" title={state.message}><Button onClick={onRetry}>{frontendText(locale, "CALENDAR_RETRY")}</Button></PageState>;
-  return <><section className="space-y-5" inert={confirmation.open ? true : undefined}>
+  return <><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={confirmation.open ? true : undefined}>
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><CalendarBlank size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{frontendText(locale, "CALENDAR_TITLE")}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "CALENDAR_DESCRIPTION")}</p></div><Badge variant="outline">{frontendText(locale, "CALENDAR_PRIVATE_BADGE")}</Badge></div>
     {range && onRangeChange && <CalendarRangeFilter key={`${range.from}:${range.to}`} locale={locale} range={range} pending={controlsPending} onChange={next => { if (!controlsPending && !confirmation.isOpen()) onRangeChange(next); }} />}
     <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus size={18} />{frontendText(locale, "CALENDAR_CREATE_TITLE")}</CardTitle></CardHeader><CardContent><CalendarCreateForm locale={locale} createMemberId={createMemberId} pending={(createPending ?? pending) || confirmation.open} isSubmitBlocked={confirmation.isOpen} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={onCreateLock} /></CardContent></Card>
@@ -32,9 +34,13 @@ export function CalendarPage({ locale, state, pending = false, actionError, onRe
       rows={state.items}
       rowId={(event) => event.id}
       ariaLabel={frontendText(locale, "CALENDAR_TITLE")}
-      loadingMoreLabel={frontendText(locale, "CALENDAR_LOAD_MORE")}
       emptyState={<PageState kind="empty" title={frontendText(locale, "CALENDAR_EMPTY")} />}
       loading={controlsPending}
+      pagination={state.pagination}
+      onPageChange={onPageChange ? changePage : undefined}
+      onPageSizeChange={onPageSizeChange ? changePageSize : undefined}
+      fill
+      className="lg:min-h-0 lg:flex-1"
       hasMore={!!state.pagination && state.pagination.page < state.pagination.totalPages}
       onLoadMore={onLoadMore ? loadMore : undefined}
       rowHeight={88}

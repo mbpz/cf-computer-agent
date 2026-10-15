@@ -5,13 +5,14 @@ import { DataTable } from "../../components/data-table";
 import { PageState } from "../../components/ui/page-state";
 import { Select, SelectOption } from "../../components/ui/select";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
+import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { TaskItem } from "../../lib/tasks-data";
 import { taskPriorityKey, taskStatusKey } from "../tasks/tasks-model";
 import { BOARD_STATUSES, adjacentBoardStatus, boardStatusTargets, visibleBoardItems, type BoardColumnStates, type BoardStatus, type BoardTargetStatus } from "./board-model";
 
 export interface BoardUnknownMove { task: Pick<TaskItem, "id" | "title">; source: BoardStatus; target: BoardTargetStatus }
 
-export function BoardsPage({ locale, columns, actionError, actionNotice, actionPendingId = null, unknownMove = null, recovering = false, recordBlocked = false, onRetry, onLoadMore, onStatusChange, onCheckMove, onRetryMove, onDiscardRecord }: {
+export function BoardsPage({ locale, columns, actionError, actionNotice, actionPendingId = null, unknownMove = null, recovering = false, recordBlocked = false, onRetry, onLoadMore, onPageChange, onPageSizeChange, onStatusChange, onCheckMove, onRetryMove, onDiscardRecord }: {
   locale: LocaleRuntime;
   columns: BoardColumnStates;
   actionError?: string;
@@ -23,12 +24,14 @@ export function BoardsPage({ locale, columns, actionError, actionNotice, actionP
   recovering?: boolean;
   onRetry: (status: BoardStatus) => void;
   onLoadMore?: (status: BoardStatus) => void;
+  onPageChange?: (status: BoardStatus, page: number) => void;
+  onPageSizeChange?: (status: BoardStatus, pageSize: SupportedPageSize) => void;
   onStatusChange: (task: TaskItem, status: BoardTargetStatus) => void;
   onCheckMove?: () => void;
   onRetryMove?: () => void;
 }) {
   const movesLocked = Boolean(actionPendingId) || unknownMove !== null || recovering || recordBlocked;
-  return <section className="space-y-5">
+  return <section className="flex flex-col space-y-5 lg:h-full lg:min-h-0">
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "BOARDS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "BOARDS_DESCRIPTION")}</p></div>
     {recordBlocked && <Alert variant="destructive" data-board-move-record-blocked="">
       <AlertTitle>{frontendText(locale, "BOARDS_MOVE_RECORD_BLOCKED")}</AlertTitle>
@@ -43,13 +46,13 @@ export function BoardsPage({ locale, columns, actionError, actionNotice, actionP
     </Alert>}
     {actionError && <Alert variant="destructive"><AlertTitle>{actionError}</AlertTitle></Alert>}
     {actionNotice && <p role="status" className="text-sm">{actionNotice}</p>}
-    <div data-board-columns="" className="flex snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 xl:grid xl:grid-cols-4 xl:overflow-visible">
-      {BOARD_STATUSES.map((status) => <BoardColumn key={status} status={status} state={columns[status]} locale={locale} actionPendingId={actionPendingId} movesLocked={movesLocked} onRetry={onRetry} onLoadMore={onLoadMore} onStatusChange={onStatusChange} />)}
+    <div data-board-columns="" className="flex snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 lg:min-h-0 lg:flex-1 lg:items-stretch xl:grid xl:grid-cols-4 xl:overflow-visible">
+      {BOARD_STATUSES.map((status) => <BoardColumn key={status} status={status} state={columns[status]} locale={locale} actionPendingId={actionPendingId} movesLocked={movesLocked} onRetry={onRetry} onLoadMore={onLoadMore} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} onStatusChange={onStatusChange} />)}
     </div>
   </section>;
 }
 
-function BoardColumn({ status, state, locale, actionPendingId, movesLocked, onRetry, onLoadMore, onStatusChange }: {
+function BoardColumn({ status, state, locale, actionPendingId, movesLocked, onRetry, onLoadMore, onPageChange, onPageSizeChange, onStatusChange }: {
   status: BoardStatus;
   state: BoardColumnStates[BoardStatus];
   locale: LocaleRuntime;
@@ -57,18 +60,20 @@ function BoardColumn({ status, state, locale, actionPendingId, movesLocked, onRe
   movesLocked: boolean;
   onRetry: (status: BoardStatus) => void;
   onLoadMore?: (status: BoardStatus) => void;
+  onPageChange?: (status: BoardStatus, page: number) => void;
+  onPageSizeChange?: (status: BoardStatus, pageSize: SupportedPageSize) => void;
   onStatusChange: (task: TaskItem, status: BoardTargetStatus) => void;
 }) {
   const heading = frontendText(locale, taskStatusKey(status));
-  return <article data-board-column={status} className="w-72 shrink-0 snap-start space-y-3 rounded-lg border bg-muted/20 p-3 xl:w-auto xl:min-w-0">
+  return <article data-board-column={status} className="flex w-72 shrink-0 snap-start flex-col space-y-3 rounded-lg border bg-muted/20 p-3 lg:min-h-0 xl:w-auto xl:min-w-0">
     <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{heading}</h2>{state.kind === "ready" && <Badge variant="secondary">{state.pagination.total}</Badge>}</div>
     {state.kind === "loading" && <div><span className="sr-only">{frontendText(locale, "BOARDS_COLUMN_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "BOARDS_COLUMN_LOADING")} /></div>}
     {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "BOARDS_COLUMN_ERROR")}><Button className="mt-3" variant="outline" onClick={() => onRetry(status)}>{frontendText(locale, "BOARDS_RETRY")}</Button></PageState>}
-    {state.kind === "ready" && <ReadyColumn status={status} state={state} locale={locale} actionPendingId={actionPendingId} movesLocked={movesLocked} onRetry={onRetry} onLoadMore={onLoadMore} onStatusChange={onStatusChange} />}
+    {state.kind === "ready" && <ReadyColumn status={status} state={state} locale={locale} actionPendingId={actionPendingId} movesLocked={movesLocked} onRetry={onRetry} onLoadMore={onLoadMore} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} onStatusChange={onStatusChange} />}
   </article>;
 }
 
-function ReadyColumn({ status, state, locale, actionPendingId, movesLocked, onRetry, onLoadMore, onStatusChange }: {
+function ReadyColumn({ status, state, locale, actionPendingId, movesLocked, onRetry, onLoadMore, onPageChange, onPageSizeChange, onStatusChange }: {
   status: BoardStatus;
   state: Extract<BoardColumnStates[BoardStatus], { kind: "ready" }>;
   locale: LocaleRuntime;
@@ -76,6 +81,8 @@ function ReadyColumn({ status, state, locale, actionPendingId, movesLocked, onRe
   movesLocked: boolean;
   onRetry: (status: BoardStatus) => void;
   onLoadMore?: (status: BoardStatus) => void;
+  onPageChange?: (status: BoardStatus, page: number) => void;
+  onPageSizeChange?: (status: BoardStatus, pageSize: SupportedPageSize) => void;
   onStatusChange: (task: TaskItem, status: BoardTargetStatus) => void;
 }) {
   const items = visibleBoardItems(status, state.items);
@@ -102,7 +109,7 @@ function ReadyColumn({ status, state, locale, actionPendingId, movesLocked, onRe
   };
   return <>
     {state.loadError && <Alert variant="destructive"><AlertTitle>{frontendText(locale, "BOARDS_COLUMN_ERROR")}</AlertTitle><Button className="mt-3" variant="outline" onClick={() => onRetry(status)}>{frontendText(locale, "BOARDS_RETRY")}</Button></Alert>}
-    <div aria-busy={state.pending || undefined}>
+    <div aria-busy={state.pending || undefined} className="flex flex-col lg:min-h-0 lg:flex-1">
       <DataTable
         locale={locale}
         rows={items}
@@ -110,8 +117,12 @@ function ReadyColumn({ status, state, locale, actionPendingId, movesLocked, onRe
         ariaLabel={`${frontendText(locale, "BOARDS_COLUMN_LIST")}: ${statusLabel}`}
         emptyState={<PageState kind="empty" title={frontendText(locale, "BOARDS_COLUMN_EMPTY")} />}
         loading={state.pending}
+        pagination={state.pagination}
+        onPageChange={onPageChange ? (page: number) => onPageChange(status, page) : undefined}
+        onPageSizeChange={onPageSizeChange ? (pageSize: SupportedPageSize) => onPageSizeChange(status, pageSize) : undefined}
         hasMore={state.pagination.page < state.pagination.totalPages}
         onLoadMore={() => onLoadMore?.(status)}
+        fill
         rowHeight={140}
         columns={[
           { key: "task", header: frontendText(locale, "TASKS_TITLE"), cellClassName: "whitespace-normal", cell: taskCard },

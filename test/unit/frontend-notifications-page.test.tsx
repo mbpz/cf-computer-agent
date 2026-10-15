@@ -1,7 +1,8 @@
 // @vitest-environment node
-import React from "react";
+import React, { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import {
   notificationEventKey,
@@ -10,6 +11,13 @@ import {
   writeNotificationSearch,
 } from "../../frontend/pages/notifications/notification-model";
 import { NotificationsPage } from "../../frontend/pages/notifications/notifications-page";
+
+const vmContexts = new WeakSet<object>();
+class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
+vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+// Static import cannot work here: happy-dom must load after the hoisted `node:vm` mock and the InertVmScript class are initialized.
+const { Window } = await import("happy-dom");
 
 describe("notification inbox model", () => {
   it("parses canonical URL filters and writes a filter change at page one", () => {
@@ -117,7 +125,7 @@ describe("notification inbox page", () => {
     expect(empty).toContain(frontendText(locale, "NOTIFICATIONS_EMPTY"));
   });
 
-  it("marks only visible unread IDs and reports the end of the appended window without a paginator", () => {
+  it("marks only visible unread IDs and leaves the desktop footer to the route's page controls", () => {
     const locale = createLocaleRuntime();
     const markVisible = vi.fn();
     const props = {
@@ -135,12 +143,78 @@ describe("notification inbox page", () => {
     const html = renderToStaticMarkup(<NotificationsPage {...props} />);
     expect(html).toContain(frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ"));
     expect(html).toContain(frontendText(locale, "NOTIFICATIONS_MARK_READ"));
+    // Unwired routes keep the desktop footer hidden and leak no feed copy into the desktop surface.
     expect(html).not.toContain("data-pagination-desktop");
-    expect(html).not.toContain("data-pagination-mobile");
     expect(html).not.toContain('aria-label="Page 3"');
     expect(html).not.toContain(frontendText(locale, "LIST_END_OF_LIST"));
-    const last = renderToStaticMarkup(<NotificationsPage {...props} state={{ ...props.state, pagination: { ...props.state.pagination, page: 3 } }} />);
-    expect(last).toContain(frontendText(locale, "LIST_END_OF_LIST"));
+
+    const paged = renderToStaticMarkup(<NotificationsPage {...props} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />);
+    expect(paged).toContain("data-pagination-desktop");
+    expect(paged).toContain("Total");
+    expect(paged).toContain("21–40");
+    expect(paged).toContain('aria-label="Page 3"');
+    expect(paged).toContain("lg:h-full lg:min-h-0");
+    expect(paged).not.toContain(frontendText(locale, "LIST_END_OF_LIST"));
+  });
+});
+
+describe("notification inbox paging surface", () => {
+  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
+  const en = createLocaleRuntime({ navigatorLanguage: "en" });
+
+  // The shared table switches surface on Tailwind's `lg` edge.
+  const setViewport = (desktop: boolean) => Object.defineProperty(browser, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: desktop && query === "(min-width: 1024px)", media: query, onchange: null, addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false }),
+  });
+
+  beforeEach(() => {
+    browser = new Window({ url: "https://app.test/notifications" });
+    for (const [key, value] of Object.entries({ window: browser, document: browser.document, HTMLElement: browser.HTMLElement, navigator: browser.navigator, getComputedStyle: browser.getComputedStyle.bind(browser), IS_REACT_ACT_ENVIRONMENT: true })) vi.stubGlobal(key, value);
+    setViewport(true);
+    container = browser.document.createElement("div") as unknown as HTMLElement;
+    browser.document.body.append(container as unknown as Node);
+    root = createRoot(container);
+  });
+  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+
+  const props = {
+    locale: en,
+    summary: { unread: 9 },
+    filters: {},
+    onRetry: () => undefined,
+    onFilterChange: () => undefined,
+    onMarkRead: () => undefined,
+    onMarkVisibleRead: () => undefined,
+    onOpen: () => undefined,
+  };
+  const readyState = (page: number, count = 20) => ({ kind: "ready" as const, items: Array.from({ length: count }, (_, index) => notification({ id: `notification-${index + 1}` })), pagination: { page, pageSize: 20 as const, total: 41, totalPages: 3 } });
+
+  it("invokes the route page controls on desktop without pulling the append feed", async () => {
+    const onPageChange = vi.fn(); const onPageSizeChange = vi.fn(); const onLoadMore = vi.fn();
+    await act(async () => root.render(<NotificationsPage {...props} state={readyState(2)} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} onLoadMore={onLoadMore} />));
+    expect(container.textContent).toContain("21–40");
+    await act(async () => (container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
+    expect(onPageChange).toHaveBeenCalledWith(3);
+    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
+    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLSelectElement.prototype, "value")!.set!.call(select, "100"); select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    expect(onPageSizeChange).toHaveBeenCalledWith(100);
+    expect(onLoadMore).not.toHaveBeenCalled();
+  });
+
+  it("keeps the append feed and hides the pager on narrow viewports", async () => {
+    setViewport(false);
+    const onLoadMore = vi.fn(); const onPageChange = vi.fn();
+    await act(async () => root.render(<NotificationsPage {...props} state={readyState(1, 12)} onPageChange={onPageChange} onPageSizeChange={vi.fn()} onLoadMore={onLoadMore} />));
+    expect(container.querySelector("[data-pagination-desktop]")).toBeNull();
+    expect(container.querySelector("[data-pagination-mobile]")).toBeNull();
+    const scroller = container.querySelector("table")!.parentElement as HTMLElement;
+    await act(async () => scroller.dispatchEvent(new browser.Event("scroll") as unknown as Event));
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+    expect(onPageChange).not.toHaveBeenCalled();
+
+    await act(async () => root.render(<NotificationsPage {...props} state={readyState(3, 12)} onPageChange={onPageChange} onPageSizeChange={vi.fn()} onLoadMore={onLoadMore} />));
+    expect(container.querySelector('p[role="status"]')?.textContent).toBe(frontendText(en, "LIST_END_OF_LIST"));
   });
 });
 

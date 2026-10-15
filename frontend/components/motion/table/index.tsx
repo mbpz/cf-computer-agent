@@ -93,6 +93,7 @@ export function Table<T>({
   onDeleteColumn,
   rowHeight = 48,
   height = 440,
+  fill = false,
   overscan = 10,
   virtualize = true,
   onEndReached,
@@ -257,14 +258,15 @@ export function Table<T>({
     <div
       className={cn(
         "w-full overflow-hidden border border-border bg-background text-sm",
+        fill && "flex h-full min-h-0 flex-1 flex-col",
         className,
       )}
     >
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="overflow-auto"
-        style={{ height }}
+        className={cn("overflow-auto", fill && "min-h-0 flex-1")}
+        style={fill ? undefined : { height }}
       >
         <table
           aria-label={ariaLabel}

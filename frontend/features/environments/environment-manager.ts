@@ -1,11 +1,12 @@
 import type { EnvironmentMetadata, EnvironmentType } from '../../../shared/environments';
 import { apiFetch, ApiRequestError, type Fetcher } from '../../lib/api';
 import type { AccountNetworkOwner } from './account-network-owner.mjs';
+import { supportedPageSizes, type SupportedPageSize } from '../../lib/numbered-page';
 
 import { createEnvironmentOperationJournal, sameEnvironmentOperation, type EnvironmentOperationIntent as Intent, type EnvironmentOperationStorage } from './environment-operation-journal';
 
 type Filter = '' | EnvironmentType;
-type Pagination = { page: number; pageSize: number; total: number; totalPages: number };
+type Pagination = { page: number; pageSize: SupportedPageSize; total: number; totalPages: number };
 type Confirmed = Readonly<{operationId:string;kind:Intent['kind'];environmentId:string;version:number;name?:string;deletedAt?:string}>;
 type State = Readonly<{items: readonly EnvironmentMetadata[]; pagination: Pagination; filter: Filter; loading: boolean; writing: boolean; pending: Intent | null; confirmed: Confirmed | null; error: string | null; closed: boolean; recoveryBlocked: boolean}>;
 const managers = new WeakMap<AccountNetworkOwner, ReturnType<typeof createManager>>();
@@ -32,7 +33,7 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher, storage?
   const journal=createEnvironmentOperationJournal(owner.scope,storage), restored=journal.load();
   const pending=restored.status === 'ready' ? restored.intent : null;
   if (pending?.kind === 'delete' && !owner.signal.aborted) owner.removeEnvironment(pending.expected.id as string);
-  let state: State = Object.freeze({items: [], pagination: {page: 1,pageSize: 20,total: 0,totalPages: 0},filter: '',loading: false,writing: false,pending,confirmed:null,error: restored.status === 'blocked' ? 'RECOVERY_BLOCKED' : pending ? 'WRITE_UNKNOWN' : null,closed: false,recoveryBlocked:restored.status === 'blocked'});
+  let state: State = Object.freeze({items: [], pagination: {page: 1,pageSize: 20 as SupportedPageSize,total: 0,totalPages: 0},filter: '',loading: false,writing: false,pending,confirmed:null,error: restored.status === 'blocked' ? 'RECOVERY_BLOCKED' : pending ? 'WRITE_UNKNOWN' : null,closed: false,recoveryBlocked:restored.status === 'blocked'});
   let read: AbortController | undefined;
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<State>) => { state = Object.freeze({...state,...patch}); for (const listener of listeners) listener(); };
@@ -54,17 +55,17 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher, storage?
   function unauthorized(error: unknown) {
     if (error instanceof ApiRequestError && [401,403].includes(error.status)) { owner.revoke(); return true; } return false;
   }
-  async function load(page = state.pagination.page, filter: Filter = state.filter) {
+  async function load(page = state.pagination.page, filter: Filter = state.filter, pageSize: SupportedPageSize = state.pagination.pageSize) {
     current();
-    if (!integer(page) || page < 1 || page > 500 || !['','personal','temporary'].includes(filter)) throw Error('INVALID_INPUT');
+    if (!integer(page) || page < 1 || page > 500 || !['','personal','temporary'].includes(filter) || !supportedPageSizes.includes(pageSize)) throw Error('INVALID_INPUT');
     read?.abort(); const attempt = new AbortController(); read = attempt;
     publish({items: [],loading: true,filter,error: state.pending || state.recoveryBlocked ? state.error : null});
     try {
-      const raw = record(await request(signal => apiFetch<unknown>(`/api/environments?page=${page}&pageSize=20${filter ? `&type=${filter}` : ''}`,{method: 'GET',requester,signal,redirect: 'error',cache: 'no-store'}),attempt.signal));
+      const raw = record(await request(signal => apiFetch<unknown>(`/api/environments?page=${page}&pageSize=${pageSize}${filter ? `&type=${filter}` : ''}`,{method: 'GET',requester,signal,redirect: 'error',cache: 'no-store'}),attempt.signal));
       current(); if (read !== attempt) return;
       const p = record(raw.pagination);
-      if (!Array.isArray(raw.items) || p.page !== page || p.pageSize !== 20 || !integer(p.total) || p.totalPages !== Math.ceil(p.total/20)
-        || raw.items.length !== Math.max(0,Math.min(20,p.total-(page-1)*20))) invalid();
+      if (!Array.isArray(raw.items) || p.page !== page || p.pageSize !== pageSize || !integer(p.total) || p.totalPages !== Math.ceil(p.total/pageSize)
+        || raw.items.length !== Math.max(0,Math.min(pageSize,p.total-(page-1)*pageSize))) invalid();
       const items = (raw.items as unknown[]).map(x => parseEnvironmentMetadata(x,owner.scope.memberId));
       if (new Set(items.map(x => x.id)).size !== items.length || filter && items.some(x => x.type !== filter)) invalid();
       publish({items:Object.freeze(items),pagination: p as Pagination});

@@ -301,6 +301,7 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     TASKS_PRIORITY_MEDIUM: "Medium",
     TASKS_PRIORITY_HIGH: "High",
     INBOX_TITLE: "Inbox",
+    INBOX_ACTION_FAILED: "That action did not go through.",
     INBOX_DESCRIPTION: "Capture loose notes, links and references before turning them into work.",
     INBOX_PRIVATE_BADGE: "Private to you",
     INBOX_CAPTURE_TITLE: "Quick capture",
@@ -602,12 +603,13 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     REVIEW_EMPTY_COMPLETED: "No completed work in this snapshot",
     REVIEW_EMPTY_NEXT: "Nothing needs attention",
     PAGINATION_NAVIGATION: "Pagination navigation",
+    PAGINATION_TOTAL: "Total",
+    PAGINATION_VISIBLE: "Visible",
     PAGINATION_ROWS_PER_PAGE: "Rows per page",
     PAGINATION_PREVIOUS_PAGE: "Previous page",
     PAGINATION_NEXT_PAGE: "Next page",
     PAGINATION_PAGE_LABEL: "Page {page}",
-    LIST_LOADING_MORE: "Loading more",
-    LIST_END_OF_LIST: "No more items",
+    PAGINATION_MOBILE_SUMMARY: "{page} / {totalPages}",
     NAV_ADMINISTRATION: "Administration",
     NAV_REVIEW_QUEUE: "Review queue",
     NAV_DUPLICATES: "Duplicate candidates",
@@ -1073,6 +1075,7 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     AGENT_QUESTION_PLACEHOLDER: "Ask about published knowledge",
     AGENT_SUBMIT: "Ask",
     AGENT_RETRY: "Try again",
+    AGENT_CONFIDENCE: "Confidence",
     AGENT_PREPARING: "Preparing answer",
     AGENT_STAGE_RETRIEVING: "Searching your knowledge",
     AGENT_STAGE_EVIDENCE: "Weighing the evidence",
@@ -1113,6 +1116,8 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     SUBMIT_ERROR: "Unable to submit this knowledge entry.",
     SUBMIT_VALIDATION_ERROR: "Add a title and content before submitting.",
     SUBMISSIONS_TITLE: "My submissions",
+    SUBMISSIONS_RANGE_HINT: "Filter by submission date, up to 31 days; local time",
+    SUBMISSIONS_RANGE_INVALID: "Choose a valid range greater than zero and no longer than 31 days",
     SUBMISSIONS_DESCRIPTION: "Track review and resubmission status.",
     SUBMISSIONS_EMPTY: "No submissions yet.",
     SUBMISSIONS_UNTITLED: "Untitled submission",
@@ -1134,6 +1139,10 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_NOT_FOUND: "This submission was not found.",
     ADMIN_REVIEW_BACK: "Back to review queue",
     COMMON_RETRY: "Try again",
+    COMMON_EXPAND: "Expand",
+    LIST_LOADING_MORE: "Loading more",
+    LIST_END_OF_LIST: "No more items",
+    COMMON_COLLAPSE: "Collapse",
     COMMON_SEARCH_UNAVAILABLE: "Search is unavailable.",
     COMMON_ANSWER_UNAVAILABLE: "The answer is unavailable.",
     ADMIN_EYEBROW: "GOVERNANCE",
@@ -1850,6 +1859,7 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     TASKS_PRIORITY_MEDIUM: "中",
     TASKS_PRIORITY_HIGH: "高",
     INBOX_TITLE: "收集箱",
+    INBOX_ACTION_FAILED: "该操作未完成。",
     INBOX_DESCRIPTION: "先收集零散想法、链接和参考内容，再把它们变成可执行工作。",
     INBOX_PRIVATE_BADGE: "仅自己可见",
     INBOX_CAPTURE_TITLE: "快速收集",
@@ -2151,12 +2161,13 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     REVIEW_EMPTY_COMPLETED: "当前快照没有已完成工作",
     REVIEW_EMPTY_NEXT: "当前没有需要关注的事项",
     PAGINATION_NAVIGATION: "分页导航",
+    PAGINATION_TOTAL: "总计",
+    PAGINATION_VISIBLE: "当前显示",
     PAGINATION_ROWS_PER_PAGE: "每页行数",
     PAGINATION_PREVIOUS_PAGE: "上一页",
     PAGINATION_NEXT_PAGE: "下一页",
     PAGINATION_PAGE_LABEL: "第 {page} 页",
-    LIST_LOADING_MORE: "正在加载更多",
-    LIST_END_OF_LIST: "已加载全部",
+    PAGINATION_MOBILE_SUMMARY: "{page} / {totalPages}",
     NAV_ADMINISTRATION: "管理",
     NAV_REVIEW_QUEUE: "审核队列",
     NAV_DUPLICATES: "重复候选",
@@ -2622,6 +2633,7 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     AGENT_QUESTION_PLACEHOLDER: "询问已发布知识",
     AGENT_SUBMIT: "提问",
     AGENT_RETRY: "重试",
+    AGENT_CONFIDENCE: "置信度",
     AGENT_PREPARING: "正在准备答案",
     AGENT_STAGE_RETRIEVING: "正在检索你的知识",
     AGENT_STAGE_EVIDENCE: "正在核对证据",
@@ -2662,6 +2674,8 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     SUBMIT_ERROR: "无法提交这条知识。",
     SUBMIT_VALIDATION_ERROR: "提交前请填写标题和内容。",
     SUBMISSIONS_TITLE: "我的提交",
+    SUBMISSIONS_RANGE_HINT: "按提交日期筛选，范围最长 31 天；按本地时区",
+    SUBMISSIONS_RANGE_INVALID: "请选择有效的日期区间，范围须大于 0 且不超过 31 天",
     SUBMISSIONS_DESCRIPTION: "跟踪审核和重新提交状态。",
     SUBMISSIONS_EMPTY: "还没有提交。",
     SUBMISSIONS_UNTITLED: "未命名提交",
@@ -2683,6 +2697,10 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_NOT_FOUND: "未找到此提交。",
     ADMIN_REVIEW_BACK: "返回审核队列",
     COMMON_RETRY: "重试",
+    COMMON_EXPAND: "展开",
+    LIST_LOADING_MORE: "正在加载更多",
+    LIST_END_OF_LIST: "已加载全部",
+    COMMON_COLLAPSE: "收起",
     COMMON_SEARCH_UNAVAILABLE: "搜索暂不可用。",
     COMMON_ANSWER_UNAVAILABLE: "答案暂不可用。",
     ADMIN_EYEBROW: "治理中心",
@@ -3198,19 +3216,27 @@ export function frontendText(locale: Pick<LocaleRuntime, "t"> | undefined, key: 
 
 export interface FrontendPaginationLabels {
   navigationLabel: string;
+  totalLabel: string;
+  rangeLabel: string;
   pageSizeLabel: string;
   previousLabel: string;
   nextLabel: string;
   pageLabel(page: number): string;
+  mobileSummary(page: number, totalPages: number): string;
 }
+
+export type DataPaginationLocalization = { locale: Pick<LocaleRuntime, "t">; labels?: never } | { labels: FrontendPaginationLabels; locale?: never };
 
 export function frontendPaginationLabels(locale: Pick<LocaleRuntime, "t">): FrontendPaginationLabels {
   return {
     navigationLabel: frontendText(locale, "PAGINATION_NAVIGATION"),
+    totalLabel: frontendText(locale, "PAGINATION_TOTAL"),
+    rangeLabel: frontendText(locale, "PAGINATION_VISIBLE"),
     pageSizeLabel: frontendText(locale, "PAGINATION_ROWS_PER_PAGE"),
     previousLabel: frontendText(locale, "PAGINATION_PREVIOUS_PAGE"),
     nextLabel: frontendText(locale, "PAGINATION_NEXT_PAGE"),
     pageLabel: (page) => formatFrontendText(locale, "PAGINATION_PAGE_LABEL", { page }),
+    mobileSummary: (page, totalPages) => formatFrontendText(locale, "PAGINATION_MOBILE_SUMMARY", { page, totalPages }),
   };
 }
 

@@ -41,6 +41,10 @@ describe("frontend locale adapter", () => {
     expect(chinese.t("LIST_LOADING_MORE")).toBe("正在加载更多");
     expect(english.t("LIST_END_OF_LIST")).toBe("No more items");
     expect(chinese.t("LIST_END_OF_LIST")).toBe("已加载全部");
+    expect(english.t("COMMON_EXPAND")).toBe("Expand");
+    expect(chinese.t("COMMON_EXPAND")).toBe("展开");
+    expect(english.t("COMMON_COLLAPSE")).toBe("Collapse");
+    expect(chinese.t("COMMON_COLLAPSE")).toBe("收起");
     expect(english.t("PAGINATION_NAVIGATION")).toBe("Pagination navigation");
     expect(chinese.t("PAGINATION_NAVIGATION")).toBe("分页导航");
     expect(english.t("PAGINATION_ROWS_PER_PAGE")).toBe("Rows per page");

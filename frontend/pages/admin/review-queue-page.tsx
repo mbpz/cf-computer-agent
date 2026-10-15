@@ -6,14 +6,16 @@ import { Skeleton } from "../../components/ui/skeleton";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { ReviewQueuePageResult } from "../../lib/admin-review-data";
+import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { ReviewDecision, ReviewNoteInput } from "../../components/review/review-detail-data";
 import { ReviewDecisionControls, ReviewDecisionFeedback, reviewDecisionLocked, type ReviewDecisionState } from "../../components/review/review-decision-controls";
 
-export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onReloadDecision, onOpenDetail, pendingId, completedId, decisionState = { kind: "idle" }, localError, pending, onLoadMore, locale, decisionRecordBlocked = false, onDiscardDecisionRecord }: {
+export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onReloadDecision, onOpenDetail, pendingId, completedId, decisionState = { kind: "idle" }, localError, pending, onPageChange, onPageSizeChange, onLoadMore, locale, decisionRecordBlocked = false, onDiscardDecisionRecord }: {
   state: { kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string };
   onRetry?: () => void; onRetryDecision?: () => void; onReloadDecision?: () => void; onOpenDetail?: (id: string) => void;
   onReview?: (id: string, action: ReviewDecision, details?: ReviewNoteInput) => void;
   pendingId?: string | null; completedId?: string | null; decisionState?: ReviewDecisionState; localError?: string; pending?: boolean;
+  onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void;
   onLoadMore?: () => void; locale: LocaleRuntime;
   decisionRecordBlocked?: boolean; onDiscardDecisionRecord?: () => void;
 }) {
@@ -22,7 +24,7 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
   if (state.kind === "loading") return <div aria-busy="true"><Skeleton className="h-24" /></div>;
   if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{retry}</PageState>;
   const locked = reviewDecisionLocked(decisionState);
-  return <section className="space-y-5">
+  return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_REVIEW_QUEUE_TITLE")}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")}</p>
     </div>
@@ -36,8 +38,12 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
       ariaLabel={frontendText(locale, "ADMIN_REVIEW_QUEUE_TITLE")}
       emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_REVIEW_EMPTY")} description={frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")} />}
       loading={pending}
+      pagination={state.data.pagination}
+      onPageChange={onPageChange}
+      onPageSizeChange={onPageSizeChange}
       hasMore={!localError && state.data.pagination.page < state.data.pagination.totalPages}
       onLoadMore={onLoadMore}
+      fill
       rowHeight={104}
       columns={[
         { key: "item", header: frontendText(locale, "ADMIN_REVIEW_COLUMN_ITEM"), cellClassName: "whitespace-normal", cell: (item) => <div className="py-1">

@@ -17,7 +17,7 @@ export type NotificationsPageState =
   | { kind: "forbidden" }
   | { kind: "ready"; items: readonly NotificationItem[]; pagination: Pagination };
 
-export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, recordBlocked = false, onDiscardRecord, onRetry, onFilterChange, onLoadMore, onMarkRead, onMarkVisibleRead, onOpen }: {
+export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, recordBlocked = false, onDiscardRecord, onRetry, onFilterChange, onLoadMore, onPageChange, onPageSizeChange, onMarkRead, onMarkVisibleRead, onOpen }: {
   locale: LocaleRuntime;
   state: NotificationsPageState;
   summary: NotificationSummary | null;
@@ -30,6 +30,8 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   onRetry: () => void;
   onFilterChange: (filters: NotificationFilters) => void;
   onLoadMore?: () => void;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: SupportedPageSize) => void;
   onMarkRead: (id: string) => void;
   onMarkVisibleRead: (ids: readonly string[]) => void;
   onOpen: (id: string) => void;
@@ -40,7 +42,7 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "NOTIFICATIONS_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
   const visibleUnreadIds = state.items.filter((item) => item.readAt === null).map((item) => item.id).slice(0, 100);
   const actionsDisabled = pending || actionPending || recordBlocked;
-  return <section className="space-y-5">
+  return <section className="flex flex-col space-y-5 lg:h-full lg:min-h-0">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="text-2xl font-semibold">{frontendText(locale, "NOTIFICATIONS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_DESCRIPTION")}</p></div>
       <p className="text-sm font-medium" aria-live="polite">{frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} {summary?.unread ?? 0}</p>
@@ -69,8 +71,12 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
       ariaLabel={frontendText(locale, "NOTIFICATIONS_TITLE")}
       emptyState={<PageState kind="empty" title={frontendText(locale, "NOTIFICATIONS_EMPTY")} />}
       loading={pending}
+      pagination={state.pagination}
+      onPageChange={onPageChange}
+      onPageSizeChange={onPageSizeChange}
       hasMore={state.pagination.page < state.pagination.totalPages}
       onLoadMore={onLoadMore}
+      fill
       rowHeight={72}
       columns={[
         { key: "notification", header: frontendText(locale, "NOTIFICATIONS_COLUMN_NOTIFICATION"), cellClassName: "whitespace-normal", cell: (item: NotificationItem) => <div data-notification-id={item.id} data-read={item.readAt === null ? "false" : "true"} className="min-w-0 space-y-1 py-1">

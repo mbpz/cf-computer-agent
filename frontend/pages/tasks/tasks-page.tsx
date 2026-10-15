@@ -6,6 +6,7 @@ import { DataTable } from "../../components/data-table";
 import { Input } from "../../components/ui/input";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
+import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { TaskItem } from "../../lib/tasks-data";
 import type { TaskFilterState, TaskPriority, TaskStatus } from "./task-types";
 import { taskPriorityKey, taskStatusKey } from "./tasks-model";
@@ -17,7 +18,7 @@ export type TasksPageState =
   | { kind: "error"; message: string }
   | { kind: "ready"; items: readonly TaskItem[]; pagination: Pagination };
 
-export function TasksPage({ state, filters, locale, pending = false, localLoadError, actionError, actionPendingId, onRetry, onFilterChange, onTextFilterChange, onLoadMore, onStatusChange, onDelete, onCreate, onOpen }: {
+export function TasksPage({ state, filters, locale, pending = false, localLoadError, actionError, actionPendingId, onRetry, onFilterChange, onTextFilterChange, onLoadMore, onPageChange, onPageSizeChange, onStatusChange, onDelete, onCreate, onOpen }: {
   state: TasksPageState;
   filters: TaskFilterState;
   locale: LocaleRuntime;
@@ -31,6 +32,8 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
   onFilterChange?: (filters: TaskFilterState) => void;
   onTextFilterChange?: (filters: TaskFilterState) => void;
   onLoadMore?: () => void;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: SupportedPageSize) => void;
   onStatusChange?: (id: string, status: TaskStatus) => void;
   onDelete?: (id: string) => void;
 }) {
@@ -57,7 +60,7 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
   };
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "TASKS_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>;
-  return <><section className="space-y-5" inert={validConfirmation} aria-hidden={validConfirmation || undefined}>
+  return <><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={validConfirmation} aria-hidden={validConfirmation || undefined}>
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "TASKS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "TASKS_DESCRIPTION")}</p></div>
     {onCreate && <Button disabled={Boolean(actionPendingId)} onClick={onCreate}>{frontendText(locale, "TASKS_NEW")}</Button>}
     <div className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -76,8 +79,12 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
       ariaLabel={frontendText(locale, "TASKS_TITLE")}
       emptyState={<PageState kind="empty" title={frontendText(locale, "TASKS_EMPTY")} />}
       loading={pending}
+      pagination={state.pagination}
+      onPageChange={onPageChange}
+      onPageSizeChange={onPageSizeChange}
       hasMore={!localLoadError && state.pagination.page < state.pagination.totalPages}
       onLoadMore={onLoadMore}
+      fill
       rowHeight={72}
       columns={[
         { key: "task", header: frontendText(locale, "TASKS_COLUMN_TASK"), cellClassName: "whitespace-normal", cell: (task) => <div className="py-1"><p className="line-clamp-1 font-medium">{task.title}</p>{task.notes && <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{task.notes}</p>}</div> },

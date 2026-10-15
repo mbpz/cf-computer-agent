@@ -20,4 +20,16 @@ describe("Project timeline page", () => {
     expect(html).not.toContain(frontendText(locale, "PROJECT_TIMELINE_LOAD_MORE"));
     expect(html).not.toContain("undefined");
   });
+
+  it("renders the desktop pager over the loaded window and retires the scroll label", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    const project = { id: "project-1", clientKey: "project-1", title: "发布 2.0", description: null, status: "active" as const, progress: 30, targetAt: null, createdAt: "2026-09-09T00:00:00.000Z", updatedAt: "2026-09-09T00:00:00.000Z" };
+    const html = renderToStaticMarkup(<ProjectTimelinePage locale={locale} state={{ kind: "ready", project, items: [], pagination: { page: 2, pageSize: 20, total: 43, totalPages: 3 } }} onCreate={vi.fn()} onLoadMore={vi.fn()} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />);
+    expect(html).toContain("data-pagination-desktop");
+    expect(html).toContain("data-pagination-mobile");
+    expect(html).toContain(frontendText(locale, "PAGINATION_TOTAL"));
+    expect(html).toContain(frontendText(locale, "PAGINATION_ROWS_PER_PAGE"));
+    expect(html).toContain("21–40");
+    expect(html).not.toContain(frontendText(locale, "PROJECT_TIMELINE_LOAD_MORE"));
+  });
 });

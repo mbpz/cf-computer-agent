@@ -4,6 +4,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { forceRemountAppAt, mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
+import { stubListViewport } from "../helpers/list-viewport";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const version = "2026-09-28T00:00:00.000Z", next = "2026-09-28T00:00:00.001Z";
 const key = "memory-garden:planning-write:v1:alice:INBOX";
@@ -36,6 +37,7 @@ describe("inbox archive and restore recovery through App", () => {
   async function mount(raw: string | null = null, member = "alice") {
     app = await mountApp({ url: "https://app.test/inbox?page=2&status=inbox", configureBrowser(browser) {
       vi.stubGlobal("HTMLElement", browser.HTMLElement);
+      stubListViewport(browser, "mobile");
       if (raw !== null) browser.sessionStorage.setItem(key, raw);
     }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"), path = url.pathname;

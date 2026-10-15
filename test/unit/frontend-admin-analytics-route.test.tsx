@@ -7,6 +7,7 @@ import { loadAdminAnalytics } from "../../frontend/lib/admin-analytics-data";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { AdminAnalyticsRoute } from "../../frontend/app";
 import { ApiRequestError } from "../../frontend/lib/api";
+import { stubListViewport } from "../helpers/list-viewport";
 
 type Loader = (input: LoadAdminAnalyticsInput) => Promise<AdminAnalyticsOverview>;
 
@@ -125,6 +126,7 @@ describe("AdminAnalyticsRoute", () => {
   });
 
   it("appends the next page's visitors on end-of-list without duplicating the first page", async () => {
+    stubListViewport(browser, "mobile");
     browser.history.replaceState({}, "", "/admin/analytics?page=4");
     const inputs: LoadAdminAnalyticsInput[] = [];
     const loader: Loader = async (input) => { inputs.push(input); return overview(input.page, input.pageSize, 41, Array.from({ length: 20 }, (_, index) => `/visit-p${input.page}-${index}`)); };
@@ -139,6 +141,7 @@ describe("AdminAnalyticsRoute", () => {
   });
 
   it("stops requesting once the last page is appended", async () => {
+    stubListViewport(browser, "mobile");
     const inputs: LoadAdminAnalyticsInput[] = [];
     const loader: Loader = async (input) => { inputs.push(input); return overview(input.page, input.pageSize, 21, input.page === 1 ? Array.from({ length: 20 }, (_, index) => `/only-p1-${index}`) : ["/only-p2-0"]); };
     await renderRoute(loader);

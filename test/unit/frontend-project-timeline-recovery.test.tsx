@@ -3,6 +3,7 @@ import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, forceRemountAppAt, type MountedApp } from "../helpers/authenticated-app-harness";
+import { stubListViewport } from "../helpers/list-viewport";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const stamp = "2026-09-27T00:00:00.000Z";
@@ -23,9 +24,9 @@ describe("parameterized project timeline through real App", () => {
   }
   const title = () => main().querySelector('input[aria-label="Timeline title"]') as HTMLInputElement;
   const writes = () => requests.filter(r => r.init?.method === "POST");
-  async function mount(saved?: Record<string, string>) {
+  async function mount(saved?: Record<string, string>, viewport: "desktop" | "mobile" = "desktop") {
     requests = []; override = undefined;
-    app = await mountAuthenticatedApp({ url: "https://app.test/projects/a/timeline", role: "contributor", permissionMask: "0x100000", configureBrowser: browser => { for (const [key, value] of Object.entries(saved ?? {})) browser.sessionStorage.setItem(key, value); }, fetch: async (input, init) => {
+    app = await mountAuthenticatedApp({ url: "https://app.test/projects/a/timeline", role: "contributor", permissionMask: "0x100000", configureBrowser: browser => { stubListViewport(browser, viewport); for (const [key, value] of Object.entries(saved ?? {})) browser.sessionStorage.setItem(key, value); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
@@ -49,7 +50,7 @@ describe("parameterized project timeline through real App", () => {
   async function navigate(id: string) { await act(async () => { expect(writeWorkspaceHistory("push", `/projects/${id}/timeline`)).toBe("committed"); }); }
   afterEach(async () => { await app?.unmount(); app = undefined; });
   it("isolates project navigation, clears the draft and ignores late old-project reads", async () => {
-    await mount(); await fill("Private A draft");
+    await mount(undefined, "mobile"); await fill("Private A draft");
     let resolve!: (response: Response) => void;
     override = (url) => url.pathname === "/api/projects/a/timeline" && url.searchParams.get("page") === "2" ? new Promise<Response>(done => { resolve = done; }) : undefined;
     await loadMore();
@@ -63,20 +64,20 @@ describe("parameterized project timeline through real App", () => {
     expect(main().textContent).not.toContain("a late"); expect(main().textContent).not.toContain("Project a");
   });
   it.each([401, 403, 404])("clears private rows on denied continuation %s and retries only reads", async status => {
-    await mount(); override = url => url.pathname.endsWith("/timeline") && url.searchParams.get("page") === "2" ? apiError(status, "DENIED", false) : undefined;
+    await mount(undefined, "mobile"); override = url => url.pathname.endsWith("/timeline") && url.searchParams.get("page") === "2" ? apiError(status, "DENIED", false) : undefined;
     await loadMore(); await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().textContent).not.toContain("a first"); expect(title()).toBeNull();
     override = undefined; await click(button("Try timeline again")); await waitForApp(() => !!title()); expect(writes()).toHaveLength(0);
   });
   it("retries a failed append at the requested page without losing the loaded window", async () => {
-    await mount(); override = url => url.searchParams.get("page") === "2" ? apiError(503, "UNAVAILABLE", true) : undefined;
+    await mount(undefined, "mobile"); override = url => url.searchParams.get("page") === "2" ? apiError(503, "UNAVAILABLE", true) : undefined;
     await loadMore(); await waitForApp(() => main().textContent!.includes("Unable to update the project timeline."));
     expect(main().textContent).toContain("a first");
     override = undefined; await loadMore(); await waitForApp(() => main().textContent!.includes("a second"));
     expect(requests.filter(r => r.url.searchParams.get("page") === "2").map(r => r.url.searchParams.get("page"))).toEqual(["2", "2"]);
   });
   it.each(["foreign-row", "duplicate", "wrong-page", "foreign-project"])("rejects malformed project-bound readback: %s", async mode => {
-    await mount(); override = url => {
+    await mount(undefined, "mobile"); override = url => {
       if (mode === "foreign-project" && url.pathname === "/api/projects/a") return Response.json(project("b"));
       if (!url.pathname.endsWith("/timeline")) return;
       if (mode === "foreign-row") return Response.json(numbered([item("b", "secret")]));
@@ -179,7 +180,7 @@ describe("parameterized project timeline through real App", () => {
     await waitForApp(() => title().value === ""); expect(writes()).toHaveLength(1);
   });
   it("coalesces a same-frame append and accumulates the new rows", async () => {
-    await mount(); let resolve!: (response: Response) => void;
+    await mount(undefined, "mobile"); let resolve!: (response: Response) => void;
     override = url => url.searchParams.get("page") === "2" ? new Promise<Response>(done => { resolve = done; }) : undefined;
     await loadMore();
     expect(requests.filter(r => r.url.searchParams.get("page") === "2")).toHaveLength(1);
@@ -188,7 +189,7 @@ describe("parameterized project timeline through real App", () => {
     expect(main().textContent).toContain("a first");
   });
   it("ignores a superseded append response after the route reloads", async () => {
-    await mount(); let resolve!: (response: Response) => void;
+    await mount(undefined, "mobile"); let resolve!: (response: Response) => void;
     override = url => url.searchParams.get("page") === "2" ? new Promise<Response>(done => { resolve = done; }) : undefined;
     await loadMore();
     override = undefined;

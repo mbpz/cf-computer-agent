@@ -8,6 +8,7 @@ import { registerWorkspaceLeaveGuard } from "../../frontend/lib/workspace-locati
 import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
 import { TasksRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { stubListViewport } from "../helpers/list-viewport";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -106,6 +107,7 @@ describe("private tasks route", () => {
   });
 
   it("appends the next page of tasks on end-of-list without duplicating the first page", async () => {
+    stubListViewport(browser, "mobile");
     const urls: string[] = [];
     const pageFor = (url: string): Response => {
       const page = Number(new URL(url, "https://app.test").searchParams.get("page") || "1");
@@ -174,6 +176,7 @@ describe("private tasks route", () => {
   });
 
   it("preserves the current list while retrying a local failure", async () => {
+    stubListViewport(browser, "mobile");
     let gets = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       gets += 1;
@@ -191,6 +194,7 @@ describe("private tasks route", () => {
   });
 
   it.each([401, 403])("clears protected tasks when a list refresh returns %s", async (status) => {
+    stubListViewport(browser, "mobile");
     const items = Array.from({ length: 20 }, (_, index) => ({ ...createTask(`Alpha ${index}`), id: `task-alpha-${index}` }));
     let gets = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {

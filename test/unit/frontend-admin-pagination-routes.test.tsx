@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminAuditRoute, AdminMembersRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import type { AdminMember, AdminMembersPage, LoadAdminMembersInput } from "../../frontend/lib/admin-members-data";
+import { stubListViewport } from "../helpers/list-viewport";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -37,6 +38,7 @@ describe("numbered admin routes", () => {
   });
 
   it("persists the audit action filter while appending the next page", async () => {
+    stubListViewport(browser, "mobile");
     const urls: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const url = String(input); urls.push(url);
@@ -60,6 +62,7 @@ describe("numbered admin routes", () => {
   });
 
   it("renders an empty audit result without pagination controls", async () => {
+    stubListViewport(browser, "mobile");
     vi.stubGlobal("fetch", async () => response("audit", 1, 20, 0));
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search="" />)); await flush();
     await waitFor(() => container.querySelector('[data-page-state="empty"]') !== null);
@@ -92,6 +95,7 @@ describe("numbered admin routes", () => {
   });
 
   it("retains the last audit page on pagination failure and retries the requested page", async () => {
+    stubListViewport(browser, "mobile");
     browser.history.replaceState({}, "", "/admin/audit?action=member.login");
     const requests = auditRequests();
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search={browser.location.search} />));

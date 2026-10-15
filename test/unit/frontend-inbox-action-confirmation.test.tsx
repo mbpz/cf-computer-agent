@@ -32,6 +32,8 @@ describe("inbox action confirmation", () => {
   function action(label: string) { const button = [...container.querySelectorAll("button")].find(node => node.textContent === label); expect(button, label).toBeDefined(); return button!; }
   function confirm() { const button = container.querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(button).not.toBeNull(); return button!; }
   async function click(button: HTMLButtonElement) { await act(async () => button.click()); }
+  /** The quick-capture composer lives behind its dialog trigger. */
+  async function openCapture() { await click(container.querySelector<HTMLButtonElement>("[data-inbox-capture-open]")!); }
   it.each(["Archive", "Restore", "Turn into task"])("requires explicit %s approval with original row/version", async label => {
     const target = { ...row, status: label === "Restore" ? "archived" : "inbox" };
     await mount({ state: { ...ready, items: [target] } }); await click(action(label));
@@ -60,7 +62,7 @@ describe("inbox action confirmation", () => {
     expect(filter).not.toHaveBeenCalled(); expect(write).not.toHaveBeenCalled(); expect(promote).not.toHaveBeenCalled(); await click(confirm()); expect(write).toHaveBeenCalledExactlyOnceWith(row); expect(promote).not.toHaveBeenCalled();
   });
   it("retains drafts and prevents same-tick capture before persisting an intent", async () => {
-    const create = vi.fn(); await mount({ onCreate: create }); const input = container.querySelector('textarea')!;
+    const create = vi.fn(); await mount({ onCreate: create }); await openCapture(); const input = container.querySelector('textarea')!;
     const prop = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
     await act(async () => { (input as any)[prop].onChange({ currentTarget: { value: "Unsaved draft" } }); });
     const expectedDraft = { kind: "ready", draft: { kind: "text", content: "Unsaved draft", sourceUrl: "" } };

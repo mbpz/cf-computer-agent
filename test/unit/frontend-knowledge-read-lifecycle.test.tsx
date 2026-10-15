@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
+import { stubListViewport } from "../helpers/list-viewport";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -54,6 +55,7 @@ describe("knowledge page read ownership and revocation", () => {
   };
 
   it.each([401, 403])("clears all private sections on list %s and only recovers by explicit reads", async status => {
+    stubListViewport(browser, "mobile");
     await mount(); expect(container.textContent).toContain("Private recent title");
     respond = url => url.pathname === "/api/knowledge" ? deny(status) : reply(url);
     await scrollToEnd();
@@ -119,6 +121,7 @@ describe("knowledge page read ownership and revocation", () => {
   });
 
   it("keeps ordinary list read failures recoverable without dropping existing rows", async () => {
+    stubListViewport(browser, "mobile");
     await mount(); respond = url => url.pathname === "/api/knowledge" ? deny(500) : reply(url);
     await scrollToEnd(); expect(container.textContent).toContain("Private list title"); expect(container.querySelector('[role="alert"]')).not.toBeNull();
   });

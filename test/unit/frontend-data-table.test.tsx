@@ -11,37 +11,42 @@ vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(valu
 vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
 const { Window } = await import("happy-dom");
 
+type Row = { id: string; title: string };
+
 describe("shared data table", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   const en = createLocaleRuntime({ navigatorLanguage: "en" });
   const zh = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+
+  // The table switches surface on Tailwind's `lg` edge, so the viewport decides
+  // whether the pager or the feed is present.
+  const setViewport = (desktop: boolean) => Object.defineProperty(browser, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: desktop && query === "(min-width: 1024px)", media: query, onchange: null, addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false }),
+  });
+
   beforeEach(() => {
     browser = new Window({ url: "https://app.test/tasks" });
-    vi.stubGlobal("window", browser);
-    vi.stubGlobal("document", browser.document);
-    vi.stubGlobal("HTMLElement", browser.HTMLElement);
-    vi.stubGlobal("navigator", browser.navigator);
-    vi.stubGlobal("getComputedStyle", browser.getComputedStyle.bind(browser));
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    for (const [key, value] of Object.entries({ window: browser, document: browser.document, HTMLElement: browser.HTMLElement, navigator: browser.navigator, getComputedStyle: browser.getComputedStyle.bind(browser), IS_REACT_ACT_ENVIRONMENT: true })) vi.stubGlobal(key, value);
+    setViewport(true);
     container = browser.document.createElement("div") as unknown as HTMLElement;
     browser.document.body.append(container as unknown as Node);
     root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
-  const rows = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `row-${index + 1}`, title: `Row ${index + 1}` }));
-  const columns = [{ key: "title", header: "Title", cell: (row: { id: string; title: string }) => <span data-row-title>{row.title}</span> }];
-  const mount = async (props: Partial<Parameters<typeof DataTable<{ id: string; title: string }>>[0]> = {}) => {
-    const merged = { locale: en, rows: rows(3), columns, rowId: (row: { id: string }) => row.id, ariaLabel: "Rows", emptyState: <span>Nothing here</span>, ...props } as Parameters<typeof DataTable<{ id: string; title: string }>>[0];
-    await act(async () => root.render(<DataTable {...merged} />));
-    return merged;
+  const rows = (count: number): Row[] => Array.from({ length: count }, (_, index) => ({ id: `row-${index + 1}`, title: `Row ${index + 1}` }));
+  const columns = [{ key: "title", header: "Title", cell: (row: Row) => <span data-row-title>{row.title}</span> }];
+  const page = { page: 1, pageSize: 20 as const, total: 45, totalPages: 3 };
+  const mount = async (props: Record<string, unknown> = {}) => {
+    await act(async () => root.render(<DataTable locale={en} rows={rows(3)} columns={columns} rowId={(row: Row) => row.id} ariaLabel="Rows" emptyState={<span>Nothing here</span>} pagination={page} onPageChange={() => undefined} onPageSizeChange={() => undefined} hasMore onLoadMore={() => undefined} {...props} />));
   };
+  const scroller = () => container.querySelector("table")!.parentElement as HTMLElement;
 
-  it("renders every loaded row with the table's accessible name, without virtualizing them away", async () => {
+  it("renders every loaded row with the table's accessible name, never virtualizing them away", async () => {
     await mount({ rows: rows(12) });
     expect(container.querySelector("table")?.getAttribute("aria-label")).toBe("Rows");
     expect(container.querySelectorAll("[data-row-title]")).toHaveLength(12);
-    expect(container.querySelector("[data-pagination-desktop]")).toBeNull();
   });
 
   it("shows the empty state node in the body when nothing has loaded", async () => {
@@ -50,41 +55,57 @@ describe("shared data table", () => {
     expect(container.querySelectorAll("[data-row-title]")).toHaveLength(0);
   });
 
-  it("pulls the next page when the loaded window cannot fill the viewport, and leaves a full window alone", async () => {
-    const onLoadMore = vi.fn();
-    await mount({ rows: rows(1), hasMore: true, onLoadMore });
-    expect(onLoadMore).toHaveBeenCalledTimes(1);
-    onLoadMore.mockClear();
-    await mount({ rows: rows(3), hasMore: true, onLoadMore });
-    expect(onLoadMore).not.toHaveBeenCalled();
+  it("pages through the footer pager on desktop with the server totals", async () => {
+    const onPageChange = vi.fn(); const onPageSizeChange = vi.fn();
+    await mount({ rows: rows(20), onPageChange, onPageSizeChange });
+    expect(container.textContent).toContain("Total");
+    expect(container.textContent).toContain("45");
+    expect(container.textContent).toContain("1–20");
+    await act(async () => (container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
+    expect(onPageChange).toHaveBeenCalledWith(2);
+    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
+    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLSelectElement.prototype, "value")!.set!.call(select, "50"); select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    expect(onPageSizeChange).toHaveBeenCalledWith(50);
   });
 
-  it("asks for the next page from the body's near-bottom scroll, once per dwell and never while loading", async () => {
-    const onLoadMore = vi.fn();
-    await mount({ rows: rows(12), hasMore: true, onLoadMore });
-    const scroller = container.querySelector("table")!.parentElement as HTMLElement;
-    const scrollToEnd = () => act(async () => {
-      Object.defineProperty(scroller, "scrollHeight", { value: 1000, configurable: true });
-      Object.defineProperty(scroller, "clientHeight", { value: 500, configurable: true });
-      scroller.scrollTop = 500;
-      scroller.dispatchEvent(new browser.Event("scroll") as unknown as Event);
-    });
-    await scrollToEnd();
-    await scrollToEnd();
-    expect(onLoadMore).toHaveBeenCalledTimes(1);
-    onLoadMore.mockClear();
-    await act(async () => root.render(<DataTable locale={en} rows={rows(12)} columns={columns} rowId={(row) => row.id} ariaLabel="Rows" emptyState={<span>Nothing here</span>} hasMore onLoadMore={onLoadMore} loading />));
-    await scrollToEnd();
-    expect(onLoadMore).not.toHaveBeenCalled();
+  it("disables the pager and keeps the loaded rows while a page is in flight", async () => {
+    await mount({ rows: rows(20), loading: true });
+    expect(container.querySelectorAll("[data-row-title]")).toHaveLength(20);
+    expect((container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("announces loading and end of list in the page locale, and stays silent when idle", async () => {
-    const status = () => container.querySelector('p[role="status"]')?.textContent;
-    await mount({ rows: rows(3), locale: en });
-    expect(status()).toBe("No more items");
-    await act(async () => root.render(<DataTable locale={zh} rows={rows(3)} columns={columns} rowId={(row) => row.id} ariaLabel="Rows" emptyState={<span>Nothing here</span>} hasMore onLoadMore={() => undefined} loading />));
-    expect(status()).toBe("正在加载更多");
-    await act(async () => root.render(<DataTable locale={zh} rows={[]} columns={columns} rowId={(row) => row.id} ariaLabel="Rows" emptyState={<span>Nothing here</span>} />));
-    expect(status()).toBeUndefined();
+  it("keeps the feed instead of the pager on narrow viewports and appends on scroll", async () => {
+    setViewport(false);
+    const onLoadMore = vi.fn(); const onPageChange = vi.fn();
+    await mount({ rows: rows(12), onLoadMore, onPageChange });
+    expect(container.querySelector("table")).not.toBeNull();
+    expect(container.textContent).not.toContain("Rows per page");
+    await act(async () => scroller().dispatchEvent(new browser.Event("scroll") as unknown as Event));
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+    expect(onPageChange).not.toHaveBeenCalled();
+  });
+
+  it("announces the feed state in the page locale on narrow viewports only", async () => {
+    setViewport(false);
+    await act(async () => root.render(<DataTable locale={zh} rows={rows(3)} columns={columns} rowId={(row: Row) => row.id} ariaLabel="行" emptyState={<span>空</span>} hasMore={false} onLoadMore={() => undefined} />));
+    expect(container.querySelector('p[role="status"]')?.textContent).toBe("已加载全部");
+    setViewport(true);
+    await mount({ hasMore: false, rows: rows(3) });
+    expect(container.querySelector('p[role="status"]')).toBeNull();
+  });
+
+  it("fills its parent on desktop and uses a capped viewport otherwise", async () => {
+    await mount({ fill: true, pagination: { page: 1, pageSize: 20, total: 3, totalPages: 1 } });
+    expect(scroller().style.height).toBe("");
+    expect(scroller().className).toContain("flex-1");
+    setViewport(false);
+    await mount({ fill: true, rows: rows(3) });
+    expect(scroller().style.height).toBe("213px");
+  });
+
+  it("localizes the pager labels without leaking English defaults", async () => {
+    await act(async () => root.render(<DataTable locale={zh} rows={rows(3)} columns={columns} rowId={(row: Row) => row.id} ariaLabel="行" emptyState={<span>空</span>} pagination={page} onPageChange={() => undefined} onPageSizeChange={() => undefined} />));
+    expect(container.textContent).toContain("总计");
+    expect(container.querySelector('button[aria-label="下一页"]')).not.toBeNull();
   });
 });

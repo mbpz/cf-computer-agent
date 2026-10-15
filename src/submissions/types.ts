@@ -44,7 +44,15 @@ export type SubmissionReviewPage = NumberedPage<Submission>;
 export type SubmissionReviewPageRequest = NumberedPageRequest;
 export interface SubmissionPageRequest extends Partial<NumberedPageRequest> {
   status?: SubmissionStatusFilter;
+  /** Stated `created_at` lower bound: `YYYY-MM-DD` (UTC day) or a canonical ISO instant. */
+  from?: string;
+  /** Stated `created_at` upper bound; the normalized interval is half-open, so this bound is exclusive. */
+  to?: string;
 }
 export interface SubmissionPageRepositoryRequest extends NumberedPageRequest {
   status?: SubmissionStatusFilter;
+  /** Normalized inclusive lower bound (canonical ISO instant). */
+  from?: string;
+  /** Normalized exclusive upper bound (canonical ISO instant). */
+  to?: string;
 }

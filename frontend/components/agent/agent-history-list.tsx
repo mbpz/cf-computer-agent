@@ -26,12 +26,14 @@ export function AgentHistoryList({ locale }: { locale?: LocaleRuntime }) {
     moving.current = true; setPage(null); setStatus("loading"); setCursors(next); setVersion((v) => v + 1);
   };
   if (!opened) return <Button type="button" variant="outline" onClick={() => setOpened(true)}>{frontendText(locale, "AGENT_LIST_TITLE")}</Button>;
-  return <section className="space-y-3 rounded-md border p-4" aria-label={frontendText(locale, "AGENT_LIST_TITLE")}>
+  return <section className="flex flex-col space-y-3 rounded-md border p-4 lg:min-h-0 lg:flex-1" aria-label={frontendText(locale, "AGENT_LIST_TITLE")}>
     <h2 className="font-medium">{frontendText(locale, "AGENT_LIST_TITLE")}</h2>
     <p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_LIST_DETAIL")}</p>
+    <div className="overflow-auto lg:min-h-0 lg:flex-1">
     {status === "loading" && <p role="status">{frontendText(locale, "AGENT_LIST_LOADING")}</p>}
     {status === "error" && <div role="alert"><p>{frontendText(locale, "AGENT_LIST_ERROR")}</p><Button type="button" onClick={() => navigate(cursors)}>{frontendText(locale, "AGENT_LIST_RETRY")}</Button></div>}
     {status === "ready" && page && <>{!page.items.length && <p>{frontendText(locale, "AGENT_LIST_EMPTY")}</p>}<ul className="space-y-2">{page.items.map((item) => <li key={item.id}><a className="underline break-all" href={`/agent?conversationId=${encodeURIComponent(item.id)}`}>{item.createdAt} · {item.id}</a></li>)}</ul></>}
+    </div>
     <div className="flex flex-wrap gap-2">
       <Button type="button" variant="outline" disabled={status === "loading" || cursors.length <= 1} onClick={() => navigate(cursors.slice(0, -1))}>{frontendText(locale, "AGENT_LIST_PREVIOUS")}</Button>
       <Button type="button" variant="outline" disabled={status !== "ready" || !page?.nextCursor} onClick={() => { if (page?.nextCursor) navigate([...cursors, page.nextCursor]); }}>{frontendText(locale, "AGENT_LIST_NEXT")}</Button>

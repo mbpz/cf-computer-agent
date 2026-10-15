@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiRequestError } from "../lib/api";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
-import { listPageSize } from "../lib/numbered-page";
+import { listPageSize, type SupportedPageSize } from "../lib/numbered-page";
 import { loadGoalTasks, setGoalTask, type GoalTask, type GoalTaskPage } from "../lib/goal-tasks-data";
 import type { PlanningWriteRecord } from "../lib/planning-write-recovery";
 import { DataTable } from "./data-table";
@@ -28,6 +28,8 @@ export function GoalTasksEditor({ goalId, title, locale, onDenied, onReadFailure
   const [loadingMore, setLoadingMore] = useState(false), [moreFailed, setMoreFailed] = useState(false);
   const [notice, setNotice] = useState<string>();
   const busyRef = useRef(true), generation = useRef(0), controller = useRef<AbortController | null>(null);
+  // The desktop pager picks the window size; the mobile feed appends inside it.
+  const pageSizeRef = useRef<SupportedPageSize>(listPageSize);
   const pendingWrite = useRef<PlanningWriteRecord | null>(null), minimumVersion = useRef<string | undefined>(undefined);
   const panel = useRef<HTMLElement>(null);
   // The list is a window, not a page: `replace` rebuilds it (page 1, or the whole
@@ -43,7 +45,7 @@ export function GoalTasksEditor({ goalId, title, locale, onDenied, onReadFailure
     try {
       const pages: GoalTaskPage[] = [];
       for (const page of targets) {
-        const next = await loadGoalTasks(goalId, { page, pageSize: listPageSize }, fetch, abort.signal);
+        const next = await loadGoalTasks(goalId, { page, pageSize: pageSizeRef.current }, fetch, abort.signal);
         if (generation.current !== current || abort.signal.aborted) return;
         const minimum = minimumVersion.current ?? pendingWrite.current?.expectedUpdatedAt;
         if (minimum && Date.parse(next.expectedUpdatedAt) < Date.parse(minimum)) throw new Error("GOAL_TASK_VERSION_REGRESSED");
@@ -109,6 +111,16 @@ export function GoalTasksEditor({ goalId, title, locale, onDenied, onReadFailure
     if (!current || current.pagination.page >= current.pagination.totalPages) return;
     void loadPages([current.pagination.page + 1], "append");
   };
+  // The pager replaces the whole window; an in-flight decision or write owns the rows.
+  const changePage = (page: number) => {
+    if (!active.current || busyRef.current || writingRef.current || decisionRef.current || pendingWrite.current || blockedRef.current) return;
+    void loadPages([page], "replace");
+  };
+  const changePageSize = (pageSize: SupportedPageSize) => {
+    if (!active.current || busyRef.current || writingRef.current || decisionRef.current || pendingWrite.current || blockedRef.current) return;
+    pageSizeRef.current = pageSize;
+    void loadPages([1], "replace");
+  };
   const cancel = () => {
     if (!active.current || !decision || decisionRef.current !== decision) return;
     decisionRef.current = null; setDecision(null);
@@ -134,6 +146,9 @@ export function GoalTasksEditor({ goalId, title, locale, onDenied, onReadFailure
         rowId={item => item.id}
         ariaLabel={frontendText(locale, "GOALS_TASK_LINKS")}
         loading={loadingMore}
+        pagination={data.pagination}
+        onPageChange={changePage}
+        onPageSizeChange={changePageSize}
         hasMore={data.pagination.page < data.pagination.totalPages}
         onLoadMore={moreFailed ? undefined : loadMore}
         emptyState={<PageState kind="empty" title={frontendText(locale, "RELATIONS_EMPTY")} />}

@@ -8,6 +8,7 @@ import { AdminAssetsRoute, AdminDuplicateRoute, ReviewQueueRoute } from "../../f
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { ReviewQueuePage } from "../../frontend/pages/admin/review-queue-page";
 import { DuplicateQueuePage } from "../../frontend/pages/admin/duplicate-queue-page";
+import { stubListViewport } from "../helpers/list-viewport";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -45,6 +46,7 @@ describe("moderation numbered routes", () => {
   });
 
   it.each(queues)("appends the next $name page on scroll and stops at the last page", async ({ path, render, item }) => {
+    stubListViewport(browser, "mobile");
     browser.history.replaceState({}, "", `${path}?page=2&pageSize=20`); const gets: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); gets.push(url);
       const page = Number(queryOf(url, "page"));
@@ -150,6 +152,7 @@ describe("moderation numbered routes", () => {
   });
 
   it.each([401, 403])("clears private review rows and decisions on %i during a page read", async (status) => {
+    stubListViewport(browser, "mobile");
     let gets = 0;
     vi.stubGlobal("fetch", async () => ++gets === 1 ? numbered(Array.from({ length: 20 }, (_, index) => ({ id: `private-review-${index}`, title: index === 0 ? "Private review" : `Private review ${index}`, submitterId: "m1", status: "review_pending" })), 1, 21) : new Response(null, { status }));
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();

@@ -52,8 +52,11 @@ describe("React submission and asset pages", () => {
     expect(html).toContain("已有正式条目");
     expect(html).not.toContain("data-pagination-desktop");
     expect(html).not.toContain("data-pagination-mobile");
-    expect(html).toContain("No more items");
+    expect(html).toContain("Review reason");
     expect(html).not.toContain("undefined");
+    const paged = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{ id: "s2", title: "Duplicate guide", status: "rejected" }], pagination: { page: 1, pageSize: 20, total: 40, totalPages: 2 } }} pagination={{ page: 1, pageSize: 20, total: 40, totalPages: 2 }} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} onLoadMore={vi.fn()} />);
+    expect(paged).toContain("data-pagination-desktop");
+    expect(paged).toContain("1–20");
     expect(html).not.toContain("reviewerId");
   });
 

@@ -27,20 +27,28 @@ describe("Projects page", () => {
     expect(renderToStaticMarkup(<ProjectsPage locale={locale} state={{ kind: "ready", items: [], summaries: {} }} />)).toContain(frontendText(locale, "PROJECTS_EMPTY"));
   });
 
-  it("keeps a per-row summary retry and renders no numbered pagination", () => {
+  it("keeps a per-row summary retry and pages the window from the footer pager", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
-    const html = renderToStaticMarkup(<ProjectsPage locale={locale} state={{ kind: "ready", items: [project], summaries: {}, pagination: { page: 1, pageSize: 20, total: 40, totalPages: 2 } }} onRetrySummary={vi.fn()} onLoadMore={vi.fn()} />);
+    const html = renderToStaticMarkup(<ProjectsPage locale={locale} state={{ kind: "ready", items: [project], summaries: {}, pagination: { page: 1, pageSize: 20, total: 40, totalPages: 2 } }} onRetrySummary={vi.fn()} onLoadMore={vi.fn()} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />);
     expect(html).toContain('data-summary-retry');
     expect(html).toContain(frontendText(locale, "PROJECTS_SUMMARY_FAILED"));
-    expect(html).not.toContain("data-pagination-desktop");
-    expect(html).not.toContain("data-pagination-mobile");
+    expect(html).toContain("data-pagination-desktop");
+    expect(html).toContain("data-pagination-mobile");
+    expect(html).toContain(frontendText(locale, "PAGINATION_TOTAL"));
     expect(html).not.toContain(frontendText(locale, "PROJECTS_LOAD_MORE"));
   });
 
-  it("announces the end of the list only once no later page remains", () => {
+  it("follows the requested window and keeps the pager off without page controls", () => {
     const locale = createLocaleRuntime();
-    const render = (pagination: { page: number; pageSize: 20; total: number; totalPages: number }) => renderToStaticMarkup(<ProjectsPage locale={locale} state={{ kind: "ready", items: [project], summaries: { "project-1": summary }, pagination }} onLoadMore={vi.fn()} />);
-    expect(render({ page: 1, pageSize: 20, total: 40, totalPages: 2 })).not.toContain(frontendText(locale, "LIST_END_OF_LIST"));
-    expect(render({ page: 2, pageSize: 20, total: 40, totalPages: 2 })).toContain(frontendText(locale, "LIST_END_OF_LIST"));
+    const base = { kind: "ready", items: [project], summaries: { "project-1": summary } } as const;
+    const first = renderToStaticMarkup(<ProjectsPage locale={locale} state={{ ...base, pagination: { page: 1, pageSize: 20, total: 40, totalPages: 2 } }} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} onLoadMore={vi.fn()} />);
+    expect(first).toContain("data-pagination-desktop");
+    expect(first).toContain("1–20");
+    expect(first).toContain(">40<");
+    const last = renderToStaticMarkup(<ProjectsPage locale={locale} state={{ ...base, pagination: { page: 2, pageSize: 20, total: 40, totalPages: 2 } }} onLoadMore={vi.fn()} />);
+    expect(last).not.toContain("data-pagination-desktop");
+    expect(last).not.toContain(frontendText(locale, "LIST_END_OF_LIST"));
+    const appended = renderToStaticMarkup(<ProjectsPage locale={locale} state={{ ...base, pagination: { page: 1, pageSize: 20, total: 40, totalPages: 2 } }} onLoadMore={vi.fn()} />);
+    expect(appended).not.toContain("data-pagination-desktop");
   });
 });

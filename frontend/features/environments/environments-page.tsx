@@ -15,6 +15,7 @@ import { EnvironmentRenameDialog } from './environment-rename-dialog';
 import { getEnvironmentManager, type EnvironmentManager } from './environment-manager';
 import { blankEnvironmentCreate, discardBlockedEnvironmentDraft, environmentCreateIsBlank, loadEnvironmentDraft, persistEnvironmentDraft, type EnvironmentCreateFields, type EnvironmentRenameFields } from './environment-draft';
 import { WORKSPACE_LOCATION_CHANGE_EVENT } from '../../lib/workspace-location';
+import type { SupportedPageSize } from '../../lib/numbered-page';
 
 export function EnvironmentsPage({locale,session}: {locale:LocaleRuntime;session:SessionSnapshot}) {
   if (!routeAccessAllowed(session,{capability:null,requiredPermission:'workspace.vm'})) return <p data-environments-forbidden role="alert">{frontendText(locale,'ENV_FORBIDDEN')}</p>;
@@ -102,8 +103,12 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   const closeRemove=()=>{removeRef.current=null;setRemove(null);};
   const run=async(action:()=>Promise<void>)=>{if(!alive.current || draft.isConfirming())return;setLocalError(false);try{await action();}catch{if(alive.current && !manager.getSnapshot().closed)setLocalError(true);}};
   const loadMore=()=>{if(state.writing)return;const next=state.pagination.page+1;if(next>500)return;void run(()=>manager.load(next));};
+  // The manager reads one page at a time, so a desktop page change replaces the
+  // window while the mobile feed keeps appending rows up to the same 500-page cap.
+  const goToPage=(page:number)=>{if(state.writing || !Number.isSafeInteger(page) || page<1 || page>500 || page===state.pagination.page)return;setPages([]);void run(()=>manager.load(page,state.filter,state.pagination.pageSize));};
+  const changePageSize=(pageSize:SupportedPageSize)=>{if(state.writing || pageSize===state.pagination.pageSize)return;setPages([]);void run(()=>manager.load(1,state.filter,pageSize));};
   if(state.closed)return <section data-environments-closed role="alert">{t('ENV_ACCOUNT_CLOSED')}</section>;
-  return <section data-environments-page className="mx-auto max-w-5xl space-y-6">
+  return <section data-environments-page className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0">
     {draft.confirmation}
     <header><h1 className="text-2xl font-semibold">{t('NAV_ENVIRONMENTS')}</h1><p className="mt-2 text-sm text-muted-foreground">{t('ENV_METADATA_ONLY')}</p></header>
     {(state.error || localError) && <div role="alert" className="rounded-md border p-4"><p>{t(localError?'ENV_INVALID_INPUT':`ENV_${state.error}`)}</p></div>}
@@ -133,7 +138,7 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
       </form>
     </CardContent></Card>
     <div className="flex flex-wrap items-end gap-3"><label className="text-sm">{t('ENV_FILTER')}<Select aria-label={t('ENV_FILTER')} value={state.filter} disabled={state.loading || state.writing} onChange={event=>void run(()=>manager.load(1,event.target.value as ''|EnvironmentType))}><option value="">{t('ENV_ALL')}</option><option value="personal">{t('ENV_PERSONAL')}</option><option value="temporary">{t('ENV_TEMPORARY')}</option></Select></label><Button variant="outline" disabled={state.loading || state.writing} onClick={()=>void run(()=>manager.load())}>{t('ENV_REFRESH')}</Button></div>
-    <div aria-busy={state.loading} className="space-y-3">
+    <div aria-busy={state.loading} className="space-y-3 lg:min-h-0 lg:flex-1">
       <DataTable
         locale={locale}
         rows={pages.flatMap(entry=>entry.items)}
@@ -141,6 +146,10 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
         ariaLabel={t('NAV_ENVIRONMENTS')}
         emptyState={<p>{t('ENV_EMPTY')}</p>}
         loading={state.loading}
+        pagination={state.pagination}
+        onPageChange={goToPage}
+        onPageSizeChange={changePageSize}
+        fill
         hasMore={!state.loading && !state.writing && !state.error && state.pagination.page<state.pagination.totalPages && state.pagination.page<500}
         onLoadMore={loadMore}
         rowHeight={88}

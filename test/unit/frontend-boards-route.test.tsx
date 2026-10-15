@@ -1,4 +1,5 @@
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
+import { stubListViewport } from "../helpers/list-viewport";
 // @vitest-environment node
 import React, { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -28,6 +29,7 @@ describe("task-backed boards route", () => {
   it("loads four bounded status pages and appends only the selected column at the end of its list", async () => {
     const requests: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); requests.push(url); return pagedResponse(url, statusFromUrl(url) === "todo" ? 21 : 0, "Todo"); });
+    stubListViewport(browser, "mobile");
     await renderBoard();
 
     expect(requests).toHaveLength(4);
@@ -140,6 +142,7 @@ describe("task-backed boards route", () => {
       if (init?.method === "POST") return mutation;
       const url = String(input); requests.push(url); return pagedResponse(url, statusFromUrl(url) === "todo" ? 41 : 0, "Alpha");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard();
     await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
 
@@ -451,6 +454,7 @@ describe("task-backed boards route", () => {
       if (status === "blocked") return pagedResponse(url, 41, "Blocked");
       return pagedResponse(url, 0, "Done");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard();
     await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
 
@@ -481,6 +485,7 @@ describe("task-backed boards route", () => {
       if (todoAttempts === 3) return never;
       return pagedResponse(url, 21, "Alpha");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard();
     await scrollToEnd("todo");
     expect(column("todo").textContent).toContain("Unable to load this task column.");
@@ -507,6 +512,7 @@ describe("task-backed boards route", () => {
       pageOneAttempts += 1;
       return pageOneAttempts === 1 ? pagedResponse(url, 41, "Alpha") : pageResponseWithPrefix(url, 40, "new-a", "New A");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard();
     await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
 
@@ -534,6 +540,7 @@ describe("task-backed boards route", () => {
       if (todoAttempts >= 3) return pageResponseWithPrefix(url, 20, "new-authoritative", "New authoritative");
       return pagedResponse(url, 21, "Alpha");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard();
     await scrollToEnd("todo");
     await change(column("todo").querySelector('select[aria-label="Move Alpha p1.1 from To do"]') as HTMLSelectElement, "doing");
@@ -612,6 +619,7 @@ describe("task-backed boards route", () => {
       if (status === "blocked") return pagedResponse(url, 41, "Blocked task");
       return pagedResponse(url, 0, "Doing task");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard();
     await scrollToEnd("todo");
     expect(boardTaskIds(column("todo"))).toHaveLength(40);
@@ -636,6 +644,7 @@ describe("task-backed boards route", () => {
       : statusFromUrl(String(input)) === "todo" ? pagedResponse(String(input), 21, "Last todo")
         : statusFromUrl(String(input)) === "done" ? pagedResponse(String(input), 20, "Done task")
           : pagedResponse(String(input), 0, "Empty"));
+    stubListViewport(browser, "mobile");
     await renderBoard();
     await scrollToEnd("todo");
     const idsBefore = boardTaskIds(column("todo"));
@@ -682,6 +691,7 @@ describe("task-backed boards route", () => {
       if (status === "doing") return pagedResponse(url, 41, "Doing");
       return pagedResponse(url, 0, "Empty");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard();
 
     await scrollToEnd("doing");
@@ -755,6 +765,7 @@ describe("task-backed boards route", () => {
       const url = String(input); requests.push(url);
       return denied && statusFromUrl(url) === "todo" ? deniedResponse(status) : pagedResponse(url, 21, "Private");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard(); denied = true;
     await scrollToEnd("todo");
     expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
@@ -793,6 +804,7 @@ describe("task-backed boards route", () => {
       }
       return deny ? deniedResponse(403) : pageResponseFor(url, 21, "Private");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard(); deny = true;
     await scrollToEnd("todo");
     expect(lateSignal?.aborted).toBe(true);
@@ -807,6 +819,7 @@ describe("task-backed boards route", () => {
       if (init?.method === "POST") return new Promise<Response>((resolve) => { resolveMove = resolve; });
       return deny ? deniedResponse(401) : pagedResponse(String(input), 21, "Private");
     });
+    stubListViewport(browser, "mobile");
     await renderBoard();
     await change(column("todo").querySelector('select[aria-label="Move Private p1.1 from To do"]') as HTMLSelectElement, "doing");
     deny = true;

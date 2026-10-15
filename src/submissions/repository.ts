@@ -352,12 +352,17 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
   }
 
   async listOwned(submitterId: string, request: SubmissionPageRepositoryRequest): Promise<SubmissionPage> {
-    const statusSql = request.status === undefined ? "" : " AND s.status = ?";
-    const bindings = [submitterId, ...(request.status === undefined ? [] : [request.status])];
+    const filters: string[] = [];
+    const bindings = [submitterId];
+    if (request.status !== undefined) { filters.push("s.status = ?"); bindings.push(request.status); }
+    // Half-open interval, so a count and its page always cover the same rows.
+    if (request.from !== undefined) { filters.push("s.created_at >= ?"); bindings.push(request.from); }
+    if (request.to !== undefined) { filters.push("s.created_at < ?"); bindings.push(request.to); }
+    const where = filters.map((filter) => ` AND ${filter}`).join("");
     return queryNumberedPage(
       this.db,
-      this.db.prepare(`SELECT COUNT(*) AS total FROM submissions s WHERE s.submitter_id = ?${statusSql}`).bind(...bindings),
-      this.db.prepare(`${submissionSelect} WHERE s.submitter_id = ?${statusSql}
+      this.db.prepare(`SELECT COUNT(*) AS total FROM submissions s WHERE s.submitter_id = ?${where}`).bind(...bindings),
+      this.db.prepare(`${submissionSelect} WHERE s.submitter_id = ?${where}
         ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`).bind(...bindings, request.pageSize, pageOffset(request)),
       { page: request.page, pageSize: request.pageSize },
       (row) => mapSubmissionRow(row as SubmissionRow),

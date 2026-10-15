@@ -1,9 +1,18 @@
 // @vitest-environment node
-import React from "react";
+import React, { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
+import { saveInboxIntent } from "../../frontend/lib/inbox-create-intent";
 import { InboxPage } from "../../frontend/pages/inbox-page";
+
+const vmContexts = new WeakSet<object>();
+class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
+vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+// happy-dom loads only after the vm doubles above are registered: its ESM entry pulls in node:vm.
+const { Window } = await import("happy-dom");
 
 const paging = { onFilterChange: vi.fn(), onLoadMore: vi.fn() };
 describe("Inbox page", () => {
@@ -28,5 +37,98 @@ describe("Inbox page", () => {
     expect(renderToStaticMarkup(<InboxPage {...paging} locale={locale} state={{ kind: "loading" }} />)).toContain('aria-busy="true"');
     expect(renderToStaticMarkup(<InboxPage {...paging} locale={locale} state={{ kind: "error", message: "Unable" }} onRetry={vi.fn()} />)).toContain("Try again");
     expect(renderToStaticMarkup(<InboxPage {...paging} locale={locale} state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }} />)).toContain(frontendText(locale, "INBOX_EMPTY"));
+  });
+});
+
+describe("inbox quick capture", () => {
+  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
+  const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+  const item = (id: string, extra: Record<string, unknown> = {}) => ({ id, clientKey: id, kind: "text" as const, content: `Row ${id}`, sourceUrl: null, status: "inbox" as const, promotedTaskId: null, promotedSubmissionId: null, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.001Z", ...extra });
+  const ready = (items = [item("one")], pagination = { page: 1, pageSize: 20 as const, total: 1, totalPages: 1 }) => ({ kind: "ready" as const, items, pagination });
+  beforeEach(() => {
+    browser = new Window({ url: "https://app.test/inbox" });
+    for (const [key, value] of Object.entries({ window: browser, document: browser.document, navigator: browser.navigator, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) vi.stubGlobal(key, value);
+    container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container);
+  });
+  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+  async function mount(extra: Record<string, unknown> = {}) {
+    await act(async () => root.render(<InboxPage locale={locale} state={ready()} createMemberId="alice" onFilterChange={() => {}} {...extra} />));
+  }
+  const dialog = () => container.querySelector("[data-inbox-capture-dialog]");
+  const trigger = () => container.querySelector<HTMLButtonElement>("[data-inbox-capture-open]")!;
+  const composer = () => container.querySelector<HTMLTextAreaElement>("textarea")!;
+  const capture = () => [...container.querySelectorAll("button")].find(node => node.textContent === "Add to inbox") as HTMLButtonElement;
+  async function click(node: HTMLButtonElement) {
+    expect(node).toBeTruthy();
+    const { promise, resolve } = Promise.withResolvers<void>();
+    await act(async () => { node.click(); setTimeout(resolve, 0); await promise; });
+  }
+  async function settle(condition: () => boolean) {
+    for (let attempt = 0; attempt < 20 && !condition(); attempt += 1) {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      await act(async () => { setTimeout(resolve, 1); await promise; });
+    }
+    expect(condition()).toBe(true);
+  }
+  async function type(value: string) {
+    const node = composer();
+    const prop = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
+    await act(async () => { (node as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[prop]!.onChange({ currentTarget: { value } }); });
+  }
+
+  it("opens the composer from the header action and dismisses it after one confirmed creation", async () => {
+    const create = vi.fn(async () => ({})); const readback = vi.fn(async () => true);
+    await mount({ onCreate: create, onCreateReadback: readback });
+    expect(dialog()).toBeNull(); expect(trigger().getAttribute("aria-expanded")).toBe("false");
+    await click(trigger());
+    expect(dialog()?.getAttribute("role")).toBe("dialog"); expect(trigger().getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector("section")?.hasAttribute("inert")).toBe(true);
+    await type("File the invoice note");
+    await click(capture());
+    await settle(() => dialog() === null);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0]![0]).toEqual(expect.objectContaining({ kind: "text", content: "File the invoice note", sourceUrl: null }));
+    expect(readback).toHaveBeenCalledTimes(1);
+    await click(trigger());
+    expect(composer().value).toBe(""); expect(composer().disabled).toBe(false);
+  });
+
+  it("reopens an unresolved capture on entry instead of resending it", async () => {
+    saveInboxIntent("alice", { id: "capture-1", clientKey: "key-1", kind: "text", content: "Recovered note", sourceUrl: null });
+    const create = vi.fn(async () => ({}));
+    await mount({ onCreate: create });
+    expect(dialog()).not.toBeNull(); expect(composer().value).toBe("Recovered note");
+    expect(container.querySelector("[data-create-retry]")).not.toBeNull();
+    expect(trigger().hasAttribute("data-inbox-capture-pending")).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("keeps the status filter and the desktop pager wired to the list query", async () => {
+    const filter = vi.fn(); const pageChange = vi.fn(); const sizeChange = vi.fn();
+    await mount({ onFilterChange: filter, onPageChange: pageChange, onPageSizeChange: sizeChange, status: "inbox", state: ready([item("one")], { page: 1, pageSize: 20, total: 43, totalPages: 3 }) });
+    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Inbox status"]')!;
+    expect(select.value).toBe("inbox");
+    const section = container.querySelector("section")!;
+    const table = section.querySelector("table")!;
+    const slots = [...section.children];
+    expect(slots.findIndex(child => child.contains(select))).toBeLessThan(slots.findIndex(child => child.contains(table)));
+    await act(async () => { select.value = "archived"; select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    expect(filter).toHaveBeenCalledExactlyOnceWith("archived");
+    await click(container.querySelector<HTMLButtonElement>('[data-pagination-desktop] button[aria-label="Next page"]')!);
+    expect(pageChange).toHaveBeenCalledExactlyOnceWith(2);
+    const size = container.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
+    await act(async () => { size.value = "50"; size.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    expect(sizeChange).toHaveBeenCalledExactlyOnceWith(50);
+  });
+
+  it("keeps the filter label, row action labels and disabled conditions", async () => {
+    const state = ready([item("one"), item("two", { status: "archived" }), item("three", { status: "promoted", promotedTaskId: "task-1" })], { page: 1, pageSize: 20, total: 3, totalPages: 1 });
+    await mount({ state, pending: true, actionError: "Nope" });
+    expect(container.querySelector<HTMLSelectElement>('select[aria-label="Inbox status"]')!.disabled).toBe(true);
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Nope");
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Archive"]')!.disabled).toBe(true);
+    expect(container.querySelector('button[aria-label="Restore"]')?.textContent).toBe("Restore");
+    expect(container.querySelector('button[aria-label="Turn into task"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Open task"]')).not.toBeNull();
   });
 });

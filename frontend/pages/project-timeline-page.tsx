@@ -1,6 +1,6 @@
 import { TimelineItemEditor } from "../components/timeline-item-editor";
 import { DataTable } from "../components/data-table";
-import type { FrontendPageMetadata } from "../lib/numbered-page";
+import type { FrontendPageMetadata, SupportedPageSize } from "../lib/numbered-page";
 import { ArrowLeft, CalendarDots, CheckCircle, ClipboardText, Gavel, MapPin, UsersThree } from "@phosphor-icons/react";
 import { TimelineCreateForm, type TimelineCreateCallbacks } from "../components/timeline-create-form";
 import type { LocaleRuntime } from "../lib/i18n";
@@ -14,15 +14,19 @@ export type ProjectTimelinePageState = { kind: "loading" } | { kind: "error"; me
 
 const kindIcons = { meeting: UsersThree, decision: Gavel, action_item: ClipboardText, milestone: MapPin } as const;
 
-export function ProjectTimelinePage({ locale, state, pending = false, actionError, onRetry, onEdit, onStatusChange, onLoadMore, onBack, createLocked = false, ...createCallbacks }: TimelineCreateCallbacks & {
+export function ProjectTimelinePage({ locale, state, pending = false, actionError, onRetry, onEdit, onStatusChange, onLoadMore, onPageChange, onPageSizeChange, onBack, createLocked = false, ...createCallbacks }: TimelineCreateCallbacks & {
   locale: LocaleRuntime; state: ProjectTimelinePageState; pending?: boolean; actionError?: string; createLocked?: boolean;
   onRetry?: () => void;
   onEdit?: (item: ProjectTimelineItem, content: TimelineEditContent) => Promise<boolean>;
   onStatusChange?: (item: ProjectTimelineItem, status: ProjectTimelineStatus) => void; onLoadMore?: () => void; onBack?: () => void;
+  onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void;
 }) {
+  const controlsBlocked = pending || createLocked;
+  const changePage = (page: number) => { if (controlsBlocked) return; onPageChange?.(page); };
+  const changePageSize = (pageSize: SupportedPageSize) => { if (controlsBlocked) return; onPageSizeChange?.(pageSize); };
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "PROJECT_TIMELINE_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "PROJECT_TIMELINE_RETRY")}</Button></PageState>;
-  return <section className="space-y-5">
+  return <section className="flex flex-col space-y-5 lg:h-full lg:min-h-0">
     <div className="flex flex-wrap items-end justify-between gap-3"><div><Button type="button" variant="ghost" size="sm" onClick={onBack}><ArrowLeft size={16} className="mr-1" />{frontendText(locale, "PROJECT_TIMELINE_BACK")}</Button><div className="mt-2 flex items-center gap-2"><CalendarDots size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{state.project.title}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "PROJECT_TIMELINE_DESCRIPTION")}</p></div><Badge variant="outline">{frontendText(locale, "PROJECT_TIMELINE_PRIVATE_BADGE")}</Badge></div>
     <TimelineCreateForm locale={locale} pending={pending} {...createCallbacks} />
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
@@ -31,9 +35,13 @@ export function ProjectTimelinePage({ locale, state, pending = false, actionErro
       rows={state.items}
       rowId={(item) => item.id}
       ariaLabel={frontendText(locale, "PROJECTS_TIMELINE")}
-      loadingMoreLabel={frontendText(locale, "PROJECT_TIMELINE_LOAD_MORE")}
       emptyState={<PageState kind="empty" title={frontendText(locale, "PROJECT_TIMELINE_EMPTY")} />}
       loading={pending || createLocked}
+      pagination={state.pagination}
+      onPageChange={changePage}
+      onPageSizeChange={changePageSize}
+      fill
+      className="lg:min-h-0 lg:flex-1"
       hasMore={Boolean(state.pagination && state.pagination.page < state.pagination.totalPages)}
       onLoadMore={onLoadMore}
       rowHeight={132}

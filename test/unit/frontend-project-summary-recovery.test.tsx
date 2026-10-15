@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 import { loadProjectSummary } from "../../frontend/lib/projects-data";
+import { stubListViewport } from "../helpers/list-viewport";
 
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const validSummary = { goalCount: 1, taskCount: 3, completedTaskCount: 2, goals: [{ id: "goal-a", title: "Linked goal" }] };
@@ -36,9 +37,9 @@ describe("project summary per-row recovery", () => {
     await act(async () => { scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new journey!.browser.Event("scroll", { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 0)); });
   }
   const requests: string[] = [];
-  async function mount(respond: (url: URL, init?: RequestInit) => Promise<Response> | Response) {
+  async function mount(respond: (url: URL, init?: RequestInit) => Promise<Response> | Response, viewport: "desktop" | "mobile" = "desktop") {
     requests.length = 0;
-    journey = await mountAuthenticatedApp({ url: "https://app.test/projects", role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
+    journey = await mountAuthenticatedApp({ url: "https://app.test/projects", role: "contributor", permissionMask: "0x100000", configureBrowser(browser) { if (viewport === "mobile") stubListViewport(browser, "mobile"); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
@@ -159,7 +160,7 @@ describe("project summary per-row recovery", () => {
         return Response.json({ items, pagination: { page, pageSize: 20, total: 22, totalPages: 2 } });
       }
       return url.pathname === "/api/projects/b/summary" && failed ? apiError(500, "UNAVAILABLE", true) : Response.json(validSummary);
-    });
+    }, "mobile");
     await waitForApp(() => !!row("first-0"));
     await scrollToEnd();
     await waitForApp(() => !!row("b"));

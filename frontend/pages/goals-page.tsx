@@ -1,5 +1,5 @@
 import { usePlanningStatusConfirmation } from "../components/planning-status-confirmation";
-import type { FrontendPageMetadata } from "../lib/numbered-page";
+import type { FrontendPageMetadata, SupportedPageSize } from "../lib/numbered-page";
 import { DataTable } from "../components/data-table";
 import { PlanningCreateForm, type PlanningCreateCallbacks } from "../components/planning-create-form";
 import { Target, Plus, Archive, CheckCircle } from "@phosphor-icons/react";
@@ -13,19 +13,23 @@ import { PageState } from "../components/ui/page-state";
 
 export type GoalsPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; items: readonly Goal[]; pagination?: FrontendPageMetadata };
 
-export function GoalsPage({ locale, state, pending = false, actionError, onRetry, onCreate, createMemberId, onCreateReadback, onCreateDenied, onCreateLock, createLocked = false, onStatusChange, onManageTasks, onProgressChange, onLoadMore }: {
+export function GoalsPage({ locale, state, pending = false, actionError, onRetry, onCreate, createMemberId, onCreateReadback, onCreateDenied, onCreateLock, createLocked = false, onStatusChange, onManageTasks, onProgressChange, onLoadMore, onPageChange, onPageSizeChange }: {
   locale: LocaleRuntime; state: GoalsPageState; pending?: boolean; actionError?: string;
   onManageTasks?: (goal: Goal, trigger: HTMLButtonElement) => void; onRetry?: () => void; createLocked?: boolean;
   onStatusChange?: (goal: Goal, status: GoalStatus) => void; onProgressChange?: (goal: Goal, progress: number) => void; onLoadMore?: () => void;
+  onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void;
 } & PlanningCreateCallbacks) {
   const statusConfirmation = usePlanningStatusConfirmation({
     kind: "GOALS", locale, items: state.kind === "ready" ? state.items : undefined,
     pagination: state.kind === "ready" ? state.pagination : undefined, memberId: createMemberId,
     blocked: pending || createLocked, onStatusChange,
   });
+  const controlsBlocked = pending || createLocked || statusConfirmation.open;
+  const changePage = (page: number) => { if (controlsBlocked) return; onPageChange?.(page); };
+  const changePageSize = (pageSize: SupportedPageSize) => { if (controlsBlocked) return; onPageSizeChange?.(pageSize); };
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "GOALS_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GOALS_RETRY")}</Button></PageState>;
-  return <><section className="space-y-5" inert={statusConfirmation.open} aria-hidden={statusConfirmation.open || undefined}>
+  return <><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={statusConfirmation.open} aria-hidden={statusConfirmation.open || undefined}>
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><Target size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{frontendText(locale, "GOALS_TITLE")}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "GOALS_DESCRIPTION")}</p></div><Badge variant="outline">{frontendText(locale, "GOALS_PRIVATE_BADGE")}</Badge></div>
     <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus size={18} />{frontendText(locale, "GOALS_CREATE_TITLE")}</CardTitle></CardHeader><CardContent><PlanningCreateForm isSubmitBlocked={statusConfirmation.isOpen} createMemberId={createMemberId} kind="GOALS" locale={locale} pending={pending || statusConfirmation.open} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={onCreateLock} /></CardContent></Card>
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
@@ -34,9 +38,13 @@ export function GoalsPage({ locale, state, pending = false, actionError, onRetry
       rows={state.items}
       rowId={(goal) => goal.id}
       ariaLabel={frontendText(locale, "GOALS_TITLE")}
-      loadingMoreLabel={frontendText(locale, "GOALS_LOAD_MORE")}
       emptyState={<PageState kind="empty" title={frontendText(locale, "GOALS_EMPTY")} />}
       loading={pending}
+      pagination={state.pagination}
+      onPageChange={onPageChange ? changePage : undefined}
+      onPageSizeChange={onPageSizeChange ? changePageSize : undefined}
+      fill
+      className="lg:min-h-0 lg:flex-1"
       hasMore={!!state.pagination && state.pagination.page < state.pagination.totalPages}
       onLoadMore={onLoadMore}
       rowHeight={104}

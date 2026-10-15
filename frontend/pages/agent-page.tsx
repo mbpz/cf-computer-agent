@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { PageState } from "../components/ui/page-state";
+import { SummaryRow, type SummaryRowItem } from "../components/ui/summary-row";
 import { agentLocationFromSearch, type AgentAnswer, type AgentScope, type ChatStage } from "../lib/agent-data";
 import { AgentProgress } from "../components/agents/agent-progress";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
@@ -20,7 +21,14 @@ const AGENT_STAGE_KEYS: Record<ChatStage, string> = { retrieving: "AGENT_STAGE_R
 export function AgentPage({ scope, state, locale, question = "", onQuestionChange, onSubmit, onCancel, onRetry, onStartScope, isWriteBlocked, sourceDraft, feedbackAdmission, feedbackBlocked = false, memberId, stage }: { scope: string | AgentScope; state: { kind: "loading" } | { kind: "cancelled" } | ({ kind: "ready"; citations: readonly AgentCitation[] } & Omit<AgentAnswer, "citations">) | { kind: "error"; message: string }; stage?: ChatStage | null; locale?: LocaleRuntime; question?: string; onQuestionChange?: (question: string) => void; onSubmit?: () => void; onCancel?: () => void; onRetry?: () => void; sourceDraft?: SourceDraft; feedbackAdmission?: AgentFeedbackAdmission; feedbackBlocked?: boolean; memberId?: string; isWriteBlocked?: () => boolean; onStartScope?: (scope: AgentScope, onCommit: () => void, onSettled: () => void) => void }) {
   const scopeLabel = typeof scope === "string" ? scope || "all" : scope.kind;
   const stageLabel = frontendText(locale, stage ? AGENT_STAGE_KEYS[stage] : "AGENT_PREPARING");
-  return <section className="space-y-6"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "AGENT_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "AGENT_SCOPE")}: <code>{scopeLabel}</code></p></div>
+  // Question, scope and low confidence share one clampable line; the confidence
+  // field only appears when the answer reports low confidence.
+  const summaryItems: SummaryRowItem[] = [
+    { label: frontendText(locale, "AGENT_QUESTION_LABEL"), value: question },
+    { label: frontendText(locale, "AGENT_SCOPE"), value: scopeLabel },
+    ...(state.kind === "ready" && state.confidence === "low" ? [{ label: frontendText(locale, "AGENT_CONFIDENCE"), value: frontendText(locale, "AGENT_CONFIDENCE_LOW") }] : []),
+  ];
+  return <section className="flex flex-col space-y-6 lg:h-full lg:min-h-0"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "AGENT_TITLE")}</h1><SummaryRow className="mt-1" locale={locale} items={summaryItems} /></div>
     <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
       <Label htmlFor="agent-question">{frontendText(locale, "AGENT_QUESTION_LABEL")}</Label>
       <div className="flex flex-col gap-2 sm:flex-row"><Input id="agent-question" name="question" disabled={state.kind === "loading" || feedbackBlocked} value={question} onChange={(event) => onQuestionChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "AGENT_QUESTION_PLACEHOLDER")} autoComplete="off" /><Button type="submit" disabled={!onSubmit || state.kind === "loading" || feedbackBlocked}>{frontendText(locale, "AGENT_SUBMIT")}</Button></div>

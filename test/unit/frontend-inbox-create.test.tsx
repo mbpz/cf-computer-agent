@@ -15,6 +15,9 @@ describe("inbox stable capture through App", () => {
   const content = () => main().querySelector("textarea") as HTMLTextAreaElement;
   const button = (selector: string) => main().querySelector(selector) as HTMLButtonElement;
   const create = () => [...main().querySelectorAll("button")].find(node => node.textContent === "Add to inbox")!;
+  const captureTrigger = () => main().querySelector<HTMLButtonElement>("[data-inbox-capture-open]");
+  /** The composer only mounts while its dialog is open, so every capture step opens it first. */
+  async function openCapture() { if (content()) return; await click(captureTrigger()!); }
   async function change(value: string) {
     await act(async () => {
       const node = content(); node.value = value;
@@ -39,7 +42,8 @@ describe("inbox stable capture through App", () => {
       if (url.pathname !== "/api/inbox") return Response.json(entity(bodies.at(-1)!));
       return Response.json({ items: [], pagination: { page: Number(url.searchParams.get("page") ?? 1), pageSize: Number(url.searchParams.get("pageSize") ?? 20), total: 0, totalPages: 0 } });
     } });
-    await waitForApp(() => !!content());
+    await waitForApp(() => !!captureTrigger());
+    await openCapture();
   }
   afterEach(async () => { await app?.unmount(); app = undefined; });
   it("retains the original frozen request on uncertainty and retries exactly once", async () => {
@@ -48,14 +52,14 @@ describe("inbox stable capture through App", () => {
     expect(content().value).toBe("Original private note"); expect(content().disabled).toBe(true);
     expect(button("[data-create-retry]")).toBeTruthy(); const original = bodies[0];
     respond = receipt; await click(button("[data-create-retry]"));
-    await waitForApp(() => content().value === ""); expect(bodies).toEqual([original, original]);
+    await waitForApp(() => !content()); expect(bodies).toEqual([original, original]);
   });
   it("double click issues one POST and confirmed creation clears only after readback", async () => {
     await mount(); let resolve!: (response: Response) => void;
     respond = () => new Promise(done => { resolve = done; });
     await change("One intent"); const capture = create(); await act(async () => { capture.click(); capture.click(); });
     expect(bodies).toHaveLength(1); expect(content().value).toBe("One intent");
-    await act(async () => resolve(receipt(bodies[0]!))); await waitForApp(() => content().value === "");
+    await act(async () => resolve(receipt(bodies[0]!))); await waitForApp(() => !content());
     expect(reads).toBe(3);
   });
   it("known rejection preserves editable draft, rather than losing content", async () => {
@@ -74,16 +78,16 @@ describe("inbox stable capture through App", () => {
     await mount(); readFailure = true;
     await change("Acknowledged note"); await click(create());
     expect(button("[data-create-read-retry]")).toBeTruthy(); expect(button("[data-create-retry]")).toBeNull();
-    readFailure = false; await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!content());
+    readFailure = false; await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!captureTrigger()); await openCapture();
     expect(content().value).toBe("Acknowledged note"); expect(button("[data-create-read-retry]")).toBeTruthy();
-    await click(button("[data-create-read-retry]")); await waitForApp(() => content().value === ""); expect(bodies).toHaveLength(1);
+    await click(button("[data-create-read-retry]")); await waitForApp(() => !content()); expect(bodies).toHaveLength(1);
   });
   it("unknown creation survives leaving and never automatically replays", async () => {
     await mount(); respond = () => { throw new TypeError("lost transport"); };
     await change("Surviving intent"); await click(create()); const original = bodies[0];
-    await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!content());
+    await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!captureTrigger()); await openCapture();
     expect(content().value).toBe("Surviving intent"); expect(bodies).toHaveLength(1);
-    respond = receipt; await click(button("[data-create-retry]")); await waitForApp(() => content().value === ""); expect(bodies).toEqual([original, original]);
+    respond = receipt; await click(button("[data-create-retry]")); await waitForApp(() => !content()); expect(bodies).toEqual([original, original]);
   });
   it("quota failure prevents any POST and keeps the draft", async () => {
     await mount(); vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
@@ -96,7 +100,7 @@ describe("inbox stable capture through App", () => {
     await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
     await forceRemount("/unknown");
     const before = reads; await act(async () => resolve(receipt(bodies[0]!))); expect(reads).toBe(before);
-    await forceRemount("/inbox"); await waitForApp(() => !!content());
+    await forceRemount("/inbox"); await waitForApp(() => !!captureTrigger()); await openCapture();
     expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
   });
   it("recovers the exact unknown intent in a fresh browser realm, isolated from another member", async () => {
@@ -112,7 +116,7 @@ describe("inbox stable capture through App", () => {
     await mount("contributor-route-auditor", saved);
     expect(content().value).toBe("Alice secret"); expect(content().disabled).toBe(true); expect(bodies).toEqual([]);
     await click(button("[data-create-retry]")); expect(bodies).toEqual([original]);
-    await waitForApp(() => content().value === "");
+    await waitForApp(() => !content());
   });
   it("never downgrades a confirmed receipt when acknowledgement storage initially fails", async () => {
     await mount();
@@ -127,7 +131,7 @@ describe("inbox stable capture through App", () => {
     await click(button("[data-create-storage-retry]")); expect(button("[data-create-retry]")).toBeNull();
     fail = false; await click(button("[data-create-storage-retry]"));
     expect(button("[data-create-read-retry]")).toBeTruthy();
-    await click(button("[data-create-read-retry]")); await waitForApp(() => content().value === ""); expect(bodies).toHaveLength(1);
+    await click(button("[data-create-read-retry]")); await waitForApp(() => !content()); expect(bodies).toHaveLength(1);
   });
   it.each([401, 403])("clears private capture and disables the route after %i", async status => {
     await mount(); respond = () => apiError(status, "DENIED", false);
@@ -168,7 +172,7 @@ describe("inbox stable capture through App", () => {
     });
   }
   async function chooseLink() {
-    const node = main().querySelector("select")!;
+    const node = main().querySelector("[data-inbox-capture-dialog] select")!;
     await act(async () => {
       node.value = "link";
       node.dispatchEvent(new app!.browser.Event("change", { bubbles: true }));
@@ -178,7 +182,7 @@ describe("inbox stable capture through App", () => {
     await mount(); await chooseLink(); await source("https://example.com/note"); await change("Keep this capture");
     expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this capture");
     expect(unload()).toBe(true); expect(bodies).toHaveLength(0);
-    await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!content());
+    await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!captureTrigger()); await openCapture();
     expect(content().value).toBe("Keep this capture");
     expect(main().querySelector<HTMLInputElement>('input[aria-label="Source URL"]')!.value).toBe("https://example.com/note");
     expect(bodies).toHaveLength(0); expect(unload()).toBe(true);
@@ -208,8 +212,8 @@ describe("inbox stable capture through App", () => {
     await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     expect(app!.browser.sessionStorage.getItem(draftKey)).toBeNull();
     await act(async () => expect(writeWorkspaceHistory("push", "/inbox")).toBe("committed"));
-    await waitForApp(() => !!content() && !content().disabled);
-    expect(content().value).toBe(""); expect(unload()).toBe(false);
+    await waitForApp(() => !!captureTrigger()); await openCapture();
+    expect(content().value).toBe(""); expect(content().disabled).toBe(false); expect(unload()).toBe(false);
   });
 
 });

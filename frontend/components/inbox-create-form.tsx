@@ -15,11 +15,13 @@ export interface InboxCreateCallbacks {
   onCreateReadback?: (intent: InboxCreateIntent) => Promise<boolean>;
   onCreateDenied?: (error: unknown) => void;
   onCreateLock?: (locked: boolean) => void;
+  /** Fires once a creation is confirmed by readback, so the host can dismiss its composer. */
+  onCreated?: () => void;
 }
 type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed" | "storage-blocked";
 
 // Persist before POST; restored intents require explicit retry, never a new key.
-export function InboxCreateForm({ locale, createMemberId, pending = false, isSubmitBlocked, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: InboxCreateCallbacks & {
+export function InboxCreateForm({ locale, createMemberId, pending = false, isSubmitBlocked, onCreate, onCreateReadback, onCreateDenied, onCreateLock, onCreated }: InboxCreateCallbacks & {
   locale: LocaleRuntime; pending?: boolean; isSubmitBlocked?: () => boolean;
 }) {
   const [stored] = useState<StoredInboxIntent>(() => createMemberId ? loadInboxIntent(createMemberId) : { kind: "blocked" });
@@ -85,7 +87,7 @@ export function InboxCreateForm({ locale, createMemberId, pending = false, isSub
       if (!active.current || generation.current !== current) return;
       if (!confirmed) { transition("read-failed"); return; }
       if (!clearStored()) { transition("storage-blocked"); return; }
-      intentRef.current = null; acknowledged.current = false; draft.reset(); setError(false); transition("editing");
+      intentRef.current = null; acknowledged.current = false; draft.reset(); setError(false); transition("editing"); onCreated?.();
     } catch (cause) {
       if (!active.current || generation.current !== current || denied(cause)) return;
       transition("read-failed");

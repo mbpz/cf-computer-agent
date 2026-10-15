@@ -6,6 +6,14 @@ import { forceRemountAppAt, mountAuthenticatedApp, waitForApp, type MountedApp }
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const V0 = "2026-09-01T00:00:00.000Z";
+const LIST_DESKTOP_QUERY = "(min-width: 1024px)";
+/** happy-dom reports a 1024px viewport, so every journey has to pick its surface explicitly. */
+function stubViewport(browser: MountedApp["browser"], desktop: boolean) {
+  Object.defineProperty(browser, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: query === LIST_DESKTOP_QUERY ? desktop : false, media: query, onchange: null, addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false }),
+  });
+}
 describe("goal task association journey", () => {
   let app: MountedApp | undefined, revision: number, links: Set<string>, writes: string[], versions: string[], reads: string[];
   let failure: number, readFailure: number, badReceipt: boolean, oldRead: boolean, hold: Promise<void> | undefined;
@@ -13,9 +21,9 @@ describe("goal task association journey", () => {
   const editor = () => main().querySelector("[data-goal-tasks-editor]")!;
   const button = (text: string, root: Element = main()) => [...root.querySelectorAll("button")].find(b => b.textContent === text)!;
   afterEach(async () => { await app?.unmount(); app = undefined; });
-  async function mount(initial = false) {
+  async function mount(initial = false, desktop = false) {
     revision = 0; links = new Set(initial ? ["t-0"] : []); writes = []; versions = []; reads = []; failure = 0; readFailure = 0; badReceipt = false; oldRead = false; hold = undefined;
-    app = await mountAuthenticatedApp({ url: "https://app.test/goals", role: "contributor", permissionMask: "0x100000", configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); }, fetch: async (input, init) => {
+    app = await mountAuthenticatedApp({ url: "https://app.test/goals", role: "contributor", permissionMask: "0x100000", configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); stubViewport(browser, desktop); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       const version = () => new Date(Date.parse(V0) + revision).toISOString();
       const goal = () => ({ id: "g", clientKey: "g", title: "Private goal", description: null, status: "active", progress: 37, targetAt: null, createdAt: V0, updatedAt: version() });
@@ -107,6 +115,18 @@ describe("goal task association journey", () => {
     await act(async () => first()); expect(confirm()).toBeTruthy(); await click(keep());
     await click(editor().querySelector<HTMLButtonElement>('[aria-label="Link: Private task 20"]')!); await confirmWrite(); await waitForApp(() => !!button("Unlink", editor()));
     expect(writes).toHaveLength(1); expect(links.has("t-20")).toBe(true); expect(links.has("t-0")).toBe(false);
+  });
+  it("replaces the loaded window with the footer pager on desktop instead of appending", async () => {
+    await mount(false, true);
+    const next = editor().querySelector<HTMLButtonElement>('[data-pagination-desktop] button[aria-label="Next page"]');
+    expect(next).not.toBeNull();
+    const before = reads.length;
+    await click(next!);
+    await waitForApp(() => editor()?.textContent?.includes("Private task 20") === true);
+    // The replaced window drops page one instead of keeping both pages loaded.
+    expect(editor().textContent).not.toContain("Private task 0");
+    expect(reads).toHaveLength(before + 1);
+    expect(reads.at(-1)).toBe("?page=2&pageSize=20");
   });
   it("invalidates captured row handlers synchronously when closing", async () => {
     await mount(); const stale = captured(button("Link", editor())), close = captured(button("Close links", editor()));

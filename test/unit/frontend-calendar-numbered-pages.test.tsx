@@ -3,6 +3,7 @@ import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { stubListViewport } from "../helpers/list-viewport";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const from = "2026-09-28T00:00:00.000Z", to = "2026-09-29T00:00:00.000Z";
@@ -18,7 +19,7 @@ describe("calendar scrolling range through App", () => {
   };
   async function mount(search = `?${range}`, count=43, initialFail?: number) {
     requests=[]; fail=initialFail; malformed=false; total=count; delay=false; resolveRead=undefined; signal=undefined;
-    app=await mountAuthenticatedApp({ url: `https://app.test/calendar${search}`, role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
+    app=await mountAuthenticatedApp({ url: `https://app.test/calendar${search}`, role: "contributor", permissionMask: "0x100000", configureBrowser: browser => stubListViewport(browser, "mobile"), fetch: async (input, init) => {
       const url=new URL(String(input), "https://app.test");
       if(url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if(url.pathname === "/api/telemetry/pageview") return new Response(null,{status:204});

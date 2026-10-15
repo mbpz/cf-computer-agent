@@ -1,7 +1,8 @@
 // @vitest-environment node
-import React from "react";
+import React, { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import {
   BOARD_STATUSES,
@@ -13,6 +14,13 @@ import {
 import { BoardsPage } from "../../frontend/pages/boards/boards-page";
 import { taskStatusKey } from "../../frontend/pages/tasks/tasks-model";
 import type { TaskItem } from "../../frontend/lib/tasks-data";
+
+const vmContexts = new WeakSet<object>();
+class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
+vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+// Static import cannot work here: happy-dom must load after the hoisted `node:vm` mock and the InertVmScript class are initialized.
+const { Window } = await import("happy-dom");
 
 describe("task-backed board model", () => {
   it("uses the four canonical non-canceled columns and legal task transitions", () => {
@@ -39,7 +47,7 @@ describe("task-backed board model", () => {
 });
 
 describe("task-backed boards page", () => {
-  it("renders four localized columns as independently scrolling tables without pagination controls", () => {
+  it("renders four localized columns as independent scroll regions until the route wires page controls", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
     const columns = readyColumns();
     columns.todo = ready([task("todo", "待办任务", "todo-1"), task("canceled", "不应出现", "canceled-1")], 21);
@@ -53,10 +61,27 @@ describe("task-backed boards page", () => {
     expect(html).toContain(frontendText(locale, "TASKS_STATUS_DONE"));
     expect(html).toContain("待办任务");
     expect(html).not.toContain("不应出现");
-    // Each column owns a distinguishable scroll region and keeps the task marker.
+    // The board fills the desktop height column by column and keeps the task marker.
+    expect(html).toContain("lg:h-full lg:min-h-0");
+    expect(html).toContain("lg:min-h-0 lg:flex-1");
+    expect(html).toContain("lg:items-stretch");
     expect(BOARD_STATUSES.every((status) => html.includes(`aria-label="${frontendText(locale, "BOARDS_COLUMN_LIST")}: ${frontendText(locale, taskStatusKey(status))}"`))).toBe(true);
     expect(html).toContain('data-board-task="todo-1"');
     expect(html).not.toContain("data-pagination");
+  });
+
+  it("gives every column its own desktop pager with that column's totals", () => {
+    const locale = createLocaleRuntime();
+    const columns = readyColumns();
+    columns.todo = ready([task("todo", "Alpha", "todo-1")], 41);
+    columns.blocked = ready([task("blocked", "Stuck", "blocked-1")], 5);
+    const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} onLoadMore={vi.fn()} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} />);
+
+    expect(html.match(/data-pagination-desktop/g)).toHaveLength(4);
+    expect(html).toContain("Total");
+    expect(html).toContain("41");
+    expect(html).toContain("1–20");
+    expect(html).not.toContain(frontendText(locale, "LIST_END_OF_LIST"));
   });
 
   it("renders locale-backed loading, error, and empty states per column", () => {
@@ -100,6 +125,65 @@ describe("task-backed boards page", () => {
     expect(html).toContain('data-board-task="task-done"');
     expect(html).not.toContain("data-optimistic");
     expect(html).toContain("aria-busy");
+  });
+});
+
+describe("boards paging surface", () => {
+  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
+  const en = createLocaleRuntime({ navigatorLanguage: "en" });
+
+  // The shared table switches surface on Tailwind's `lg` edge.
+  const setViewport = (desktop: boolean) => Object.defineProperty(browser, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: desktop && query === "(min-width: 1024px)", media: query, onchange: null, addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false }),
+  });
+
+  beforeEach(() => {
+    browser = new Window({ url: "https://app.test/boards" });
+    for (const [key, value] of Object.entries({ window: browser, document: browser.document, HTMLElement: browser.HTMLElement, navigator: browser.navigator, getComputedStyle: browser.getComputedStyle.bind(browser), IS_REACT_ACT_ENVIRONMENT: true })) vi.stubGlobal(key, value);
+    setViewport(true);
+    container = browser.document.createElement("div") as unknown as HTMLElement;
+    browser.document.body.append(container as unknown as Node);
+    root = createRoot(container);
+  });
+  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+
+  const todoItems = () => Array.from({ length: 4 }, (_, index) => task("todo", `Alpha ${index + 1}`, `todo-${index + 1}`));
+  const column = (status: (typeof BOARD_STATUSES)[number]) => container.querySelector(`[data-board-column="${status}"]`) as HTMLElement;
+
+  const render = async (nodes: BoardColumnStates, handlers: Record<string, unknown>) => {
+    await act(async () => root.render(<BoardsPage locale={en} columns={nodes} onRetry={() => undefined} onStatusChange={() => undefined} {...handlers} />));
+  };
+
+  it("routes each column's page controls with that column's status", async () => {
+    const onPageChange = vi.fn(); const onPageSizeChange = vi.fn();
+    const columns = readyColumns();
+    columns.todo = ready(todoItems(), 41);
+    await render(columns, { onLoadMore: vi.fn(), onPageChange, onPageSizeChange });
+
+    const todo = column("todo");
+    expect(todo.textContent).toContain("1–20");
+    await act(async () => (todo.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
+    expect(onPageChange).toHaveBeenCalledWith("todo", 2);
+    const select = todo.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
+    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLSelectElement.prototype, "value")!.set!.call(select, "50"); select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    expect(onPageSizeChange).toHaveBeenCalledWith("todo", 50);
+    expect(container.querySelectorAll("[data-pagination-desktop]")).toHaveLength(4);
+  });
+
+  it("keeps every column's append feed and hides the pagers on narrow viewports", async () => {
+    setViewport(false);
+    const onLoadMore = vi.fn(); const onPageChange = vi.fn();
+    const columns = readyColumns();
+    columns.doing = ready([task("doing", "Beta 1", "doing-1"), task("doing", "Beta 2", "doing-2"), task("doing", "Beta 3", "doing-3"), task("doing", "Beta 4", "doing-4")], 41);
+    await render(columns, { onLoadMore, onPageChange, onPageSizeChange: vi.fn() });
+
+    expect(container.querySelector("[data-pagination-desktop]")).toBeNull();
+    expect(container.querySelector("[data-pagination-mobile]")).toBeNull();
+    const scroller = column("doing").querySelector("table")!.parentElement as HTMLElement;
+    await act(async () => scroller.dispatchEvent(new browser.Event("scroll") as unknown as Event));
+    expect(onLoadMore).toHaveBeenCalledWith("doing");
+    expect(onPageChange).not.toHaveBeenCalled();
   });
 });
 

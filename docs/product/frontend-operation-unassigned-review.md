@@ -347,7 +347,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `e740dbdf1be47a45a7b1281a3f7600eeabbd96a11deb2dd986d90e69b796710f`
+- `frontend/app.tsx`: `612ed4158d293f423bf6fa1c6491061d7c00a08b01e01fef73820868bc36e19e`
 - `frontend/components/agent/answer-panel.tsx`: `aacef68e378bab0307b095b1afa160fb2151de7ec7f06d53a7928b3f6c4aef70`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
@@ -364,7 +364,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/features/environments/account-vm-runtime.mjs`: `5cfd8db87089437abd4e0c2edcc667b973ee4e57f9a0806886e7dcf326ff3c8d`
 - `frontend/features/environments/authenticated-vm-runtime.ts`: `f81bc382e47709dd818a3209b5974c53f87487821bebea8ab3112c2f687c4bf2`
 - `frontend/features/environments/connector-session.mjs`: `4bea623fd47128568d112e9cfa26ecdc90f114a6572e536b08d49f4537cc5269`
-- `frontend/features/environments/environments-page.tsx`: `0477072da0695c88dfde1357ef4623ac1b433456de6e9f38b320780cdefb6e5d`
+- `frontend/features/environments/environments-page.tsx`: `4a7ba1d3e92887673e7f54735b2dbf97a9322cf3693a58787ba35ca96a63299b`
 - `frontend/features/environments/files/asset-import-panel.tsx`: `b0f3b4bd5e1c31d8e19d3a38162029551812e7e53bb69268a6fc4ee6e612000f`
 - `frontend/features/environments/files/asset-import.ts`: `9f8dcf9fef963647f1bbc5af57e3f0716af2d39064b9212fcbeec3adb2dee6a8`
 - `frontend/features/environments/files/file-manager.mjs`: `2721e8e7abecd3dda95765eecb055f7bf3272942f1933807a07bba83a7df5ea6`

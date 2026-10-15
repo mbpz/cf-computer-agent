@@ -6,6 +6,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { forceRemountAppAt, mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
+const LIST_DESKTOP_QUERY = "(min-width: 1024px)";
+/** happy-dom reports a 1024px viewport, so every journey has to pick its surface explicitly. */
+function stubViewport(browser: MountedApp["browser"], desktop: boolean) {
+  Object.defineProperty(browser, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: query === LIST_DESKTOP_QUERY ? desktop : false, media: query, onchange: null, addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false }),
+  });
+}
 const stamp = "2026-09-28T00:00:00.000Z";
 const task = (id: number) => ({id: `task-${id}`, title: `Owned task ${id}`, notes: "", status: "todo", priority: "medium", progress: 0, dueAt: null, completedAt: null, createdAt: stamp, updatedAt: stamp});
 const page = (number = 1, size = 20, total = 21) => ({items: Array.from({length: Math.max(0, Math.min(size, total - (number - 1) * size))}, (_, i) => task((number - 1) * size + i + 1)), pagination: {page: number, pageSize: size, total, totalPages: Math.ceil(total / size)}});
@@ -29,8 +37,8 @@ describe("Focus owned task selection through App", () => {
   const click = async (node: HTMLElement) => act(async () => node.click());
   async function finish(label: string) { await click(button(label)); const confirm=main().querySelector<HTMLButtonElement>("[data-confirm-action]")!; expect(confirm).not.toBeNull(); await act(async()=>{confirm.click();confirm.click();}); }
   async function input(value: string) { await act(async () => { const node = main().querySelector('input[aria-label="Search tasks"]')!; const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!; (node as any)[key].onChange({currentTarget: {value}}); }); }
-  async function mount(wait = true) {
-    app = await mountAuthenticatedApp({url: "https://app.test/focus", role: "contributor", permissionMask: "0x100000", configureBrowser: browser => {for (const [key, value] of seedStorage) browser.sessionStorage.setItem(key, value);}, fetch: async (input, init) => {
+  async function mount(wait = true, desktop = false) {
+    app = await mountAuthenticatedApp({url: "https://app.test/focus", role: "contributor", permissionMask: "0x100000", configureBrowser: browser => {stubViewport(browser, desktop);for (const [key, value] of seedStorage) browser.sessionStorage.setItem(key, value);}, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"), method = init?.method ?? "GET";
       calls.push({path: url.pathname + url.search, method, body: init?.body ? JSON.parse(String(init.body)) : undefined, signal: init?.signal});
       if (url.pathname === "/api/navigation") return Response.json({tree: currentNavigationFixture("contributor", "0x100000")});
@@ -434,7 +442,7 @@ describe("Focus owned task selection through App", () => {
   it.each([401,403,404])("does not POST when the selected task preflight returns %i", async status => {await mount(); await select(); detailStatus = status; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]') || main().textContent!.includes("Unable to load")); expect(calls.filter(c => c.path === "/api/tasks/task-1")).toHaveLength(1); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0); expect(main().querySelector('[data-focus-selected]')).toBeNull(); if(status === 404) expect(button("Start focus").disabled).toBe(true);});
   it("rejects a wrong-target preflight without writing", async () => {await mount(); await select(); wrongTarget = true; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]')); expect(calls.filter(c => c.path === "/api/tasks/task-1")).toHaveLength(1); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0); expect(button("Start focus").disabled).toBe(true);});
   it("invalidates selection if the task disappears between preflight and POST", async () => {await mount(); await select(); postStatus = 404; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]')); expect(button("Start focus").disabled).toBe(true); expect(main().textContent).toContain("Task is unavailable");});
-  it("offers no numbered pager and appends the next task page on scroll", async () => {
+  it("keeps the narrow feed without a pager and appends the next task page on scroll", async () => {
     await mount(); await open();
     expect(main().querySelector('select[aria-label="Rows per page"]')).toBeNull();
     expect(main().querySelector('button[aria-label="Page 2"]')).toBeNull();
@@ -443,6 +451,16 @@ describe("Focus owned task selection through App", () => {
     const requests = calls.filter(c => c.path.startsWith("/api/tasks?"));
     expect(requests.map(c => new URL(c.path, "https://app.test").searchParams.get("page"))).toEqual(["1", "2"]);
     expect(button("Owned task 1")).toBeDefined();
+  });
+  it("pages the picker window with the footer pager on desktop instead of appending", async () => {
+    await mount(true, true); await open();
+    const next = main().querySelector<HTMLButtonElement>('[data-pagination-desktop] button[aria-label="Next page"]');
+    expect(next).not.toBeNull();
+    await click(next!);
+    await waitForApp(() => !!button("Owned task 21"));
+    // A page change replaces the window, so the first page is gone instead of stacked.
+    expect(button("Owned task 1")).toBeUndefined();
+    expect(calls.filter(c => c.path === "/api/tasks?page=2&pageSize=20")).toHaveLength(1);
   });
   it("ignores an old search response after a newer query succeeds", async () => {
     let resolve!: (response: Response) => void; delayed = () => new Promise(done => {resolve = done;});

@@ -8,7 +8,7 @@ import { SearchPage } from "../../frontend/pages/search-page";
 import { AgentPage } from "../../frontend/pages/agent-page";
 import { SubmitPage } from "../../frontend/pages/submit-page";
 import { MySubmissionsPage } from "../../frontend/pages/my-submissions-page";
-import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 
 describe("React read-only user pages", () => {
   it("renders loading and empty knowledge states without undefined values", () => {
@@ -18,16 +18,29 @@ describe("React read-only user pages", () => {
     expect(empty).not.toContain("undefined");
   });
 
-  it("renders knowledge rows in an appending list without a numbered pager", () => {
-    const html = renderToStaticMarkup(<KnowledgePage state={{ kind: "ready", items: [{ id: "k1", title: "Guide", summary: "Short", publishedAt: "2026-08-25", tags: ["cf"] }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }} onLoadMore={vi.fn()} />);
-    expect(html).toContain("Guide");
-    expect(html).toContain('href="/knowledge/k1"');
-    expect(html).toContain("Short");
-    expect(html).toContain("2026-08-25");
-    expect(html).not.toContain('aria-label="Page 2"');
-    expect(html).toContain('aria-label="Published knowledge"');
-    expect(html).toContain("cf");
-    expect(html).not.toContain("undefined");
+  it("keeps the desktop pager and the mobile feed on the knowledge list", () => {
+    const locale = createLocaleRuntime();
+    const state = { kind: "ready" as const, items: [{ id: "k1", title: "Guide", summary: "Short", publishedAt: "2026-08-25", tags: ["cf"] }], pagination: { page: 1 as const, pageSize: 20 as const, total: 21, totalPages: 2 } };
+    const feed = renderToStaticMarkup(<KnowledgePage locale={locale} state={state} onLoadMore={vi.fn()} />);
+    expect(feed).toContain("Guide");
+    expect(feed).toContain('href="/knowledge/k1"');
+    expect(feed).toContain("Short");
+    expect(feed).toContain("2026-08-25");
+    expect(feed).toContain("cf");
+    expect(feed).toContain('aria-label="Published knowledge"');
+    expect(feed).toContain("flex flex-col gap-6 lg:h-full lg:min-h-0");
+    // An unwired route keeps the footer hidden instead of rendering a dead pager.
+    expect(feed).not.toContain("data-pagination-desktop");
+    expect(feed).not.toContain('aria-label="Page 2"');
+    expect(feed).not.toContain("undefined");
+
+    const paged = renderToStaticMarkup(<KnowledgePage locale={locale} state={state} onLoadMore={vi.fn()} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />);
+    expect(paged).toContain("data-pagination-desktop");
+    expect(paged).toContain(frontendText(locale, "PAGINATION_TOTAL"));
+    expect(paged).toContain("1–20");
+    expect(paged).toContain('aria-label="Page 2"');
+    expect(paged).toContain("lg:min-h-0 lg:flex-1");
+    expect(paged).not.toContain("undefined");
   });
 
   it("offers retry actions for local reader pagination failures", () => {
@@ -95,6 +108,26 @@ describe("React read-only user pages", () => {
     expect(html).toContain("body");
     expect(html).toContain("Ask about this result");
     expect(html).not.toContain("undefined");
+  });
+
+  it("keeps the query input and the saved views on one row with the desktop pager", () => {
+    const locale = createLocaleRuntime();
+    const state = { kind: "ready" as const, query: "docs", degraded: false, results: [{ id: "r1", knowledgeItemId: "knowledge-1", title: "Guide", snippet: "A match", href: "/knowledge/r1", matchedFields: ["body"] }], pagination: { page: 1 as const, pageSize: 20 as const, total: 21, totalPages: 2 } };
+    const feed = renderToStaticMarkup(<SearchPage locale={locale} state={state} query="docs" savedViews={[]} onSaveView={vi.fn()} onLoadMore={vi.fn()} />);
+    expect(feed).toContain('id="knowledge-search"');
+    expect(feed).toContain("data-search-controls-row");
+    expect(feed).toContain("flex flex-col gap-5 lg:h-full lg:min-h-0");
+    expect(feed).not.toContain("data-pagination-desktop");
+    expect(feed).not.toContain('aria-label="Page 2"');
+    expect(feed).not.toContain("undefined");
+
+    const paged = renderToStaticMarkup(<SearchPage locale={locale} state={state} query="docs" onLoadMore={vi.fn()} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />);
+    expect(paged).toContain("data-pagination-desktop");
+    expect(paged).toContain(frontendText(locale, "PAGINATION_TOTAL"));
+    expect(paged).toContain("1–20");
+    expect(paged).toContain('aria-label="Page 2"');
+    expect(paged).toContain("lg:min-h-0 lg:flex-1");
+    expect(paged).not.toContain("undefined");
   });
 
   it("renders owner saved-view controls without exposing undefined values", () => {

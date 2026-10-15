@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeRoute, MySubmissionsRoute, SearchRoute } from "../../frontend/app";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { stubListViewport } from "../helpers/list-viewport";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -14,7 +15,7 @@ const { Window } = await import("happy-dom");
 
 describe("reader infinite-scroll routes", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(() => { browser = new Window({ url: "https://app.test/knowledge" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
+  beforeEach(() => { browser = new Window({ url: "https://app.test/knowledge" }); stubListViewport(browser, "mobile"); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   it("loads page one and ignores a stated page while keeping knowledge filters", async () => {

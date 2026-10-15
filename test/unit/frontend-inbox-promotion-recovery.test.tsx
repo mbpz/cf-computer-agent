@@ -4,6 +4,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { forceRemountAppAt, mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
+import { stubListViewport } from "../helpers/list-viewport";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const version = "2026-09-28T00:00:00.000Z", next = "2026-09-28T00:00:00.001Z";
 const taskKey = "memory-garden:task-write:v1:alice";
@@ -40,6 +41,7 @@ describe("inbox promotion recovery through App", () => {
   async function mount(raw: string | null = null, member = "alice", taskRaw: string | null = null) {
     app = await mountApp({ url: "https://app.test/inbox?page=2&status=inbox", configureBrowser(browser) {
       vi.stubGlobal("HTMLElement", browser.HTMLElement);
+      stubListViewport(browser, "mobile");
       if (raw !== null) browser.sessionStorage.setItem(key, raw);
       if (taskRaw !== null) browser.sessionStorage.setItem(taskKey, taskRaw);
     }, fetch: async (input, init) => {

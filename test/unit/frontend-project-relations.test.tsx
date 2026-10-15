@@ -4,6 +4,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
+const LIST_DESKTOP_QUERY = "(min-width: 1024px)";
+/** happy-dom reports a 1024px viewport, so every journey has to pick its surface explicitly. */
+function stubViewport(browser: MountedApp["browser"], desktop: boolean) {
+  Object.defineProperty(browser, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: query === LIST_DESKTOP_QUERY ? desktop : false, media: query, onchange: null, addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false }),
+  });
+}
 const project = (id: string) => ({ id, clientKey: id, title: `Project ${id}`, description: null, status: "active", progress: 37, targetAt: null, createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z" });
 describe("project relation editing and readback", () => {
   let app: MountedApp | undefined;
@@ -14,9 +22,9 @@ describe("project relation editing and readback", () => {
   const main = () => app!.container.querySelector("main")!;
   const editor = () => main().querySelector("[data-project-relations-editor]")!;
   const button = (text: string, root: Element = main()) => [...root.querySelectorAll("button")].find(b => b.textContent === text)!;
-  async function mount() {
+  async function mount(desktop = false) {
     sentVersions = []; revision = 0; goalLinks = new Set(); taskLinks = new Set(); writes = []; reads = []; failure = 0; readFailure = false; holdWrite = undefined; holdRead = undefined; malformed = false; deniedRead = 0; malformedReceipt = false;
-    app = await mountAuthenticatedApp({ url: "https://app.test/projects", role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
+    app = await mountAuthenticatedApp({ url: "https://app.test/projects", role: "contributor", permissionMask: "0x100000", configureBrowser: browser => stubViewport(browser, desktop), fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });

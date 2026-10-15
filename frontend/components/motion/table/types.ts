@@ -65,8 +65,14 @@ export interface TableProps<T> {
   onDeleteColumn?: (columnKey: string, index: number) => void;
   /** Fixed row height in px — required for virtualization. */
   rowHeight?: number;
-  /** Scroll viewport height in px. */
+  /** Scroll viewport height in px. Ignored when `fill` is set. */
   height?: number;
+  /**
+   * Fill the parent's height instead of a fixed viewport: the header stays put
+   * and the body scrolls inside. The parent must be a flex/grid item with a
+   * resolved height.
+   */
+  fill?: boolean;
   /** Rows rendered above/below the viewport. */
   overscan?: number;
   /**

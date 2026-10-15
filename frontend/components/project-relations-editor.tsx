@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiRequestError } from "../lib/api";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
-import { listPageSize, type FrontendPageRequest } from "../lib/numbered-page";
+import { listPageSize, type FrontendPageRequest, type SupportedPageSize } from "../lib/numbered-page";
 import { loadProjectRelations, setProjectRelation, type ProjectRelation, type ProjectRelationKind, type ProjectRelationPage } from "../lib/project-relations-data";
 import { loadProjectSummary, type ProjectSummary } from "../lib/projects-data";
 import type { PlanningWriteRecord } from "../lib/planning-write-recovery";
@@ -136,6 +136,17 @@ export function ProjectRelationsEditor({ projectId, title, locale, onSummary, on
     if (!active.current || busyRef.current || decisionRef.current) return;
     void read(request, kind, request.page > 1);
   };
+  // The pager replaces the window instead of appending to it.
+  const changePage = (page: number) => {
+    const loaded = dataRef.current;
+    if (!loaded || !active.current || busyRef.current || decisionRef.current || pendingWrite.current || blockedRef.current) return;
+    void read({ page, pageSize: loaded.pagination.pageSize }, loaded.kind, false);
+  };
+  const changePageSize = (pageSize: SupportedPageSize) => {
+    const loaded = dataRef.current;
+    if (!loaded || !active.current || busyRef.current || decisionRef.current || pendingWrite.current || blockedRef.current) return;
+    void read({ page: 1, pageSize }, loaded.kind, false);
+  };
 
   const requestMutation = (item: ProjectRelation, trigger?: HTMLButtonElement) => {
     const page = dataRef.current;
@@ -171,6 +182,9 @@ export function ProjectRelationsEditor({ projectId, title, locale, onSummary, on
       ariaLabel={`${text("RELATIONS_TITLE")}: ${title}`}
       emptyState={<PageState kind="empty" title={text("RELATIONS_EMPTY")} />}
       loading={busy}
+      pagination={data.pagination}
+      onPageChange={changePage}
+      onPageSizeChange={changePageSize}
       hasMore={!failed && data.pagination.page < data.pagination.totalPages}
       onLoadMore={loadMore}
       rowHeight={64}

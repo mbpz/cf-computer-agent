@@ -6,10 +6,11 @@ import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminAnalyticsOverview } from "../../lib/admin-analytics-data";
 import { NumberTicker } from "../../components/motion/number-ticker";
 import { DataTable } from "../../components/data-table";
+import type { SupportedPageSize } from "../../lib/numbered-page";
 
 export type AdminAnalyticsState = { kind: "loading" } | { kind: "ready"; data: AdminAnalyticsOverview } | { kind: "error" } | { kind: "forbidden" };
 
-export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, localError = false, onDaysChange, onLoadMore, onRefresh }: { state: AdminAnalyticsState; locale: LocaleRuntime; days?: number; pending?: boolean; localError?: boolean; onDaysChange?: (days: number) => void; onLoadMore?: () => void; onRefresh?: () => void }) {
+export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, localError = false, onDaysChange, onPageChange, onPageSizeChange, onLoadMore, onRefresh }: { state: AdminAnalyticsState; locale: LocaleRuntime; days?: number; pending?: boolean; localError?: boolean; onDaysChange?: (days: number) => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void; onLoadMore?: () => void; onRefresh?: () => void }) {
   const retry = <Button data-analytics-retry type="button" variant="outline" size="sm" disabled={pending} onClick={onRefresh}>{frontendText(locale, "COMMON_RETRY")}</Button>;
   if (state.kind === "loading") return <div data-page-state="loading" aria-busy="true" className="space-y-4"><Skeleton className="h-20" /><Skeleton className="h-56" /></div>;
   if (state.kind === "error" || state.kind === "forbidden") return <PageState kind={state.kind} title={frontendText(locale, state.kind === "forbidden" ? "ADMIN_ANALYTICS_FORBIDDEN" : "ADMIN_ANALYTICS_UNAVAILABLE")}>{retry}</PageState>;
@@ -28,6 +29,9 @@ export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, l
       ariaLabel={frontendText(locale, "ADMIN_ANALYTICS_VISITORS")}
       emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_ANALYTICS_EMPTY")} />}
       loading={pending}
+      pagination={data.recentVisitors.pagination}
+      onPageChange={onPageChange}
+      onPageSizeChange={onPageSizeChange}
       hasMore={!localError && data.recentVisitors.pagination.page < data.recentVisitors.pagination.totalPages}
       onLoadMore={onLoadMore}
       rowHeight={48}

@@ -1,6 +1,6 @@
 import { usePlanningStatusConfirmation } from "../components/planning-status-confirmation";
 import type { ReactNode } from "react";
-import type { FrontendPageMetadata } from "../lib/numbered-page";
+import type { FrontendPageMetadata, SupportedPageSize } from "../lib/numbered-page";
 import { PlanningCreateForm, type PlanningCreateCallbacks } from "../components/planning-create-form";
 import { FolderSimple, Plus, Archive, CheckCircle, ArrowRight } from "@phosphor-icons/react";
 import type { LocaleRuntime } from "../lib/i18n";
@@ -14,12 +14,13 @@ import { PageState } from "../components/ui/page-state";
 
 export type ProjectsPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; items: readonly Project[]; summaries: Readonly<Record<string, ProjectSummary>>; nextCursor?: string; pagination?: FrontendPageMetadata };
 
-export function ProjectsPage({ locale, state, pending = false, actionError, onRetry, onCreate, createMemberId, onCreateReadback, onCreateDenied, onCreateLock, createLocked = false, onStatusChange, onLoadMore, onOpenTimeline, onRetrySummary, summaryPending = [], relationEditor, relationProjectId, onManageRelations }: {
+export function ProjectsPage({ locale, state, pending = false, actionError, onRetry, onCreate, createMemberId, onCreateReadback, onCreateDenied, onCreateLock, createLocked = false, onStatusChange, onLoadMore, onOpenTimeline, onRetrySummary, summaryPending = [], relationEditor, relationProjectId, onManageRelations, onPageChange, onPageSizeChange }: {
   locale: LocaleRuntime; state: ProjectsPageState; pending?: boolean; actionError?: string;
   relationEditor?: ReactNode; relationProjectId?: string; onManageRelations?: (project: Project) => void;
   onRetry?: () => void; createLocked?: boolean;
   onRetrySummary?: (project: Project) => void; summaryPending?: readonly string[];
   onStatusChange?: (project: Project, status: ProjectStatus) => void; onLoadMore?: () => void; onOpenTimeline?: (project: Project) => void;
+  onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void;
 } & PlanningCreateCallbacks) {
   const statusConfirmation = usePlanningStatusConfirmation({
     kind: "PROJECTS", locale, items: state.kind === "ready" ? state.items : undefined,
@@ -30,7 +31,9 @@ export function ProjectsPage({ locale, state, pending = false, actionError, onRe
   if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "PROJECTS_RETRY")}</Button></PageState>;
   // A confirmation, an open relations editor, a create lock or an in-flight write all hold the list still.
   const listBlocked = statusConfirmation.open || !!relationProjectId || createLocked || pending;
-  return <><section className="space-y-5" inert={statusConfirmation.open} aria-hidden={statusConfirmation.open || undefined}>
+  const changePage = (page: number) => { if (listBlocked) return; onPageChange?.(page); };
+  const changePageSize = (pageSize: SupportedPageSize) => { if (listBlocked) return; onPageSizeChange?.(pageSize); };
+  return <><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={statusConfirmation.open} aria-hidden={statusConfirmation.open || undefined}>
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><FolderSimple size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{frontendText(locale, "PROJECTS_TITLE")}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "PROJECTS_DESCRIPTION")}</p></div><Badge variant="outline">{frontendText(locale, "PROJECTS_PRIVATE_BADGE")}</Badge></div>
     <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus size={18} />{frontendText(locale, "PROJECTS_CREATE_TITLE")}</CardTitle></CardHeader><CardContent><PlanningCreateForm isSubmitBlocked={statusConfirmation.isOpen} createMemberId={createMemberId} kind="PROJECTS" locale={locale} pending={pending || !!relationProjectId || statusConfirmation.open} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={onCreateLock} /></CardContent></Card>
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
@@ -42,6 +45,11 @@ export function ProjectsPage({ locale, state, pending = false, actionError, onRe
       ariaLabel={frontendText(locale, "PROJECTS_TITLE")}
       emptyState={<PageState kind="empty" title={frontendText(locale, "PROJECTS_EMPTY")} />}
       loading={pending}
+      pagination={state.pagination}
+      onPageChange={onPageChange ? changePage : undefined}
+      onPageSizeChange={onPageSizeChange ? changePageSize : undefined}
+      fill
+      className="lg:min-h-0 lg:flex-1"
       hasMore={!!state.pagination && state.pagination.page < state.pagination.totalPages}
       onLoadMore={listBlocked ? undefined : onLoadMore}
       rowHeight={160}
