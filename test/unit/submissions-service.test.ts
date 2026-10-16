@@ -3,6 +3,7 @@ import { SubmissionsService } from "../../src/submissions/service";
 import {
   SubmissionsRepositoryConflictError,
   type CreateSubmissionWithSourceVersion,
+  type SubmissionDraftDiscardOutcome,
   type SubmissionsRepositoryPort,
 } from "../../src/submissions/repository";
 import type { CreateSubmission, Submission, SubmissionCreateResult, SubmissionPage } from "../../src/submissions/types";
@@ -79,6 +80,18 @@ describe("SubmissionsService", () => {
     await expect(service.updateDraft("member-a", draft.id, {
       requestedSpaceId: "default", kind: "markdown", title: "No", content: "No",
     })).rejects.toMatchObject({ code: "SUBMISSION_NOT_FOUND", status: 404 });
+
+    // Discarding is owner-scoped and idempotent: the owner's repeat answers as
+    // success for the outcome the first discard committed, while another
+    // member and a submitted row both stay not found.
+    repository.draft = { ...draft, status: "draft" };
+    await expect(service.discardDraft("member-b", draft.id)).rejects.toMatchObject({ code: "SUBMISSION_NOT_FOUND", status: 404 });
+    await expect(service.discardDraft("member-a", draft.id)).resolves.toBeUndefined();
+    expect(repository.draft).toBeUndefined();
+    await expect(service.discardDraft("member-a", draft.id)).resolves.toBeUndefined();
+    await expect(service.discardDraft("member-b", draft.id)).rejects.toMatchObject({ code: "SUBMISSION_NOT_FOUND", status: 404 });
+    repository.draft = { ...draft, id: "submission-2", status: "review_pending" };
+    await expect(service.discardDraft("member-a", "submission-2")).rejects.toMatchObject({ code: "SUBMISSION_NOT_FOUND", status: 404 });
   });
 
   it.each(["rich_text", "html", ""])('rejects unsupported submission kind "%s"', async (kind) => {
@@ -286,6 +299,7 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
   conflict: SubmissionsRepositoryConflictError | undefined;
   prior: Submission | null = null;
   resubmission: CreateSubmissionWithSourceVersion | undefined;
+  discardedDrafts = new Set<string>();
 
   async createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission> {
     this.audit = audit;
@@ -305,6 +319,16 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
     if (!await this.findOwnedDraft(submission.submitterId, submission.id)) return null;
     this.draft = { ...submission, status: "draft" };
     return this.draft;
+  }
+  async discardDraft(submitterId: string, submissionId: string): Promise<SubmissionDraftDiscardOutcome> {
+    const owned = await this.findOwnedDraft(submitterId, submissionId);
+    if (owned) {
+      this.draft = undefined;
+      this.discardedDrafts.add(`${submitterId}:${submissionId}`);
+      return "discarded";
+    }
+    // The receipt is what a repeat converges on, so the fake keeps one too.
+    return this.discardedDrafts.has(`${submitterId}:${submissionId}`) ? "replayed" : "missing";
   }
 
   async createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult> {

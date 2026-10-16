@@ -29,10 +29,18 @@ export interface CreateSubmissionWithSourceVersion {
   audit: CreateAuditEvent;
 }
 
+/**
+ * What a discard of one member's own draft did: `discarded` removed the live
+ * row now, `replayed` converges on a discard that already committed, and
+ * `missing` means the caller owns no draft with that id.
+ */
+export type SubmissionDraftDiscardOutcome = "discarded" | "replayed" | "missing";
+
 export interface SubmissionsRepositoryPort {
   createDraft(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission>;
   findOwnedDraft(submitterId: string, submissionId: string): Promise<Submission | null>;
   updateDraft(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission | null>;
+  discardDraft(submitterId: string, submissionId: string, discardedAt: string): Promise<SubmissionDraftDiscardOutcome>;
   createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission>;
   createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult>;
   findByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<SubmissionCreateResult | null>;
@@ -143,6 +151,32 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     if (results[0]?.meta.changes !== 1) return null;
     if (results[1]?.meta.changes !== 1) throw new Error("Draft audit write did not persist");
     return { ...submission, status: "draft" };
+  }
+
+  /**
+   * Deletes one member's own draft and records the member-scoped receipt in the
+   * same batch, so the receipt can only exist for a delete that actually
+   * committed. The receipt is then read back inside that transaction: a row
+   * that is gone now is `discarded`, a retained receipt is `replayed` (a retry
+   * of the same discard converges instead of reporting the draft as missing),
+   * and neither means the caller owns no draft with that id. A draft that is no
+   * longer a draft — another member's, an unknown id, or an already submitted
+   * row — matches no predicate and leaves no receipt.
+   */
+  async discardDraft(submitterId: string, submissionId: string, discardedAt: string): Promise<SubmissionDraftDiscardOutcome> {
+    const results = await this.db.batch([
+      this.db.prepare("DELETE FROM submissions WHERE id = ? AND submitter_id = ? AND status = 'draft'").bind(submissionId, submitterId),
+      this.db.prepare(
+      `INSERT INTO submission_draft_discard_receipts (member_id, draft_id, discarded_at)
+       SELECT ?, ?, ? WHERE changes() = 1
+       ON CONFLICT(member_id, draft_id) DO UPDATE SET discarded_at = excluded.discarded_at`,
+      ).bind(submitterId, submissionId, discardedAt),
+      this.db.prepare(
+        "SELECT 1 AS recorded FROM submission_draft_discard_receipts WHERE member_id = ? AND draft_id = ?",
+      ).bind(submitterId, submissionId),
+    ]);
+    if (results[0]?.meta.changes === 1) return "discarded";
+    return results[2]?.results[0] === undefined ? "missing" : "replayed";
   }
 
   async createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission> {

@@ -4,13 +4,14 @@ import type { SubmissionMode } from "../components/submissions/submission-form-m
 
 /**
  * Server-side submission drafts (`POST /api/submissions/drafts`,
- * `GET|PATCH /api/submissions/drafts/:id`).
+ * `GET|PATCH|DELETE /api/submissions/drafts/:id`).
  *
  * The server draft is the authority: it is the only copy this module ever
- * reports as saved. The local storage records here are (a) the identity of the
- * server draft this browser is editing and (b) the write intent that resolves a
- * draft write whose outcome was never observed. The visitor's text itself is
- * mirrored by `offline-submission-draft.ts`, which stays the synchronous,
+ * reports as saved, and only a server answer lets the module say a draft is
+ * gone. The local storage records here are (a) the identity of the server draft
+ * this browser is editing, (b) the write intent that resolves a draft operation
+ * whose outcome was never observed — a save or a discard — and (c) the text
+ * mirror kept by `offline-submission-draft.ts`, which stays the synchronous,
  * unload-safe copy.
  */
 
@@ -41,13 +42,26 @@ export interface DraftBody {
   content: string;
 }
 
-export interface DraftWriteIntent {
+/** A save write: it carries the exact request body it sends, journaled verbatim. */
+export interface DraftSaveIntent {
   version: 1;
   op: "create" | "update";
   draftId: string | null;
   body: DraftBody;
   startedAt: string;
 }
+
+/** A discard: the id is the whole operation, so it carries no body. */
+export interface DraftDiscardIntent {
+  version: 1;
+  op: "discard";
+  draftId: string;
+  body: null;
+  startedAt: string;
+}
+
+/** The one draft operation this browser journals before it leaves. */
+export type DraftWriteIntent = DraftSaveIntent | DraftDiscardIntent;
 
 export interface ServerDraft {
   id: string;
@@ -69,18 +83,26 @@ export type DraftWriteIntentLoad =
 /**
  * How the visitor's text is currently kept. `saved` is the only state that
  * claims the server holds the draft; every other state says the text is only in
- * this browser.
+ * this browser. `idle` says this editor has no server draft — before any text,
+ * and after a discard the server confirmed.
  */
 export type SubmissionDraftSaveState = {
-  kind: "idle" | "saving" | "saved" | "unconfirmed";
+  kind: "idle" | "saving" | "saved" | "discarding" | "unconfirmed";
   /** Why the server copy is not confirmed, or why recovery is not guaranteed. */
-  reason?: "no_target" | "storage" | "error" | "unknown" | "unsaved" | "resubmit";
+  reason?: "no_target" | "storage" | "error" | "unknown" | "unsaved" | "resubmit" | "discard_error" | "discard_unknown";
   /** The server's `updatedAt` for the confirmed draft. */
   at?: string;
 };
 
+/**
+ * What re-reading a journaled intent proved: `resolved` is a landed save,
+ * `discarded` is a landed discard (the draft the intent named is gone),
+ * `resend` is a save that never landed, `recreate` is a save whose draft the
+ * server no longer knows, and `pending` means nothing could be proven.
+ */
 export type DraftWriteResolution =
   | { kind: "resolved"; draft: ServerDraft }
+  | { kind: "discarded" }
   | { kind: "resend" }
   | { kind: "recreate" }
   | { kind: "pending" };
@@ -206,8 +228,16 @@ export function clearDraftWriteIntent(memberId: string, startedAt: string, stora
   }
 }
 
-export function createDraftWriteIntent(op: "create" | "update", draftId: string | null, body: DraftBody, now?: string): DraftWriteIntent {
+export function createDraftWriteIntent(op: "create" | "update", draftId: string | null, body: DraftBody, now?: string): DraftSaveIntent {
   return { version: 1, op, draftId, body: copyBody(body), startedAt: now ?? new Date().toISOString() };
+}
+
+/**
+ * The journaled discard of one server draft. It is journaled exactly like a
+ * save, so a discard whose answer was lost is re-read instead of guessed at.
+ */
+export function createDraftDiscardIntent(draftId: string, now?: string): DraftDiscardIntent {
+  return { version: 1, op: "discard", draftId: requireDraftId(draftId), body: null, startedAt: now ?? new Date().toISOString() };
 }
 
 export function createDraftRecord(draftId: string | null, target: SubmissionTarget | null): SubmissionDraftRecord {
@@ -215,7 +245,7 @@ export function createDraftRecord(draftId: string | null, target: SubmissionTarg
 }
 
 /** POST a new draft, or PATCH the draft this browser already owns. */
-export async function writeDraft(intent: DraftWriteIntent, options: RequestOptions = {}): Promise<ServerDraft> {
+export async function writeDraft(intent: DraftSaveIntent, options: RequestOptions = {}): Promise<ServerDraft> {
   const { requester = fetch, signal } = options;
   const response = intent.op === "create"
     ? await apiFetch<unknown>("/api/submissions/drafts", {
@@ -233,6 +263,19 @@ export async function readDraft(draftId: string, options: RequestOptions = {}): 
     `/api/submissions/drafts/${encodeURIComponent(requireDraftId(draftId))}`,
     { requester, signal },
   ));
+}
+
+/**
+ * DELETE the draft this browser owns. The endpoint is idempotent, so an answer
+ * of any status below 500 proves the server either removed the draft or already
+ * had it removed; an unreachable server proves nothing and throws instead.
+ */
+export async function discardDraft(draftId: string, options: RequestOptions = {}): Promise<void> {
+  const { requester = fetch, signal } = options;
+  await apiFetch<unknown>(
+    `/api/submissions/drafts/${encodeURIComponent(requireDraftId(draftId))}`,
+    { requester, signal, method: "DELETE" },
+  );
 }
 
 /**
@@ -259,14 +302,28 @@ export async function findDraftByBody(body: DraftBody, options: RequestOptions =
 }
 
 /**
- * Reconciles a journaled draft write before it is repeated:
- * - the write landed (the record now carries exactly the journaled fields) → resolved;
- * - the record is gone (an owned draft id the server no longer knows) → create;
- * - the write did not land → resend the same journaled body;
+ * Reconciles a journaled draft operation before it is repeated:
+ * - a save that landed (the record now carries exactly the journaled fields) → resolved;
+ * - a discard that landed (the record the intent named is gone) → discarded;
+ * - a save whose record is gone (an owned draft id the server no longer knows) → create;
+ * - a save that did not land → resend the same journaled body;
  * - the readback itself failed → pending, so nothing is sent and the visitor decides.
  */
 export async function resolveDraftWriteIntent(intent: DraftWriteIntent, options: RequestOptions = {}): Promise<DraftWriteResolution> {
   try {
+    if (intent.op === "discard") {
+      try {
+        await readDraft(intent.draftId, options);
+        // The draft is still there, so the delete never landed.
+        return { kind: "resend" };
+      } catch (error) {
+        // Only the record's own absence proves a discard landed; every other
+        // failure (an unreachable server, a 5xx) proves nothing and is pending.
+        const missing = error !== null && typeof error === "object" && "status" in error && error.status === 404;
+        if (!missing) throw error;
+        return { kind: "discarded" };
+      }
+    }
     if (intent.op === "update" && intent.draftId) {
       let current: ServerDraft | null = null;
       try {
@@ -351,7 +408,9 @@ function copyBody(body: DraftBody): DraftBody {
 }
 
 function copyIntent(intent: DraftWriteIntent): DraftWriteIntent {
-  return { version: 1, op: intent.op, draftId: intent.draftId, body: copyBody(intent.body), startedAt: intent.startedAt };
+  return intent.op === "discard"
+    ? { version: 1, op: "discard", draftId: intent.draftId, body: null, startedAt: intent.startedAt }
+    : { version: 1, op: intent.op, draftId: intent.draftId, body: copyBody(intent.body), startedAt: intent.startedAt };
 }
 
 function boundedId(value: unknown): value is string {
@@ -391,11 +450,13 @@ function validIntent(value: unknown, now = Date.now()): value is DraftWriteInten
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const intent = value as Record<string, unknown>;
   if (intent.version !== 1) return false;
-  if (intent.op !== "create" && intent.op !== "update") return false;
+  if (intent.op !== "create" && intent.op !== "update" && intent.op !== "discard") return false;
   if (intent.draftId !== null && !boundedId(intent.draftId)) return false;
-  if (intent.op === "update" && intent.draftId === null) return false;
+  // Only a create writes a draft the server may not have named yet.
+  if (intent.op !== "create" && intent.draftId === null) return false;
   if (typeof intent.startedAt !== "string" || !Number.isFinite(Date.parse(intent.startedAt))) return false;
   // A stale intent is not replayed: the draft it described is a week old.
   if (now - Date.parse(intent.startedAt) > MAX_INTENT_AGE_MS || Date.parse(intent.startedAt) - now > 86_400_000) return false;
-  return validBody(intent.body);
+  // A discard is the id alone; a save must carry the exact request it sends.
+  return intent.op === "discard" ? intent.body === null : validBody(intent.body);
 }

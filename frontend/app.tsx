@@ -1478,6 +1478,9 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
     liveFields: draftRef,
     target: targets.view.target,
     suspended: state.kind === "pending",
+    // A discard the server confirmed leaves nothing to keep: the editor clears
+    // the text the draft held, so a reload cannot resurrect it.
+    onDiscarded: () => { protectedDraft.set("title", ""); protectedDraft.set("content", ""); },
   });
   const changeDraft = (patch: Partial<SubmissionDraft>) => {
     if (!alive.current || protectedDraft.isConfirming()) return;
@@ -1667,7 +1670,8 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
     recovery={{ title: intent?.draft.title, storageUnavailable, invalid: invalidIntent || resubmitLoad.kind === "invalid", onRetry: () => { if (intentRef.current) void submit(intentRef.current.draft); } }}
     targets={targets}
     draftSave={resubmit ? resubmitDraftSaveState : draftWrites.state}
-    onDraftRetry={() => { if (draftWrites.state.reason === "unknown") draftWrites.recheck(); else draftWrites.saveNow(); }}
+    onDraftRetry={() => { if (draftWrites.state.reason === "unknown" || draftWrites.state.reason === "discard_unknown") draftWrites.recheck(); else draftWrites.saveNow(); }}
+    onDraftDiscard={() => draftWrites.discard()}
     {...(resubmitView ? {
       resubmit: resubmitView,
       onResubmitRestart: restartResubmit,

@@ -25,6 +25,8 @@
 
 2026-10-16 admin 回收站与知识条目能力根登记后重新对账：`shared/workbench-maturity-capabilities.ts` 新增三条能力记录与对应 root——`workbench-admin-recycle-bin`（menu 路由 `/admin/knowledge/trash`）与 `workbench-admin-knowledge-trash`（同路径的 pageKind），root 均为 `frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute`；`workbench-admin-knowledge-item`（pageKind `/admin/knowledge/:id`），root 为 `frontend/pages/admin/knowledge-item-route.tsx#AdminKnowledgeItemRoute`。生成索引随之由 36 条路由增至 39 条。上一轮记为未归属的 admin 管理面候选（`frontend/pages/admin/recycle-bin-{route,page}.tsx`、`frontend/pages/admin/knowledge-item-{route,page}.tsx` 及数据模块 `frontend/lib/admin-knowledge-{trash,item}-data.ts`、`frontend/lib/knowledge-lifecycle-intent.ts`）随这三条 root 归入对应路由，未归属候选由 147 降至 121；这些坐标上一轮未补写处置行，故本轮无需从表格删除任何行。`frontend/app.tsx` 的两个外层 `app-boundary` 候选（234:106、261:39）及其指纹与上一轮一致，本轮不新增也不改动任何来源指纹，只重生成生成器产物 `docs/product/frontend-operation-inventory.{json,md}`。当前索引 365 文件 / 1525 候选 / 121 未归属，不扩大本记录的运行验收结论。
 
+2026-10-16 成员草稿丢弃入口接入后复核：`/submit` 的草稿状态行新增受确认门禁的「丢弃草稿」控件（`frontend/pages/submit-page.tsx`，`onDraftDiscard`），丢弃写经 `frontend/lib/use-submission-draft.ts` 与 `frontend/lib/submission-draft-data.ts` 复用同一份写入 journal（先复查再重发同一操作，未确认的结果不当作已丢弃），服务端为 `DELETE /api/submissions/drafts/:id`（`src/routes/member.ts`、`src/submissions/service.ts`、`src/submissions/repository.ts`、迁移 `0073_submission_draft_discard_receipts.sql`）。`frontend/app.tsx` 的两个未归属外层边界候选（navigate/logout 转发与 settings props 透传）属性、回调与前置条件均未变，本轮改动均在其坐标 234:106、261:39 之后，坐标因此未动；未归属候选集合与分类处置未变，只同步该文件指纹。索引重生成后为 365 文件 / 1533 候选 / 121 未归属。本轮未改动本记录的任何处置行，也不扩大本记录的运行验收结论。
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
@@ -376,7 +378,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `9f5e0e5c999274bba8e4255b001f57f3db6647e2eb7aa405b55eb5b7e5ae5976`
+- `frontend/app.tsx`: `4d87d932b76bbc15e62b03537a6bd31f525f85a0d12343c26777ce4d79aaa7c4`
 - `frontend/components/agent/answer-panel.tsx`: `63e54eadda8bf814a2302b8f4a2e99f39fb51a752e2d8678322dbf02e83fb807`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`

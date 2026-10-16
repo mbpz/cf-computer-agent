@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   clearDraftRecord,
   clearDraftWriteIntent,
+  createDraftDiscardIntent,
   createDraftRecord,
   createDraftWriteIntent,
+  discardDraft,
   draftBody,
   loadDraftRecord,
   loadDraftWriteIntent,
@@ -158,5 +160,54 @@ describe("server-backed submission drafts", () => {
     expect(loaded).toEqual({ kind: "ready", intent });
     const record: SubmissionDraftRecord = createDraftRecord("draft-1", target);
     expect(record).toEqual({ version: 1, draftId: "draft-1", target });
+  });
+
+  it("deletes the draft this browser owns and refuses a discard the server rejected", async () => {
+    const calls: { path: string; method?: string }[] = [];
+    const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push({ path: String(input), method: init?.method });
+      return new Response(null, { status: 204 });
+    });
+    await expect(discardDraft("draft-1", { requester })).resolves.toBeUndefined();
+    expect(calls).toEqual([{ path: "/api/submissions/drafts/draft-1", method: "DELETE" }]);
+    await expect(discardDraft("bad id!", { requester })).rejects.toThrow("DRAFT_ID_INVALID");
+
+    // A refusal is not a discard: the caller has to report it as failed, so the
+    // error is propagated instead of being read as a completed deletion.
+    const refused = vi.fn(async () => Response.json(
+      { error: { code: "SUBMISSION_NOT_FOUND", message: "Submission not found", retryable: false } }, { status: 404 },
+    ));
+    await expect(discardDraft("draft-1", { requester: refused })).rejects.toThrow("Submission not found");
+  });
+
+  it("journals a discard as the id alone and settles it by re-reading the record", async () => {
+    const store = storage();
+    const intent = createDraftDiscardIntent("draft-1", NOW);
+    expect(intent).toEqual({ version: 1, op: "discard", draftId: "draft-1", body: null, startedAt: NOW });
+    expect(saveDraftWriteIntent("member-a", intent, store)).toBe(true);
+    expect(loadDraftWriteIntent("member-a", store)).toEqual({ kind: "ready", intent });
+    // A discard names a draft and carries nothing else.
+    store.setItem("personal-workbench:submission-draft-write:v1:member-a", JSON.stringify({ ...intent, draftId: null }));
+    expect(loadDraftWriteIntent("member-a", store)).toEqual({ kind: "invalid" });
+    store.setItem("personal-workbench:submission-draft-write:v1:member-a", JSON.stringify({ ...intent, body: {} }));
+    expect(loadDraftWriteIntent("member-a", store)).toEqual({ kind: "invalid" });
+
+    // The record still answering means the delete never landed; its absence is
+    // the one thing that proves the discard committed.
+    const present = vi.fn(async (input: string | URL | Request) => {
+      expect(String(input)).toBe("/api/submissions/drafts/draft-1");
+      return Response.json(draftRow());
+    });
+    await expect(resolveDraftWriteIntent(intent, { requester: present })).resolves.toEqual({ kind: "resend" });
+
+    const gone = vi.fn(async () => Response.json(
+      { error: { code: "SUBMISSION_NOT_FOUND", message: "Submission not found", retryable: false } }, { status: 404 },
+    ));
+    await expect(resolveDraftWriteIntent(intent, { requester: gone })).resolves.toEqual({ kind: "discarded" });
+
+    const failing = vi.fn(async () => Response.json(
+      { error: { code: "UNAVAILABLE", message: "UNAVAILABLE", retryable: true } }, { status: 503 },
+    ));
+    await expect(resolveDraftWriteIntent(intent, { requester: failing })).resolves.toEqual({ kind: "pending" });
   });
 });

@@ -87,6 +87,18 @@ export class SubmissionsService {
     return updated;
   }
 
+  /**
+   * Discards one member's own draft. The operation is idempotent: repeating a
+   * discard that already committed answers as success, so a retried request
+   * whose answer was lost cannot be told apart from a fresh one, while another
+   * member's draft or an unknown id stays not found. A row that is no longer a
+   * draft is not discardable here, because only private drafts are.
+   */
+  async discardDraft(submitterId: string, submissionId: string): Promise<void> {
+    const outcome = await this.repository.discardDraft(submitterId, requireDraftId(submissionId), this.now().toISOString());
+    if (outcome === "missing") throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+  }
+
   async create(submitterId: string, input: CreateSubmissionInput): Promise<Submission> {
     const normalized = normalize(input);
     const now = this.now().toISOString();

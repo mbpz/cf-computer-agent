@@ -103,6 +103,42 @@ describe("React submission and asset pages", () => {
     expect(submitted).not.toContain("Resubmit for review");
   });
 
+  it("offers a confirmed discard beside the draft state and never claims an unconfirmed one", () => {
+    const draft = { mode: "markdown" as const, title: "Guide", content: "# Body" };
+    const onDraftDiscard = vi.fn();
+    const saved = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }} draftSave={{ kind: "saved", at: "2026-10-16T09:00:00.000Z" }} onDraftDiscard={onDraftDiscard} />);
+    expect(saved).toContain("data-submission-draft-discard");
+    expect(saved).toContain("Discard draft");
+    // The control only opens the page's own confirmation: it discards nothing by itself.
+    expect(saved).not.toContain("Discard this draft?");
+    expect(onDraftDiscard).not.toHaveBeenCalled();
+
+    // In flight the state line says so, and it does not claim the draft is gone.
+    const discarding = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }} draftSave={{ kind: "discarding" }} onDraftDiscard={onDraftDiscard} />);
+    expect(discarding).toContain('data-submission-draft-status="discarding"');
+    expect(discarding).toContain("Discarding the draft…");
+    expect(discarding).not.toContain("Nothing to save yet");
+
+    // A refused discard keeps the text and says the draft was not discarded.
+    const refused = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }} draftSave={{ kind: "unconfirmed", reason: "discard_error" }} onDraftDiscard={onDraftDiscard} />);
+    expect(refused).toContain("The draft was not discarded. Your text is kept in this browser.");
+    expect(refused).toContain("# Body");
+
+    // An unknown discard outcome is settled by re-reading it, never by re-saving.
+    const unknown = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }} draftSave={{ kind: "unconfirmed", reason: "discard_unknown" }} onDraftDiscard={onDraftDiscard} />);
+    expect(unknown).toContain("The discard was not confirmed.");
+    expect(unknown).toContain("Recheck the draft record");
+
+    // A confirmed discard leaves an empty editor with nothing saved — and no
+    // control to offer — while a resubmission has no server draft at all.
+    const cleared = renderToStaticMarkup(<SubmitPage draft={{ mode: "markdown", title: "", content: "" }} state={{ kind: "idle" }} draftSave={{ kind: "idle" }} onDraftDiscard={onDraftDiscard} />);
+    expect(cleared).toContain("Nothing to save yet.");
+    expect(cleared).not.toContain("data-submission-draft-discard");
+    const resubmitting = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }} draftSave={{ kind: "unconfirmed", reason: "resubmit" }} onDraftDiscard={onDraftDiscard}
+      resubmit={{ priorId: "prior-1", title: "Returned guide", state: "editing", statusRead: "none" }} />);
+    expect(resubmitting).not.toContain("data-submission-draft-discard");
+  });
+
   it("renders an owner-safe review reason and note without internal metadata", () => {
     const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{
       id: "s2",

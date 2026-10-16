@@ -3,6 +3,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, forceRemountAppAt, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
+import { loadOfflineSubmissionDraft } from "../../frontend/lib/offline-submission-draft";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 
 const NOW = "2026-10-16T09:00:00.000Z";
@@ -24,7 +25,7 @@ function server() {
   const draftKeys: string[] = [];
   return {
     drafts, submissions, resubmitKeys, draftKeys,
-    failDraftWrite: false, lostResubmitResponse: false,
+    failDraftWrite: false, lostResubmitResponse: false, lostDiscardResponse: false, discardCount: 0, refuseDraftDiscard: false,
     row: (item: Record<string, unknown>) => ({
       submitterId: "contributor-route-auditor", status: "draft", createdAt: NOW, updatedAt: NOW,
       requestedCollectionId: null, requestedVisibility: "shared", ...item,
@@ -75,6 +76,14 @@ describe("member submission loop through App", () => {
             if (state.failDraftWrite) return apiError(503, "UNAVAILABLE", true);
             const body = JSON.parse(String(init?.body)) as Record<string, string>;
             Object.assign(draft, { kind: body.kind, title: body.title, content: body.content, requestedSpaceId: body.requestedSpaceId });
+          }
+          if (method === "DELETE") {
+            if (state.refuseDraftDiscard) return apiError(404, "SUBMISSION_NOT_FOUND");
+            state.drafts.splice(state.drafts.indexOf(draft), 1);
+            state.discardCount += 1;
+            // The delete lands, but its answer never reaches the browser.
+            if (state.lostDiscardResponse) { state.lostDiscardResponse = false; throw new Error("network down"); }
+            return new Response(null, { status: 204 });
           }
           return Response.json(state.row(draft));
         }
@@ -181,6 +190,85 @@ describe("member submission loop through App", () => {
     await waitForApp(() => titleInput()?.value === "Kept guide");
     expect(contentInput().value).toBe("# Kept body");
     expect(draftStatus()?.dataset.submissionDraftStatus).not.toBe("saved");
+  });
+
+  it("discards the server draft it owns and leaves no local copy to reload", async () => {
+    await mount("/submit");
+    await waitForSelector("[data-submission-target=\"ready\"]");
+    await change(titleInput(), "Discard me");
+    await change(contentInput(), "# Body");
+    await leavePage();
+    await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "saved");
+    expect(state.drafts).toHaveLength(1);
+
+    // The control only opens the page's own confirmation, so the draft is still
+    // there until the confirmation commits.
+    await click(main().querySelector("[data-submission-draft-discard]"));
+    expect(state.discardCount).toBe(0);
+    expect(state.drafts).toHaveLength(1);
+    await click(main().querySelector("[data-confirm-action]"));
+
+    await waitForApp(() => state.discardCount === 1);
+    await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "idle");
+    expect(state.drafts).toHaveLength(0);
+    expect(draftStatus()!.textContent).toContain("Nothing to save yet.");
+    expect(titleInput().value).toBe("");
+    expect(contentInput().value).toBe("");
+    expect(loadOfflineSubmissionDraft("contributor-route-auditor", app!.browser.localStorage)).toBeNull();
+
+    // A reload finds nothing to resurrect: neither the draft nor its text.
+    await forceRemountAppAt(app!, "/submit");
+    await waitForSelector("[data-submission-target=\"ready\"]");
+    expect(titleInput().value).toBe("");
+    expect(contentInput().value).toBe("");
+    expect(state.drafts).toHaveLength(0);
+  });
+
+  it("keeps a discarded draft recoverable when its answer is lost and never calls it saved", async () => {
+    await mount("/submit");
+    await waitForSelector("[data-submission-target=\"ready\"]");
+    await change(titleInput(), "Lost answer");
+    await change(contentInput(), "# Body");
+    await leavePage();
+    await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "saved");
+
+    // The delete commits on the server, but the answer never arrives, so the page
+    // reports an unknown outcome instead of a discarded draft.
+    state.lostDiscardResponse = true;
+    await click(main().querySelector("[data-submission-draft-discard]"));
+    await click(main().querySelector("[data-confirm-action]"));
+    await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "unconfirmed");
+    expect(state.drafts).toHaveLength(0);
+    expect(contentInput().value).toBe("# Body");
+    expect(draftStatus()!.textContent).toContain("The discard was not confirmed.");
+
+    // Re-reading the same journaled discard settles it: the record is gone, so the
+    // draft is discarded, once, and the local copy goes with it.
+    await click(main().querySelector("[data-submission-draft-retry]"));
+    await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "idle");
+    expect(draftStatus()!.textContent).toContain("Nothing to save yet.");
+    expect(state.discardCount).toBe(1);
+    expect(contentInput().value).toBe("");
+    expect(loadOfflineSubmissionDraft("contributor-route-auditor", app!.browser.localStorage)).toBeNull();
+  });
+
+  it("never reports a refused discard as a discarded draft", async () => {
+    await mount("/submit");
+    await waitForSelector("[data-submission-target=\"ready\"]");
+    await change(titleInput(), "Refused");
+    await change(contentInput(), "# Body");
+    await leavePage();
+    await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "saved");
+
+    // The server refuses the delete (another writer's draft, a revoked session),
+    // and the page says the draft is still there with the text intact.
+    state.refuseDraftDiscard = true;
+    await click(main().querySelector("[data-submission-draft-discard]"));
+    await click(main().querySelector("[data-confirm-action]"));
+    await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "unconfirmed");
+    expect(draftStatus()!.textContent).toContain("The draft was not discarded.");
+    expect(contentInput().value).toBe("# Body");
+    expect(state.drafts).toHaveLength(1);
   });
 
   it("opens a returned item, shows its thread, and lands on the authoritative status without a second record", async () => {

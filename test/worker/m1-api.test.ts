@@ -827,6 +827,45 @@ it("returns authorized, bounded related knowledge with explainable fields", asyn
     }), 405, "METHOD_NOT_ALLOWED");
   });
 
+  it("discards an owned draft through DELETE and converges on a repeat", async () => {
+    const body = { requestedSpaceId: "default", kind: "markdown", title: "Keep me", content: "# Body" };
+    const create = async () => {
+      const created = await memberApi("contributor", "/api/submissions/drafts", { method: "POST", body: JSON.stringify(body) });
+      expect(created.status).toBe(201);
+      return created.json<{ id: string }>();
+    };
+    const draft = await create();
+    const rowCount = async (id: string) => (await env.DB.prepare("SELECT count(*) AS count FROM submissions WHERE id = ?").bind(id).first<{ count: number }>())!.count;
+
+    // Discarding is owner-scoped: another member cannot remove it, so the row
+    // survives their refused request untouched.
+    await expectApiError(memberApi("other", `/api/submissions/drafts/${draft.id}`, { method: "DELETE" }), 404, "SUBMISSION_NOT_FOUND");
+    await expect(rowCount(draft.id)).resolves.toBe(1);
+
+    const discarded = await memberApi("contributor", `/api/submissions/drafts/${draft.id}`, { method: "DELETE" });
+    expect(discarded.status).toBe(204);
+    expect(await discarded.text()).toBe("");
+    await expect(rowCount(draft.id)).resolves.toBe(0);
+    await expect(memberApi("contributor", "/api/submissions/mine?page=1&pageSize=20&status=draft").then((response) => response.json<{ items: { id: string }[] }>()))
+      .resolves.toMatchObject({ items: [] });
+
+    // A retried discard reads the receipt the first attempt committed instead of
+    // answering 404, and an unknown id still has no receipt to converge on.
+    await expect(memberApi("contributor", `/api/submissions/drafts/${draft.id}`, { method: "DELETE" }))
+      .resolves.toMatchObject({ status: 204 });
+    await expectApiError(memberApi("contributor", "/api/submissions/drafts/unknown-draft", { method: "DELETE" }), 404, "SUBMISSION_NOT_FOUND");
+
+    // A submitted row is not a draft and keeps its own lifecycle.
+    const submitted = await memberApi("contributor", "/api/submissions", {
+      method: "POST", headers: { "idempotency-key": "discard-scope-key1" },
+      body: JSON.stringify({ requestedSpaceId: "default", kind: "text", title: "Submitted", content: "Body" }),
+    });
+    const accepted = await submitted.json<{ submission: { id: string } }>();
+    await expectApiError(memberApi("contributor", `/api/submissions/drafts/${accepted.submission.id}`, { method: "DELETE" }), 404, "SUBMISSION_NOT_FOUND");
+    await expect(env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(accepted.submission.id).first())
+      .resolves.toEqual({ status: "review_pending" });
+  });
+
   it("converts rich-text paste to sanitized Markdown before review persistence", async () => {
     const response = await memberApi("contributor", "/api/submissions", {
       method: "POST",

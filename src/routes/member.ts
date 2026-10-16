@@ -386,7 +386,16 @@ export async function routeMemberApi(
         context.requestId,
       );
     }
-    return methodNotAllowed("GET, PATCH", context);
+    if (request.method === "DELETE") {
+      // Discarding a private draft is a member write on their own record, so it
+      // needs the same capability the draft write does. The id is the whole
+      // request: there is no body to validate, and the answer is idempotent, so
+      // a re-sent discard of a draft that is already gone still succeeds.
+      requireCapability(principal, "submission:create");
+      await services.submissions.discardDraft(member.memberId, draftId);
+      return new Response(null, { status: 204, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff", "x-request-id": context.requestId } });
+    }
+    return methodNotAllowed("DELETE, GET, PATCH", context);
   }
 
   const resubmit = /^\/api\/submissions\/([^/]+)\/resubmit$/.exec(url.pathname);

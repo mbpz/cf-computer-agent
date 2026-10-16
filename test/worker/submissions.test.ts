@@ -440,6 +440,57 @@ describe("submissions D1 control plane", () => {
     });
   });
 
+  it("discards an owned draft, converges on a repeat, and never touches another owner's row", async () => {
+    const service = createService("discard");
+    const draft = await service.createDraft("member-a", {
+      requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared",
+      kind: "markdown", title: "Draft to discard", content: "# Body",
+    });
+    const foreign = await service.createDraft("member-b", {
+      requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared",
+      kind: "text", title: "Someone else's draft", content: "private B",
+    });
+
+    // Ownership is the boundary: another member's live draft is neither deleted
+    // nor converged, so the row is still there afterwards.
+    await expect(service.discardDraft("member-a", foreign.id)).rejects.toThrow(/not found/iu);
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM submissions WHERE id = ?").bind(foreign.id).first())
+      .resolves.toEqual({ count: 1 });
+
+    await expect(service.discardDraft("member-a", draft.id)).resolves.toBeUndefined();
+    await expect(service.getDraft("member-a", draft.id)).rejects.toThrow(/not found/iu);
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM submissions WHERE id = ?").bind(draft.id).first())
+      .resolves.toEqual({ count: 0 });
+    // The receipt is the record of the discard: no payload, one row per member.
+    await expect(env.DB.prepare(
+      "SELECT member_id, draft_id, discarded_at FROM submission_draft_discard_receipts WHERE draft_id = ?",
+    ).bind(draft.id).all()).resolves.toMatchObject({ results: [
+      { member_id: "member-a", draft_id: draft.id, discarded_at: now },
+    ] });
+    await expect(service.listOwn("member-a", { page: 1, pageSize: 20, status: "draft" })).resolves.toMatchObject({
+      items: [], pagination: { total: 0, totalPages: 0 },
+    });
+
+    // A repeat converges on the recorded outcome instead of a second 404, and
+    // the receipt stays the single record of the one delete that committed.
+    await expect(service.discardDraft("member-a", draft.id)).resolves.toBeUndefined();
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM submission_draft_discard_receipts WHERE draft_id = ?").bind(draft.id).first())
+      .resolves.toEqual({ count: 1 });
+    // The recorded outcome is the caller's own: another member has no receipt.
+    await expect(service.discardDraft("member-b", draft.id)).rejects.toThrow(/not found/iu);
+    await expect(service.discardDraft("member-a", "unknown-draft")).rejects.toThrow(/not found/iu);
+
+    // Only a draft is discardable: a submitted row keeps its own lifecycle.
+    const submitted = await service.create("member-a", {
+      requestedSpaceId: "default", kind: "text", title: "Submitted", content: "Body",
+    });
+    await expect(service.discardDraft("member-a", submitted.id)).rejects.toThrow(/not found/iu);
+    await expect(env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(submitted.id).first())
+      .resolves.toEqual({ status: "review_pending" });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM submission_draft_discard_receipts").first())
+      .resolves.toEqual({ count: 1 });
+  });
+
   it("replays one resubmission for one idempotency key and takes a new key as a new attempt", async () => {
     const service = createService("replay");
     const prior = await service.createWithSourceVersion("member-a", {
