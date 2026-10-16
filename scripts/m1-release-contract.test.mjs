@@ -89,6 +89,15 @@ const expectedLocalMigrations = [...expectedMigrations,
   ["0061_knowledge_favorite_operations.sql", "bf6d72c6558cced59e57e5dd17c01fc0c7a63a84ad705593b6056b36ee9b5b8f"],
   ["0062_contributor_workspace_tasks_alignment.sql", "5443b342877097bf54a9d92fb7c3bb1a1457aea2a46e38c5959129e7d66ddbbf"],
   ["0063_member_login_invitations.sql", "88059df3afbc81877c4b802ff4c71f4d1a02e34c95aaf7cf1a44bfe55f8ec4d3"],
+  ["0064_role_operation_receipts.sql", "12257f0c9803a5d837c80cdccedca24021a5b9ca19372a38cb48d288e2d4d6a3"],
+  ["0065_workbench_write_convergence.sql", "a8537cc98c7cda49b7f1a87be14eb1997943a026785dca6f87d70dd32eb2731d"],
+  ["0066_task_delete_tombstones.sql", "d49f65209a22e07157048ac64834a8c3c49d6e7438aedc53192487fb8d380e61"],
+  ["0067_menu_operation_receipts.sql", "ae52d1a5e8fb28173ac50878136aa6622ac4b7e8d6fb1689dbba25157f81c04b"],
+  ["0068_task_status_intent_dedup.sql", "0bb77d431369e1d1bd78084f68ed92ad376feb0454f06bbe17c435e7865f0b7d"],
+  ["0069_review_decision_receipts.sql", "0dc48351c8cccafc0a24b9402c674d9e98f2080e51568bff0bfa6084ef4f483e"],
+  ["0070_knowledge_lifecycle_operation_receipts.sql", "fe7cd13949636d63ed0ca8e69e67919e4e92ba0e6ef5aa23d38b6f5c9f0b18fe"],
+  ["0071_admin_operation_receipts.sql", "37fac82bcff9f651ea278fa8b6d38262f9e67e8e252ebdbdd0379928bcb79826"],
+  ["0072_knowledge_recycle_bin_menu.sql", "cc49b35f922ad7f816406873667888ca29f44ddf6e00b3beeb951742b266862b"],
 ];
 
 const requiredEvidenceBlocks = [
@@ -243,7 +252,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^\[pass\] migration-files count=63$/mu);
+  assert.match(result.output, /^\[pass\] migration-files count=72$/mu);
 });
 
 test("keeps asset pairing migration compatible with remote D1 statement execution", async () => {

@@ -90,6 +90,20 @@ describe("admin audit identity read", () => {
     expect(container.textContent).not.toContain("Audit unavailable.");
   });
 
+  it("surfaces the server's related resource as a read-only link through normalization", async () => {
+    vi.stubGlobal("fetch", async () => Response.json({ items: [{ ...item, resourceType: "knowledge", resourceId: "know-1" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }));
+    await act(async () => root.render(<AdminAuditRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} search="" />));
+    for (let attempt = 0; attempt < 12 && !container.querySelector('a[data-audit-related="knowledge"]'); attempt += 1) {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 20);
+      await act(async () => { await promise; });
+    }
+    const link = container.querySelector('a[data-audit-related="knowledge"]') as HTMLAnchorElement | null;
+    expect(link).not.toBeNull();
+    expect(link!.getAttribute("href")).toBe("/knowledge/know-1");
+    expect(container.textContent).toContain("knowledge · know-1");
+  });
+
   async function mount() {
     vi.stubGlobal("fetch", async () => Response.json({ items: [{ ...item }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }));
     await act(async () => root.render(<AdminAuditRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} search="" />));

@@ -4,11 +4,13 @@ export interface ApiError {
   status: number;
   retryable: boolean;
   requestId?: string;
+  /** Machine-readable conflict context from the server, e.g. the authoritative version. */
+  details?: unknown;
 }
 
 export class ApiRequestError extends Error implements ApiError {
   readonly name = "ApiRequestError";
-  constructor(readonly code: string, message: string, readonly status: number, readonly retryable: boolean, readonly requestId?: string) {
+  constructor(readonly code: string, message: string, readonly status: number, readonly retryable: boolean, readonly requestId?: string, readonly details?: unknown) {
     super(message);
   }
 }
@@ -32,6 +34,7 @@ export async function parseApiError(response: Response): Promise<ApiError> {
         status: response.status,
         retryable: record.retryable,
         requestId: typeof record.requestId === "string" ? record.requestId : requestId,
+        ...(record.details === undefined ? {} : { details: record.details }),
       };
     }
   }
@@ -43,7 +46,7 @@ export async function apiFetch<T>(path: string, init: FrontendRequestInit = {}):
   const response = await requester(path, { ...requestInit, credentials: "same-origin" });
   if (!response.ok) {
     const error = await parseApiError(response);
-    throw new ApiRequestError(error.code, error.message, error.status, error.retryable, error.requestId);
+    throw new ApiRequestError(error.code, error.message, error.status, error.retryable, error.requestId, error.details);
   }
   if (response.status === 204) return undefined as T;
   try {

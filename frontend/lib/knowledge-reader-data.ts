@@ -1,6 +1,7 @@
 import { apiFetch, type Fetcher } from "./api";
 import { createAsyncOwner } from "./async-owner";
 import { loadGraphCitation } from "./graph-evidence";
+import { clearReaderVisitIntent, openReaderVisitIntent } from "./reader-visit-intent";
 
 export interface KnowledgeRevision {
   selectedChunkId?: string;
@@ -331,7 +332,7 @@ function normalizeDiff(value: unknown): KnowledgeRevisionDiff | null {
   };
 }
 
-export async function loadKnowledgeRevision(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal, citationHash = ""): Promise<KnowledgeRevision> {
+export async function loadKnowledgeRevision(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal, citationHash = "", memberId = ""): Promise<KnowledgeRevision> {
   assertKnowledgeId(knowledgeItemId);
   if (citationHash && citationHash !== "#") {
     if (!citationHash.startsWith("#")) throw new Error("KNOWLEDGE_CITATION_INVALID");
@@ -350,7 +351,15 @@ export async function loadKnowledgeRevision(knowledgeItemId: string, requester: 
     }
     return { ...revision, selectedChunkId: chunk.id };
   }
-  const data = await apiFetch<{ knowledge?: { currentRevision?: unknown } }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}`, { requester, signal });
+  // One explicit identity per visit: a retried read reuses it and is not counted
+  // twice, while a fresh visit invents a new one. It is cleared only after the
+  // read that recorded it succeeds, so a lost response keeps the same identity.
+  const visitIdentity = memberId === "" ? null : openReaderVisitIntent(memberId, knowledgeItemId);
+  const data = await apiFetch<{ knowledge?: { currentRevision?: unknown } }>(
+    `/api/knowledge/${encodeURIComponent(knowledgeItemId)}`,
+    { requester, signal, ...(visitIdentity === null ? {} : { headers: { "x-visit-id": visitIdentity } }) },
+  );
+  if (visitIdentity !== null) clearReaderVisitIntent(memberId, knowledgeItemId, visitIdentity);
   const revision = normalizeRevision(data.knowledge?.currentRevision);
   if (!revision || revision.knowledgeItemId !== knowledgeItemId) throw new Error("KNOWLEDGE_REVISION_INVALID");
   return revision;
@@ -360,7 +369,7 @@ function assertKnowledgeId(knowledgeItemId: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(knowledgeItemId)) throw new Error("KNOWLEDGE_ID_INVALID");
 }
 
-export function createKnowledgeReaderRequestController(requester: Fetcher = fetch) {
+export function createKnowledgeReaderRequestController(memberId = "", requester: Fetcher = fetch) {
   let active: AbortController | null = null;
   const owner = createAsyncOwner();
   return {
@@ -368,7 +377,7 @@ export function createKnowledgeReaderRequestController(requester: Fetcher = fetc
       active?.abort();
       active = new AbortController();
       const generation = owner.claim();
-      const promise = loadKnowledgeRevision(knowledgeItemId, requester, active.signal, citationHash).then((revision) => ({ generation, revision }));
+      const promise = loadKnowledgeRevision(knowledgeItemId, requester, active.signal, citationHash, memberId).then((revision) => ({ generation, revision }));
       return { generation, promise };
     },
     isCurrent(generation: number) { return owner.isCurrent(generation); },

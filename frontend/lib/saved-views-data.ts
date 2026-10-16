@@ -7,6 +7,10 @@ export interface SavedViewFilters {
   collectionId: string | null;
   tagIds: string[];
   tagMode: "and" | "or";
+  kind: "text" | "markdown" | "code" | null;
+  authorId: string | null;
+  publishedFrom: string | null;
+  publishedTo: string | null;
 }
 
 export interface SavedViewItem {
@@ -22,12 +26,13 @@ export async function loadSavedViews(requester: Fetcher = fetch): Promise<SavedV
   return (data as { items: unknown[] }).items.map(normalizeSavedView).filter((item): item is SavedViewItem => item !== null);
 }
 
-export async function createSavedView(name: string, filters: Partial<SavedViewFilters>, requester: Fetcher = fetch): Promise<SavedViewItem> {
+export async function createSavedView(name: string, filters: Partial<SavedViewFilters>, clientKey: string, requester: Fetcher = fetch): Promise<SavedViewItem> {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(clientKey)) throw new Error("SAVED_VIEW_INVALID");
   const data = await apiFetch<unknown>("/api/saved-views", {
     requester: expectStatus(requester, 201),
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, filters: savedViewInputFilters(filters) }),
+    body: JSON.stringify({ clientKey, name, filters: savedViewInputFilters(filters) }),
   });
   const result = verifiedSavedView(data);
   if (!result || result.name !== name.trim() || !sameSavedViewFilters(result.filters, canonicalSavedViewFilters(filters))) throw new Error("SAVED_VIEW_INVALID");
@@ -66,6 +71,10 @@ function normalizeFilters(value: Partial<SavedViewFilters>): SavedViewFilters {
     collectionId: typeof value.collectionId === "string" ? value.collectionId : null,
     tagIds: Array.isArray(value.tagIds) ? value.tagIds.filter((tag): tag is string => typeof tag === "string").slice(0, 20) : [],
     tagMode: value.tagMode === "and" ? "and" : "or",
+    kind: value.kind === "text" || value.kind === "markdown" || value.kind === "code" ? value.kind : null,
+    authorId: typeof value.authorId === "string" ? value.authorId : null,
+    publishedFrom: typeof value.publishedFrom === "string" ? value.publishedFrom : null,
+    publishedTo: typeof value.publishedTo === "string" ? value.publishedTo : null,
   };
 }
 
@@ -82,7 +91,9 @@ export function canonicalSavedViewFilters(value: Partial<SavedViewFilters>): Sav
 }
 export function sameSavedViewFilters(left: SavedViewFilters, right: SavedViewFilters): boolean {
   return left.q === right.q && left.spaceId === right.spaceId && left.collectionId === right.collectionId
-    && left.tagMode === right.tagMode && JSON.stringify([...left.tagIds].sort()) === JSON.stringify([...right.tagIds].sort());
+    && left.tagMode === right.tagMode && left.kind === right.kind && left.authorId === right.authorId
+    && left.publishedFrom === right.publishedFrom && left.publishedTo === right.publishedTo
+    && JSON.stringify([...left.tagIds].sort()) === JSON.stringify([...right.tagIds].sort());
 }
 export function verifiedSavedView(value: unknown): SavedViewItem | null {
   const item = normalizeSavedView(value);
@@ -92,8 +103,16 @@ export function verifiedSavedView(value: unknown): SavedViewItem | null {
   if (!filters || filters.v !== 1 || typeof filters.q !== "string" || filters.q !== filters.q.trim()
     || !["and", "or"].includes(String(filters.tagMode)) || !Array.isArray(filters.tagIds) || filters.tagIds.length > 20
     || filters.tagIds.some(id => typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(id))
-    || [filters.spaceId, filters.collectionId].some(id => id !== null && (typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(id)))) return null;
+    || [filters.spaceId, filters.collectionId, filters.authorId].some(id => id !== null && (typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(id)))
+    || (filters.kind !== null && !["text", "markdown", "code"].includes(String(filters.kind)))
+    || [filters.publishedFrom, filters.publishedTo].some(at => at !== null && !isCanonicalTimestamp(at))) return null;
   return item;
+}
+/** A stored published-at bound: the API only accepts canonical UTC timestamps. */
+export function isCanonicalTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 function expectStatus(requester: Fetcher, status: number): Fetcher {
   return async (input, init) => {

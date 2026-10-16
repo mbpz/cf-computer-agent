@@ -1,6 +1,7 @@
 import { AppError } from "../http";
 import type { WorkScope } from "../maintenance/lifecycle";
 import { parallelWork } from "../maintenance/work";
+import { deriveGraphCursorScopeKey, graphCursorOffset } from "./cursor";
 import { GRAPH_MAX_TEMPORAL_DAYS, normalizeGraphSnapshot } from "./types";
 import type { GraphChangeKind, GraphEdge, GraphNode, GraphNodeKind, GraphQuery, GraphSnapshot } from "./types";
 import type {
@@ -63,10 +64,13 @@ export class GraphProjectionService {
     });
     const selected = selectNeighborhood(scopeSeeds, typeFiltered, authorizedEdges, query.rootId, query.depth);
     const selectedIds = new Set(selected.map((node) => node.id));
+    // The continuation token is bound to this exact query, so the window carries its
+    // scope key; a request without one simply starts at the first window.
     return normalizeGraphSnapshot(
       selected,
       authorizedEdges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target)),
       query,
+      { offset: graphCursorOffset(query.cursor), cursorScopeKey: await deriveGraphCursorScopeKey(memberId, query) },
     );
   }
 }

@@ -306,7 +306,7 @@ describe("numbered admin routes", () => {
     await act(async () => { confirm.click(); confirm.click(); });
     expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH"]);
     expect(requests[1]!.url).toBe("/api/admin/members/m1/status");
-    expect(JSON.parse(String(requests[1]!.body))).toEqual({ status: "active" });
+    expect(JSON.parse(String(requests[1]!.body))).toEqual({ status: "active", expectedStatus: "disabled" });
     expect(button.disabled).toBe(true);
   });
 

@@ -104,7 +104,7 @@ describe("saved view route ownership", () => {
       return Response.json({ items: [{ ...view(), filters }] });
     });
     await act(async () => { edit("Docs"); submit(); await new Promise(resolve => setTimeout(resolve, 20)); });
-    expect(sent).toEqual({ name: "Docs", filters: { q: "docs", spaceId: "space-a", collectionId: "collection-a", tagIds: ["tag-a", "tag-b"], tagMode: "and" } });
+    expect(sent).toEqual({ clientKey: expect.any(String), name: "Docs", filters: { q: "docs", spaceId: "space-a", collectionId: "collection-a", tagIds: ["tag-a", "tag-b"], tagMode: "and", kind: null, authorId: null, publishedFrom: null, publishedTo: null } });
     await act(async () => writeWorkspaceHistory("push", "/search?q=other"));
     await click("[data-saved-view-controls] [data-saved-view-apply]");
     const query = new URLSearchParams(browser.location.search);
@@ -226,4 +226,4 @@ describe("saved view route ownership", () => {
 });
 function props<T>(element: HTMLElement): T { return (element as unknown as Record<string, T>)[Object.keys(element).find(key => key.startsWith("__reactProps$"))!]!; }
 
-function view() { return { id: "view-1", name: "Docs", updatedAt: "2026-10-02T00:00:00.000Z", filters: { v: 1, q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or" } }; }
+function view() { return { id: "view-1", name: "Docs", updatedAt: "2026-10-02T00:00:00.000Z", filters: { v: 1, q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or", kind: null, authorId: null, publishedFrom: null, publishedTo: null } }; }

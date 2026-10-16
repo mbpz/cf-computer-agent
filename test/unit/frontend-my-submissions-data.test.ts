@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { createMySubmissionsRequestController, loadMySubmissionsPage, normalizeSubmissionRange, parseSubmissionRange, writeSubmissionRange } from "../../frontend/lib/my-submissions-data";
+import { createMySubmissionsRequestController, loadMySubmissionsPage, normalizeSubmissionRange, parseSubmissionRange, submissionResubmitSource, writeSubmissionRange } from "../../frontend/lib/my-submissions-data";
 
 const pageBody = { items: [{ id: "s-1", title: "Guide", status: "review_pending" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } };
 
@@ -50,6 +50,27 @@ describe("frontend my submissions data", () => {
     await expect(first.promise).rejects.toMatchObject({ name: "AbortError" });
     controller.dispose();
     await expect(second.promise).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("keeps a returned row's own source and the supersede link the list renders from", async () => {
+    const requester = vi.fn(async () => Response.json({ items: [
+      { id: "resubmitted", title: "Revision", status: "review_pending", supersedesSubmissionId: "returned" },
+      { id: "returned", title: "Returned guide", status: "revision_requested", kind: "markdown", content: "# Body", requestedSpaceId: "space-a", requestedCollectionId: null, requestedVisibility: "shared", review: { decision: "revision_requested", reasonCode: "needs_revision", note: "Add sources." } },
+      { id: "partial", title: "Partial", status: "revision_requested", kind: "markdown" },
+    ], pagination: { page: 1, pageSize: 20, total: 3, totalPages: 1 } }));
+    const page = await loadMySubmissionsPage({ page: 1, pageSize: 20, requester });
+    expect(page.items[0]).toEqual({ id: "resubmitted", title: "Revision", status: "review_pending", supersedes: "returned" });
+    // A row without its complete own source offers no editing payload.
+    expect(page.items[2]).toEqual({ id: "partial", title: "Partial", status: "revision_requested" });
+    const returned = page.items[1]!;
+    expect(returned.source).toEqual({ kind: "markdown", content: "# Body", target: { requestedSpaceId: "space-a", requestedCollectionId: null, requestedVisibility: "shared" } });
+    expect(submissionResubmitSource(returned)).toEqual({
+      id: "returned", title: "Returned guide", kind: "markdown", content: "# Body",
+      target: { requestedSpaceId: "space-a", requestedCollectionId: null, requestedVisibility: "shared" },
+      reviewNote: "Add sources.",
+    });
+    expect(submissionResubmitSource(page.items[0]!)).toBeNull();
+    expect(submissionResubmitSource(page.items[2]!)).toBeNull();
   });
 });
 

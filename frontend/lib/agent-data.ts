@@ -28,6 +28,36 @@ export interface AgentAnswer {
   conflicts?: Array<{ text: string; citationIds: string[] }>;
 }
 
+/**
+ * A quota deferral and a temporarily unavailable AI backend are server answers
+ * about the request, not client-side transport failures. The reader's AI
+ * artifacts use the same two reasons, so both surfaces share one vocabulary
+ * (`unavailable-quota` / `unavailable-degraded`) and one code list.
+ */
+export type AgentUnavailableReason = "quota" | "degraded";
+
+const AGENT_QUOTA_CODES: Record<string, true> = { RESEARCH_QUOTA_DEFERRED: true, AI_QUOTA_EXHAUSTED: true, QUOTA_EXHAUSTED: true };
+
+/** Null means the failure is neither a quota deferral nor a degraded backend. */
+export function agentUnavailableReason(error: unknown): AgentUnavailableReason | null {
+  if (!(error instanceof ApiRequestError)) return null;
+  if (Object.hasOwn(AGENT_QUOTA_CODES, error.code)) return "quota";
+  return error.code === "AI_UNAVAILABLE" ? "degraded" : null;
+}
+
+/**
+ * The page's own request states. `refused` is the server's explicit
+ * no-evidence answer and carries no answer body; `unavailable` is a classified
+ * server availability answer, never a generic error.
+ */
+export type AgentTurnState =
+  | { kind: "loading" }
+  | { kind: "cancelled" }
+  | { kind: "ready"; answer: string; confidence: AgentAnswer["confidence"]; citations: readonly AgentCitation[]; conversationId?: string; conflicts?: AgentAnswer["conflicts"] }
+  | { kind: "refused"; citations: readonly AgentCitation[]; conversationId?: string; suggestions?: AgentAnswer["suggestions"] }
+  | { kind: "unavailable"; reason: AgentUnavailableReason; code: string }
+  | { kind: "error"; message: string };
+
 type ChatPayload = { answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; conflicts?: unknown[]; messageKey?: unknown; suggestedActionKeys?: unknown; idempotencyKey?: unknown };
 
 /**

@@ -4,7 +4,7 @@ import { normalizeNumberedPageRequest, type NumberedPageRequest } from "../pagin
 import type { AuditRepository } from "../audit/repository";
 import type { AuditAction, CreateAuditEvent } from "../audit/types";
 import type { NotificationEventInput } from "../notifications/types";
-import type { TasksRepositoryPort } from "./repository";
+import type { TasksRepositoryPort, TaskTombstone } from "./repository";
 import { normalizeSubtaskCreate, normalizeSubtaskUpdate, validStructureId, type TaskDependency, type TaskSubtask, type TaskSubtaskCreateInput, type TaskSubtaskUpdateInput } from "./structure";
 import { TASK_PRIORITIES, TASK_STATUSES, type Task, type TaskLink, type TaskListFilters, type TaskPage, type TaskStatus, type TaskSummary } from "./types";
 
@@ -201,41 +201,53 @@ export class TasksService {
   async update(memberId: string, id: string, input: TaskUpdateInput): Promise<Task> {
     const task = await this.requireOwned(memberId, id);
     const normalized = normalizeUpdate(input);
-    const expected = parseExpectedVersion((input as Record<string, unknown> | null)?.expectedUpdatedAt);
+    // The detail update always carries the version the client edited, so a save that
+    // never read the task is refused instead of overwriting a newer member edit.
+    const expected = requireExpectedVersion((input as Record<string, unknown> | null)?.expectedUpdatedAt);
     // Absolute-value semantics: a re-send that already matches succeeds without a second write.
     if (task.title === normalized.title && task.notes === normalized.notes && task.priority === normalized.priority
       && (task.dueAt === null ? null : Date.parse(task.dueAt)) === normalized.dueAt) return task;
     const conflict = versionConflict;
-    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw conflict();
+    if (Date.parse(task.updatedAt) !== expected) throw conflict();
     // Strictly increasing, so two writes in the same millisecond still produce distinct versions.
     const updatedAt = Math.max(this.now().getTime(), Date.parse(task.updatedAt) + 1);
     const updated = await this.repository.update(memberId, id, { ...normalized, updatedAt }, expected);
     if (!updated) {
-      if (expected !== undefined && await this.repository.findOwned(memberId, id)) throw conflict();
+      // The SQL predicate is authoritative: only a still-present task proves a conflict.
+      if (await this.repository.findOwned(memberId, id)) throw conflict();
       throw notFound();
     }
     await this.emitAudit("task.updated", memberId, updated.id, { priority: normalized.priority });
     return updated;
   }
 
-  async delete(memberId: string, id: string): Promise<void> {
-    const task = await this.requireOwned(memberId, id);
-    if (!await this.repository.delete(memberId, id)) throw notFound();
-    await this.emitAudit("task.deleted", memberId, task.id, { status: task.status });
-    return void task;
+  async delete(memberId: string, id: string, expectedUpdatedAt: unknown): Promise<TaskTombstone> {
+    if (!validId(id)) throw notFound();
+    // The delete names the version it removes, so a stale intent cannot discard a
+    // newer member edit; only the recorded receipt decides the replay outcome.
+    const expected = requireExpectedVersion(expectedUpdatedAt);
+    const task = await this.repository.findOwned(memberId, id);
+    const outcome = await this.repository.delete(memberId, id, expected, this.now().getTime());
+    // No live task and no retained receipt: an unknown id, another member's task, or a
+    // receipt that is past its retention window.
+    if (!outcome) throw notFound();
+    if (outcome.kind === "version_conflict") throw versionConflict();
+    // A replay converges without a second audit result.
+    if (outcome.kind === "deleted" && task) await this.emitAudit("task.deleted", memberId, id, { status: task.status });
+    return outcome.tombstone;
   }
 
   async setStatus(memberId: string, id: string, status: unknown, expectedStatus?: unknown): Promise<Task> {
     const task = await this.requireOwned(memberId, id);
     const next = normalizeStatus(status);
-    const expected = expectedStatus === undefined ? undefined : normalizeStatus(expectedStatus);
+    // A status write always names the status it replaces, so the CAS predicate is never
+    // skipped: an omitted precondition is a malformed request, not an unconditional write.
+    const expected = normalizeStatus(expectedStatus);
     if (task.status === next) {
       await this.deliverPendingStatusNotifications(memberId, task.id);
       return task; // 绝对值语义:重复提交即成功,同时修复 pending intent
     }
-    if (expected !== undefined && task.status !== expected) {
-      throw new AppError("TASK_STATUS_CONFLICT", "Task status changed since it was read", 409);
-    }
+    if (task.status !== expected) throw statusConflict();
     if (!TRANSITIONS[task.status].includes(next)) {
       throw new AppError("TASK_TRANSITION_INVALID", "Task status transition is invalid", 422);
     }
@@ -247,9 +259,7 @@ export class TasksService {
       memberId, id, previousStatus, next, next === "done" ? completedAt : null, progress, now,
     );
     const current = await this.requireOwned(memberId, id);
-    if (!won && current.status !== next) {
-      throw new AppError("TASK_STATUS_CONFLICT", "Task status changed concurrently", 409, true);
-    }
+    if (!won && current.status !== next) throw statusConflict();
     if (won) await this.emitAudit("task.status_changed", memberId, current.id, { previousStatus, status: next });
     await this.deliverPendingStatusNotifications(memberId, current.id);
     return current;
@@ -432,11 +442,23 @@ function versionConflict(): AppError {
   return new AppError("TASK_VERSION_CONFLICT", "Task changed since it was read", 409);
 }
 
+/** One meaning for both conflict paths: the snapshot was stale, so re-read and retry deliberately. */
+function statusConflict(): AppError {
+  return new AppError("TASK_STATUS_CONFLICT", "Task status changed; reload before retrying", 409, false);
+}
+
 function parseExpectedVersion(value: unknown): number | undefined {
   if (value === undefined) return undefined;
   const ms = typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/u.test(value) ? Date.parse(value) : Number.NaN;
   if (!Number.isFinite(ms)) throw invalid("TASK_INVALID", "Task fields are invalid");
   return ms;
+}
+
+/** A conditional write must name the version it edited; a missing one is a malformed request, not an unconditional write. */
+function requireExpectedVersion(value: unknown): number {
+  const expected = parseExpectedVersion(value);
+  if (expected === undefined) throw invalid("TASK_INVALID", "Task fields are invalid");
+  return expected;
 }
 
 function normalizeUpdate(input: TaskUpdateInput): { title: string; notes: string; priority: Task["priority"]; dueAt: number | null } {

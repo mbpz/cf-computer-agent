@@ -1,5 +1,6 @@
 import { AppError } from "../http";
 import { parsePageRequest, type PageRequest } from "../pagination";
+import { nextPlanningVersion, planningConflict, requirePlanningVersion } from "../planning-version";
 import type { PrivateNote, PrivateNoteCitation, PrivateNoteInput, PrivateNotePage, PrivateNoteRepositoryPort, PrivateNoteScope, PrivateNoteShare } from "./types";
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -40,12 +41,36 @@ export class PrivateNotesService {
     const existing = await this.get(scope, knowledgeItemId);
     if (existing?.access === "shared") throw new AppError("PRIVATE_NOTE_READ_ONLY", "Shared notes are read-only", 403);
     const normalized = normalizeInput(input);
+    if (!existing) return this.createNote(scope, knowledgeItemId, normalized);
+    // A request that already matches the stored note is the same write, replayed.
+    if (normalized.id !== null && normalized.id !== existing.id) throw planningConflict("PRIVATE_NOTE");
+    if (sameContent(existing, normalized)) return existing;
+    if (normalized.expectedUpdatedAt === null) throw planningConflict("PRIVATE_NOTE");
+    const expected = requirePlanningVersion(normalized.expectedUpdatedAt, existing.updatedAt, "PRIVATE_NOTE");
+    // The repository re-checks identity and version in one statement; the
+    // service read is only the conflict shortcut.
+    const saved = await this.repository.update({
+      ownerId: scope.memberId, role: scope.role, knowledgeItemId, id: existing.id,
+      title: normalized.title, body: normalized.body, citations: normalized.citations,
+      expectedUpdatedAt: existing.updatedAt, updatedAt: new Date(nextPlanningVersion(expected, this.now().getTime())).toISOString(),
+    });
+    if (!saved) throw planningConflict("PRIVATE_NOTE");
+    return saved;
+  }
+
+  private async createNote(scope: PrivateNoteScope, knowledgeItemId: string, normalized: NormalizedNote): Promise<PrivateNote> {
+    if (normalized.expectedUpdatedAt !== null) throw planningConflict("PRIVATE_NOTE");
     const timestamp = this.now().toISOString();
-    return this.repository.upsert({
-      id: this.id(), ownerId: scope.memberId, role: scope.role, knowledgeItemId,
+    const created = await this.repository.create({
+      id: normalized.id ?? this.id(), ownerId: scope.memberId, role: scope.role, knowledgeItemId,
       title: normalized.title, body: normalized.body, citations: normalized.citations,
       createdAt: timestamp, updatedAt: timestamp,
     });
+    const saved = await this.get(scope, knowledgeItemId);
+    if (!saved || saved.access !== "owner") throw new AppError("PRIVATE_NOTE_UNAVAILABLE", "Private note is unavailable", 503, true);
+    // A losing concurrent create must not be silently overwritten.
+    if (!created && !sameContent(saved, normalized)) throw planningConflict("PRIVATE_NOTE");
+    return saved;
   }
 
   async share(scope: PrivateNoteScope, knowledgeItemId: string, recipientMemberId: string): Promise<PrivateNoteShare> {
@@ -56,7 +81,7 @@ export class PrivateNotesService {
     return this.repository.share(scope, knowledgeItemId, recipientMemberId, this.now().toISOString());
   }
 
-  async revokeShare(scope: PrivateNoteScope, knowledgeItemId: string, recipientMemberId: string): Promise<void> {
+  async revokeShare(scope: PrivateNoteScope, knowledgeItemId: string, recipientMemberId: string): Promise<PrivateNoteShare> {
     assertId(knowledgeItemId);
     assertId(recipientMemberId);
     if (!this.repository.revokeShare) throw new AppError("PRIVATE_NOTE_UNAVAILABLE", "Private note sharing is unavailable", 503, true);
@@ -70,16 +95,39 @@ export class PrivateNotesService {
   }
 }
 
-function normalizeInput(input: PrivateNoteInput): { title: string; body: string; citations: PrivateNoteCitation[] } {
+type NormalizedNote = {
+  id: string | null;
+  expectedUpdatedAt: string | null;
+  title: string;
+  body: string;
+  citations: PrivateNoteCitation[];
+};
+
+function normalizeInput(input: PrivateNoteInput): NormalizedNote {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw invalid();
   if (typeof input.title !== "string" || typeof input.body !== "string" || !Array.isArray(input.citations)) throw invalid();
+  const id = input.id === undefined || input.id === null ? null : input.id;
+  if (id !== null && !validId(id)) throw invalid();
+  const expectedUpdatedAt = input.expectedUpdatedAt === undefined || input.expectedUpdatedAt === null ? null : input.expectedUpdatedAt;
+  if (expectedUpdatedAt !== null && !isCanonicalVersion(expectedUpdatedAt)) throw invalid();
   const title = input.title.trim();
   const body = input.body.trim();
   if (!title || !body || utf8Bytes(title) > MAX_TITLE_BYTES || utf8Bytes(body) > MAX_BODY_BYTES) throw invalid();
   if (input.citations.length < 1 || input.citations.length > MAX_CITATIONS) throw invalid();
   const citations = input.citations.map(normalizeCitation);
   if (new Set(citations.map((citation) => `${citation.revisionId}:${citation.chunkId}:${citation.startLine}:${citation.endLine}`)).size !== citations.length) throw invalid();
-  return { title, body, citations };
+  return { id, expectedUpdatedAt, title, body, citations };
+}
+
+function isCanonicalVersion(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const epoch = Date.parse(value);
+  return Number.isSafeInteger(epoch) && epoch >= 0 && new Date(epoch).toISOString() === value;
+}
+
+function sameContent(note: PrivateNote, normalized: NormalizedNote): boolean {
+  return note.title === normalized.title && note.body === normalized.body
+    && JSON.stringify(note.citations) === JSON.stringify(normalized.citations);
 }
 
 function normalizeCitation(value: unknown): PrivateNoteCitation {

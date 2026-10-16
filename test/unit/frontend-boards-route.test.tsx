@@ -79,6 +79,38 @@ describe("task-backed boards route", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
 
+  it("rolls the losing card back to its own column before the winner's column replaces it", async () => {
+    let competing = false;
+    let releaseReload: () => void = () => undefined;
+    const reload = new Promise<void>((resolve) => { releaseReload = resolve; });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        // The other session won the race for the same card, so this tab's move is refused.
+        competing = true;
+        return Response.json({ error: { code: "TASK_STATUS_CONFLICT", message: "Task status changed concurrently", retryable: true } }, { status: 409 });
+      }
+      if (!competing) return boardPage(url, { todoTitle: "Alpha" });
+      // Hold the authoritative reload so the loser's rolled-back render is observable on its own.
+      await reload;
+      return statusFromUrl(url) === "doing"
+        ? Response.json({ items: [task("doing", "Alpha", "todo-task")], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } })
+        : Response.json({ items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+    });
+    await renderBoard();
+
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing"); await flush();
+    // The loser owns up to the conflict and puts the card back in the column it moved it from.
+    expect(container.textContent).toContain("changed elsewhere");
+    expect(column("todo").textContent).toContain("Alpha");
+    expect(column("doing").textContent).not.toContain("Alpha");
+    expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+
+    await act(async () => releaseReload()); await flush();
+    // The winner's authoritative board holds the card in one column, and never in two.
+    expect(boardHolders("todo-task")).toEqual(["doing"]);
+  });
+
   it("moves a focused card with arrow keys only when the next column is a legal status, and keeps columns in a horizontal scroller", async () => {
     const mutations: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -907,6 +939,71 @@ describe("task-backed boards route", () => {
       expect(browser.sessionStorage.getItem(KEY)).toBeNull();
     });
 
+    it("retries a lost response with the journaled intent and renders the card in one column", async () => {
+      const posts: string[] = []; let sent = false;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") {
+          posts.push(String(init.body)); sent = true;
+          // The server applied the move, but this tab never received the response.
+          if (posts.length === 1) throw new TypeError("network down");
+          return Response.json(task("doing", "Alpha", "todo-task"));
+        }
+        if (!sent) return boardPage(url, { todoTitle: "Alpha" });
+        return statusFromUrl(url) === "doing"
+          ? Response.json({ items: [task("doing", "Alpha", "todo-task")], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } })
+          : Response.json({ items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+      });
+      await renderBoard("member-a");
+      await moveAlpha(); await flush();
+      expect(container.querySelector("[data-board-move-unknown]")).toBeTruthy();
+      expect(browser.sessionStorage.getItem(KEY)).not.toBeNull();
+
+      await act(async () => buttonByText(container, "Retry the same move").click()); await flush();
+
+      // The retry reuses the journaled intent byte for byte instead of inventing a new move.
+      expect(posts).toHaveLength(2);
+      expect(new Set(posts)).toEqual(new Set([JSON.stringify({ status: "doing", expectedStatus: "todo" })]));
+      expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+      // One move, one result: the card is rendered in exactly one column, never in two.
+      await flush();
+      expect(boardHolders("todo-task")).toEqual(["doing"]);
+    });
+
+    it("keeps the journaled source when a resumed move meets a newer column", async () => {
+      const posts: string[] = []; let sent = false; let clobbered = false;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") {
+          const body = JSON.parse(String(init.body)) as { status: string; expectedStatus?: string };
+          posts.push(String(init.body));
+          if (posts.length === 1) { sent = true; throw new TypeError("network down"); }
+          // The server refuses a move that still asserts the column it left; without that
+          // assertion the same target is written unconditionally and clobbers the newer column.
+          if (body.expectedStatus !== "todo") { clobbered = true; return Response.json(task("doing", "Alpha", "todo-task")); }
+          return Response.json({ error: { code: "TASK_STATUS_CONFLICT", message: "changed", retryable: false } }, { status: 409 });
+        }
+        if (!sent) return boardPage(url, { todoTitle: "Alpha" });
+        const authoritative = clobbered ? "doing" : "blocked";
+        return statusFromUrl(url) === authoritative
+          ? Response.json({ items: [task(authoritative, "Alpha", "todo-task")], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } })
+          : Response.json({ items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+      });
+      await renderBoard("member-a");
+      await moveAlpha(); await flush();
+      expect(browser.sessionStorage.getItem(KEY)).not.toBeNull();
+
+      await act(async () => buttonByText(container, "Retry the same move").click()); await flush();
+
+      // The resumed move still asserts the source it was journaled from, so it is refused.
+      expect(posts).toEqual([JSON.stringify({ status: "doing", expectedStatus: "todo" }), JSON.stringify({ status: "doing", expectedStatus: "todo" })]);
+      expect(container.textContent).toContain("Unable to move the task.");
+      expect(browser.sessionStorage.getItem(KEY)).toBeNull();
+      await flush();
+      expect(boardHolders("todo-task")).toEqual(["blocked"]);
+    });
+
     it("clears the record when the move is definitively rejected", async () => {
       vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST" ? rejectedResponse() : boardPage(String(input), { todoTitle: "Alpha" }));
       await renderBoard("member-a");
@@ -990,6 +1087,11 @@ describe("task-backed boards route", () => {
 
   function column(status: string): HTMLElement {
     return container.querySelector(`[data-board-column="${status}"]`) as HTMLElement;
+  }
+
+  /** The columns rendering this card right now; a converged board holds it in exactly one. */
+  function boardHolders(taskId: string): string[] {
+    return ["todo", "doing", "blocked", "done"].filter((status) => boardTaskIds(column(status)).includes(taskId));
   }
 
   function columnTotal(status: string): string | null {

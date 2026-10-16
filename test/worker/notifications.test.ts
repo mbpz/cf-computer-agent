@@ -223,6 +223,29 @@ describe("notifications HTTP contract", () => {
     expect(newOwner.items.some(({ id }) => id === "a-task-history")).toBe(false);
   });
 
+  it("converges the unread total and hides the target when an opened notification's target is revoked", async () => {
+    expect(await (await api("/api/notifications/summary", sessionA)).json()).toEqual({ unread: 2 });
+    // Task ownership moves away from the recipient: the target is revoked for member-a.
+    await env.DB.prepare("UPDATE tasks SET member_id = 'member-b' WHERE id = 'task-a'").run();
+    const listed = await (await api("/api/notifications?page=1&pageSize=20", sessionA)).json() as { items: Array<Record<string, unknown>> };
+    expect(listed.items.find(({ id }) => id === "a-due")).toMatchObject({ targetKind: null, targetId: null, readAt: null });
+
+    // Opening a revoked-target notification still commits the read and answers redacted.
+    const opened = await api("/api/notifications/a-due/read", sessionA, { method: "POST" });
+    expect(opened.status).toBe(200);
+    const openedBody = await opened.json() as Record<string, unknown>;
+    expect(openedBody).toMatchObject({ id: "a-due", targetKind: null, targetId: null });
+    expect(typeof openedBody.readAt).toBe("string");
+    expect(JSON.stringify(openedBody)).not.toContain("task-a");
+    // The recipient's unread total converges on the read; the new owner sees no history.
+    expect(await (await api("/api/notifications/summary", sessionA)).json()).toEqual({ unread: 1 });
+    expect(await (await api("/api/notifications/summary", sessionB)).json()).toEqual({ unread: 1 });
+    const newOwner = await (await api("/api/notifications?page=1&pageSize=20", sessionB)).json() as { items: Array<Record<string, unknown>> };
+    expect(newOwner.items.some(({ id }) => id === "a-due")).toBe(false);
+    await expect((await api("/api/notifications/a-due/read", sessionA, { method: "POST" })).json()).resolves.toEqual(openedBody);
+    expect(await (await api("/api/notifications/summary", sessionA)).json()).toEqual({ unread: 1 });
+  });
+
   it("rechecks submission ownership and current admin status on list and read without transferring history", async () => {
     const timestamp = "2026-08-30T00:00:00.000Z";
     await env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, kind, status, title, content, created_at, updated_at) VALUES ('review-target', 'member-a', 'default', 'markdown', 'rejected', 'Private', 'Private body', ?, ?)").bind(timestamp, timestamp).run();

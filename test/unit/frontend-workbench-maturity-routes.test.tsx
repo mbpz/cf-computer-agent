@@ -50,10 +50,33 @@ const ROUTE_STATE_MATRIX = Object.freeze({
   "admin-assets": listWithRetry,
   "admin-members": listWithRetry,
   "admin-roles": listWithRetry,
+  "admin-role-new": {
+    loading: gap("Create role renders its form while the shared role read is pending; the route has no route-owned loading state."),
+    empty: gap("Create role has no empty state; an empty role list leaves the create form unchanged."),
+    error: gap("Create role projects a failed role read as a bare alert; the retry control renders outside that alert."),
+    ready: supported,
+  },
+  "admin-role-detail": {
+    loading: supported,
+    empty: gap("An empty role list cannot resolve the requested id, so role detail renders its not-found error instead of an empty state."),
+    error: supported,
+    ready: supported,
+  },
   "admin-menus": listWithRetry,
   "admin-spaces": listWithRetry,
   "admin-audit": listWithRetry,
   "admin-analytics": listWithRetry,
+  // The recycle bin and its fixed-path page kind are the same route: the list read
+  // owns loading, an empty page and a retryable failure, and the ready list paints
+  // the item the server returned.
+  "admin-recycle-bin": listWithRetry,
+  "admin-knowledge-trash": listWithRetry,
+  "admin-knowledge-item": {
+    loading: supported,
+    empty: gap("Knowledge item detail treats an empty read as an invalid payload and renders its load error, not an empty state."),
+    error: supported,
+    ready: supported,
+  },
   notifications: listWithRetry,
   messages: listWithRetry,
   "knowledge-reader": { loading: supported, empty: gap("Knowledge reader treats a missing revision as an error, not an empty state."), error: supported, ready: supported },
@@ -70,7 +93,11 @@ const PERMISSION_MASK_BY_ROUTE = Object.freeze({
   environments: "0x200000",
   tasks: "0x100000", boards: "0x100000", settings: "0x0", admin: "0x0", "admin-submissions": "0x0",
   "admin-duplicates": "0x0", "admin-assets": "0x0", "admin-members": "0x0", "admin-roles": "0x0",
+  "admin-role-new": "0x0", "admin-role-detail": "0x0",
   "admin-menus": "0x0", "admin-spaces": "0x0", "admin-audit": "0x0", "admin-analytics": "0x0",
+  // The three knowledge-lifecycle routes authorize on the session capability
+  // `knowledge:review`, not on a permission bit, so they claim no mask.
+  "admin-recycle-bin": "0x0", "admin-knowledge-trash": "0x0", "admin-knowledge-item": "0x0",
   notifications: "0x0", messages: "0x0", "knowledge-reader": "0x0", "message-thread": "0x0", "admin-submission-detail": "0x0",
 } as const satisfies Record<MaturityRouteId, string>);
 
@@ -175,7 +202,8 @@ describe("workbench maturity server projection and authorization audit", () => {
           requests.push(String(input));
           return status === 404 ? apiError(404, "SUBMISSION_NOT_FOUND") : Response.json({ preview: {
             submissionId: "ready-admin-submissions", title: "Selected response-owned submission", submitterId: "member-route-audit",
-            status: "review_pending", requestedSpaceId: "default", requestedVisibility: "shared", sourceVersion: { content: "Selected content" },
+            status: "review_pending", requestedSpaceId: "default", requestedVisibility: "shared",
+            sourceVersion: { id: "ready-admin-source-version", content: "Selected content" },
           } });
         }
         return base(input, init);
@@ -186,12 +214,28 @@ describe("workbench maturity server projection and authorization audit", () => {
     await act(async () => (journey!.container.querySelector('main a[href="/admin/submissions/ready-admin-submissions"]') as HTMLElement).click());
     await waitForApp(() => journey!.browser.location.pathname === "/admin/submissions/ready-admin-submissions");
     await waitForApp(() => journey!.container.querySelector("main")?.textContent?.includes(status === 404 ? "This submission was not found." : "Selected response-owned submission") === true);
-    expect(requests.filter((path) => path === "/api/admin/submissions/ready-admin-submissions")).toHaveLength(1);
+    // One eager read by the detail surface (pages/admin/review-detail-route.tsx) for
+    // both statuses. The source-maintenance panel
+    // (components/review/review-source-panel.tsx) resolves the same submission's
+    // source version, but it starts idle and reads only when the administrator opens
+    // the source section, so rendering the detail issues no second read.
+    const detailReads = () => requests.filter((path) => path === "/api/admin/submissions/ready-admin-submissions");
+    expect(detailReads()).toHaveLength(1);
     if (status === 404) {
       expect(journey.container.querySelector("main pre")).toBeNull();
+      expect(journey.container.querySelector("[data-review-source-open]")).toBeNull();
+      expect(detailReads()).toHaveLength(1);
       await act(async () => (journey!.container.querySelector('main a[href="/admin/submissions"]') as HTMLElement).click());
     } else {
       expect(journey.container.querySelector("main pre")?.textContent).toBe("Selected content");
+      // The panel is mounted but idle, and unopened it has read nothing.
+      expect(journey.container.querySelector("[data-review-source-open]")).not.toBeNull();
+      expect(journey.container.querySelector("[data-review-source-version]")).toBeNull();
+      expect(detailReads()).toHaveLength(1);
+      // Opening the source section is what triggers the source read.
+      await act(async () => (journey!.container.querySelector("[data-review-source-open]") as HTMLElement).click());
+      await waitForApp(() => detailReads().length === 2);
+      await waitForApp(() => journey!.container.querySelector("[data-review-source-version]")?.textContent === "ready-admin-source-version");
       await ensureRouteEntry(journey, "admin-submissions");
       await act(async () => (journey!.container.querySelector('[data-route-id="admin-submissions"]') as HTMLElement).click());
     }
@@ -394,7 +438,9 @@ async function assertExplicitGap(journey: MountedApp, routeId: MaturityRouteId, 
     expect(journey.container.querySelector('main [role="alert"] button')).toBeNull();
     return;
   }
-  if (state === "empty" && (routeId === "knowledge-reader" || routeId === "admin-submission-detail")) {
+  if (state === "empty" && (routeId === "knowledge-reader" || routeId === "admin-submission-detail" || routeId === "admin-role-detail" || routeId === "admin-knowledge-item")) {
+    // These detail reads reject a payload that names nothing, so the route reaches
+    // its own load error instead of an empty state.
     await waitForApp(() => journey.container.querySelector('main [role="alert"]') !== null);
     expect(journey.container.querySelector('main [data-page-state="empty"]')).toBeNull();
     return;

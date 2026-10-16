@@ -417,6 +417,58 @@ describe("submissions D1 control plane", () => {
     await expect(counts()).resolves.toEqual({ submissions: 2, sources: 2, sourceVersions: 2, audits: 2 });
   });
 
+  it("keeps a member's draft private, updatable, and listed by its own status", async () => {
+    const service = createService("draft");
+    const created = await service.createDraft("member-a", {
+      requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared",
+      kind: "markdown", title: "Draft guide", content: "# Body",
+    });
+    expect(created).toMatchObject({ status: "draft", title: "Draft guide", content: "# Body", requestedSpaceId: "default" });
+    await expect(service.getDraft("member-a", created.id)).resolves.toMatchObject({ id: created.id });
+    // Ownership is the draft boundary: another member cannot read or write it.
+    await expect(service.getDraft("member-b", created.id)).rejects.toThrow(/not found/iu);
+    await expect(service.updateDraft("member-b", created.id, {
+      requestedSpaceId: "default", kind: "markdown", title: "Hijacked", content: "hijacked",
+    })).rejects.toThrow(/not found/iu);
+    // A draft is readable through the owner's own numbered list, which is the
+    // readback the composer uses to resolve a draft write of unknown outcome.
+    const drafted = await service.listOwn("member-a", { page: 1, pageSize: 20, status: "draft" });
+    expect(drafted.items.map((item) => item.id)).toEqual([created.id]);
+    expect(drafted.items[0]).toMatchObject({ title: "Draft guide", content: "# Body", status: "draft" });
+    await expect(service.listOwn("member-a", { page: 1, pageSize: 20, status: "review_pending" })).resolves.toMatchObject({
+      items: [], pagination: { total: 0, totalPages: 0 },
+    });
+  });
+
+  it("replays one resubmission for one idempotency key and takes a new key as a new attempt", async () => {
+    const service = createService("replay");
+    const prior = await service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "Returned guide", content: "# Original", idempotencyKey: "replay-prior-key1",
+    });
+    const priorId = prior.submission!.id;
+    await env.DB.prepare("UPDATE submissions SET status = 'revision_requested' WHERE id = ?").bind(priorId).run();
+
+    const first = await service.resubmit("member-a", priorId, { kind: "markdown", title: "Revised guide", content: "# Revised" }, "replay-resubmit-key1");
+    const replayed = await service.resubmit("member-a", priorId, { kind: "markdown", title: "Revised guide", content: "# Revised" }, "replay-resubmit-key1");
+    expect(replayed.submission!.id).toBe(first.submission!.id);
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM submissions WHERE supersedes_submission_id = ?",
+    ).bind(priorId).first()).resolves.toEqual({ count: 1 });
+    // The prior row keeps its status and carries the link the member list renders from.
+    await expect(env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(priorId).first())
+      .resolves.toEqual({ status: "revision_requested" });
+    const mine = await service.listOwn("member-a", { page: 1, pageSize: 20 });
+    expect(mine.items.find((item) => item.id === first.submission!.id)?.supersedesSubmissionId).toBe(priorId);
+    expect(mine.items.filter((item) => item.supersedesSubmissionId === priorId)).toHaveLength(1);
+
+    // A different key is what the endpoint treats as another attempt, which is why
+    // the composer pins one key to the attempt it journaled.
+    await service.resubmit("member-a", priorId, { kind: "markdown", title: "Revised again", content: "# Again" }, "replay-resubmit-key2");
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM submissions WHERE supersedes_submission_id = ?",
+    ).bind(priorId).first()).resolves.toEqual({ count: 2 });
+  });
+
   it("keeps null-key legacy submissions readable and outside replay matching", async () => {
     const legacy = submissionInput("legacy-null-key");
     await new SubmissionsRepository(env.DB, new AuditRepository(env.DB)).createWithAudit(legacy, {

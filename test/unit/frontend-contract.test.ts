@@ -10,10 +10,12 @@ const formalClientSources = import.meta.glob([
 ], { eager: true, import: "default", query: "?raw" }) as Record<string, string>;
 
 // Intentionally outside the ten formal numbered pages: dashboard activity,
-// favorites, recent visits, private notes, research runs, R2 orphan cleanup,
-// and background asset processing keep bounded cursor/keyset workflows.
+// the knowledge side-panel reads (knowledge-panels-data), favorites, recent
+// visits, private notes, research runs, R2 orphan cleanup, and background asset
+// processing keep bounded cursor/keyset workflows.
 const documentedCursorSources = import.meta.glob([
   "../../frontend/lib/activity-data.ts",
+  "../../frontend/lib/knowledge-panels-data.ts",
   "../../src/{favorites,recent-visits,private-notes,research}/*.ts",
   "../../src/ai/research-report-service.ts",
   "../../src/assets/{repository,service,types}.ts",

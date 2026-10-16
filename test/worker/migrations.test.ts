@@ -1207,6 +1207,7 @@ describe("Phase 1 control-plane migrations", () => {
       "knowledge_item_id:TEXT:1:NULL:2",
       "last_visited_at:TEXT:1:NULL:0",
       "visit_count:INTEGER:1:1:0",
+      "visit_identity:TEXT:1:'':0",
     ], ["CHECK(visit_count >= 1)"]);
     await expectIndex("knowledge_visits", "knowledge_visits_member_page", [{ name: "member_id", desc: 0 }, { name: "last_visited_at", desc: 1 }, { name: "knowledge_item_id", desc: 1 }]);
     const timestamp = "2026-08-26T00:00:00.000Z";
@@ -1941,5 +1942,29 @@ describe("Phase 1 control-plane migrations", () => {
     for (const plan of [contextPlan, participantPlan, historyPlan, replayPlan, taskAuthorizationPlan, eligibleMembersPlan]) {
       expect(plan).not.toMatch(/SCAN (?:discussion_threads|discussion_participants|discussion_messages)\b(?! USING)/iu);
     }
+  });
+
+  it("records one member-scoped task delete receipt per deleted task", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await expectTableSchema("task_tombstones", [
+      "member_id:TEXT:1:NULL:1",
+      "task_id:TEXT:1:NULL:2",
+      "deleted_at:INTEGER:1:NULL:0",
+    ]);
+    await expectForeignKeys("task_tombstones", [{ from: "member_id", table: "members", to: "id" }]);
+    const timestamp = "2026-08-30T00:00:00.000Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('tomb-member', 'github:tomb-member', 'tomb@example.test', 'contributor', 'active', ?, ?)",
+    ).bind(timestamp, timestamp).run();
+    await env.DB.prepare(
+      "INSERT INTO task_tombstones (member_id, task_id, deleted_at) VALUES ('tomb-member', 'task-gone', 1)",
+    ).run();
+    // The primary key, not application code, is what keeps a repeated delete to one receipt.
+    await expect(env.DB.prepare(
+      "INSERT INTO task_tombstones (member_id, task_id, deleted_at) VALUES ('tomb-member', 'task-gone', 2)",
+    ).run()).rejects.toThrow(/UNIQUE/iu);
+    expect(await env.DB.prepare(
+      "SELECT deleted_at FROM task_tombstones WHERE member_id = 'tomb-member' AND task_id = 'task-gone'",
+    ).first()).toEqual({ deleted_at: 1 });
   });
 });

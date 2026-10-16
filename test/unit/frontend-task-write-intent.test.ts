@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearTaskWrite, discardBlockedTaskWrite, loadTaskWrite, saveTaskWrite, taskWriteOutcome, validTaskWrite, type TaskWriteIntent } from "../../frontend/lib/task-write-intent";
+import { clearTaskWrite, discardBlockedTaskWrite, loadTaskWrite, runTaskWrite, saveTaskWrite, taskWriteOutcome, validTaskWrite, type TaskWriteIntent } from "../../frontend/lib/task-write-intent";
 import type { TaskDetail } from "../../frontend/lib/tasks-data";
 
 const detail: TaskDetail = {
@@ -8,14 +8,15 @@ const detail: TaskDetail = {
   links: [{ id: "l1", taskId: "t1", knowledgeItemId: "k1", knowledgeTitle: null, createdAt: "2026-09-01T00:00:00Z" }],
 };
 const fields = { title: "Alpha", notes: "N", priority: "high" as const, dueAt: "2026-10-01T10:00:00Z" };
+const V0 = detail.task.updatedAt;
 
 describe("task write intent", () => {
   it.each<[string, TaskWriteIntent, "applied" | "not_applied"]>([
-    ["matching fields with an equivalent instant", { op: "update", taskId: "t1", fields }, "applied"],
-    ["different fields", { op: "update", taskId: "t1", fields: { ...fields, title: "Beta" } }, "not_applied"],
+    ["matching fields with an equivalent instant", { op: "update", taskId: "t1", fields, expectedUpdatedAt: V0 }, "applied"],
+    ["different fields", { op: "update", taskId: "t1", fields: { ...fields, title: "Beta" }, expectedUpdatedAt: V0 }, "not_applied"],
     ["a created task with the intended fields", { op: "create", taskId: "t1", fields }, "applied"],
-    ["the intended status", { op: "status", taskId: "t1", status: "doing" }, "applied"],
-    ["another status", { op: "status", taskId: "t1", status: "done" }, "not_applied"],
+    ["the intended status", { op: "status", taskId: "t1", status: "doing", expectedStatus: "todo" }, "applied"],
+    ["another status", { op: "status", taskId: "t1", status: "done", expectedStatus: "todo" }, "not_applied"],
     ["the intended progress", { op: "progress", taskId: "t1", progress: 40 }, "applied"],
     ["the same tags after server normalisation", { op: "tags", taskId: "t1", tags: [" b", "a", "a"] }, "applied"],
     ["different tags", { op: "tags", taskId: "t1", tags: ["a"] }, "not_applied"],
@@ -29,20 +30,59 @@ describe("task write intent", () => {
 
   it.each([
     ["an unknown op", { op: "archive", taskId: "t1" }],
-    ["an extra key", { op: "status", taskId: "t1", status: "done", extra: 1 }],
-    ["an invalid status", { op: "status", taskId: "t1", status: "archived" }],
+    ["an extra key", { op: "status", taskId: "t1", status: "done", expectedStatus: "todo", extra: 1 }],
+    ["an invalid status", { op: "status", taskId: "t1", status: "archived", expectedStatus: "todo" }],
+    ["a status without its expected status", { op: "status", taskId: "t1", status: "done" }],
+    ["an update without its expected version", { op: "update", taskId: "t1", fields }],
+    ["an update with an unparsable version", { op: "update", taskId: "t1", fields, expectedUpdatedAt: "yesterday" }],
+    ["a delete without its expected version", { op: "delete", taskId: "t1" }],
     ["fractional progress", { op: "progress", taskId: "t1", progress: 1.5 }],
-    ["an empty title", { op: "update", taskId: "t1", fields: { ...fields, title: " " } }],
+    ["an empty title", { op: "update", taskId: "t1", fields: { ...fields, title: " " }, expectedUpdatedAt: V0 }],
     ["an unsafe id", { op: "link", taskId: "../t1", knowledgeItemId: "k1" }],
     ["too many tags", { op: "tags", taskId: "t1", tags: Array.from({ length: 11 }, (_, i) => `t${i}`) }],
   ])("rejects %s", (_label, value) => {
     expect(validTaskWrite(value)).toBe(false);
   });
 
+  it("sends the recorded precondition for every conditional write it replays", async () => {
+    const requests: Array<{ path: string; method: string | undefined; body: Record<string, unknown> }> = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push({ path: String(input), method: init?.method, body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+      return String(input).endsWith("/status") ? Response.json({ ...detail.task, status: "done" }) : Response.json(detail.task);
+    });
+    try {
+      await runTaskWrite({ op: "update", taskId: "t1", fields, expectedUpdatedAt: V0 });
+      await runTaskWrite({ op: "status", taskId: "t1", status: "done", expectedStatus: "doing" });
+      await runTaskWrite({ op: "delete", taskId: "t1", expectedUpdatedAt: V0 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(requests).toEqual([
+      { path: "/api/tasks/t1", method: "PATCH", body: { title: "Alpha", notes: "N", priority: "high", dueAt: "2026-10-01T10:00:00Z", expectedUpdatedAt: V0 } },
+      { path: "/api/tasks/t1/status", method: "POST", body: { status: "done", expectedStatus: "doing" } },
+      { path: "/api/tasks/t1", method: "DELETE", body: { expectedUpdatedAt: V0 } },
+    ]);
+  });
+
+  it("blocks a record that lost its precondition instead of replaying it unconditionally", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("window", { sessionStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); }, removeItem: (k: string) => { store.delete(k); } } });
+    try {
+      store.set("memory-garden:task-write:v1:alice", JSON.stringify({ version: 1, memberId: "alice", intent: { op: "update", taskId: "t1", fields } }));
+      expect(loadTaskWrite("alice")).toEqual({ kind: "blocked" });
+      expect(loadTaskWrite("alice")).toEqual({ kind: "blocked" });
+      expect(discardBlockedTaskWrite("alice")).toBe(true);
+      expect(loadTaskWrite("alice")).toEqual({ kind: "empty" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   describe("storage", () => {
     let store: Map<string, string>;
     const KEY = "memory-garden:task-write:v1:alice";
-    const intent: TaskWriteIntent = { op: "status", taskId: "t1", status: "done" };
+    const intent: TaskWriteIntent = { op: "status", taskId: "t1", status: "done", expectedStatus: "doing" };
+    const other: TaskWriteIntent = { op: "status", taskId: "t1", status: "todo", expectedStatus: "doing" };
     beforeEach(() => {
       store = new Map();
       vi.stubGlobal("window", { sessionStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); }, removeItem: (k: string) => { store.delete(k); } } });
@@ -52,9 +92,9 @@ describe("task write intent", () => {
     it("keeps one member-scoped intent, allows re-saving the same one, and refuses a different one", () => {
       expect(saveTaskWrite("alice", intent)).toBe(true);
       expect(saveTaskWrite("alice", intent)).toBe(true);
-      expect(saveTaskWrite("alice", { ...intent, status: "todo" })).toBe(false);
+      expect(saveTaskWrite("alice", other)).toBe(false);
       expect(loadTaskWrite("bob")).toEqual({ kind: "empty" });
-      expect(clearTaskWrite("alice", { ...intent, status: "todo" })).toBe(false);
+      expect(clearTaskWrite("alice", other)).toBe(false);
       expect(clearTaskWrite("alice", intent)).toBe(true);
       expect(store.size).toBe(0);
     });

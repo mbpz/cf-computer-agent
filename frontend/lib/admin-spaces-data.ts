@@ -1,8 +1,14 @@
 import { apiFetch, type Fetcher } from "./api";
-import type { Space, Collection } from "../../src/spaces/types";
+import type { Space, SpaceImpact, Collection } from "../../src/spaces/types";
 
 export type AdminCollection = Collection;
-export interface AdminSpace extends Space { collections: AdminCollection[]; collectionsCursor?: string; }
+/**
+ * `impact` is the server-provided archive impact. It stays optional on the
+ * client so a response that predates the archive-impact contract keeps the page
+ * working: absent impact means "unknown, do not present an impact line", while a
+ * present but malformed impact still fails the read instead of showing zeros.
+ */
+export interface AdminSpace extends Space { collections: AdminCollection[]; collectionsCursor?: string; impact?: SpaceImpact; }
 export interface AdminSpacesPage { items: AdminSpace[]; nextCursor?: string; }
 type ReadOptions = { requester?: Fetcher; signal?: AbortSignal; cursor?: string };
 
@@ -10,7 +16,7 @@ export async function loadAdminSpaces(options: ReadOptions = {}): Promise<AdminS
   return (await loadAdminSpacesPage(options)).items;
 }
 export async function loadAdminSpacesPage({ requester = fetch, signal, cursor }: ReadOptions = {}): Promise<AdminSpacesPage> {
-  const data = page(await apiFetch<unknown>(pageUrl("/api/admin/spaces", cursor), { requester, signal }), normalizeSpace);
+  const data = page(await apiFetch<unknown>(pageUrl("/api/admin/spaces", cursor), { requester, signal }), normalizeSpaceListItem);
   const items: AdminSpace[] = [];
   for (const space of data.items) {
     const collections = await loadAdminCollections(space.id, { requester, signal });
@@ -21,11 +27,11 @@ export async function loadAdminSpacesPage({ requester = fetch, signal, cursor }:
 export async function loadAdminCollections(spaceId: string, { requester = fetch, signal, cursor }: ReadOptions = {}) {
   return page(await apiFetch<unknown>(pageUrl(`/api/admin/spaces/${encodeURIComponent(spaceId)}/collections`, cursor), { requester, signal }), (value) => normalizeCollection(value, spaceId));
 }
-export async function createAdminSpace(input: { slug: string; name: string }, requester: Fetcher = fetch): Promise<AdminSpace> {
+export async function createAdminSpace(input: { slug: string; name: string }, requester: Fetcher = fetch): Promise<Space> {
   const data = record(await apiFetch<unknown>("/api/admin/spaces", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...input, position: 0 }) }));
   const space = normalizeSpace(data.space);
   if (space.name !== input.name || space.slug !== input.slug || space.kind !== "shared" || space.readOnly || space.status !== "active" || space.position !== 0) invalid();
-  return { ...space, collections: [] };
+  return space;
 }
 export interface AdminRecordFields { name: string; description: string; status: "active" | "disabled"; position: number; }
 export type AdminSpaceCommand =
@@ -68,6 +74,20 @@ function normalizeSpace(value: unknown): Space {
   const r = normalizeBase(value);
   if (!text(r.slug, 80) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(r.slug) || !["shared", "legacy"].includes(String(r.kind)) || typeof r.readOnly !== "boolean" || (r.kind === "legacy" && !r.readOnly)) invalid();
   return r as unknown as Space;
+}
+function normalizeSpaceListItem(value: unknown): AdminSpace {
+  const space = normalizeSpace(value);
+  const impact = record(value).impact;
+  return { ...space, collections: [], ...(impact === undefined ? {} : { impact: normalizeImpact(impact) }) };
+}
+function normalizeImpact(value: unknown): SpaceImpact {
+  const r = record(value);
+  const fields = ["collections", "knowledgeItems", "revisions", "links"] as const;
+  for (const key of fields) {
+    const count = r[key];
+    if (!Number.isSafeInteger(count) || (count as number) < 0) invalid();
+  }
+  return { collections: r.collections as number, knowledgeItems: r.knowledgeItems as number, revisions: r.revisions as number, links: r.links as number };
 }
 function normalizeCollection(value: unknown, spaceId: string): Collection {
   const r = normalizeBase(value);

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { loadReviewDetail, normalizeReviewPreview, submitReviewDecision, prepareReviewDecision, sendReviewDecision } from "../../frontend/components/review/review-detail-data";
+import { loadReviewDetail, normalizeReviewPreview, submitReviewDecision, prepareReviewDecision, sendReviewDecision, type ReviewOperation } from "../../frontend/components/review/review-detail-data";
 
 const publish = { title: "Cloudflare guide", visibility: "shared" as const, spaceId: "space-1", collectionId: null, tagIds: [] };
 const json = (value: unknown) => new Response(JSON.stringify(value));
@@ -116,5 +116,45 @@ describe("review detail data boundary", () => {
     expect(() => prepareReviewDecision("sub-1", "reject", publish, { reasonCode: "duplicate", note: "中".repeat(1333) + "x" })).not.toThrow();
     expect(() => prepareReviewDecision("sub-1", "reject", publish, { reasonCode: "needs_revision", note: "" })).toThrow("REVIEW_NOTE_INVALID");
     expect(() => prepareReviewDecision("sub-1", "request_changes", publish, { reasonCode: "unsafe", note: "" })).toThrow("REVIEW_NOTE_INVALID");
+  });
+
+  it("carries the submission version as one decision identity on every surface", async () => {
+    const version = "2026-08-22T00:00:00.000Z";
+    const body = (operation: ReviewOperation) => JSON.parse(operation.body) as Record<string, unknown>;
+    const published = prepareReviewDecision("sub-1", "publish", publish, undefined, version);
+    const rejected = prepareReviewDecision("sub-1", "reject", publish, { reasonCode: "unsafe", note: "" }, version);
+    const requested = prepareReviewDecision("sub-1", "request_changes", publish, undefined, version);
+    const identity = `review.publish.sub-1.${version}`;
+    expect(body(published)).toEqual({ ...publish, operationId: identity, expectedUpdatedAt: version });
+    // The same decision reached from the queue and from the detail page is the
+    // same operation number, so a retry replays instead of deciding twice.
+    expect(body(prepareReviewDecision("sub-1", "publish", publish, undefined, version))).toEqual(body(published));
+    expect(body(rejected)).toEqual({ reasonCode: "unsafe", note: "", operationId: `review.reject.sub-1.${version}`, expectedUpdatedAt: version });
+    expect(body(requested)).toEqual({ reasonCode: "needs_revision", note: "", operationId: `review.request_changes.sub-1.${version}`, expectedUpdatedAt: version });
+
+    const bodies: unknown[] = [];
+    const requester = async (_: unknown, init?: RequestInit) => { bodies.push(init?.body); return json({ revision: { id: "rev-1", knowledgeItemId: "ki-1", searchStatus: "indexed" } }); };
+    await sendReviewDecision(published, requester); await sendReviewDecision(published, requester);
+    expect(bodies[0]).toBe(bodies[1]);
+    expect(JSON.parse(String(bodies[0]))).toMatchObject({ operationId: identity, expectedUpdatedAt: version });
+  });
+
+  it("keeps the legacy decision body when the surface has no authoritative version", () => {
+    const operation = prepareReviewDecision("sub-1", "reject", publish, { reasonCode: "unsafe", note: "no version" });
+    expect(JSON.parse(operation.body)).toEqual({ reasonCode: "unsafe", note: "no version" });
+  });
+
+  it("refuses a version that cannot be a precondition", () => {
+    expect(() => prepareReviewDecision("sub-1", "reject", publish, undefined, "2026-08-22")).toThrow("REVIEW_VERSION_INVALID");
+    expect(() => prepareReviewDecision("sub-1", "reject", publish, undefined, "not-a-date")).toThrow("REVIEW_VERSION_INVALID");
+  });
+
+  it("keeps the authoritative version from the preview and rejects a malformed one", () => {
+    const withVersion = normalizeReviewPreview({ ...preview(), updatedAt: "2026-08-22T00:00:00.000Z" });
+    expect(withVersion?.version).toBe("2026-08-22T00:00:00.000Z");
+    expect(normalizeReviewPreview(preview())?.version).toBeUndefined();
+    // A version that is present but unusable must not degrade silently into an
+    // unprotected decision.
+    expect(normalizeReviewPreview({ ...preview(), updatedAt: "2026-08-22" })).toBeNull();
   });
 });

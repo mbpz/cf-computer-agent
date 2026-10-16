@@ -58,7 +58,7 @@ describe("subtask ordering and safe retries in real D1", () => {
   it("does not turn a deleted parent between preflight and insertion into a database error", async () => {
     const original = repository.insertSubtask.bind(repository);
     vi.spyOn(repository, "insertSubtask").mockImplementationOnce(async (...args) => {
-      await repository.delete("member-a", "task-a");
+      await repository.delete("member-a", "task-a", 1, 100);
       return original(...args);
     });
     await expect(create("orphan", 0)).rejects.toMatchObject({ status: 404, code: "TASK_NOT_FOUND" });

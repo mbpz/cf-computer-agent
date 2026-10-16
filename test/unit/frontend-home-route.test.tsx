@@ -141,6 +141,28 @@ describe("home summary real route", () => {
     const reads = vi.mocked(fetch).mock.calls.filter(([path]) => !String(path).startsWith("/api/telemetry/"));
     expect(reads.every(([, init]) => !init?.method || init.method === "GET")).toBe(true);
   });
+  it("continues the cursor-paged recent list and recovers a failed page without dropping loaded rows", async () => {
+    await render();
+    await answer(0, taskSummary);
+    await answer(1, { items: [{ knowledgeItemId: "k1", title: "Private guide", lastVisitedAt: "2026-10-01T00:00:00Z", visitCount: 1 }], nextCursor: "cursor-2" });
+    await answer(2, { items: [] });
+    const more = section("knowledge")?.querySelector('[data-home-more="knowledge"]') as HTMLButtonElement | null;
+    expect(more).not.toBeNull();
+    await act(async () => more!.click());
+    expect(requests).toHaveLength(4);
+    expect(requests[3].path).toBe("/api/knowledge/recent?limit=8&cursor=cursor-2");
+    await answer(3, {}, 500);
+    expect(section("knowledge")?.textContent).toContain("Private guide");
+    const retry = section("knowledge")?.querySelector('[data-home-more-error="knowledge"] button') as HTMLButtonElement | null;
+    expect(retry).not.toBeNull();
+    await act(async () => retry!.click());
+    expect(requests).toHaveLength(5);
+    await answer(4, { items: [{ knowledgeItemId: "k2", title: "Second guide", lastVisitedAt: "2026-09-30T00:00:00Z", visitCount: 2 }], nextCursor: null });
+    const text = section("knowledge")?.textContent ?? "";
+    expect(text).toContain("Private guide");
+    expect(text).toContain("Second guide");
+    expect(section("knowledge")?.querySelector('[data-home-more="knowledge"]')).toBeNull();
+  });
   it.each([401,403])("clears all protected sections immediately on %s even with pending siblings", async status => {
     await render(); await answer(1, knowledge); await answer(0, {}, status);
     expect(container.textContent).toContain("Unable to load");

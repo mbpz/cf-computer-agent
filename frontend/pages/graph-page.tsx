@@ -40,10 +40,17 @@ export interface GraphPageProps {
   lens?: GraphLens;
   temporalRange?: GraphTemporalRange;
   changeKind?: "all" | "added" | "updated" | "completed" | "archived";
+  /** The node this projection is drilled into; null shows the whole scope. */
+  rootId?: string | null;
   onQueryChange?: (query: string) => void;
   onLensChange?: (lens: GraphLens) => void;
   onTemporalRangeChange?: (range: GraphTemporalRange) => void;
   onChangeKindChange?: (changeKind: NonNullable<GraphPageProps["changeKind"]>) => void;
+  onRootIdChange?: (rootId: string | null) => void;
+  /** Continues a truncated projection with the cursor the server returned. */
+  onLoadMore?: () => void;
+  morePending?: boolean;
+  moreError?: boolean;
   suggestionsState?: GraphSuggestionsState;
   onGenerateSuggestions?: () => void;
   onRetry?: () => void;
@@ -60,7 +67,7 @@ export type GraphLoader = (query: GraphQueryInput, signal: AbortSignal) => Promi
 
 const WORK_LENS_KINDS = new Set(["task", "project", "goal", "meeting", "decision", "action_item", "inbox", "calendar", "focus"]);
 
-export function GraphPage({ locale, state, memberId, query = "", lens = "workspace", temporalRange = "all", changeKind = "all", suggestionsState = { kind: "idle" }, onQueryChange, onLensChange, onTemporalRangeChange, onChangeKindChange, onGenerateSuggestions, onRetry, onDenied, viewBlocked = false, viewNotice, onDiscardView }: GraphPageProps & { memberId?: string }) {
+export function GraphPage({ locale, state, memberId, query = "", lens = "workspace", temporalRange = "all", changeKind = "all", rootId = null, suggestionsState = { kind: "idle" }, onQueryChange, onLensChange, onTemporalRangeChange, onChangeKindChange, onRootIdChange, onLoadMore, morePending = false, moreError = false, onGenerateSuggestions, onRetry, onDenied, viewBlocked = false, viewNotice, onDiscardView }: GraphPageProps & { memberId?: string }) {
   const [stored] = useState(() => memberId ? loadGraphAction(memberId) : { kind: "empty" as const });
   const restored: GraphActionOwner | null = stored.kind === "ready"
     ? { node: stored.intent.node, clientKey: stored.intent.clientKey, status: "unconfirmed" } : null;
@@ -227,13 +234,14 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
     { value: "completed", label: frontendText(locale, "GRAPH_CHANGE_KIND_COMPLETED") },
     { value: "archived", label: frontendText(locale, "GRAPH_CHANGE_KIND_ARCHIVED") },
   ];
-  const clearFilters = () => { onQueryChange?.(""); onLensChange?.("workspace"); onTemporalRangeChange?.("all"); onChangeKindChange?.("all"); };
+  const clearFilters = () => { onQueryChange?.(""); onLensChange?.("workspace"); onTemporalRangeChange?.("all"); onChangeKindChange?.("all"); onRootIdChange?.(null); };
   // Every applied condition stays visible as removable text; the same handler the control uses applies it.
   const appliedFilters: AppliedFilter[] = [];
   if (query) appliedFilters.push({ id: "query", label: `${frontendText(locale, "GRAPH_QUERY_LABEL")}: ${query}`, onRemove: () => onQueryChange?.("") });
   if (lens !== "workspace") appliedFilters.push({ id: "lens", label: `${frontendText(locale, "GRAPH_LENS_LABEL")}: ${lensOptions.find((option) => option.value === lens)?.label ?? lens}`, onRemove: () => onLensChange?.("workspace") });
   if (temporalRange !== "all") appliedFilters.push({ id: "temporal-range", label: `${frontendText(locale, "GRAPH_TIME_RANGE_LABEL")}: ${temporalRangeOptions.find((option) => option.value === temporalRange)?.label ?? temporalRange}`, onRemove: () => onTemporalRangeChange?.("all") });
   if (changeKind !== "all") appliedFilters.push({ id: "change-kind", label: `${frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")}: ${changeKindOptions.find((option) => option.value === changeKind)?.label ?? changeKind}`, onRemove: () => onChangeKindChange?.("all") });
+  if (rootId) appliedFilters.push({ id: "root", label: `${frontendText(locale, "GRAPH_DRILL_DOWN_LABEL")}: ${filteredSnapshot?.nodes.find((node) => node.id === rootId)?.label ?? rootId}`, onRemove: () => onRootIdChange?.(null) });
   // The page shell (header + query row) renders for every state; only the content slot
   // branches, so a first load or a read failure never unmounts the toolbar (design §4.3).
   return (
@@ -272,10 +280,30 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
       </PageState>}
       {filteredSnapshot && state.kind !== "empty" && <>
         <GraphSuggestionsPanel locale={locale} state={suggestionsState} onGenerate={onGenerateSuggestions} />
-        {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
+        {snapshot && snapshot.truncated && <div data-graph-truncated role="status" className="flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          <span>{frontendText(locale, "GRAPH_TRUNCATED")}</span>
+          {/* The continuation is honest about its bounds: the cursor continues this exact
+              window, and a window with no cursor left is the end of what can be shown. */}
+          {snapshot.nextCursor
+            ? onLoadMore && <Button type="button" variant="outline" size="sm" data-graph-more disabled={morePending} onClick={onLoadMore}>{frontendText(locale, "GRAPH_MORE")}</Button>
+            : <span data-graph-more-end>{frontendText(locale, "GRAPH_MORE_END")}</span>}
+        </div>}
+        {moreError && <div role="alert" data-graph-more-error className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive">
+          <span>{frontendText(locale, "COMMON_UNABLE_TO_LOAD")}</span>
+          {onLoadMore && <Button type="button" variant="outline" size="sm" onClick={onLoadMore}>{frontendText(locale, "COMMON_RETRY")}</Button>}
+        </div>}
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} onClearSelection={() => setSelectedId(null)} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
           <div className="grid gap-5 self-start">
+            {/* The drill-down entry point is explicit and reversible: it names the node it
+                focuses, and an active drill-down is also a removable applied filter. */}
+            <div data-graph-drill-down className="flex flex-wrap items-center gap-2 rounded-md border p-3 text-sm">
+              {rootId
+                ? <><span className="min-w-0 flex-1 truncate">{frontendText(locale, "GRAPH_DRILL_DOWN_ACTIVE")}: {filteredSnapshot.nodes.find((node) => node.id === rootId)?.label ?? rootId}</span><Button type="button" variant="outline" size="sm" data-graph-drill-down-exit onClick={() => onRootIdChange?.(null)}>{frontendText(locale, "GRAPH_DRILL_DOWN_EXIT")}</Button></>
+                : selectedNode
+                  ? <><span className="min-w-0 flex-1 truncate">{selectedNode.label}</span><Button type="button" variant="outline" size="sm" data-graph-drill-down-enter onClick={() => onRootIdChange?.(selectedNode.id)}>{frontendText(locale, "GRAPH_DRILL_DOWN_ENTER")}</Button></>
+                  : <span className="text-muted-foreground">{frontendText(locale, "GRAPH_DRILL_DOWN_HINT")}</span>}
+            </div>
             <GraphInspector
               locale={locale}
               node={selectedNode}
@@ -302,6 +330,11 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
   const [lens, setLens] = useState<GraphLens>(restored?.lens ?? "workspace");
   const [temporalRange, setTemporalRange] = useState<GraphTemporalRange>(restored?.temporalRange ?? "all");
   const [changeKind, setChangeKind] = useState<NonNullable<GraphPageProps["changeKind"]>>(restored?.changeKind ?? "all");
+  const [rootId, setRootId] = useState<string | null>(restored?.rootId ?? null);
+  const [morePending, setMorePending] = useState(false);
+  const [moreError, setMoreError] = useState(false);
+  const moreController = useRef<AbortController | null>(null);
+  const morePendingRef = useRef(false);
   const [suggestionsState, setSuggestionsState] = useState<GraphSuggestionsState>({ kind: "idle" });
   const [retry, setRetry] = useState(0);
   const readGeneration = useRef(0);
@@ -314,8 +347,10 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
   const denyRead = useCallback(() => {
     readGeneration.current++;
     readController.current?.abort();
+    moreController.current?.abort(); moreController.current = null; morePendingRef.current = false;
     cancelSuggestions();
     setSuggestionsState({ kind: "idle" });
+    setMorePending(false); setMoreError(false);
     setState({ kind: "forbidden" });
   }, [cancelSuggestions]);
   useEffect(() => {
@@ -325,19 +360,13 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
     const live = () => generation === readGeneration.current && !controller.signal.aborted;
     cancelSuggestions();
     setSuggestionsState({ kind: "idle" });
+    // A new projection replaces the window: an earlier window's cursor no longer applies.
+    moreController.current?.abort(); moreController.current = null; morePendingRef.current = false;
+    setMorePending(false); setMoreError(false);
     setState({ kind: "loading" });
-    const input: GraphQueryInput = { scope: "workspace" };
-    if (lens === "knowledge") input.scope = "knowledge";
-    if (lens === "work") input.types = [...WORK_LENS_KINDS] as GraphQueryInput["types"];
-    if (temporalRange !== "all") {
-      const days = temporalRange === "7d" ? 7 : temporalRange === "30d" ? 30 : 90;
-      input.from = new Date(Date.now() - days * 86_400_000).toISOString();
-      input.to = new Date().toISOString();
-    }
-    if (changeKind !== "all") input.changeKind = changeKind;
-    void load(input, controller.signal).then((snapshot) => {
+    void load(graphQueryInput({ lens, temporalRange, changeKind, rootId }), controller.signal).then((snapshot) => {
       if (!live()) return;
-      setState(snapshot.nodes.length === 0 ? { kind: "empty" } : snapshot.truncated ? { kind: "truncated", snapshot } : { kind: "ready", snapshot });
+      setState(graphPageStateFor(snapshot));
     }).catch((error: unknown) => {
       if (!live()) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) denyRead();
@@ -345,16 +374,39 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
     });
     return () => {
       controller.abort();
+      moreController.current?.abort(); moreController.current = null; morePendingRef.current = false;
       cancelSuggestions();
       if (readController.current === controller) readController.current = null;
     };
-  }, [cancelSuggestions, changeKind, denyRead, lens, load, retry, temporalRange]);
+  }, [cancelSuggestions, changeKind, denyRead, lens, load, retry, rootId, temporalRange]);
   useEffect(() => {
     if (!memberId || viewBlocked) return;
-    const saved = persistGraphView(memberId, { query, lens, temporalRange, changeKind });
+    const saved = persistGraphView(memberId, { query, lens, temporalRange, changeKind, rootId });
     setViewNotice(saved ? undefined : frontendText(locale, "GRAPH_VIEW_NOT_RECORDED"));
-  }, [query, lens, temporalRange, changeKind, memberId, viewBlocked, locale]);
+  }, [query, lens, temporalRange, changeKind, rootId, memberId, viewBlocked, locale]);
   const discardView = () => { if (!memberId || !viewBlocked || !discardBlockedGraphView(memberId)) return; setViewBlocked(false); setViewNotice(undefined); };
+  // A truncated projection continues with the cursor the server bound to this exact
+  // query; appending keeps every node already read, even when the append fails.
+  const loadMore = () => {
+    const current = state.kind === "ready" || state.kind === "truncated" ? state.snapshot : null;
+    if (!current?.nextCursor || morePendingRef.current || !readController.current || readController.current.signal.aborted) return;
+    const cursor = current.nextCursor;
+    const generation = readGeneration.current;
+    const controller = new AbortController();
+    moreController.current = controller; morePendingRef.current = true;
+    setMorePending(true); setMoreError(false);
+    const live = () => moreController.current === controller && generation === readGeneration.current && !controller.signal.aborted;
+    void load({ ...graphQueryInput({ lens, temporalRange, changeKind, rootId }), cursor }, controller.signal).then((page) => {
+      if (!live()) return;
+      setState(graphPageStateFor(mergeGraphPages(current, page)));
+    }).catch((error: unknown) => {
+      if (!live()) return;
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) denyRead();
+      else setMoreError(true);
+    }).finally(() => {
+      if (moreController.current === controller) { moreController.current = null; morePendingRef.current = false; setMorePending(false); }
+    });
+  };
   const generateSuggestions = () => {
     if ((state.kind !== "ready" && state.kind !== "truncated") || !readController.current
       || readController.current.signal.aborted || suggestionController.current) return;
@@ -375,7 +427,7 @@ export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { lo
       if (suggestionController.current === controller) suggestionController.current = null;
     });
   };
-  return <GraphPage memberId={memberId} locale={locale} state={state} onDenied={denyRead} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} viewBlocked={viewBlocked} viewNotice={viewNotice} onDiscardView={discardView} />;
+  return <GraphPage memberId={memberId} locale={locale} state={state} onDenied={denyRead} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} rootId={rootId} onRootIdChange={setRootId} onLoadMore={loadMore} morePending={morePending} moreError={moreError} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} viewBlocked={viewBlocked} viewNotice={viewNotice} onDiscardView={discardView} />;
 }
 
 function GraphSuggestionsPanel({ locale, state, onGenerate }: { locale: LocaleRuntime; state: GraphSuggestionsState; onGenerate?: () => void }) {
@@ -402,6 +454,45 @@ function GraphSuggestionCard({ locale, suggestion }: { locale: LocaleRuntime; su
 
 function defaultGraphLoader(query: GraphQueryInput, signal: AbortSignal): Promise<GraphSnapshot> {
   return loadGraph(query, fetch, signal);
+}
+
+/** The bounded query the toolbar states, shared by the first read and its continuation. */
+function graphQueryInput({ lens, temporalRange, changeKind, rootId }: { lens: GraphLens; temporalRange: GraphTemporalRange; changeKind: NonNullable<GraphPageProps["changeKind"]>; rootId: string | null }): GraphQueryInput {
+  const input: GraphQueryInput = { scope: "workspace" };
+  if (lens === "knowledge") input.scope = "knowledge";
+  if (lens === "work") input.types = [...WORK_LENS_KINDS] as GraphQueryInput["types"];
+  if (temporalRange !== "all") {
+    const days = temporalRange === "7d" ? 7 : temporalRange === "30d" ? 30 : 90;
+    input.from = new Date(Date.now() - days * 86_400_000).toISOString();
+    input.to = new Date().toISOString();
+  }
+  if (changeKind !== "all") input.changeKind = changeKind;
+  if (rootId) input.rootId = rootId;
+  return input;
+}
+
+function graphPageStateFor(snapshot: GraphSnapshot): GraphPageState {
+  return snapshot.nodes.length === 0 ? { kind: "empty" } : snapshot.truncated ? { kind: "truncated", snapshot } : { kind: "ready", snapshot };
+}
+
+/**
+ * A continuation appends to the window it continues: the nodes and edges already read
+ * stay, a repeated id is kept once, and only the continuation state comes from the page.
+ */
+function mergeGraphPages(current: GraphSnapshot, page: GraphSnapshot): GraphSnapshot {
+  return {
+    nodes: mergeGraphRecords(current.nodes, page.nodes),
+    edges: mergeGraphRecords(current.edges, page.edges),
+    rootId: page.rootId,
+    depth: page.depth,
+    truncated: page.truncated,
+    nextCursor: page.nextCursor,
+  };
+}
+
+function mergeGraphRecords<T extends { id: string }>(current: readonly T[], added: readonly T[]): T[] {
+  const seen = new Set(current.map((record) => record.id));
+  return [...current, ...added.filter((record) => !seen.has(record.id))];
 }
 
 function filterSnapshot(snapshot: GraphSnapshot, query: string, lens: GraphLens): GraphSnapshot {

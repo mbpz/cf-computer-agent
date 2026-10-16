@@ -8,6 +8,7 @@ import { ReviewDetailPage, type ReviewDecisionState, type ReviewDetailState } fr
 import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../lib/workspace-location";
 import { createAsyncOwner } from "../../lib/async-owner";
 import { ReviewCommentsPanel } from "../../components/review/review-comments-panel";
+import { ReviewSourcePanel } from "../../components/review/review-source-panel";
 import { clearReviewDecision, discardBlockedReviewDecision, loadReviewDecision, saveReviewDecision } from "../../lib/review-decision-intent";
 
 export type ReviewDetailRouteState = { kind: "loading" } | { kind: "ready"; data: ReviewDetailData } | { kind: "error" | "forbidden" | "not-found"; message: string };
@@ -143,7 +144,7 @@ function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; 
   const decide = (action: ReviewDecision, details?: ReviewNoteInput) => {
     if (blockedRef.current || readRef.current || decisionRef.current || operationRef.current || state.kind !== "ready" || state.data.detail.status !== "review_pending") return;
     try {
-      const operation = prepareReviewDecision(id, action, state.data.publish, details);
+      const operation = prepareReviewDecision(id, action, state.data.publish, details, state.data.version);
       if (memberId && !saveReviewDecision(memberId, id, operation)) {
         setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_NOT_RECORDED")); return;
       }
@@ -156,5 +157,6 @@ function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; 
   return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState} unresolvedDecision={Boolean(operationRef.current) || commentsOwner.unresolved} retainedDraft={Boolean(drafts.get(id)) || commentsOwner.hasDraft}
     onRetry={() => { void read(); }} onRetryDecision={() => { if (decisionState.kind === "error" && decisionState.recovery === "retry" && operationRef.current) void send(operationRef.current, true); }}
     decisionRecordBlocked={recordBlocked} decisionRecordNotice={recordNotice} onDiscardDecisionRecord={discardRecord}
-    onDecision={recordBlocked ? undefined : decide} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
+    onDecision={recordBlocked ? undefined : decide} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />}
+    sourceMaintenance={<ReviewSourcePanel submissionId={id} locale={locale} requester={requester} />} />;
 }

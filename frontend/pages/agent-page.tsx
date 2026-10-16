@@ -1,7 +1,7 @@
 import { AgentFeedback, type AgentFeedbackAdmission } from "../components/agent/agent-feedback";
 import { useState } from "react";
 import type { useCreateDraft } from "../lib/use-create-draft";
-import { AnswerPanel, type AgentCitation } from "../components/agent/answer-panel";
+import { AnswerPanel } from "../components/agent/answer-panel";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -9,7 +9,7 @@ import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/motion/select";
 import { SummaryRow, type SummaryRowItem } from "../components/ui/summary-row";
-import { agentLocationFromSearch, type AgentAnswer, type AgentScope, type ChatStage } from "../lib/agent-data";
+import { agentLocationFromSearch, type AgentScope, type AgentTurnState, type ChatStage } from "../lib/agent-data";
 import { AgentProgress } from "../components/agents/agent-progress";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 
@@ -20,7 +20,7 @@ type SourceDraft = ReturnType<typeof useCreateDraft<ReturnType<typeof agentSourc
 
 const AGENT_STAGE_KEYS: Record<ChatStage, string> = { retrieving: "AGENT_STAGE_RETRIEVING", evidence: "AGENT_STAGE_EVIDENCE", generating: "AGENT_STAGE_GENERATING", validating: "AGENT_STAGE_VALIDATING" };
 
-export function AgentPage({ scope, state, locale, question = "", onQuestionChange, onSubmit, onCancel, onRetry, onStartScope, isWriteBlocked, sourceDraft, feedbackAdmission, feedbackBlocked = false, memberId, stage }: { scope: string | AgentScope; state: { kind: "loading" } | { kind: "cancelled" } | ({ kind: "ready"; citations: readonly AgentCitation[] } & Omit<AgentAnswer, "citations">) | { kind: "error"; message: string }; stage?: ChatStage | null; locale?: LocaleRuntime; question?: string; onQuestionChange?: (question: string) => void; onSubmit?: () => void; onCancel?: () => void; onRetry?: () => void; sourceDraft?: SourceDraft; feedbackAdmission?: AgentFeedbackAdmission; feedbackBlocked?: boolean; memberId?: string; isWriteBlocked?: () => boolean; onStartScope?: (scope: AgentScope, onCommit: () => void, onSettled: () => void) => void }) {
+export function AgentPage({ scope, state, locale, question = "", onQuestionChange, onSubmit, onCancel, onRetry, onStartScope, isWriteBlocked, sourceDraft, feedbackAdmission, feedbackBlocked = false, memberId, stage }: { scope: string | AgentScope; state: AgentTurnState; stage?: ChatStage | null; locale?: LocaleRuntime; question?: string; onQuestionChange?: (question: string) => void; onSubmit?: () => void; onCancel?: () => void; onRetry?: () => void; sourceDraft?: SourceDraft; feedbackAdmission?: AgentFeedbackAdmission; feedbackBlocked?: boolean; memberId?: string; isWriteBlocked?: () => boolean; onStartScope?: (scope: AgentScope, onCommit: () => void, onSettled: () => void) => void }) {
   const scopeLabel = typeof scope === "string" ? scope || "all" : scope.kind;
   const stageLabel = frontendText(locale, stage ? AGENT_STAGE_KEYS[stage] : "AGENT_PREPARING");
   // Question, scope and low confidence share one clampable line; the confidence
@@ -36,8 +36,19 @@ export function AgentPage({ scope, state, locale, question = "", onQuestionChang
       <div className="flex flex-col gap-2 sm:flex-row"><Input id="agent-question" name="question" disabled={state.kind === "loading" || feedbackBlocked} value={question} onChange={(event) => onQuestionChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "AGENT_QUESTION_PLACEHOLDER")} autoComplete="off" /><Button type="submit" disabled={!onSubmit || state.kind === "loading" || feedbackBlocked}>{frontendText(locale, "AGENT_SUBMIT")}</Button></div>
     </form>
     {onStartScope && sourceDraft && <AgentSourceControls key={JSON.stringify(scope)} draft={sourceDraft} locale={locale} disabled={state.kind === "loading" || feedbackBlocked} isWriteBlocked={isWriteBlocked} onStartScope={onStartScope} />}
-    {state.kind === "loading" ? <div><div data-page-state="loading" aria-busy="true"><AgentProgress label={stageLabel} ariaLabel={stageLabel} /></div><Button className="mt-4" variant="outline" onClick={onCancel}>{frontendText(locale, "AGENT_STOP")}</Button></div> : state.kind === "cancelled" ? <PageState kind="degraded" title={frontendText(locale, "AGENT_STOPPED_WAITING")} description={frontendText(locale, "AGENT_STOPPED_DETAIL")} /> : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_ANSWER_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState> : <><AnswerPanel locale={locale} state={state} />{state.conversationId && <AgentFeedback admission={feedbackAdmission} memberId={memberId} key={state.conversationId} locale={locale} conversationId={state.conversationId} citationIds={state.citations.map((citation) => citation.id)} />}</>}
+    {state.kind === "loading" ? <div><div data-page-state="loading" aria-busy="true"><AgentProgress label={stageLabel} ariaLabel={stageLabel} /></div><Button className="mt-4" variant="outline" onClick={onCancel}>{frontendText(locale, "AGENT_STOP")}</Button></div> : state.kind === "cancelled" ? <PageState kind="degraded" title={frontendText(locale, "AGENT_STOPPED_WAITING")} description={frontendText(locale, "AGENT_STOPPED_DETAIL")} /> : state.kind === "unavailable" ? <div data-agent-unavailable={state.reason}><PageState kind="degraded" title={frontendText(locale, state.reason === "quota" ? "AGENT_UNAVAILABLE_QUOTA" : "AGENT_UNAVAILABLE_DEGRADED")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState></div> : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_ANSWER_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState> : <>{state.kind === "refused" ? <AgentRefusal locale={locale} state={state} onRetry={onRetry} /> : <AnswerPanel locale={locale} state={state} />}{state.conversationId && <AgentFeedback admission={feedbackAdmission} memberId={memberId} key={state.conversationId} locale={locale} conversationId={state.conversationId} citationIds={state.citations.map((citation) => citation.id)} />}</>}
   </section>;
+}
+
+/** The server's explicit no-evidence answer. It carries no answer body, so the
+ * page states the refusal instead of rendering an empty or placeholder answer. */
+function AgentRefusal({ state, locale, onRetry }: { state: Extract<AgentTurnState, { kind: "refused" }>; locale?: LocaleRuntime; onRetry?: () => void }) {
+  const suggestions = state.suggestions ?? [];
+  return <div data-agent-refused role="status" className="space-y-2 rounded-md border p-4">
+    <h3 className="font-medium">{frontendText(locale, "AGENT_INSUFFICIENT")}</h3>
+    {suggestions.length > 0 && <ul className="list-disc pl-5 text-sm text-muted-foreground">{suggestions.map((suggestion) => <li key={suggestion}>{frontendText(locale, suggestion === "rewrite" ? "AGENT_SUGGEST_REWRITE" : "AGENT_SUGGEST_SOURCES")}</li>)}</ul>}
+    {onRetry && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button>}
+  </div>;
 }
 
 function AgentSourceControls({ draft, locale, disabled, onStartScope, isWriteBlocked }: { draft: SourceDraft; locale?: LocaleRuntime; disabled: boolean; isWriteBlocked?: () => boolean; onStartScope: (scope: AgentScope, onCommit: () => void, onSettled: () => void) => void }) {

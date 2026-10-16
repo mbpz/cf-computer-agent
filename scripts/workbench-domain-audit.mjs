@@ -564,7 +564,7 @@ export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve
       const fact = canonical.mutations[record.id]?.[mutationFactId];
       assert.ok(fact, `${record.id}: unknown mutation evidence ${mutationFactId}`);
       assert.ok(record.apiPaths.some((apiPath) => pathShape(apiPath) === pathShape(fact.apiPath)), `${record.id}: source-visible API ownership contradiction for ${mutationFactId}`);
-      assert.ok(["gap", "idempotency_key", "conditional_write"].includes(fact.strategy), `${record.id}: mutation strategy evidence contradiction for ${mutationFactId}`);
+      assert.ok(["gap", "idempotency_key", "conditional_write", "convergent_delete"].includes(fact.strategy), `${record.id}: mutation strategy evidence contradiction for ${mutationFactId}`);
       if (runtimeEvidence) assert.deepEqual(runtimeEvidence.mutations?.[record.id]?.[mutationFactId], fact, `${record.id}: runtime evidence contradiction for mutation ${mutationFactId}`);
       if (fact.strategy !== "gap") {
         semanticBindings.push({ binding: fact.safety, context: `${record.id}: mutation strategy evidence ${mutationFactId}` });
@@ -712,7 +712,7 @@ export function renderWorkbenchDomainAudit(records) {
   return [
     "# Workbench Functional Domain Audit — 2026-09-26",
     "",
-    "Current 34-capability reconciliation including environments, graph and exact review comment operations; the D02-R1, D01-B2, D01-B1, D01-A and M02 snapshots are preserved separately. The 2026-08-31 R0 audit remains a separate historical 24-capability snapshot; this artifact does not backdate coverage or promote release/acceptance.",
+    "Current 39-capability reconciliation including environments, graph, exact review comment operations, the two registered admin role routes and the knowledge-lifecycle route surfaces; the D02-R1, D01-B2, D01-B1, D01-A and M02 snapshots are preserved separately. The 2026-08-31 R0 audit remains a separate historical 24-capability snapshot; this artifact does not backdate coverage or promote release/acceptance.",
     "",
     "Generated deterministically by `scripts/workbench-domain-audit.mjs`. Every capability declares explicit frontend operation roots; every manifest operation declaration and capability-owned strategy binding maps bidirectionally to one generated fact. Ordinary GET calls remain excluded unless an independently source- and test-bound side effect declares a stable operation identity. Every API carries its independently bound runtime pagination shape, and mutation status remains conservative.",
     "",

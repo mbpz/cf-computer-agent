@@ -89,19 +89,24 @@ export function useReaderNote(memberId: string, knowledgeItemId: string, locale?
     if (!controller || intent.current || phaseRef.current !== "idle" || accessRef.current !== "owner" || draft.isConfirming() || actionBlocked()) return;
     const fields = { title: draft.current.current.title.trim(), body: draft.current.current.body.trim() };
     if (!fields.title || !fields.body || !citations.length || new TextEncoder().encode(fields.title).length > 1024 || new TextEncoder().encode(fields.body).length > 32768) { setStatus("error"); return; }
-    const operation: Intent = { id: crypto.randomUUID(), kind: "save", fields, citations: citations.map(citation => ({ ...citation })) };
+    // The key of the note this editor holds, or a fresh key for a first create.
+    // It is persisted with the intent before the request, so a retry reuses it.
+    const operation: Intent = { id: persistedRef.current?.id ?? crypto.randomUUID(), kind: "save", fields, citations: citations.map(citation => ({ ...citation })) };
+    const expectedUpdatedAt = persistedRef.current?.updatedAt ?? null;
     try { prepareReaderNoteIntent(memberId, knowledgeItemId, operation); }
     catch { recovering.current = true; unsent.current = fields; transition("storage-error"); setStatus("error"); return; }
     outcome.current = null; intent.current = operation; transition("saving"); setStatus("saving");
     try {
-      const result = await saveRemotePrivateKnowledgeNote(knowledgeItemId, fields, operation.citations, fetch, controller.signal);
+      const result = await saveRemotePrivateKnowledgeNote(knowledgeItemId, fields, operation.citations, { id: operation.id, expectedUpdatedAt }, fetch, controller.signal);
       if (owner.current !== controller || intent.current !== operation) return;
       if (!matches(result, operation)) throw new Error("KNOWLEDGE_NOTE_RECEIPT_INVALID");
       accept(operation, result);
     } catch (error) {
       if (owner.current !== controller || intent.current !== operation) return;
-      if (error instanceof ApiRequestError && error.status === 400 && error.code === "PRIVATE_NOTE_INVALID") {
-        // Service validation precedes the upsert; retain that proof through cleanup failures.
+      // A stable 400 rejection or a 409 version conflict both prove the server
+      // did not apply this write, so the intent can be settled as rejected.
+      if (error instanceof ApiRequestError && (error.status === 400 && error.code === "PRIVATE_NOTE_INVALID"
+        || error.status === 409 && error.code === "PRIVATE_NOTE_VERSION_CONFLICT")) {
         outcome.current = "rejected";
         try { reject(operation); } catch { transition("unknown"); setStatus("error"); }
       } else { transition("unknown"); setStatus("error"); }

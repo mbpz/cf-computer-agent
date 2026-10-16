@@ -14,11 +14,11 @@ import { ReviewDecisionControls, ReviewDecisionFeedback, reviewDecisionLocked, t
 export type { ReviewDecisionState } from "../../components/review/review-decision-controls";
 export type ReviewDetailState = { kind: "loading" } | { kind: "ready"; detail: ReviewDetailModel } | { kind: "error" | "forbidden" | "not-found"; message: string };
 
-export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, onBack, decisionState = { kind: "idle" }, locale, comments, unresolvedDecision = false, retainedDraft = false, decisionRecordBlocked = false, decisionRecordNotice, onDiscardDecisionRecord }: {
+export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, onBack, decisionState = { kind: "idle" }, locale, comments, unresolvedDecision = false, retainedDraft = false, decisionRecordBlocked = false, decisionRecordNotice, onDiscardDecisionRecord, sourceMaintenance }: {
   state: ReviewDetailState; onDecision?: (action: ReviewDecision, details?: ReviewNoteInput) => void;
   onRetry?: () => void; onRetryDecision?: () => void; onBack?: () => void;
   decisionState?: ReviewDecisionState; locale?: LocaleRuntime; comments?: ReactNode; unresolvedDecision?: boolean; retainedDraft?: boolean;
-  decisionRecordBlocked?: boolean; decisionRecordNotice?: string; onDiscardDecisionRecord?: () => void;
+  decisionRecordBlocked?: boolean; decisionRecordNotice?: string; onDiscardDecisionRecord?: () => void; sourceMaintenance?: ReactNode;
 }) {
   // The page shell is constant (research §4.3): the titled header renders for every state
   // and only the panel below switches between loading, failure and the submission.
@@ -57,6 +57,7 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
       <ReviewDecisionControls decisionUnresolved={reviewDecisionLocked(decisionState)} key={state.detail.id} targetId={state.detail.id} targetLabel={state.detail.title || state.detail.id} snapshot={state.detail} disabled={reviewDecisionLocked(decisionState)} terminal={terminal}
         pendingAction={decisionState.kind === "pending" ? decisionState.action : undefined} onDecision={onDecision} locale={locale} />
     </CardContent></Card>
+    {sourceMaintenance}
       </>}
   </section>;
 }

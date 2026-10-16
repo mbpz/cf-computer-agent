@@ -20,7 +20,7 @@ export type NotificationsPageState =
   | { kind: "forbidden" }
   | { kind: "ready"; items: readonly NotificationItem[]; pagination: Pagination };
 
-export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, recordBlocked = false, onDiscardRecord, onRetry, onFilterChange, onLoadMore, onPageChange, onPageSizeChange, onMarkRead, onMarkVisibleRead, onOpen }: {
+export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, recordBlocked = false, revokedTarget = false, onDiscardRecord, onRetry, onFilterChange, onLoadMore, onPageChange, onPageSizeChange, onMarkRead, onMarkVisibleRead, onOpen }: {
   locale: LocaleRuntime;
   state: NotificationsPageState;
   summary: NotificationSummary | null;
@@ -29,6 +29,8 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   actionPending?: boolean;
   actionError?: string;
   recordBlocked?: boolean;
+  /** A notification was opened whose target access was revoked; its content stays hidden. */
+  revokedTarget?: boolean;
   onDiscardRecord?: () => void;
   onRetry: () => void;
   onFilterChange: (filters: NotificationFilters) => void;
@@ -77,6 +79,13 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
       <div className="mt-3"><Button variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_DISCARD")}</Button></div>
     </Alert>}
     {actionError && <Alert variant="destructive"><AlertTitle>{actionError}</AlertTitle></Alert>}
+    {/* An opened notification whose target lost access is an explicit, recoverable
+        state: nothing about the target renders, and retry re-checks the list. */}
+    {revokedTarget && <section data-notification-target-revoked="" aria-live="polite">
+      <PageState kind="forbidden" title={frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")} description={frontendText(locale, "NOTIFICATIONS_TARGET_REVOKED_DESCRIPTION")}>
+        <Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button>
+      </PageState>
+    </section>}
     {state.kind === "loading" && <div><span className="sr-only">{frontendText(locale, "NOTIFICATIONS_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "NOTIFICATIONS_LOADING")} /></div>}
     {state.kind === "recovery" && <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ACTION_FAILED")} description={frontendText(locale, "NOTIFICATIONS_RECOVERY_DESCRIPTION")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>}
     {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>}

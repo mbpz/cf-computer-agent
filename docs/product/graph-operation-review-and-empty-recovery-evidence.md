@@ -40,7 +40,7 @@
 
 | 契约 | handler / API | 权限和持久化边界 |
 | --- | --- | --- |
-| R | `frontend/lib/graph-data.ts#loadGraph` → `GET /api/graph`；`src/routes/graph.ts#routeGraphApi` → `src/graph/service.ts#GraphProjectionService.get` | `tasks:use` + member principal；从 principal 取得 memberId；`src/graph/repository.ts` 各成员作用域投影查询；只读。服务端授权后才返回节点/边/引用。cursor API 存在，但本页没有翻页按钮，truncated 只是提示。 |
+| R | `frontend/lib/graph-data.ts#loadGraph` → `GET /api/graph`；`src/routes/graph.ts#routeGraphApi` → `src/graph/service.ts#GraphProjectionService.get` | `tasks:use` + member principal；从 principal 取得 memberId；`src/graph/repository.ts` 各成员作用域投影查询；只读。服务端授权后才返回节点/边/引用。cursor 与 `rootId` 已接线：截断窗口显示续载入口（`data-graph-more`、失败时 `data-graph-more-error`），取尽后入口消失（`data-graph-more-end`）；下钻可进入并退出。 |
 | V | `frontend/lib/graph-view.ts` | `sessionStorage` 按成员键隔离，非默认筛选恢复；默认视图由无记录表示。无法读取时不得默默覆盖；显式 discard 后才恢复保存。不是后台偏好设置，也不是跨标签同步。 |
 | I | `frontend/lib/graph-action-intent.ts` | 同标签成员作用域操作记录，冻结 clientKey/node。刷新恢复不自动 POST；持久化失败不得发送新写。移除记录仅是本地恢复状态变更。 |
 | W | `frontend/lib/graph-actions.ts#dispatchGraphAction` → `POST /api/tasks`、`POST /api/focus`、`POST /api/projects/{id}/timeline` | `src/routes/tasks.ts`、`focus.ts`、`project-timeline.ts` 均要求 `tasks:use`、member principal。对应 service/repository 使用 memberId；任务关联知识重新授权、专注校验所属任务、时间线校验所属项目。D1 保存业务实体及幂等身份；前端核验回执实体与原编号/来源一致，不接受任意成功 JSON。不是新建图谱写库。 |

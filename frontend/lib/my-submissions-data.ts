@@ -1,5 +1,7 @@
 import { apiFetch, type Fetcher } from "./api";
 import { createNumberedRequestController, normalizeNumberedPage, type FrontendNumberedPage, type FrontendPageRequest } from "./numbered-page";
+import { validateSubmissionTarget, type SubmissionTarget } from "./submission-data";
+import type { ResubmitSource } from "./submission-resubmit-data";
 
 export type MySubmissionReviewDecision = "rejected" | "revision_requested";
 export type MySubmissionReviewReasonCode = "not_relevant" | "duplicate" | "unsafe" | "needs_revision";
@@ -8,7 +10,24 @@ export interface MySubmissionReview {
   reasonCode: MySubmissionReviewReasonCode;
   note: string;
 }
-export interface MySubmissionItem { id: string; title?: string; status?: string; review?: MySubmissionReview; }
+export interface MySubmissionItem {
+  id: string;
+  title?: string;
+  status?: string;
+  review?: MySubmissionReview;
+  /** Set on the row a resubmission produced: the id of the submission it supersedes. */
+  supersedes?: string;
+  /**
+   * The exact source of this row, read from the same response. Absent when any
+   * field is unreadable, so the editor is only ever opened on real content.
+   */
+  source?: MySubmissionSource;
+}
+export interface MySubmissionSource {
+  kind: "text" | "markdown" | "code";
+  content: string;
+  target: SubmissionTarget;
+}
 export type MySubmissionsPageResult = FrontendNumberedPage<MySubmissionItem>;
 export interface LoadMySubmissionsPageInput extends FrontendPageRequest { status?: string; from?: string; to?: string; signal?: AbortSignal; }
 
@@ -75,11 +94,59 @@ function normalizeSubmission(value: unknown): MySubmissionItem {
   const status = record.status;
   if (typeof record.id !== "string" || !record.id || typeof record.title !== "string" || !isSubmissionStatus(status)) throw new Error("SUBMISSION_RESPONSE_INVALID");
   const review = normalizeReview(record.review);
+  const supersedes = record.supersedesSubmissionId;
+  const source = normalizeSource(record);
   return {
     id: record.id,
     title: record.title,
     status,
     ...(review ? { review } : {}),
+    ...(typeof supersedes === "string" && /^[A-Za-z0-9_-]{1,200}$/u.test(supersedes) ? { supersedes } : {}),
+    ...(source ? { source } : {}),
+  };
+}
+
+/**
+ * The submission's own source fields, kept only as one complete payload: a row
+ * whose kind, content or target cannot be read offers no editing payload at all.
+ */
+function normalizeSource(record: Record<string, unknown>): MySubmissionSource | null {
+  const kind = record.kind;
+  const content = record.content;
+  const spaceId = record.requestedSpaceId;
+  const collectionId = record.requestedCollectionId ?? null;
+  const visibility = record.requestedVisibility;
+  if (kind !== "text" && kind !== "markdown" && kind !== "code") return null;
+  if (typeof content !== "string" || new TextEncoder().encode(content).byteLength > 131072) return null;
+  if (typeof spaceId !== "string") return null;
+  if (collectionId !== null && typeof collectionId !== "string") return null;
+  if (visibility !== "shared" && visibility !== "admin_only") return null;
+  try {
+    return {
+      kind,
+      content,
+      target: validateSubmissionTarget({ requestedSpaceId: spaceId, requestedCollectionId: collectionId, requestedVisibility: visibility }),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The editing payload for a returned item, or `null` when this row is not
+ * resubmittable: the server accepts a resubmission only while the prior row is
+ * `revision_requested` (`src/submissions/repository.ts:findResubmittable`), and
+ * an owner row without its source cannot be opened for editing.
+ */
+export function submissionResubmitSource(item: MySubmissionItem): ResubmitSource | null {
+  if (item.status !== "revision_requested" || !item.source) return null;
+  return {
+    id: item.id,
+    title: item.title ?? "",
+    kind: item.source.kind,
+    content: item.source.content,
+    target: item.source.target,
+    ...(item.review?.note ? { reviewNote: item.review.note } : {}),
   };
 }
 

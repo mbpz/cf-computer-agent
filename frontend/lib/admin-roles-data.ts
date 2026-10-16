@@ -46,7 +46,7 @@ export async function loadAdminRoles(requester: Fetcher = fetch, signal?: AbortS
   return roles as AdminRole[];
 }
 
-export async function updateAdminRole(roleId: string, input: { name?: string; description?: string; allowBits: string }, requester: Fetcher = fetch): Promise<AdminRole> {
+export async function updateAdminRole(roleId: string, input: { name?: string; description?: string; allowBits: string; expectedAllowBits: string }, requester: Fetcher = fetch): Promise<AdminRole> {
   const data = await apiFetch<{ role?: unknown }>(`/api/admin/roles/${encodeURIComponent(roleId)}`, {
     requester,
     method: "PATCH",
@@ -58,7 +58,7 @@ export async function updateAdminRole(roleId: string, input: { name?: string; de
   return role;
 }
 
-export async function createAdminRole(input: { key: string; name: string; description?: string; allowBits: string }, requester: Fetcher = fetch): Promise<AdminRole> {
+export async function createAdminRole(input: { operationId: string; key: string; name: string; description?: string; allowBits: string }, requester: Fetcher = fetch): Promise<AdminRole> {
   const data = await apiFetch<{ role?: unknown }>("/api/admin/roles", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
   const role = normalizeAdminRole(data?.role);
   if (!role || role.key !== input.key.trim() || role.name !== input.name.trim() || role.isSystem || role.status !== "active" || BigInt(role.allowBits) !== BigInt(input.allowBits)) throw new Error("ROLE_RESPONSE_INVALID");

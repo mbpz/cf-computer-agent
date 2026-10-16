@@ -1,14 +1,16 @@
 export type AdminRoleWriteIntent =
-  | { readonly op: "update"; readonly roleId: string; readonly allowBits: string }
-  | { readonly op: "create"; readonly key: string; readonly name: string; readonly allowBits: string }
+  | { readonly op: "update"; readonly roleId: string; readonly allowBits: string; readonly expectedAllowBits: string }
+  | { readonly op: "create"; readonly operationId: string; readonly key: string; readonly name: string; readonly description: string; readonly allowBits: string }
   | { readonly op: "assign"; readonly roleId: string; readonly memberId: string }
   | { readonly op: "unassign"; readonly roleId: string; readonly memberId: string };
 export type StoredAdminRoleWrite = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intent: AdminRoleWriteIntent };
 const storageKey = (memberId: string) => `memory-garden:admin-role-write:v1:${encodeURIComponent(memberId)}`;
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+const operationPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const keyPattern = /^[a-z][a-z0-9_-]{1,63}$/u;
 const bitsPattern = /^0x[0-9a-f]+$/iu;
 const isId = (value: unknown): value is string => typeof value === "string" && idPattern.test(value);
+const isOperationId = (value: unknown): value is string => typeof value === "string" && operationPattern.test(value);
 function validBits(value: unknown): value is string {
   if (typeof value !== "string" || !bitsPattern.test(value) || value.length > 18) return false;
   try {
@@ -23,9 +25,11 @@ export function validAdminRoleWrite(value: unknown): value is AdminRoleWriteInte
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
-  if (record.op === "update" && keys.length === 3 && keys.every((key) => ["op", "roleId", "allowBits"].includes(key))) return isId(record.roleId) && validBits(record.allowBits);
-  if (record.op === "create" && keys.length === 4 && keys.every((key) => ["op", "key", "name", "allowBits"].includes(key))) {
-    return typeof record.key === "string" && keyPattern.test(record.key) && validName(record.name) && validBits(record.allowBits);
+  if (record.op === "update" && keys.length === 4 && keys.every((key) => ["op", "roleId", "allowBits", "expectedAllowBits"].includes(key))) return isId(record.roleId) && validBits(record.allowBits) && validBits(record.expectedAllowBits);
+  if (record.op === "create" && keys.length === 6 && keys.every((key) => ["op", "operationId", "key", "name", "description", "allowBits"].includes(key))) {
+    return isOperationId(record.operationId) && typeof record.key === "string" && keyPattern.test(record.key) && validName(record.name)
+      && typeof record.description === "string" && [...record.description].length <= 200 && !/[\u0000-\u001f\u007f-\u009f]/u.test(record.description)
+      && validBits(record.allowBits);
   }
   if ((record.op === "assign" || record.op === "unassign") && keys.length === 3 && keys.every((key) => ["op", "roleId", "memberId"].includes(key))) {
     return isId(record.roleId) && isId(record.memberId);
@@ -33,8 +37,8 @@ export function validAdminRoleWrite(value: unknown): value is AdminRoleWriteInte
   return false;
 }
 function plain(intent: AdminRoleWriteIntent): AdminRoleWriteIntent {
-  if (intent.op === "update") return { op: "update", roleId: intent.roleId, allowBits: intent.allowBits.toLowerCase() };
-  if (intent.op === "create") return { op: "create", key: intent.key, name: intent.name, allowBits: intent.allowBits.toLowerCase() };
+  if (intent.op === "update") return { op: "update", roleId: intent.roleId, allowBits: intent.allowBits.toLowerCase(), expectedAllowBits: intent.expectedAllowBits.toLowerCase() };
+  if (intent.op === "create") return { op: "create", operationId: intent.operationId, key: intent.key, name: intent.name, description: intent.description, allowBits: intent.allowBits.toLowerCase() };
   return intent.op === "assign"
     ? { op: "assign", roleId: intent.roleId, memberId: intent.memberId }
     : { op: "unassign", roleId: intent.roleId, memberId: intent.memberId };

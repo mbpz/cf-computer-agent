@@ -343,16 +343,18 @@ describe("private tasks route", () => {
   });
 
   it("cancels deletion without HTTP writes then deletes the exact same-title target once", async () => {
-    browser.history.replaceState({}, "", "/tasks"); const writes: string[] = []; let finish!: (response: Response) => void;
+    browser.history.replaceState({}, "", "/tasks"); const writes: Array<{ url: string; body: string | null }> = []; let finish!: (response: Response) => void;
     const items = [{ ...createTask("Same"), id: "first" }, { ...createTask("Same"), id: "second-id" }];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "DELETE") { writes.push(String(input)); return new Promise<Response>(resolve => { finish = resolve; }); }
+      if (init?.method === "DELETE") { writes.push({ url: String(input), body: init.body === undefined || init.body === null ? null : String(init.body) }); return new Promise<Response>(resolve => { finish = resolve; }); }
       return Response.json({ items: writes.length ? [items[0]] : items, pagination: { page: 1, pageSize: 20, total: writes.length ? 1 : 2, totalPages: 1 } });
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" />)); await flush();
     await clickButton("Delete: Same (second-id)"); expect(writes).toEqual([]); await clickButton("Cancel"); expect(writes).toEqual([]);
     await clickButton("Delete: Same (second-id)"); const confirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
-    await act(async () => { confirm.click(); confirm.click(); }); expect(writes).toEqual(["/api/tasks/second-id"]);
+    await act(async () => { confirm.click(); confirm.click(); });
+    // The confirmed row's own version is the precondition: an old confirmation cannot delete a newer task.
+    expect(writes).toEqual([{ url: "/api/tasks/second-id", body: JSON.stringify({ expectedUpdatedAt: items[1]!.updatedAt }) }]);
     expect((container.querySelector('[aria-label="Delete: Same (first)"]') as HTMLButtonElement).disabled).toBe(true);
     await act(async () => finish(new Response(null, { status: 204 }))); await flush();
     expect(container.querySelector('[aria-label="Delete: Same (second-id)"]')).toBeNull();
@@ -487,7 +489,7 @@ describe("private tasks route", () => {
       });
       await render("alice");
       await clickButton("Delete: Alpha (task-alpha)"); await clickButton("Delete permanently"); await flush();
-      expect(JSON.parse(browser.sessionStorage.getItem(KEY)!)).toEqual({ version: 1, memberId: "alice", intent: { op: "delete", taskId: "task-alpha" } });
+      expect(JSON.parse(browser.sessionStorage.getItem(KEY)!)).toEqual({ version: 1, memberId: "alice", intent: { op: "delete", taskId: "task-alpha", expectedUpdatedAt: "2026-01-01T00:00:00.000Z" } });
       await act(async () => root.unmount()); root = createRoot(container); await render("alice");
       expect(banner()?.textContent).toContain("task-alpha");
       expect(await leave()).toBe("blocked");
@@ -498,7 +500,7 @@ describe("private tasks route", () => {
     });
 
     it("restores a status write after refresh as a list check instead of an editor", async () => {
-      browser.sessionStorage.setItem(KEY, JSON.stringify({ version: 1, memberId: "alice", intent: { op: "status", taskId: "task-alpha", status: "done" } }));
+      browser.sessionStorage.setItem(KEY, JSON.stringify({ version: 1, memberId: "alice", intent: { op: "status", taskId: "task-alpha", status: "done", expectedStatus: "doing" } }));
       vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input) === "/api/tasks/task-alpha"
         ? Response.json({ task: { ...createTask("Alpha"), status: "done" }, tags: [], links: [] }) : taskPage(String(input)));
       await render("alice");

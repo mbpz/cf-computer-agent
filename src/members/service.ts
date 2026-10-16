@@ -112,23 +112,38 @@ export class MembersService {
     return this.insertWithConflictRecovery(identity, "contributor");
   }
 
-  async setContributorStatus(actor: Member, memberId: string, status: MemberStatus): Promise<Member> {
+  async setContributorStatus(actor: Member, memberId: string, status: MemberStatus, expectedStatus?: unknown): Promise<Member> {
     if (actor.role !== "admin" || actor.status !== "active") {
       throw new AppError("FORBIDDEN", "Administrator access required", 403);
+    }
+    if (status !== "active" && status !== "disabled") throw new AppError("MEMBER_STATUS_INVALID", "Member status is invalid", 400);
+    if (expectedStatus !== undefined && expectedStatus !== "active" && expectedStatus !== "disabled") {
+      throw new AppError("MEMBER_STATUS_INVALID", "Member status precondition is invalid", 400);
     }
     const target = await this.repository.findById(memberId);
     if (!target) throw new AppError("MEMBER_NOT_FOUND", "Member not found", 404);
     if (target.role !== "contributor") throw new AppError("ADMIN_PROTECTED", "Administrators cannot be modified", 403);
+    // A repeated identical assignment is a success with one recorded outcome:
+    // no second write and no second authorisation audit.
+    if (target.status === status) return target;
+    // The caller's own precondition is the CAS input; a stale or racing change
+    // becomes a visible conflict instead of a silent re-write.
+    const expected = expectedStatus ?? target.status;
+    if (target.status !== expected) throw memberStatusConflict();
     const now = this.now().toISOString();
     const updated = this.repository.updateContributorStatusWithAudit
-      ? await this.repository.updateContributorStatusWithAudit(memberId, status, now, {
+      ? await this.repository.updateContributorStatusWithAudit(memberId, status, expected, now, {
         id: this.auditId(), actorKind: "member", actorId: actor.id, action: "member.status_updated",
         resourceType: "member", resourceId: memberId,
-        metadata: { previousStatus: target.status, newStatus: status }, createdAt: now,
+        metadata: { previousStatus: expected, newStatus: status }, createdAt: now,
       })
       : await this.repository.updateContributorStatus(memberId, status, now);
-    if (!updated) throw new AppError("ADMIN_PROTECTED", "Administrators cannot be modified", 403);
-    return updated;
+    if (updated) return updated;
+    // Losing the race is convergent only when someone else already applied the
+    // same absolute state; any other divergence is the caller's conflict.
+    const current = await this.repository.findById(memberId);
+    if (current?.status === status) return current;
+    throw memberStatusConflict();
   }
 
   private async linkExistingIdentity(existing: Member, identity: MemberIdentity, provider: "github" | "wechat"): Promise<Member> {
@@ -286,4 +301,8 @@ function oauthConfigurationInvalid(message = "GitHub authentication is not confi
 
 function identityConflict(): AppError {
   return new AppError("MEMBER_IDENTITY_CONFLICT", "Member identity conflicted", 409);
+}
+
+function memberStatusConflict(): AppError {
+  return new AppError("MEMBER_STATUS_CONFLICT", "Member status changed since it was read", 409);
 }

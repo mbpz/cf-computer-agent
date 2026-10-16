@@ -3,7 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, DiscussionThreadRoute, MessagesRoute } from "../../frontend/app";
-import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createDiscussionOperationJournal } from "../../frontend/lib/discussion-intent";
 import { createDiscussionSubmitController } from "../../frontend/pages/messages/discussion-model";
@@ -124,7 +124,7 @@ describe("discussion routes", () => {
       return Response.json({ items: [] });
     });
     const render = () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />);
-    await act(async () => { render(); }); await waitFor(() => container.querySelector("[data-page-state=error]") !== null);
+    await act(async () => { render(); }); await waitFor(() => container.querySelector("[data-page-state=error], [data-page-state=forbidden]") !== null);
     expect(container.textContent).not.toContain(saved.body); expect(container.textContent).not.toContain(saved.clientKey);
     expect(container.querySelector("textarea")).toBeNull(); expect(writes).toBe(0);
     restoreAccess = true;
@@ -193,6 +193,79 @@ describe("discussion routes", () => {
     expect(container.textContent).not.toContain("task-other");
   });
 
+  it("shows the explicit revoked state for a denied context entry and recovers on an explicit retry", async () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    let revoked = true;
+    const attempts: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      attempts.push(`${init?.method ?? "GET"} ${String(input)}`);
+      if (revoked) return new Response(null, { status: 404 });
+      return Response.json({ thread: thread(), created: false });
+    });
+    browser.history.replaceState({}, "", "/messages?contextKind=task&contextId=task-1");
+    await act(async () => root.render(<MessagesRoute locale={locale} search={browser.location.search} />));
+    await waitFor(() => container.querySelector("[data-page-state='forbidden']") !== null);
+    expect(container.querySelector("[data-page-state='error']")).toBeNull();
+    expect(container.querySelector("[data-page-state='empty']")).toBeNull();
+    expect(container.textContent).toContain(frontendText(locale, "MESSAGES_THREAD_REVOKED"));
+    expect(container.textContent).not.toContain(frontendText(locale, "MESSAGES_ERROR"));
+    expect(browser.location.pathname).toBe("/messages");
+    expect(container.querySelector("[data-messages-scroll]")).toBeNull();
+
+    revoked = false;
+    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === frontendText(locale, "MESSAGES_RETRY"))!.click(); });
+    await waitFor(() => browser.location.pathname === "/messages/thread-1");
+    expect(attempts.filter((attempt) => attempt.startsWith("POST"))).toHaveLength(2);
+  });
+
+  it.each([401, 403])("hides the whole list behind the explicit revoked state when the messages read is denied with %s", async (status) => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    browser.history.replaceState({}, "", "/messages");
+    vi.stubGlobal("fetch", async () => new Response(null, { status }));
+    await act(async () => root.render(<MessagesRoute locale={locale} search="" />));
+    await waitFor(() => container.querySelector("[data-page-state='forbidden']") !== null);
+    expect(container.querySelector("[data-page-state='error']")).toBeNull();
+    expect(container.textContent).toContain(frontendText(locale, "MESSAGES_REVOKED"));
+    expect(container.querySelector("[data-messages-scroll]")).toBeNull();
+    expect(container.querySelector('a[href^="/messages/"]')).toBeNull();
+  });
+
+  it("keeps private messages out of the DOM on refresh and back navigation after the context is revoked", async () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    let revoked = false;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (revoked) return new Response(null, { status: 403 });
+      return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
+    });
+    const render = () => root.render(<DiscussionThreadRoute memberId="member-1" locale={locale} threadId="thread-1" search="" />);
+    browser.history.replaceState({}, "", "/messages/thread-1");
+    await act(async () => { render(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    expect(container.textContent).toContain("Thread A");
+
+    // The context is revoked while the thread is open; refreshing must not re-render it.
+    revoked = true;
+    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === frontendText(locale, "MESSAGES_REFRESH"))!.click(); });
+    await waitFor(() => container.querySelector("[data-thread-context-revoked]") !== null);
+    expect(container.textContent).not.toContain("Thread A");
+    expect(container.querySelector("[data-message-id]")).toBeNull();
+    expect(container.querySelector("#discussion-composer")).toBeNull();
+
+    // Leaving and returning through history re-reads the same thread and stays revoked.
+    await act(async () => root.render(<div>Other route</div>)); await flush();
+    browser.history.replaceState({}, "", "/messages/thread-1");
+    await act(async () => { render(); });
+    await waitFor(() => container.querySelector("[data-thread-context-revoked]") !== null);
+    expect(container.textContent).not.toContain("Thread A");
+    expect(container.querySelector("[data-message-id]")).toBeNull();
+    expect(container.querySelector("[data-page-state='error']")).toBeNull();
+
+    // Access restored: only the explicit retry re-authorizes and renders the history again.
+    revoked = false;
+    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === frontendText(locale, "MESSAGES_RETRY"))!.click(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    expect(container.textContent).toContain("Thread A");
+  });
   it.each(["detail", "messages"])("does not render a mismatched %s response and retries the original thread", async (mismatch) => {
     let valid = false;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
@@ -308,8 +381,13 @@ describe("discussion routes", () => {
     await waitFor(() => container.querySelector("[role='alert']") !== null);
     denied = true;
     await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
-    await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
+    await waitFor(() => container.querySelector("[data-thread-context-revoked]") !== null);
+    expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+    expect(container.querySelector("[data-page-state='error']")).toBeNull();
+    expect(container.textContent).toContain(frontendText(createLocaleRuntime({ navigatorLanguage: "en" }), "MESSAGES_THREAD_REVOKED"));
     expect(container.textContent).not.toContain("Secret draft");
+    expect(container.textContent).not.toContain("Thread A");
+    expect(container.querySelector("[data-message-id]")).toBeNull();
     denied = false;
     await act(async () => { container.querySelector("button")!.click(); });
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
@@ -341,7 +419,7 @@ describe("discussion routes", () => {
     await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
     denied = true;
     await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
-    await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
+    await waitFor(() => container.querySelector("[data-page-state='forbidden']") !== null);
     denied = false;
     await act(async () => { container.querySelector("button")!.click(); });
     await waitFor(() => container.querySelector("#discussion-composer") !== null);

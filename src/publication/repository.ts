@@ -21,7 +21,11 @@ import type {
   RollbackResult,
   PublishSubmissionInput,
   RejectionReasonCode,
+  DecisionReceipt,
+  DecisionReceiptWrite,
+  LifecycleReceiptWrite,
   ReviewDecision,
+  ReviewDecisionOperation,
   ReviewSubmissionSnapshot,
   ReviewTargetSummary,
   SearchStatus,
@@ -34,6 +38,8 @@ export type PublicationRepositoryConflictKind =
   | "intent_mismatch"
   | "receipt_mismatch"
   | "decision_conflict"
+  | "operation_conflict"
+  | "version_conflict"
   | "rollback_target_invalid"
   | "rollback_conflict"
   | "lifecycle_target_invalid"
@@ -42,8 +48,20 @@ export type PublicationRepositoryConflictKind =
   | "purge_retention_active"
   | "purge_conflict";
 
+/** Authoritative state observed by a rejected conditional decision. */
+export interface PublicationConflictAuthority {
+  submissionId: string;
+  status: string;
+  updatedAt: string;
+  revisionId?: string;
+}
+
 export class PublicationRepositoryConflictError extends Error {
-  constructor(readonly kind: PublicationRepositoryConflictKind) {
+  constructor(
+    readonly kind: PublicationRepositoryConflictKind,
+    /** Machine-readable context: the authoritative version, or the reused operation. */
+    readonly details?: PublicationConflictAuthority | { submissionId: string; operationId: string } | { knowledgeItemId: string; operationId: string },
+  ) {
     super(`Publication conflict: ${kind}`);
   }
 }
@@ -58,6 +76,7 @@ export interface PublicationRepositoryOptions {
 type PreviewRow = {
   submission_id: string;
   submitter_id: string;
+  updated_at: string;
   status: ReviewSubmissionSnapshot["status"];
   requested_space_id: string;
   requested_collection_id: string | null;
@@ -250,12 +269,18 @@ export class PublicationRepository implements PublicationRepositoryPort {
     submissionId: string,
     reviewerId: string,
     input: PublishSubmissionInput,
+    operation?: ReviewDecisionOperation,
   ): Promise<PublicationIntent> {
     const existing = await this.findIntent(submissionId);
     if (existing) return exactIntentOrThrow(existing, reviewerId, input);
     const preview = await this.getPreview(submissionId);
     if (!preview) throw new PublicationRepositoryConflictError("submission_not_pending");
-    if (preview.status !== "review_pending") throw new PublicationRepositoryConflictError("submission_not_pending");
+    if (preview.status !== "review_pending") {
+      throw new PublicationRepositoryConflictError(
+        "submission_not_pending",
+        await this.readSubmissionAuthority(submissionId),
+      );
+    }
     await this.validateTarget(input);
 
     const knowledgeItemId = input.knowledgeItemId || this.id();
@@ -283,6 +308,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
         SELECT s.id, ?, ?, ?, ?, ?, ?, ?, sv.content_sha256, 'pending_content', ?, ?, ?, ?, ?
         FROM submissions s JOIN source_versions sv ON sv.submission_id = s.id
         WHERE s.id = ? AND s.status = 'review_pending'
+          AND (? IS NULL OR s.updated_at = ?)
           AND EXISTS (
             SELECT 1 FROM members reviewer
             WHERE reviewer.id = ? AND reviewer.role = 'admin' AND reviewer.status = 'active'
@@ -303,7 +329,8 @@ export class PublicationRepository implements PublicationRepositoryPort {
       ).bind(
         revisionId, knowledgeItemId, reviewerId, input.title, input.visibility, tagsJson, normalizedPath,
         timestamp, timestamp, input.spaceId, input.collectionId, input.visibilityReasonCode ?? null,
-        submissionId, reviewerId, input.visibilityReasonCode ?? null,
+        submissionId, operation?.expectedVersion ?? null, operation?.expectedVersion ?? null,
+        reviewerId, input.visibilityReasonCode ?? null,
         input.visibility, input.visibilityReasonCode ?? null,
         input.visibility, input.visibilityReasonCode ?? null,
         input.spaceId, input.collectionId, input.collectionId, input.spaceId,
@@ -317,8 +344,15 @@ export class PublicationRepository implements PublicationRepositoryPort {
     const created = await this.findIntent(submissionId);
     if (created) return exactIntentOrThrow(created, reviewerId, input);
     const afterInsert = await this.getPreview(submissionId);
-    if (!afterInsert || afterInsert.status !== "review_pending") {
-      throw new PublicationRepositoryConflictError("submission_not_pending");
+    if (!afterInsert) throw new PublicationRepositoryConflictError("submission_not_pending");
+    const authority = await this.readSubmissionAuthority(submissionId);
+    // The caller's own version is the precondition: a decision made against a
+    // version that is no longer authoritative must not create a new intent.
+    if (operation?.expectedVersion !== undefined && operation.expectedVersion !== afterInsert.updatedAt) {
+      throw new PublicationRepositoryConflictError("version_conflict", authority);
+    }
+    if (afterInsert.status !== "review_pending") {
+      throw new PublicationRepositoryConflictError("submission_not_pending", authority);
     }
     throw new PublicationRepositoryConflictError("target_invalid");
   }
@@ -808,12 +842,13 @@ export class PublicationRepository implements PublicationRepositoryPort {
     operation: "trash" | "restore",
   ): Promise<GovernedKnowledgeItem> {
     const current = await this.findGovernedItem(knowledgeItemId);
-    if (!current || current.revisionId.length === 0
-      || (operation === "trash" && current.status !== "active")
-      || (operation === "restore" && current.status !== "trashed")) {
+    if (!current || current.revisionId.length === 0) {
       throw new PublicationRepositoryConflictError("lifecycle_target_invalid");
     }
     const nextStatus = operation === "trash" ? "trashed" : "active";
+    // Natural-identity convergence: an item that already holds the target status
+    // is answered with that status instead of a conflict, so a repeated
+    // transition converges on one status change and one audit entry.
     if (current.status === nextStatus) return current;
     const timestamp = this.now().toISOString();
     const audit: CreateAuditEvent = operation === "trash"
@@ -1048,16 +1083,105 @@ export class PublicationRepository implements PublicationRepositoryPort {
     submissionId: string,
     reviewerId: string,
     input: { reasonCode: RejectionReasonCode; note: string },
+    operation?: ReviewDecisionOperation,
   ): Promise<ReviewDecision> {
-    return this.decide(submissionId, reviewerId, "rejected", input.reasonCode, input.note);
+    return this.decide(submissionId, reviewerId, "rejected", input.reasonCode, input.note, operation);
   }
 
   requestRevision(
     submissionId: string,
     reviewerId: string,
     input: { reasonCode: "needs_revision"; note: string },
+    operation?: ReviewDecisionOperation,
   ): Promise<ReviewDecision> {
-    return this.decide(submissionId, reviewerId, "revision_requested", input.reasonCode, input.note);
+    return this.decide(submissionId, reviewerId, "revision_requested", input.reasonCode, input.note, operation);
+  }
+
+  findDecisionReceipt(submissionId: string, operationId: string): Promise<DecisionReceipt | null> {
+    return this.db.prepare(
+      `SELECT request_hash, response_json FROM review_decision_receipts
+       WHERE submission_id = ? AND operation_id = ? LIMIT 1`,
+    ).bind(submissionId, operationId).first<{ request_hash: string; response_json: string }>()
+      .then((row) => (row ? { requestHash: row.request_hash, responseJson: row.response_json } : null));
+  }
+
+  async recordDecisionReceipt<T extends PublishedRevision | ReviewDecision>(
+    write: DecisionReceiptWrite,
+    response: T,
+  ): Promise<T> {
+    const { submissionId, kind, actorId, operation } = write;
+    // One statement claims the operation; a racing duplicate keeps the winner's
+    // row, so both attempts answer with the same recorded decision.
+    await this.db.prepare(
+      `INSERT INTO review_decision_receipts (
+         submission_id, operation_id, kind, request_hash, actor_id, expected_version, claim_id, response_json, created_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(submission_id, operation_id) DO NOTHING`,
+    ).bind(
+      submissionId, operation.operationId, kind, operation.requestHash, actorId,
+      operation.expectedVersion ?? null, this.id(), JSON.stringify(response), this.now().toISOString(),
+    ).run();
+    const receipt = await this.findDecisionReceipt(submissionId, operation.operationId);
+    if (!receipt) throw new Error("Decision receipt was not recorded");
+    if (receipt.requestHash !== operation.requestHash) {
+      throw new PublicationRepositoryConflictError("operation_conflict", {
+        submissionId, operationId: operation.operationId,
+      });
+    }
+    return JSON.parse(receipt.responseJson) as T;
+  }
+
+  findLifecycleReceipt(knowledgeItemId: string, operationId: string): Promise<DecisionReceipt | null> {
+    return this.db.prepare(
+      `SELECT request_hash, response_json FROM knowledge_lifecycle_operation_receipts
+       WHERE knowledge_item_id = ? AND operation_id = ? LIMIT 1`,
+    ).bind(knowledgeItemId, operationId).first<{ request_hash: string; response_json: string }>()
+      .then((row) => (row ? { requestHash: row.request_hash, responseJson: row.response_json } : null));
+  }
+
+  /**
+   * Records the answer of a lifecycle write that already committed. One
+   * statement claims the operation, so a racing duplicate keeps the winner's row
+   * and both attempts answer with the same recorded item, revision or purge.
+   */
+  async recordLifecycleReceipt<T extends GovernedKnowledgeItem | RollbackResult | PurgeResult>(
+    write: LifecycleReceiptWrite,
+    response: T,
+  ): Promise<T> {
+    const { knowledgeItemId, kind, actorId, operation } = write;
+    await this.db.prepare(
+      `INSERT INTO knowledge_lifecycle_operation_receipts (
+         knowledge_item_id, operation_id, kind, request_hash, actor_id, claim_id, response_json, created_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(knowledge_item_id, operation_id) DO NOTHING`,
+    ).bind(
+      knowledgeItemId, operation.operationId, kind, operation.requestHash, actorId,
+      this.id(), JSON.stringify(response), this.now().toISOString(),
+    ).run();
+    const receipt = await this.findLifecycleReceipt(knowledgeItemId, operation.operationId);
+    if (!receipt) throw new Error("Lifecycle receipt was not recorded");
+    if (receipt.requestHash !== operation.requestHash) {
+      throw new PublicationRepositoryConflictError("operation_conflict", {
+        knowledgeItemId, operationId: operation.operationId,
+      });
+    }
+    return JSON.parse(receipt.responseJson) as T;
+  }
+
+  private async readSubmissionAuthority(
+    submissionId: string,
+  ): Promise<PublicationConflictAuthority | undefined> {
+    const row = await this.db.prepare(
+      `SELECT s.status, s.updated_at,
+         (SELECT pi.revision_id FROM publication_intents pi WHERE pi.submission_id = s.id) AS intent_revision_id
+       FROM submissions s WHERE s.id = ? LIMIT 1`,
+    ).bind(submissionId).first<{ status: string; updated_at: string; intent_revision_id: string | null }>();
+    return row === null ? undefined : {
+      submissionId,
+      status: row.status,
+      updatedAt: row.updated_at,
+      ...(row.intent_revision_id === null ? {} : { revisionId: row.intent_revision_id }),
+    };
   }
 
   async listPendingIntents(limit: number): Promise<PublicationIntent[]> {
@@ -1167,17 +1291,41 @@ export class PublicationRepository implements PublicationRepositoryPort {
     decision: "rejected" | "revision_requested",
     reasonCode: RejectionReasonCode | "needs_revision",
     note: string,
+    operation?: ReviewDecisionOperation,
   ): Promise<ReviewDecision> {
+    // A retry of a recorded operation never re-decides: it replays its receipt.
+    if (operation) {
+      const replay = await this.findDecisionReceipt(submissionId, operation.operationId);
+      if (replay) return replayDecision(replay, submissionId, operation);
+    }
     const existing = await this.findReview(submissionId);
-    if (existing) return exactDecisionOrThrow(existing, reviewerId, decision, reasonCode, note);
+    if (existing) {
+      const converged = matchingDecision(existing, reviewerId, decision, reasonCode, note);
+      if (converged === null) {
+        throw new PublicationRepositoryConflictError(
+          "decision_conflict",
+          await this.readSubmissionAuthority(submissionId),
+        );
+      }
+      return this.settleDecision(converged, submissionId, reviewerId, decision, operation);
+    }
     const preview = await this.getPreview(submissionId);
     if (!preview || preview.status !== "review_pending") {
       // A decision may commit between the initial lookup and the preview read.
       const concurrent = await this.findReview(submissionId);
-      if (concurrent) return exactDecisionOrThrow(concurrent, reviewerId, decision, reasonCode, note);
-      throw new PublicationRepositoryConflictError("decision_conflict");
+      const converged = concurrent === null
+        ? null
+        : matchingDecision(concurrent, reviewerId, decision, reasonCode, note);
+      if (converged) return this.settleDecision(converged, submissionId, reviewerId, decision, operation);
+      throw new PublicationRepositoryConflictError(
+        "decision_conflict",
+        await this.readSubmissionAuthority(submissionId),
+      );
     }
-    const timestamp = this.now().toISOString();
+    const timestamp = new Date(Math.max(
+      this.now().getTime(),
+      Date.parse(preview.updatedAt) + 1,
+    )).toISOString();
     const review: ReviewDecision = {
       submissionId,
       reviewerId,
@@ -1189,45 +1337,139 @@ export class PublicationRepository implements PublicationRepositoryPort {
       createdAt: timestamp,
     };
     const audit = decisionAudit(review);
+    const claimId = operation === undefined ? null : this.id();
     try {
       await this.db.batch([
-        this.db.prepare(
-          `UPDATE submissions SET status = ?, updated_at = ?
-           WHERE id = ? AND status = 'review_pending'
-             AND NOT EXISTS (
-               SELECT 1 FROM publication_intents active_intent
-               WHERE active_intent.submission_id = submissions.id
-             )`,
-        ).bind(decision, timestamp, submissionId),
+        // The claim is the operation's identity: a retry (or a racing duplicate)
+        // cannot reach the guarded write below, so a lost response can only be
+        // replayed, never re-applied. The claim itself is bound to the version
+        // the caller read, so a stale attempt does not even claim.
+        ...(operation === undefined ? [] : [
+          this.prepareDecisionClaim(review, reviewerId, operation, claimId!),
+        ]),
+        this.prepareDecisionUpdate(submissionId, decision, timestamp, operation, claimId),
         this.changeGuard(),
-        this.db.prepare(
-          `INSERT INTO reviews (
-            id, submission_id, reviewer_id, decision, reason_code, reason, title, visibility, created_at,
-            requested_title, requested_space_id, requested_collection_id, requested_visibility,
-            final_space_id, final_collection_id, final_visibility, visibility_reason_code
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)`,
-        ).bind(
-          `review-${submissionId}`, submissionId, reviewerId, decision, reasonCode, note,
-          preview.title, preview.requestedVisibility, timestamp, preview.title,
-          preview.requestedSpaceId, preview.requestedCollectionId, preview.requestedVisibility,
-        ),
+        this.prepareDecisionReview(review, preview),
         this.audit.prepareWriteAudit(audit),
         this.prepareReviewNotification(submissionId, reviewerId, decision, timestamp),
       ]);
     } catch (error) {
-      const concurrent = await this.findReview(submissionId);
-      if (concurrent) return exactDecisionOrThrow(concurrent, reviewerId, decision, reasonCode, note);
-      const blocked = await this.db.prepare(
-        `SELECT s.status,
+      const replay = operation === undefined
+        ? null
+        : await this.findDecisionReceipt(submissionId, operation.operationId);
+      if (replay) return replayDecision(replay, submissionId, operation!);
+      const guard = await this.db.prepare(
+        `SELECT s.status, s.updated_at,
            EXISTS(SELECT 1 FROM publication_intents pi WHERE pi.submission_id = s.id) AS has_intent
          FROM submissions s WHERE s.id = ? LIMIT 1`,
-      ).bind(submissionId).first<{ status: ReviewSubmissionSnapshot["status"]; has_intent: number }>();
-      if (!blocked || blocked.status !== "review_pending" || blocked.has_intent === 1) {
-        throw new PublicationRepositoryConflictError("decision_conflict");
+      ).bind(submissionId).first<{ status: ReviewSubmissionSnapshot["status"]; updated_at: string; has_intent: number }>();
+      const authority: PublicationConflictAuthority | undefined = guard === null ? undefined : {
+        submissionId,
+        status: guard.status,
+        updatedAt: guard.updated_at,
+      };
+      const concurrent = await this.findReview(submissionId);
+      const converged = concurrent === null
+        ? null
+        : matchingDecision(concurrent, reviewerId, decision, reasonCode, note);
+      if (converged) return this.settleDecision(converged, submissionId, reviewerId, decision, operation);
+      if (operation?.expectedVersion !== undefined && guard !== null && operation.expectedVersion !== guard.updated_at) {
+        throw new PublicationRepositoryConflictError("version_conflict", authority);
+      }
+      if (concurrent !== null || guard === null
+        || guard.status !== "review_pending" || guard.has_intent === 1) {
+        throw new PublicationRepositoryConflictError("decision_conflict", authority);
       }
       throw error;
     }
-    return review;
+    return this.settleDecision(review, submissionId, reviewerId, decision, operation);
+  }
+
+  /** Records the operation receipt for an already-authoritative decision. */
+  private settleDecision(
+    review: ReviewDecision,
+    submissionId: string,
+    reviewerId: string,
+    decision: "rejected" | "revision_requested",
+    operation?: ReviewDecisionOperation,
+  ): Promise<ReviewDecision> {
+    if (operation === undefined) return Promise.resolve(review);
+    return this.recordDecisionReceipt({
+      submissionId,
+      kind: decision === "rejected" ? "review.reject" : "review.request_revision",
+      actorId: reviewerId,
+      operation,
+    }, review);
+  }
+
+  private prepareDecisionClaim(
+    review: ReviewDecision,
+    actorId: string,
+    operation: ReviewDecisionOperation,
+    claimId: string,
+  ): D1PreparedStatement {
+    // The claim carries the answer already: a winning attempt that loses its
+    // response is replayed from this row instead of re-deriving it, and the
+    // claim only lands while the caller's version is still authoritative.
+    return this.db.prepare(
+      `INSERT INTO review_decision_receipts (
+         submission_id, operation_id, kind, request_hash, actor_id, expected_version, claim_id, response_json, created_at
+       )
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+       WHERE (? IS NULL OR EXISTS (
+         SELECT 1 FROM submissions version_guard WHERE version_guard.id = ? AND version_guard.updated_at = ?
+       ))
+       ON CONFLICT(submission_id, operation_id) DO NOTHING`,
+    ).bind(
+      review.submissionId, operation.operationId,
+      review.decision === "rejected" ? "review.reject" : "review.request_revision",
+      operation.requestHash, actorId, operation.expectedVersion ?? null, claimId,
+      JSON.stringify(review), review.createdAt,
+      operation.expectedVersion ?? null, review.submissionId, operation.expectedVersion ?? null,
+    );
+  }
+
+  private prepareDecisionUpdate(
+    submissionId: string,
+    decision: "rejected" | "revision_requested",
+    timestamp: string,
+    operation: ReviewDecisionOperation | undefined,
+    claimId: string | null,
+  ): D1PreparedStatement {
+    return this.db.prepare(
+      `UPDATE submissions SET status = ?, updated_at = ?
+       WHERE id = ? AND status = 'review_pending'
+         AND NOT EXISTS (
+           SELECT 1 FROM publication_intents active_intent
+           WHERE active_intent.submission_id = submissions.id
+         )
+         AND (? IS NULL OR updated_at = ?)
+         AND (? IS NULL OR EXISTS (
+           SELECT 1 FROM review_decision_receipts claim
+           WHERE claim.submission_id = submissions.id AND claim.operation_id = ? AND claim.claim_id = ?
+         ))`,
+    ).bind(
+      decision, timestamp, submissionId,
+      operation?.expectedVersion ?? null, operation?.expectedVersion ?? null,
+      claimId, operation?.operationId ?? null, claimId,
+    );
+  }
+
+  private prepareDecisionReview(
+    review: ReviewDecision,
+    preview: ReviewSubmissionSnapshot,
+  ): D1PreparedStatement {
+    return this.db.prepare(
+      `INSERT INTO reviews (
+        id, submission_id, reviewer_id, decision, reason_code, reason, title, visibility, created_at,
+        requested_title, requested_space_id, requested_collection_id, requested_visibility,
+        final_space_id, final_collection_id, final_visibility, visibility_reason_code
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)`,
+    ).bind(
+      `review-${review.submissionId}`, review.submissionId, review.reviewerId, review.decision,
+      review.reasonCode, review.note, review.title, review.visibility, review.createdAt,
+      preview.title, preview.requestedSpaceId, preview.requestedCollectionId, preview.requestedVisibility,
+    );
   }
 
   private prepareReviewNotification(
@@ -1442,7 +1684,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
 }
 
 const previewSelect = `SELECT
-  s.id AS submission_id, s.submitter_id, s.status, s.requested_space_id, s.requested_collection_id,
+  s.id AS submission_id, s.submitter_id, s.updated_at, s.status, s.requested_space_id, s.requested_collection_id,
   s.requested_visibility,
   s.kind, s.title, s.content AS raw_content, sv.id AS source_version_id, sv.content AS source_content,
   sv.content_sha256, sv.parser_version, sv.parser_schema_version,
@@ -1450,7 +1692,7 @@ const previewSelect = `SELECT
 FROM submissions s JOIN source_versions sv ON sv.submission_id = s.id`;
 
 const intentSelect = `SELECT
-  s.id AS submission_id, s.submitter_id, s.status, s.requested_space_id, s.requested_collection_id,
+  s.id AS submission_id, s.submitter_id, s.updated_at, s.status, s.requested_space_id, s.requested_collection_id,
   s.requested_visibility,
   s.kind, s.title, s.content AS raw_content, sv.id AS source_version_id, sv.content AS source_content,
   sv.content_sha256, sv.parser_version, sv.parser_schema_version,
@@ -1471,6 +1713,7 @@ function mapPreview(
   return {
     submissionId: row.submission_id,
     submitterId: row.submitter_id,
+    updatedAt: row.updated_at,
     status: row.status,
     requestedSpaceId: row.requested_space_id,
     requestedCollectionId: row.requested_collection_id,
@@ -1719,16 +1962,33 @@ function decisionAudit(review: ReviewDecision): CreateAuditEvent {
   };
 }
 
-function exactDecisionOrThrow(
+function replayDecision(
+  receipt: DecisionReceipt,
+  submissionId: string,
+  operation: ReviewDecisionOperation,
+): ReviewDecision {
+  if (receipt.requestHash !== operation.requestHash) {
+    throw new PublicationRepositoryConflictError("operation_conflict", {
+      submissionId, operationId: operation.operationId,
+    });
+  }
+  return JSON.parse(receipt.responseJson) as ReviewDecision;
+}
+
+/**
+ * The already-stored decision, when it is exactly the caller's own decision;
+ * `null` means the caller is asking for a different outcome and must conflict.
+ */
+function matchingDecision(
   existing: ReviewDecision,
   reviewerId: string,
   decision: ReviewDecision["decision"],
   reasonCode: ReviewDecision["reasonCode"],
   note: string,
-): ReviewDecision {
+): ReviewDecision | null {
   if (existing.reviewerId !== reviewerId || existing.decision !== decision
     || existing.reasonCode !== reasonCode || existing.note !== note) {
-    throw new PublicationRepositoryConflictError("decision_conflict");
+    return null;
   }
   return existing;
 }

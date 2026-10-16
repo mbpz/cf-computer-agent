@@ -18,6 +18,10 @@ const PARAMETERIZED_ROUTES = Object.freeze([
   // would put them in the module rail and the navigation data). app-routes.ts owns the
   // page kind: /admin/roles/new deliberately resolves to the same role:manage gate.
   { prefix: "/admin/roles/", path: "/admin/roles/:id", labelKey: "NAV_ROLES", group: "admin" as const, capability: "role:manage" as const },
+  // The recycle bin's fixed path is a registered route and wins the exact match above;
+  // only its per-item administration page is matched here, so the shell gates a
+  // direct visit to /admin/knowledge/<id> on the same knowledge:review as the bin.
+  { prefix: "/admin/knowledge/", path: "/admin/knowledge/:id", labelKey: "NAV_RECYCLE_BIN", group: "admin" as const, capability: "knowledge:review" as const },
 ]);
 
 export function matchRoute(pathname: string): RouteMatch | null {

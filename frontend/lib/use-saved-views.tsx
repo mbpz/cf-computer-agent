@@ -6,15 +6,15 @@ import { ConfirmAction } from "../components/ui/confirm-action";
 import { useCreateDraft } from "./use-create-draft";
 import { clearSavedViewWrite, discardBlockedSavedViewWrite, loadSavedViewWrite, saveSavedViewWrite, type SavedViewWriteIntent } from "./saved-view-intent";
 
-type Intent = { kind: "create"; name: string; filters: Partial<SavedViewFilters> } | { kind: "delete"; view: SavedViewItem };
+type Intent = { kind: "create"; clientKey: string; name: string; filters: Partial<SavedViewFilters> } | { kind: "delete"; view: SavedViewItem };
 
 function storedFrom(operation: Intent): SavedViewWriteIntent {
   return operation.kind === "create"
-    ? { kind: "create", name: operation.name.trim(), filters: canonicalSavedViewFilters(operation.filters) }
+    ? { kind: "create", clientKey: operation.clientKey, name: operation.name.trim(), filters: canonicalSavedViewFilters(operation.filters) }
     : { kind: "delete", id: operation.view.id };
 }
 function memoryFrom(intent: SavedViewWriteIntent): Intent {
-  if (intent.kind === "create") return { kind: "create", name: intent.name, filters: intent.filters };
+  if (intent.kind === "create") return { kind: "create", clientKey: intent.clientKey, name: intent.name, filters: intent.filters };
   return { kind: "delete", view: { id: intent.id, name: intent.id, filters: canonicalSavedViewFilters({}), updatedAt: "1970-01-01T00:00:00.000Z" } };
 }
 
@@ -55,7 +55,9 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
     const controller = owner.current;
     if (!controller || recordBlocked || intent.current || deleteRef.current || draft.isConfirming() || actionBlocked()) return;
     const name = draft.current.current.name.trim(); if (!name) return;
-    const operation: Intent = { kind: "create", name, filters: filters() };
+    // The key is generated once and persisted with the intent before the
+    // request, so a retry after a lost response resolves to the same view.
+    const operation: Intent = { kind: "create", clientKey: crypto.randomUUID(), name, filters: filters() };
     await run(operation, controller);
   }
   function requestDelete(id: string) {
@@ -78,7 +80,7 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
     intent.current = operation; generation.current++; transition("pending"); setError(undefined);
     try {
       const result = operation.kind === "create"
-        ? await createSavedView(operation.name, operation.filters, requester(controller))
+        ? await createSavedView(operation.name, operation.filters, operation.clientKey, requester(controller))
         : await deleteSavedView(operation.view.id, requester(controller));
       if (owner.current !== controller || intent.current !== operation) return;
       accept(operation, result);

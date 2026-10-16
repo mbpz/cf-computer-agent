@@ -570,6 +570,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
   const preview: ReviewSubmissionSnapshot = {
     submissionId: "submission-1",
     submitterId: "member-1",
+    updatedAt: "2026-08-22T00:00:00.000Z",
     status: "review_pending",
     requestedSpaceId: "default",
     requestedCollectionId: "collection-1",
@@ -658,6 +659,10 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
       revisionInputs.push(input);
       return revisionDecision;
     },
+    async findDecisionReceipt() { return null; },
+    async recordDecisionReceipt(_write, response) { return response; },
+    async findLifecycleReceipt() { return null; },
+    async recordLifecycleReceipt(_write, response) { return response; },
     async listPendingIntents(limit) {
       return limit > 0 && intent.state !== "completed" && intent.state !== "failed_terminal" ? [intent] : [];
     },

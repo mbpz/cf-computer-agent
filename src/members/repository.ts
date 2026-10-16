@@ -30,7 +30,7 @@ export interface MembersRepositoryPort {
   touchLastSeenIfStale(id: string, now: string, staleBefore: string): Promise<boolean>;
   listPage(pagination: NumberedPageRequest, status?: MemberStatus): Promise<MemberPage>;
   updateContributorStatus(id: string, status: MemberStatus, updatedAt?: string): Promise<Member | null>;
-  updateContributorStatusWithAudit?(id: string, status: MemberStatus, updatedAt: string, audit: CreateAuditEvent): Promise<Member | null>;
+  updateContributorStatusWithAudit?(id: string, status: MemberStatus, expectedStatus: MemberStatus, updatedAt: string, audit: CreateAuditEvent): Promise<Member | null>;
 }
 
 type MemberRow = {
@@ -173,17 +173,20 @@ export class MembersRepository implements MembersRepositoryPort {
   async updateContributorStatusWithAudit(
     id: string,
     status: MemberStatus,
+    expectedStatus: MemberStatus,
     updatedAt: string,
     input: CreateAuditEvent,
   ): Promise<Member | null> {
     if (!this.audit) return this.updateContributorStatus(id, status, updatedAt);
     const current = await this.findById(id);
-    if (!current || current.role !== "contributor") return null;
-    assertMemberStatusAudit(current, status, input);
+    if (!current || current.role !== "contributor" || current.status !== expectedStatus) return null;
+    assertMemberStatusAudit(id, status, input);
     const results = await this.db.batch([
+      // The client's precondition, not a fresher server read, is authoritative:
+      // a racing or stale caller loses instead of silently re-writing a status.
       this.db.prepare(
         "UPDATE members SET status = ?, updated_at = ? WHERE id = ? AND role = 'contributor' AND status = ?",
-      ).bind(status, updatedAt, id, current.status),
+      ).bind(status, updatedAt, id, expectedStatus),
       this.audit.prepareResourceWriteAudit(input, { table: "members", id }),
     ]);
     if (results[0]?.meta.changes !== 1 || results[1]?.meta.changes !== 1) return null;
@@ -245,9 +248,12 @@ function assertMemberLoginAudit(member: CreateMember, audit: CreateAuditEvent): 
   }
 }
 
-function assertMemberStatusAudit(member: Member, status: MemberStatus, audit: CreateAuditEvent): void {
-  if (audit.actorKind !== "member" || audit.action !== "member.status_updated" || audit.resourceType !== "member"
-    || audit.resourceId !== member.id || audit.metadata.previousStatus !== member.status || audit.metadata.newStatus !== status) {
+function assertMemberStatusAudit(memberId: string, status: MemberStatus, audit: CreateAuditEvent): void {
+  if (audit.actorKind !== "member" || audit.action !== "member.status_updated" || audit.resourceType !== "member" || audit.resourceId !== memberId) {
+    throw new TypeError("Member status audit binding is invalid");
+  }
+  const previous = audit.metadata.previousStatus;
+  if ((previous !== "active" && previous !== "disabled") || previous === status || audit.metadata.newStatus !== status) {
     throw new TypeError("Member status audit binding is invalid");
   }
 }

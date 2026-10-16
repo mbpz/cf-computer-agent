@@ -106,11 +106,19 @@ describe("React workspace assets", () => {
     expect(response.headers.get("x-request-id")).toBeTruthy();
   });
 
-  it.each(["/knowledge/knowledge-1", "/messages/thread-1", "/admin/submissions/submission-1"]) ("serves React for bounded parameter route %s", async (path) => {
+  it.each(["/knowledge/knowledge-1", "/messages/thread-1", "/admin/submissions/submission-1", "/admin/knowledge/knowledge-1"]) ("serves React for bounded parameter route %s", async (path) => {
     const response = await SELF.fetch(`https://example.test${path}`);
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('id="root"');
     expect(response.headers.get("x-frame-options")).toBe("DENY");
+  });
+
+  it("bounds the knowledge item shell path at 128 characters", async () => {
+    // The client page kind accepts any safe id; the shell is only served inside the
+    // bound the other parameter paths use, so a longer path stays a 404 page.
+    const oversize = await SELF.fetch(`https://example.test/admin/knowledge/${"x".repeat(129)}`);
+    expect(oversize.status).toBe(404);
+    await expect(oversize.text()).resolves.not.toContain('id="root"');
   });
 
   it("serves the same anonymous shell for /login as for /", async () => {

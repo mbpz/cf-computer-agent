@@ -116,6 +116,7 @@ describe("frontend graph data client", () => {
       rootId: "task:t1",
       depth: 2,
       truncated: true,
+      nextCursor: null,
     });
   });
 

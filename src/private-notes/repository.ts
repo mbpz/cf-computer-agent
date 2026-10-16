@@ -1,6 +1,6 @@
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, type PageRequest } from "../pagination";
-import type { PrivateNote, PrivateNoteCitation, PrivateNoteListItem, PrivateNotePage, PrivateNoteRepositoryPort, PrivateNoteScope, PrivateNoteShare, PrivateNoteUpsert } from "./types";
+import type { PrivateNote, PrivateNoteCitation, PrivateNoteListItem, PrivateNotePage, PrivateNoteRepositoryPort, PrivateNoteScope, PrivateNoteShare, PrivateNoteUpdate, PrivateNoteUpsert } from "./types";
 
 type PrivateNoteRow = {
   id: string;
@@ -110,14 +110,23 @@ export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
     return mapShare(share);
   }
 
-  async revokeShare(scope: PrivateNoteScope, knowledgeItemId: string, recipientMemberId: string, revokedAt: string): Promise<void> {
-    const result = await this.db.prepare(
+  async revokeShare(scope: PrivateNoteScope, knowledgeItemId: string, recipientMemberId: string, revokedAt: string): Promise<PrivateNoteShare> {
+    // COALESCE keeps the first revoke timestamp, so a replay leaves exactly one
+    // authorisation state behind. The owner subquery rejects a foreign note.
+    await this.db.prepare(
       `UPDATE private_note_shares
-       SET revoked_at = ?
+       SET revoked_at = COALESCE(revoked_at, ?)
        WHERE note_id = (SELECT id FROM private_notes WHERE owner_member_id = ? AND knowledge_item_id = ?)
-         AND recipient_member_id = ? AND revoked_at IS NULL`,
+         AND recipient_member_id = ?`,
     ).bind(revokedAt, scope.memberId, knowledgeItemId, recipientMemberId).run();
-    if (result.meta.changes !== 1) throw new AppError("PRIVATE_NOTE_SHARE_NOT_FOUND", "Note share was not found", 404);
+    const share = await this.db.prepare(
+      `SELECT note_id, recipient_member_id, created_at, revoked_at
+       FROM private_note_shares
+       WHERE note_id = (SELECT id FROM private_notes WHERE owner_member_id = ? AND knowledge_item_id = ?)
+         AND recipient_member_id = ? LIMIT 1`,
+    ).bind(scope.memberId, knowledgeItemId, recipientMemberId).first<PrivateNoteShareRow>();
+    if (!share) throw new AppError("PRIVATE_NOTE_SHARE_NOT_FOUND", "Note share was not found", 404);
+    return mapShare(share);
   }
 
   async listShares(scope: PrivateNoteScope, knowledgeItemId: string): Promise<PrivateNoteShare[]> {
@@ -131,23 +140,34 @@ export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
     return rows.results.map(mapShare);
   }
 
-  async upsert(input: PrivateNoteUpsert): Promise<PrivateNote> {
+  async create(input: PrivateNoteUpsert): Promise<boolean> {
     for (const citation of input.citations) await assertCitationReadable(this.db, input, citation);
-    await this.db.prepare(
+    // A concurrent create wins the unique (owner, knowledge item) target; the
+    // caller re-reads the authoritative row rather than overwriting it.
+    const result = await this.db.prepare(
       `INSERT INTO private_notes (id, owner_member_id, knowledge_item_id, title, body, citations_json, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(owner_member_id, knowledge_item_id) DO UPDATE SET
-         title = excluded.title,
-         body = excluded.body,
-         citations_json = excluded.citations_json,
-         updated_at = excluded.updated_at`,
+       ON CONFLICT(owner_member_id, knowledge_item_id) DO NOTHING`,
     ).bind(
       input.id, input.ownerId, input.knowledgeItemId, input.title, input.body,
       JSON.stringify(input.citations), input.createdAt, input.updatedAt,
     ).run();
-    const saved = await this.findOwned({ memberId: input.ownerId, role: input.role }, input.knowledgeItemId);
-    if (!saved) throw new AppError("PRIVATE_NOTE_UNAVAILABLE", "Private note is unavailable", 503, true);
-    return saved;
+    return result.meta.changes === 1;
+  }
+
+  async update(input: PrivateNoteUpdate): Promise<PrivateNote | null> {
+    for (const citation of input.citations) await assertCitationReadable(this.db, input, citation);
+    // The single statement re-checks identity and version, so a concurrent
+    // writer can never be overwritten by a stale expected version.
+    return mapRow(await this.db.prepare(
+      `UPDATE private_notes
+       SET title = ?, body = ?, citations_json = ?, updated_at = ?
+       WHERE owner_member_id = ? AND knowledge_item_id = ? AND id = ? AND updated_at = ?
+       RETURNING id, owner_member_id, knowledge_item_id, title, body, citations_json, created_at, updated_at`,
+    ).bind(
+      input.title, input.body, JSON.stringify(input.citations), input.updatedAt,
+      input.ownerId, input.knowledgeItemId, input.id, input.expectedUpdatedAt,
+    ).first<PrivateNoteRow>());
   }
 }
 
@@ -169,7 +189,11 @@ function decodeNoteCursor(value: string): NoteCursor {
 
 function isIsoTimestamp(value: string): boolean { return value.length === 24 && !Number.isNaN(Date.parse(value)) && value.endsWith("Z"); }
 
-async function assertCitationReadable(db: D1Database, input: PrivateNoteUpsert, citation: PrivateNoteCitation): Promise<void> {
+async function assertCitationReadable(
+  db: D1Database,
+  input: { knowledgeItemId: string; role: "admin" | "contributor" },
+  citation: PrivateNoteCitation,
+): Promise<void> {
   const row = await db.prepare(
     `SELECT 1 AS readable
      FROM chunks

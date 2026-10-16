@@ -282,11 +282,19 @@ export async function routeLibraryApi(
     if (request.method === "PUT") {
       const input = strictRecord(
         await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-        ["title", "body", "citations"],
+        ["id", "expectedUpdatedAt", "title", "body", "citations"],
         "PRIVATE_NOTE_REQUEST_INVALID",
       );
-      if (!hasExactKeys(input, ["title", "body", "citations"])) throw new AppError("PRIVATE_NOTE_REQUEST_INVALID", "Request body is invalid", 400);
-      return jsonResponse({ note: await services.privateNotes.save(noteScope, knowledgeItemId, input as { title: unknown; body: unknown; citations: unknown }) }, 200, context.requestId);
+      // `id` is the write's stable client key and `expectedUpdatedAt` its CAS
+      // version; both are optional so an older client keeps its behaviour.
+      if (typeof input.title !== "string" || typeof input.body !== "string" || !Array.isArray(input.citations)
+        || (input.id !== undefined && typeof input.id !== "string")
+        || (input.expectedUpdatedAt !== undefined && input.expectedUpdatedAt !== null && typeof input.expectedUpdatedAt !== "string")) {
+        throw new AppError("PRIVATE_NOTE_REQUEST_INVALID", "Request body is invalid", 400);
+      }
+      return jsonResponse({
+        note: await services.privateNotes.save(noteScope, knowledgeItemId, input as { id?: unknown; expectedUpdatedAt?: unknown; title: unknown; body: unknown; citations: unknown }),
+      }, 200, context.requestId);
     }
     return methodNotAllowed("GET, PUT", context);
   }
@@ -660,7 +668,11 @@ export async function routeLibraryApi(
     requireNoQuery(url);
     const knowledgeItemId = decodePathId(detail[1]!);
     const knowledge = await services.library.detail(scope, knowledgeItemId);
-    await services.recentVisits.record(scope, knowledgeItemId);
+    // The reading's explicit identity: a client that retries the same read
+    // resends `x-visit-id` and does not double-count; a new reading sends none
+    // or a new value. The client-value is validated by the recent-visits service.
+    const visitIdentity = request.headers.get("x-visit-id") ?? undefined;
+    await services.recentVisits.record(scope, knowledgeItemId, visitIdentity);
     return jsonResponse({ knowledge }, 200, context.requestId);
   }
 

@@ -20,6 +20,15 @@ describe("SavedViewsService", () => {
     });
   });
 
+  it("replays a create that reuses its client key", async () => {
+    const repository = new FakeSavedViewsRepository();
+    const service = createService(repository);
+    const first = await service.create("member-a", { clientKey: "save-key-1", name: "Docs", filters: { q: "docs" } });
+    const replay = await service.create("member-a", { clientKey: "save-key-1", name: "Docs", filters: { q: "docs" } });
+    expect(replay).toMatchObject({ id: first.id, name: "Docs" });
+    await expect(service.list("member-a", { limit: 20 })).resolves.toMatchObject({ items: [expect.objectContaining({ id: first.id })] });
+  });
+
   it("rejects unknown, oversized, and malformed filter values", async () => {
     const service = createService(new FakeSavedViewsRepository());
     await expect(service.create("member-a", { name: "", filters: {} })).rejects.toMatchObject({ code: "SAVED_VIEW_INVALID", status: 400 });
@@ -61,7 +70,7 @@ function view(overrides: Partial<SavedView> = {}): SavedView {
     memberId: "member-a",
     name: "Default",
     schemaVersion: 1,
-    filters: { v: 1, q: "", spaceId: null, collectionId: null, tagIds: [], tagMode: "or" },
+    filters: { v: 1, q: "", spaceId: null, collectionId: null, tagIds: [], tagMode: "or", kind: null, authorId: null, publishedFrom: null, publishedTo: null },
     createdAt: "2026-08-24T00:00:00.000Z",
     updatedAt: "2026-08-24T00:00:00.000Z",
     ...overrides,
@@ -69,12 +78,15 @@ function view(overrides: Partial<SavedView> = {}): SavedView {
 }
 
 class FakeSavedViewsRepository implements SavedViewsRepositoryPort {
-  constructor(private readonly items: SavedView[] = []) {}
+  constructor(private readonly items: (SavedView & { clientKey?: string })[] = []) {}
   async create(input: SavedViewCreate): Promise<SavedView> {
     if (this.items.some((item) => item.memberId === input.memberId && item.name === input.name)) throw new SavedViewsRepositoryConflictError("name");
     const created = { ...input };
     this.items.push(created);
     return created;
+  }
+  async findByClientKey(memberId: string, clientKey: string): Promise<SavedView | null> {
+    return this.items.find((item) => item.memberId === memberId && item.clientKey === clientKey) ?? null;
   }
   async list(memberId: string, request: { limit: number; cursor?: string }): Promise<{ items: SavedView[]; nextCursor?: string }> {
     const sorted = this.items.filter((item) => item.memberId === memberId).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id));
@@ -88,7 +100,7 @@ class FakeSavedViewsRepository implements SavedViewsRepositoryPort {
     if (input.name !== undefined && this.items.some((item) => item.memberId === memberId && item.id !== id && item.name === input.name)) throw new SavedViewsRepositoryConflictError("name");
     Object.assign(current, input); return current;
   }
-  async delete(memberId: string, id: string): Promise<boolean> {
+  async delete(memberId: string, id: string, _deletedAt: string): Promise<boolean> {
     const index = this.items.findIndex((item) => item.memberId === memberId && item.id === id); if (index < 0) return false;
     this.items.splice(index, 1); return true;
   }

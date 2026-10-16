@@ -8,22 +8,28 @@ import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-fil
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
-import { writeSubmissionRange, type MySubmissionItem, type SubmissionRangeQuery } from "../lib/my-submissions-data";
+import { submissionResubmitSource, writeSubmissionRange, type MySubmissionItem, type SubmissionRangeQuery } from "../lib/my-submissions-data";
 import type { SupportedPageSize } from "../lib/numbered-page";
 import { readWorkspaceLocation, writeWorkspaceHistory } from "../lib/workspace-location";
 
 const unfilteredRange: SubmissionRangeQuery = { from: "", to: "", invalid: false };
 
-export function MySubmissionsPage({ state, locale, pending = false, localError, range = unfilteredRange, pagination, onRetry, onLoadMore, onPageChange, onPageSizeChange }: {
+export function MySubmissionsPage({ state, locale, pending = false, localError, resubmitError, resubmitted, range = unfilteredRange, pagination, onRetry, onResubmit, onLoadMore, onPageChange, onPageSizeChange }: {
   state: { kind: "loading" } | { kind: "ready"; items: readonly MySubmissionItem[]; pagination: { page: number; pageSize: SupportedPageSize; total: number; totalPages: number } } | { kind: "error"; message: string };
   locale: LocaleRuntime;
   pending?: boolean;
   localError?: string;
+  /** Reported when a returned item cannot be opened for resubmission. */
+  resubmitError?: string;
+  /** Rows whose resubmission already exists, read from the server's own supersede link. */
+  resubmitted?: readonly { priorId: string; submissionId: string }[];
   /** Submission-time filter stated by the location; an empty interval is never listed. */
   range?: SubmissionRangeQuery;
   /** Route-held page metadata; the loaded page supplies it when the route does not. */
   pagination?: DataTablePage;
   onRetry?: () => void;
+  /** Opens a returned item in the resubmission editor. */
+  onResubmit?: (item: MySubmissionItem) => void;
   onLoadMore?: () => void;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (pageSize: SupportedPageSize) => void;
@@ -44,12 +50,13 @@ export function MySubmissionsPage({ state, locale, pending = false, localError, 
       : state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
       : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{onRetry && <Button type="button" variant="outline" size="sm" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button>}</PageState>
       : <>{localError && <div role="alert" className="flex items-center gap-3 text-sm text-destructive"><span>{localError}</span><Button type="button" variant="outline" size="sm" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></div>}
+    {resubmitError && <div role="alert" data-my-submissions-resubmit-error className="text-sm text-destructive">{resubmitError}</div>}
     {ready && <DataTable
       locale={locale}
       rows={ready.items}
       columns={[
         { key: "item", header: frontendText(locale, "SUBMISSIONS_COLUMN_ITEM"), cell: (item) => <div className="py-1"><p className="font-medium">{item.title?.trim() || frontendText(locale, "SUBMISSIONS_UNTITLED")}</p><p className="mt-1 text-xs text-muted-foreground">{item.id}</p></div> },
-        { key: "status", header: frontendText(locale, "SUBMISSIONS_COLUMN_STATUS"), width: "200px", cell: (item) => <div className="flex items-center gap-3"><Badge variant={item.status === "needs_revision" ? "warning" : "outline"}>{statusLabel(item)}</Badge>{item.status === "needs_revision" && <button type="button" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "SUBMISSIONS_RESUBMIT")}</button>}</div> },
+        { key: "status", header: frontendText(locale, "SUBMISSIONS_COLUMN_STATUS"), width: "240px", cell: (item) => <div className="flex flex-wrap items-center gap-3"><Badge variant={item.status === "revision_requested" ? "warning" : "outline"}>{statusLabel(item)}</Badge>{resubmitAction(item, locale, onResubmit, resubmitted)}</div> },
         { key: "review", header: frontendText(locale, "SUBMISSIONS_COLUMN_REVIEW"), width: "40%", cellClassName: "whitespace-normal", cell: (item) => {
           if (!item.review) return null;
           const note = item.review.note.trim();
@@ -105,6 +112,20 @@ function SubmissionRangeFilter({ locale, range, pending }: { locale: LocaleRunti
 
 /** A stated instant is shown by its UTC day, which is the granularity of the input. */
 function dateFieldValue(value: string): string { return value ? value.slice(0, 10) : ""; }
+
+/**
+ * The row action for a returned item: offered only while the row is
+ * `revision_requested` and its own source is readable, replaced by the server's
+ * supersede link once the member has resubmitted it, and never rendered as a
+ * control that would send nothing.
+ */
+function resubmitAction(item: MySubmissionItem, locale: LocaleRuntime, onResubmit?: (item: MySubmissionItem) => void, resubmitted?: readonly { priorId: string; submissionId: string }[]) {
+  const mark = resubmitted?.find((candidate) => candidate.priorId === item.id);
+  if (mark) return <span data-my-submission-resubmitted className="text-xs text-muted-foreground">{frontendText(locale, "SUBMISSIONS_ALREADY_RESUBMITTED")} {mark.submissionId}</span>;
+  if (item.status !== "revision_requested") return null;
+  if (!onResubmit || !submissionResubmitSource(item)) return <span data-my-submission-resubmit-unavailable className="text-xs text-muted-foreground">{frontendText(locale, "SUBMISSIONS_RESUBMIT_UNAVAILABLE")}</span>;
+  return <button type="button" data-my-submission-resubmit className="text-sm font-medium text-primary hover:underline" onClick={() => onResubmit(item)}>{frontendText(locale, "SUBMISSIONS_RESUBMIT")}</button>;
+}
 
 function reviewReasonKey(reasonCode: NonNullable<MySubmissionItem["review"]>["reasonCode"]): string {
   switch (reasonCode) {

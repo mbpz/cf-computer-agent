@@ -1,9 +1,13 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { applyD1Migrations, env, reset } from "cloudflare:test";
+import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { MIGRATIONS } from "../fixtures/d1";
+import { createApp } from "../../src/app";
+import { MembersRepository } from "../../src/members/repository";
+import { SessionService } from "../../src/identity/session";
 import { InboxRepository } from "../../src/inbox/repository";
+import { InboxTaskPromotion } from "../../src/inbox/task-promotion";
 import { encodeOpaqueCursor } from "../../src/pagination";
 
 describe("private Inbox migration contract", () => {
@@ -57,5 +61,168 @@ describe("private Inbox migration contract", () => {
     expect(page.items.map((item) => item.memberId)).toEqual(["member-a", "member-a"]);
     const foreignCursor = encodeOpaqueCursor({ v: 1, memberId: "member-b", status: null, sort: 30, id: "inbox-b-1" });
     await expect(repository.listOwned("member-a", { limit: 20, cursor: foreignCursor })).rejects.toMatchObject({ code: "INBOX_PAGE_INVALID", status: 400 });
+  });
+});
+
+type InboxJson = {
+  id: string;
+  clientKey: string;
+  content: string;
+  status: string;
+  promotedTaskId: string | null;
+  updatedAt: string;
+};
+type CreateJson = { item: InboxJson; created: boolean };
+type PromoteJson = { item: InboxJson; promoted: boolean; taskId: string };
+
+describe("workbench Inbox convergence journeys", () => {
+  const tokens: Record<string, string> = {};
+
+  beforeEach(async () => {
+    await reset();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    for (const [id, subject] of [["member-a", "subject-a"], ["member-b", "subject-b"]] as const) {
+      await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, 'contributor', 'active', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')")
+        .bind(id, subject, `${subject}@example.test`).run();
+      const members = new MembersRepository(env.DB);
+      tokens[id] = (await new SessionService(env.DB, members, { waitUntil: () => undefined }).create((await members.findByIdentitySubject(subject))!)).token;
+    }
+  });
+
+  async function http(path = "/api/inbox", method = "GET", body?: unknown, owner = "member-a"): Promise<Response> {
+    const context = createExecutionContext();
+    const response = await createApp().fetch!(
+      new Request(`https://memory.crgmhrc.asia${path}`, {
+        method,
+        headers: { cookie: `__Host-memory-session=${tokens[owner] ?? ""}`, origin: "https://memory.crgmhrc.asia", "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }) as Request<unknown, IncomingRequestCfProperties<unknown>>,
+      env,
+      context,
+    );
+    await waitOnExecutionContext(context);
+    return response;
+  }
+
+  async function count(table: "inbox_items" | "tasks" | "audit_events", extra = ""): Promise<number> {
+    const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}${extra}`).first<{ n: number }>();
+    return row!.n;
+  }
+
+  it("workbench-inbox:query_or_idempotency:create-inbox — duplicate submissions and lost-response retries keep one capture and client keys stay member-scoped", async () => {
+    const clientKey = "capture-retry-1";
+    const [first, second] = await Promise.all([
+      http("/api/inbox", "POST", { id: "capture-a-1", clientKey, kind: "text", content: "Capture one" }),
+      http("/api/inbox", "POST", { id: "capture-a-2", clientKey, kind: "text", content: "Capture one" }),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 201]);
+    const firstBody = (await first.json()) as CreateJson;
+    const secondBody = (await second.json()) as CreateJson;
+    const winnerId = firstBody.item.id;
+    expect(secondBody.item.id).toBe(winnerId);
+    expect([firstBody.created, secondBody.created]).toEqual(expect.arrayContaining([true, false]));
+    expect(await count("inbox_items")).toBe(1);
+
+    const retry = await http("/api/inbox", "POST", { id: winnerId, clientKey, kind: "text", content: "Capture one" });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toMatchObject({ created: false, item: { id: winnerId } });
+    expect(await count("inbox_items")).toBe(1);
+
+    const foreign = await http("/api/inbox", "POST", { id: "capture-b-1", clientKey, kind: "text", content: "Capture one" }, "member-b");
+    expect(foreign.status).toBe(201);
+    const foreignBody = (await foreign.json()) as CreateJson;
+    expect(foreignBody).toMatchObject({ created: true, item: { id: "capture-b-1" } });
+    expect(foreignBody.item.id).not.toBe(winnerId);
+    expect(await count("inbox_items")).toBe(2);
+
+    const ownList = (await (await http("/api/inbox", "GET")).json()) as { items: InboxJson[] };
+    expect(ownList.items.map((item) => item.id)).toEqual([winnerId]);
+    const otherList = (await (await http("/api/inbox", "GET", undefined, "member-b")).json()) as { items: InboxJson[] };
+    expect(otherList.items.map((item) => item.id)).toEqual(["capture-b-1"]);
+  });
+
+  it("workbench-inbox:query_or_idempotency:archive-inbox — concurrent archive yields one winner and a visible conflict, stale writes are rejected and repeats converge", async () => {
+    const created = (await (await http("/api/inbox", "POST", { id: "archive-1", clientKey: "archive-key-1", kind: "text", content: "Archive me" })).json()) as CreateJson;
+    const id = created.item.id;
+    const v0 = created.item.updatedAt;
+
+    const [a, b] = await Promise.all([
+      http(`/api/inbox/${id}`, "PATCH", { status: "archived", expectedUpdatedAt: v0 }),
+      http(`/api/inbox/${id}`, "PATCH", { status: "archived", expectedUpdatedAt: v0 }),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const loser = a.status === 409 ? a : b;
+    expect(await loser.json()).toMatchObject({ error: { code: "INBOX_VERSION_CONFLICT" } });
+
+    const afterWinner = (await (await http(`/api/inbox/${id}`, "GET")).json()) as InboxJson;
+    expect(afterWinner.status).toBe("archived");
+    const v1 = afterWinner.updatedAt;
+
+    const stale = await http(`/api/inbox/${id}`, "PATCH", { status: "archived", expectedUpdatedAt: v0 });
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: "INBOX_VERSION_CONFLICT" } });
+    expect((await (await http(`/api/inbox/${id}`, "GET")).json()) as InboxJson).toMatchObject({ status: "archived", updatedAt: v1 });
+
+    const repeat = await http(`/api/inbox/${id}`, "PATCH", { status: "archived", expectedUpdatedAt: v1 });
+    expect(repeat.status).toBe(200);
+    expect((await repeat.json()) as InboxJson).toMatchObject({ status: "archived" });
+    expect(await count("inbox_items")).toBe(1);
+
+    expect((await http(`/api/inbox/${id}`, "GET", undefined, "member-b")).status).toBe(404);
+    expect((await http(`/api/inbox/${id}`, "PATCH", { status: "archived", expectedUpdatedAt: v1 }, "member-b")).status).toBe(404);
+    expect((await (await http(`/api/inbox/${id}`, "GET")).json()) as InboxJson).toMatchObject({ status: "archived" });
+  });
+
+  it("workbench-inbox:query_or_idempotency:promote-inbox-task — concurrent promotion yields one linked task and replay, cross-member requests denied", async () => {
+    const created = (await (await http("/api/inbox", "POST", { id: "promote-1", clientKey: "promote-key-1", kind: "text", content: "Ship the ledger" })).json()) as CreateJson;
+    const id = created.item.id;
+    const v0 = created.item.updatedAt;
+
+    const [first, second] = await Promise.all([
+      http(`/api/inbox/${id}/promote/task`, "POST", { expectedUpdatedAt: v0 }),
+      http(`/api/inbox/${id}/promote/task`, "POST", { expectedUpdatedAt: v0 }),
+    ]);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const firstBody = (await first.json()) as PromoteJson;
+    const secondBody = (await second.json()) as PromoteJson;
+    expect(firstBody.taskId).toBe(secondBody.taskId);
+    expect([firstBody.promoted, secondBody.promoted].filter(Boolean)).toHaveLength(1);
+    const taskId = firstBody.taskId;
+
+    expect(await count("tasks")).toBe(1);
+    expect(await count("audit_events", " WHERE action = 'task.created'")).toBe(1);
+
+    const item = (await (await http(`/api/inbox/${id}`, "GET")).json()) as InboxJson;
+    expect(item.status).toBe("promoted");
+    expect(item.promotedTaskId).toBe(taskId);
+    const task = (await (await http(`/api/tasks/${taskId}`, "GET")).json()) as { task: { title: string; notes: string } };
+    expect(task.task).toMatchObject({ title: "Ship the ledger", notes: "Ship the ledger" });
+
+    const retry = await http(`/api/inbox/${id}/promote/task`, "POST", { expectedUpdatedAt: item.updatedAt });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toMatchObject({ promoted: false, taskId });
+    expect(await count("tasks")).toBe(1);
+    expect(await count("audit_events", " WHERE action = 'task.created'")).toBe(1);
+
+    const foreign = await http(`/api/inbox/${id}/promote/task`, "POST", { expectedUpdatedAt: item.updatedAt }, "member-b");
+    expect(foreign.status).toBe(404);
+    expect(await count("tasks")).toBe(1);
+  });
+
+  it("workbench-inbox:query_or_idempotency:promote-inbox-task — replaying the pre-promotion snapshot never writes a second task or audit", async () => {
+    const created = (await (await http("/api/inbox", "POST", { id: "promote-replay", clientKey: "promote-replay-key", kind: "text", content: "Replay the receipt" })).json()) as CreateJson;
+    const repository = new InboxRepository(env.DB);
+    // The caller's snapshot and version are both pre-promotion: exactly what a lost response retries with.
+    const snapshot = await repository.findOwned("member-a", created.item.id);
+    const promotion = new InboxTaskPromotion(env.DB);
+    const first = await promotion.promote("member-a", snapshot!, Date.parse(created.item.updatedAt) + 1);
+    expect(first.promoted).toBe(true);
+    const replay = await promotion.promote("member-a", snapshot!, Date.parse(created.item.updatedAt) + 1);
+    expect(replay.promoted).toBe(false);
+    expect(replay.taskId).toBe(first.taskId);
+    expect(await count("tasks")).toBe(1);
+    expect(await count("audit_events", " WHERE action = 'task.created'")).toBe(1);
+    expect(await repository.findOwned("member-a", created.item.id)).toMatchObject({ status: "promoted", promotedTaskId: first.taskId });
   });
 });

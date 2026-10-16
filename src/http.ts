@@ -6,6 +6,12 @@ export class AppError extends Error {
     message: string,
     readonly status: number,
     readonly retryable = false,
+    /**
+     * Optional machine-readable conflict context (for example the authoritative
+     * version a rejected conditional write observed). It is part of the error
+     * body, never a second success payload.
+     */
+    readonly details?: unknown,
   ) {
     super(message);
   }
@@ -79,7 +85,13 @@ export function errorResponse(error: unknown, requestId: string): Response {
     ? error
     : new AppError("INTERNAL_ERROR", "Internal error", 500, true);
   return jsonResponse({
-    error: { code: app.code, message: app.message, retryable: app.retryable, requestId },
+    error: {
+      code: app.code,
+      message: app.message,
+      retryable: app.retryable,
+      requestId,
+      ...(app.details === undefined ? {} : { details: app.details }),
+    },
   }, app.status, requestId);
 }
 

@@ -66,3 +66,13 @@ DOM 测试的网络是独立夹具，不证明 SQL 原子性或服务端授权�
 - 共 13 条 Inbox target gap 中，本次绑定 11 条直接表单写入；`target-editor-create` 仍由原入口不可达测试负责，`target-delete-task` 属于 R4-010 的删除/软删除/恢复工作，不把无删除按钮当成功能完成。
 - 这是当前状态核对而非永久历史操作账本。后续修改可能改变被核对资源，不能宣称永久精确历史结果。
 - 真正两账号原生 UI、完整二级对象撤权时序、所有字段/状态组合及生产环境没有被本矩阵替代；DOM 与 Worker 测试分层运行，不声称是同一浏览器直连真实 Worker 的端到端测试。
+
+## 2026-10-16 追加：前提必填、删除入口绑定与状态补偿
+
+本节只补充今天在本矩阵内新增的证据，不修改上表历史结论。
+
+- 每个条件写入现在都必须带前提：`PATCH /api/tasks/:id` 与 `POST /api/tasks/:id/status` 缺少 `expectedUpdatedAt`/`expectedStatus` 一律 400 `TASK_INVALID`，SQL 谓词不再可能被跳过；`DELETE /api/tasks/:id` 同样要求 `expectedUpdatedAt`，并返回已记录的回执 `{tombstone}`（旧版本不符为 409 `TASK_VERSION_CONFLICT`，重复删除读同一回执）。前端 `TaskWriteIntent` 的 `update`/`status`/`delete` 已把前提设为必填，编辑器在详情未加载时不提供提交路径。
+- `target-editor-create`：矩阵内新增 `exposes no create branch`，从该入口打开的是 `promotedTaskId` 的编辑态（有 `Save task`、无 `Create task`、无 `data-task-create-recovery`、无 `POST /api/tasks`）。
+- `target-delete-task`：该入口的编辑器仍**没有删除控件**（不能从本入口发起删除，这一点不算完成）。可绑定的部分是共享标签页记录：`Inbox target editor delete-target journey` 证明原删除意图在该入口被恢复、`Check the result` 只读结算（404 视为已应用）、显式重试复用同一 `DELETE` 载荷且不重复写入、401/403 清除私有界面但保留意图、他人记录不被重放；操作本身由 `test/worker/tasks.test.ts`（单 tombstone 收敛、旧版本 409 不覆盖较新修改、跨成员 404、保留期外 404）与 `frontend-tasks-route.test.tsx`（列表入口发送确认行版本）承担。真正的删除按钮/恢复界面仍属 R4-010 未批准的回收站模型。
+- 状态补偿：`TASK_STATUS_CONFLICT` 两条路径（预读守卫与 CAS 落败）统一为 `retryable:false`；`trg_tasks_status_notification_intent` 改为 `INSERT OR IGNORE`（migration `0068`），`status_version` 被修复回退后下一次状态写入不再因 UNIQUE 失败而中止。
+

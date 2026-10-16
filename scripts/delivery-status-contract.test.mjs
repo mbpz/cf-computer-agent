@@ -338,6 +338,7 @@ test("actual workspace route registry extraction includes every ready and coming
       { path: "/admin/roles", availability: "ready" },
       { path: "/admin/menus", availability: "ready" },
       { path: "/admin/spaces", availability: "ready" },
+      { path: "/admin/knowledge/trash", availability: "ready" },
       { path: "/admin/audit", availability: "ready" },
       { path: "/admin/analytics", availability: "ready" },
       { path: "/notifications", availability: "ready" },

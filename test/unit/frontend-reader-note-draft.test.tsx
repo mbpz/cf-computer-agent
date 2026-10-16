@@ -153,7 +153,9 @@ describe("private reader note draft ownership", () => {
     await mount(init => init?.method === "PUT" ? (sent.push(JSON.parse(String(init.body))), new Promise(resolve => { finish = resolve; })) : Promise.resolve(Response.json({ note: null })));
     const submit = props<{onClick: () => void}>(save()).onClick;
     await act(async () => { edit("title", " Title "); edit("body", " Body "); submit(); submit(); writeWorkspaceHistory("push", "/tasks"); });
-    expect(sent).toEqual([{ title: "Title", body: "Body", citations }]); expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); expect(unloadWarns()).toBe(true);
+    // The write carries its stable key and the version it read (null for a create).
+    expect(sent).toEqual([expect.objectContaining({ id: expect.any(String), expectedUpdatedAt: null, title: "Title", body: "Body", citations })]);
+    expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); expect(unloadWarns()).toBe(true);
     await act(async () => finish(Response.json({ note: receipt() }))); await settle(); expect(unloadWarns()).toBe(false); expect(container.textContent).toContain("Saved");
   });
   it("keeps ambiguous saves locked and only checks the original content without resending", async () => {

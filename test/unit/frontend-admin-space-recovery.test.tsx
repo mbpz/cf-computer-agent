@@ -241,7 +241,7 @@ describe("space write recovery", () => {
     const calls:string[]=[];vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return reads(url);});await render();await draft("N".repeat(121),"bad--slug");await submit();expect(calls.filter(x=>x==="POST")).toHaveLength(0);
   });
 });
-function space(overrides:Record<string,unknown>={}) {return {id:"space-1",name:"Private space",slug:"private-space",description:"",kind:"shared",status:"active",position:0,readOnly:false,createdAt:"2026-09-28T00:00:00.000Z",updatedAt:"2026-09-28T00:00:00.000Z",...overrides};}
+function space(overrides:Record<string,unknown>={}) {return {id:"space-1",name:"Private space",slug:"private-space",description:"",kind:"shared",status:"active",position:0,readOnly:false,impact:{collections:0,knowledgeItems:0,revisions:0,links:0},createdAt:"2026-09-28T00:00:00.000Z",updatedAt:"2026-09-28T00:00:00.000Z",...overrides};}
 function collection(overrides:Record<string,unknown>={}) {return {id:"collection-1",spaceId:"space-1",parentId:null,name:"Private collection",description:"",status:"active",position:0,createdAt:"2026-09-28T00:00:00.000Z",updatedAt:"2026-09-28T00:00:00.000Z",...overrides};}
 function json(value:unknown){return new Response(JSON.stringify(value),{headers:{"content-type":"application/json"}});}
 function locale(){return createLocaleRuntime({navigatorLanguage:"en"});}

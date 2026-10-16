@@ -51,6 +51,7 @@ export function normalizeGraphSnapshot(value: unknown): GraphSnapshot {
   if (!isRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.edges)
     || !isRootId(value.rootId) || (value.depth !== 1 && value.depth !== 2)
     || typeof value.truncated !== "boolean"
+    || (value.nextCursor !== undefined && value.nextCursor !== null && !isNonEmptyString(value.nextCursor))
     || value.nodes.length > GRAPH_MAX_NODE_LIMIT
     || value.edges.length > GRAPH_MAX_EDGE_LIMIT) {
     throw invalidResponse();
@@ -84,6 +85,7 @@ export function normalizeGraphSnapshot(value: unknown): GraphSnapshot {
     rootId: value.rootId,
     depth: value.depth,
     truncated: value.truncated,
+    nextCursor: typeof value.nextCursor === "string" && value.nextCursor ? value.nextCursor : null,
   };
 }
 

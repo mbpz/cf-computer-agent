@@ -10,7 +10,7 @@ export function VmAssetImportPanel({model,locale='en'}:{model:VmAssetImport;loca
   const [title,setTitle]=useState(''),[space,setSpace]=useState('default'),[visibility,setVisibility]=useState<'shared'|'admin_only'>('shared');
   const flow=state.flow,review=flow?.intent?.review;
   useEffect(()=>{setUploadAck(false);},[state.selected]);
-  useEffect(()=>{setReviewAck(false);setTitle(review?.title??flow?.intent?.file.name??'');setSpace(review?.target?.requestedSpaceId??'default');setVisibility(review?.target?.requestedVisibility??'shared');},[state.parsed,review]);
+  useEffect(()=>{setReviewAck(false);setTitle(review?.title??flow?.intent?.file?.name??flow?.intent?.source?.url??'');setSpace(review?.target?.requestedSpaceId??'default');setVisibility(review?.target?.requestedVisibility??'shared');},[state.parsed,review]);
   const t=(en:string,cn:string)=>locale==='zh-CN'?cn:en;
   if(state.kind==='idle')return null;
   const job=flow?.record?.job.status,busy=state.busy||!!flow?.busy;
@@ -25,7 +25,7 @@ export function VmAssetImportPanel({model,locale='en'}:{model:VmAssetImport;loca
       <Button data-vm-asset-upload disabled={busy||!uploadAck||flow?.error==='storage'} onClick={()=>void model.upload(uploadAck)}>{t('Upload / retry identical file','上传 / 重试同一文件')}</Button>
     </>}
     {flow?.intent&&<div className="space-y-2">
-      <p className="break-all">{t('Pending asset','未决资产')}: {flow.intent.file.name} · {flow.intent.file.size} bytes · SHA-256: {flow.intent.file.sha256}</p>
+      <p className="break-all">{t('Pending asset','未决资产')}: {flow.intent.file?`${flow.intent.file.name} · ${flow.intent.file.size} bytes · SHA-256: ${flow.intent.file.sha256}`:flow.intent.source?.url??''}</p>
       <p>{t('State','状态')}: {flow.kind} {job}</p>
       <Button disabled={busy} onClick={()=>void model.refresh()}>{t('Read server status (no replay)','回读服务端状态（不重放）')}</Button>
       {(job==='queued'||job==='failed_retryable')&&<>

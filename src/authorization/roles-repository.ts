@@ -48,7 +48,7 @@ export class RolesRepository {
     return { items: rows.results.map(mapRole) };
   }
 
-  async update(id: string, input: { name?: string; description?: string; allowBits: string }, actorId: string): Promise<RoleRecord> {
+  async update(id: string, input: { name?: string; description?: string; allowBits: string }, actorId: string, expectedAllowBits?: string): Promise<RoleRecord> {
     const current = await this.find(id);
     if (!current) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
     const mask = serializePermissionMask(parsePermissionMask(input.allowBits));
@@ -58,28 +58,64 @@ export class RolesRepository {
     if (current.isSystem && !isAdminWorkbenchGrant(current, input, mask)) throw new AppError("ROLE_SYSTEM_IMMUTABLE", "System roles cannot be changed", 409);
     const name = input.name === undefined ? current.name : boundedText(input.name, "ROLE_NAME_INVALID");
     const description = input.description === undefined ? current.description : boundedText(input.description, "ROLE_DESCRIPTION_INVALID");
+    // The client may state the authorisation mask it rendered. Binding that value
+    // (instead of the server's fresh read) makes the SQL predicate reject an
+    // administrator acting on a stale matrix before it can overwrite new grants.
+    const previousMask = expectedAllowBits === undefined ? current.allowBits : serializePermissionMask(parsePermissionMask(expectedAllowBits));
     const result = await this.writeWithAudit(this.db.prepare(
       `UPDATE roles SET name = ?, description = ?, allow_bits = ?, updated_at = ? WHERE id = ? AND is_system = ? AND allow_bits = ? AND name = ? AND description = ?`,
-    ).bind(name, description, mask, new Date().toISOString(), id, current.isSystem ? 1 : 0, current.allowBits, current.name, current.description), actorId, id, { action: "role.updated", metadata: { previousAllowBits: current.allowBits, allowBits: mask } });
+    ).bind(name, description, mask, new Date().toISOString(), id, current.isSystem ? 1 : 0, previousMask, current.name, current.description), actorId, id, { action: "role.updated", metadata: { previousAllowBits: current.allowBits, allowBits: mask } });
     if (result.meta.changes !== 1) throw new AppError("ROLE_UPDATE_CONFLICT", "Role update conflict", 409);
     return (await this.find(id))!;
   }
 
-  async create(input: { key: string; name: string; description?: string; allowBits: string }, actorId: string): Promise<RoleRecord> {
+  async create(input: { key: string; name: string; description?: string; allowBits: string }, actorId: string, operation?: { operationId: string }): Promise<RoleRecord> {
     const key = boundedKey(input.key);
     const name = boundedText(input.name, "ROLE_NAME_INVALID");
     const description = input.description === undefined ? "" : boundedText(input.description, "ROLE_DESCRIPTION_INVALID");
     const allowBits = serializePermissionMask(parsePermissionMask(input.allowBits));
     const id = `role-${crypto.randomUUID()}`;
-    try {
-      await this.writeWithAudit(this.db.prepare(
-        "INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', 0, ?, ?)",
-      ).bind(id, key, name, description, allowBits, new Date().toISOString(), new Date().toISOString()), actorId, id, { action: "role.created", metadata: { allowBits } });
-    } catch (error) {
-      if (error instanceof Error && /UNIQUE constraint failed: roles\.key/iu.test(error.message)) throw new AppError("ROLE_KEY_DUPLICATE", "Role key is already in use", 409);
-      throw error;
+    const createdAt = new Date().toISOString();
+    if (!operation) {
+      try {
+        await this.writeWithAudit(this.db.prepare(
+          "INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', 0, ?, ?)",
+        ).bind(id, key, name, description, allowBits, createdAt, createdAt), actorId, id, { action: "role.created", metadata: { allowBits } });
+      } catch (error) {
+        rethrowRoleKeyConflict(error);
+      }
+      return (await this.find(id))!;
     }
-    return (await this.find(id))!;
+    // The caller's operation number freezes one intent. One batch claims it,
+    // inserts the role only for the claim owner and audits only the insert that
+    // changed a row, so a retry yields the recorded role and one audit event.
+    const claimId = crypto.randomUUID();
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({ kind: "role.create", memberId: actorId, key, name, description, allowBits })));
+    const requestHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const recorded: RoleRecord = { id, key, name, description, allowBits, memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
+    try {
+      const results = await this.db.batch([
+        this.db.prepare(
+          `INSERT INTO role_operation_receipts
+             (member_id, operation_id, kind, request_hash, role_id, claim_id, response_json, created_at)
+           VALUES (?, ?, 'role.create', ?, ?, ?, ?, ?)
+           ON CONFLICT(member_id, operation_id) DO NOTHING`,
+        ).bind(actorId, operation.operationId, requestHash, id, claimId, JSON.stringify(recorded), createdAt),
+        this.db.prepare(
+          `INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at)
+           SELECT ?, ?, ?, ?, ?, 'active', 0, ?, ? WHERE EXISTS
+             (SELECT 1 FROM role_operation_receipts WHERE member_id = ? AND operation_id = ? AND claim_id = ?)`,
+        ).bind(id, key, name, description, allowBits, createdAt, createdAt, actorId, operation.operationId, claimId),
+        new AuditRepository(this.db).prepareChangedRowAudit({ id: crypto.randomUUID(), actorKind: "member", actorId, action: "role.created", resourceType: "role", resourceId: id, metadata: { allowBits }, createdAt }),
+        this.db.prepare("SELECT request_hash, response_json FROM role_operation_receipts WHERE member_id = ? AND operation_id = ?").bind(actorId, operation.operationId),
+      ]);
+      const receipt = results[3]?.results[0] as { request_hash: string; response_json: string } | undefined;
+      if (!receipt) throw new AppError("ROLE_OPERATION_UNAVAILABLE", "Role operation receipt is unavailable", 503, true);
+      if (receipt.request_hash !== requestHash) throw new AppError("ROLE_OPERATION_CONFLICT", "Operation ID was already used for a different request", 409);
+      return JSON.parse(receipt.response_json) as RoleRecord;
+    } catch (error) {
+      rethrowRoleKeyConflict(error);
+    }
   }
 
   async remove(id: string, actorId: string): Promise<RoleRecord> {
@@ -119,30 +155,36 @@ export class RolesRepository {
     );
   }
 
-  async assignMember(roleId: string, memberId: string, actorId: string): Promise<void> {
+  async assignMember(roleId: string, memberId: string, actorId: string): Promise<RoleRecord> {
     const role = await this.find(roleId);
     if (!role) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
     if (role.status !== "active") throw new AppError("ROLE_INACTIVE", "Inactive roles cannot be assigned", 409);
     const member = await this.db.prepare("SELECT status FROM members WHERE id = ?").bind(memberId).first<{ status: string }>();
     if (!member) throw new AppError("MEMBER_NOT_FOUND", "Member not found", 404);
-    try {
-      await this.writeWithAudit(this.db.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES (?, ?, ?)")
-        .bind(roleId, memberId, new Date().toISOString()), actorId, roleId, { action: "role.member_assigned", metadata: { memberId } });
-    } catch (error) {
-      if (error instanceof Error && /UNIQUE constraint failed: role_members/iu.test(error.message)) {
-        throw new AppError("ROLE_MEMBER_EXISTS", "Role is already assigned", 409);
-      }
-      throw error;
-    }
+    // Assigning an already-assigned member is the same authorised set, not an
+    // error: the guarded insert changes no row and the paired audit is skipped.
+    const now = new Date().toISOString();
+    const auditId = crypto.randomUUID();
+    await this.db.batch([
+      this.db.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES (?, ?, ?) ON CONFLICT(role_id, member_id) DO NOTHING")
+        .bind(roleId, memberId, now),
+      new AuditRepository(this.db).prepareChangedRowAudit({ id: auditId, actorKind: "member", actorId, action: "role.member_assigned", resourceType: "role", resourceId: roleId, metadata: { memberId }, createdAt: now }),
+    ]);
+    return (await this.find(roleId))!;
   }
 
-  async unassignMember(roleId: string, memberId: string, actorId: string): Promise<void> {
+  async unassignMember(roleId: string, memberId: string, actorId: string): Promise<RoleRecord> {
     const role = await this.find(roleId);
     if (!role) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
     if (role.isSystem) throw new AppError("ROLE_SYSTEM_IMMUTABLE", "System role assignments cannot be changed", 409);
-    const result = await this.writeWithAudit(this.db.prepare("DELETE FROM role_members WHERE role_id = ? AND member_id = ?")
-      .bind(roleId, memberId), actorId, roleId, { action: "role.member_unassigned", metadata: { memberId } });
-    if (result.meta.changes !== 1) throw new AppError("ROLE_MEMBER_NOT_FOUND", "Role assignment not found", 404);
+    // Removing an already-removed assignment converges on "not assigned" and
+    // produces no second authorisation change event.
+    const now = new Date().toISOString();
+    await this.db.batch([
+      this.db.prepare("DELETE FROM role_members WHERE role_id = ? AND member_id = ?").bind(roleId, memberId),
+      new AuditRepository(this.db).prepareChangedRowAudit({ id: crypto.randomUUID(), actorKind: "member", actorId, action: "role.member_unassigned", resourceType: "role", resourceId: roleId, metadata: { memberId }, createdAt: now }),
+    ]);
+    return (await this.find(roleId))!;
   }
 
   private async writeWithAudit(statement: D1PreparedStatement, actorId: string, resourceId: string, event: RoleMutationAudit) {
@@ -151,6 +193,13 @@ export class RolesRepository {
     return result!;
   }
 
+}
+
+function rethrowRoleKeyConflict(error: unknown): never {
+  if (error instanceof Error && /UNIQUE constraint failed: roles\.key/iu.test(error.message)) {
+    throw new AppError("ROLE_KEY_DUPLICATE", "Role key is already in use", 409);
+  }
+  throw error;
 }
 
 const adminWorkbenchBits = ["workspace.tasks", "workspace.vm"] as const;

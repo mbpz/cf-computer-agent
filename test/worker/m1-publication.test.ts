@@ -1671,7 +1671,10 @@ describe("M1 publication control plane", () => {
     expect(first).toEqual({
       submissionId, reviewerId: adminReviewer.id, decision,
       reasonCode: decision === "rejected" ? "unsafe" : "needs_revision",
-      note: "Private review note", title: "Submitted title", visibility, createdAt: now,
+      note: "Private review note", title: "Submitted title", visibility,
+      // A decision must advance the submission version, so a client holding the
+      // previous version can tell the state changed.
+      createdAt: "2026-08-22T00:00:00.001Z",
     });
     const replay = await decide(new PublicationService(
       new PublicationRepository(env.DB, { now: () => new Date("2026-09-16T00:00:00.000Z") }),
@@ -1978,6 +1981,133 @@ describe("M1 publication control plane", () => {
       "page-a-4", "page-a-3", "page-a-2", "page-a-1", "tag-b", "tag-a", "page-a-0",
     ]);
     expect(new Set(seen.map((tag) => tag.id)).size).toBe(seen.length);
+  });
+
+  it("replays one publish operation without a second Revision, content write, or index job", async () => {
+    const submissionId = "submission-operation-publish";
+    await seedReviewPendingSubmission(submissionId);
+    let commits = 0;
+    const durable = durableContentCommitter();
+    const service = new PublicationService(new PublicationRepository(env.DB), {
+      commit: async (input) => {
+        commits += 1;
+        return durable.commit(input);
+      },
+    });
+    const operation = { operationId: `review.publish.${submissionId}.v1`, expectedUpdatedAt: now };
+
+    const first = await service.publish(adminReviewer, submissionId, publicationInput, operation);
+    // The recorded operation answers from its receipt, not from current state:
+    // even a target that is no longer writable cannot change the decision.
+    await env.DB.prepare("UPDATE spaces SET status = 'disabled' WHERE id = 'default'").run();
+    const replay = await service.publish(adminReviewer, submissionId, publicationInput, { ...operation });
+    await env.DB.prepare("UPDATE spaces SET status = 'active' WHERE id = 'default'").run();
+
+    expect(replay).toEqual(first);
+    expect(commits).toBe(1);
+    await expect(publicationState(submissionId)).resolves.toMatchObject({
+      submissionStatus: "published", intentState: "completed", revisionCount: 1,
+      reviewCount: 1, auditCount: 1, notificationCount: 1, jobState: "completed", jobAttempts: 1,
+    });
+    await expect(env.DB.prepare(
+      "SELECT kind, operation_id, expected_version, actor_id FROM review_decision_receipts WHERE submission_id = ?",
+    ).bind(submissionId).first()).resolves.toEqual({
+      kind: "review.publish", operation_id: operation.operationId, expected_version: now, actor_id: "admin-1",
+    });
+  });
+
+  it("refuses a reused publish operation number for a different decision and a stale publish version", async () => {
+    const submissionId = "submission-operation-publish-conflict";
+    await seedReviewPendingSubmission(submissionId);
+    const service = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+    const operation = { operationId: `review.publish.${submissionId}.v1`, expectedUpdatedAt: now };
+    await service.publish(adminReviewer, submissionId, publicationInput, operation);
+
+    await expect(service.publish(adminReviewer, submissionId, { ...publicationInput, title: "Another title" }, operation))
+      .rejects.toMatchObject({
+        code: "PUBLICATION_OPERATION_CONFLICT", status: 409,
+        details: { submissionId, operationId: operation.operationId },
+      });
+
+    const staleId = "submission-stale-publish";
+    await seedReviewPendingSubmission(staleId);
+    const stale = new Date(Date.parse(now) - 60_000).toISOString();
+    await expect(service.publish(adminReviewer, staleId, publicationInput, {
+      operationId: `review.publish.${staleId}.stale`, expectedUpdatedAt: stale,
+    })).rejects.toMatchObject({
+      code: "PUBLICATION_VERSION_CONFLICT", status: 409,
+      details: { submissionId: staleId, status: "review_pending", updatedAt: now },
+    });
+    await expect(env.DB.prepare(
+      `SELECT (SELECT count(*) FROM publication_intents WHERE submission_id = ?) AS intents,
+         (SELECT count(*) FROM review_decision_receipts WHERE submission_id = ?) AS receipts,
+         (SELECT count(*) FROM audit_events WHERE json_extract(metadata, '$.submissionId') = ?) AS audits`,
+    ).bind(staleId, staleId, staleId).first()).resolves.toEqual({ intents: 0, receipts: 0, audits: 0 });
+
+    // Recovery is a re-read: the authoritative version is what the client re-sends.
+    const reRead = await service.preview(adminReviewer, staleId);
+    expect(reRead.updatedAt).toBe(now);
+    await expect(service.publish(adminReviewer, staleId, publicationInput, {
+      operationId: `review.publish.${staleId}.retry`, expectedUpdatedAt: reRead.updatedAt,
+    })).resolves.toMatchObject({ searchStatus: "indexed" });
+  });
+
+  it("records one rejection and one revision request per operation and none for a conflicting one", async () => {
+    const rejectId = "submission-operation-reject";
+    const revisionId = "submission-operation-revision";
+    await seedReviewPendingSubmission(rejectId);
+    await seedReviewPendingSubmission(revisionId);
+    const decide = () => new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+
+    const rejectOperation = { operationId: `review.reject.${rejectId}.v1`, expectedUpdatedAt: now };
+    const rejected = await decide().reject(adminReviewer, rejectId, { reasonCode: "unsafe", note: "Recorded once" }, rejectOperation);
+    expect(await decide().reject(adminReviewer, rejectId, { reasonCode: "unsafe", note: "Recorded once" }, rejectOperation))
+      .toEqual(rejected);
+    await expectDecisionStoredOnce(rejectId, rejected);
+    await expect(decide().reject(adminReviewer, rejectId, { reasonCode: "duplicate", note: "Different" }, rejectOperation))
+      .rejects.toMatchObject({
+        code: "REVIEW_OPERATION_CONFLICT", status: 409,
+        details: { submissionId: rejectId, operationId: rejectOperation.operationId },
+      });
+    // A later decision on an already-decided submission is a conflict that names
+    // the authoritative version, never a silent second write.
+    await expect(decide().requestRevision(adminReviewer, rejectId, { reasonCode: "needs_revision", note: "Too late" }, {
+      operationId: `review.request_revision.${rejectId}.v1`, expectedUpdatedAt: now,
+    })).rejects.toMatchObject({
+      code: "REVIEW_STATE_CONFLICT", status: 409,
+      details: { submissionId: rejectId, status: "rejected", updatedAt: rejected.createdAt },
+    });
+
+    const revisionOperation = { operationId: `review.request_revision.${revisionId}.v1`, expectedUpdatedAt: now };
+    const requested = await decide().requestRevision(
+      adminReviewer, revisionId, { reasonCode: "needs_revision", note: "Add the source" }, revisionOperation,
+    );
+    expect(await decide().requestRevision(
+      adminReviewer, revisionId, { reasonCode: "needs_revision", note: "Add the source" }, revisionOperation,
+    )).toEqual(requested);
+    await expect(publicationState(revisionId)).resolves.toMatchObject({
+      submissionStatus: "revision_requested", intentState: null, revisionCount: 0,
+      reviewCount: 1, notificationCount: 1, auditCount: 0,
+    });
+
+    await expect(env.DB.prepare(
+      `SELECT
+         (SELECT count(*) FROM reviews) AS reviews,
+         (SELECT count(*) FROM notifications WHERE event_type = 'submission.revision_requested') AS revisionNotices,
+         (SELECT count(*) FROM notifications WHERE event_type = 'submission.rejected') AS rejectionNotices,
+         (SELECT count(*) FROM audit_events WHERE action = 'submission.rejected') AS rejectionAudits,
+         (SELECT count(*) FROM audit_events WHERE action = 'submission.revision_requested') AS revisionAudits,
+         (SELECT count(*) FROM review_decision_receipts) AS receipts`,
+    ).first()).resolves.toEqual({
+      reviews: 2, revisionNotices: 1, rejectionNotices: 1, rejectionAudits: 1, revisionAudits: 1, receipts: 2,
+    });
+    // The contributor keeps the original submission and its source version to edit from.
+    await expect(env.DB.prepare(
+      `SELECT s.status, s.content, (SELECT count(*) FROM source_versions sv WHERE sv.submission_id = s.id) AS versions
+       FROM submissions s WHERE s.id = ?`,
+    ).bind(revisionId).first()).resolves.toEqual({
+      status: "revision_requested", content: "# Trusted\n\nFirst paragraph.\n\nSecond paragraph.\n", versions: 1,
+    });
   });
 });
 

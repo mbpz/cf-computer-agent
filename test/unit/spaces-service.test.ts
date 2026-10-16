@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SpacesService } from "../../src/spaces/service";
 import { SpacesRepositoryConflictError, type CollectionsRepositoryPort, type SpacesRepositoryPort } from "../../src/spaces/repository";
-import type { Collection, CreateCollection, CreateSpace, Space, UpdateCollection, UpdateSpace } from "../../src/spaces/types";
+import type { Collection, CreateCollection, CreateSpace, Space, SpaceListItem, UpdateCollection, UpdateSpace } from "../../src/spaces/types";
 
 describe("SpacesService", () => {
   it("normalizes valid Space input and rejects invalid names, slugs, and positions", async () => {
@@ -97,7 +97,7 @@ class FakeSpacesRepository implements SpacesRepositoryPort, CollectionsRepositor
     if (input.slug !== undefined && this.spaces.some((space) => space.id !== id && space.slug === input.slug)) throw new SpacesRepositoryConflictError("slug");
     const updated = { ...existing, ...input }; this.spaces.splice(this.spaces.indexOf(existing), 1, updated); return updated;
   }
-  async listSpaces(): Promise<{ items: Space[]; nextCursor?: string }> { return { items: [...this.spaces].sort(byPositionThenId) }; }
+  async listSpaces(): Promise<{ items: SpaceListItem[]; nextCursor?: string }> { return { items: [...this.spaces].sort(byPositionThenId).map((space): SpaceListItem => ({ ...space, impact: { collections: 0, knowledgeItems: 0, revisions: 0, links: 0 } })) }; }
   async findCollectionById(id: string): Promise<Collection | null> { return this.collections.find((item) => item.id === id) ?? null; }
   async createCollection(input: CreateCollection): Promise<Collection> {
     const space = await this.findSpaceById(input.spaceId);

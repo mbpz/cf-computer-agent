@@ -76,6 +76,23 @@ describe("duplicate decision recovery", () => {
     await render(); await act(async () => action().click()); await click("Confirm decision");
     expect(action().disabled).toBe(true); expect(unloadBlocked()).toBe(false); await leave(); expect(browser.location.pathname).toBe("/home");
   });
+  it("retries a failed initial read without writing and keeps the header mounted", async () => {
+    let gets = 0; let posts = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({ candidate: duplicate("associate") }); }
+      return ++gets === 1 ? new Response(null, { status: 500 }) : numbered([duplicate()]);
+    });
+    await render();
+    expect(container.querySelector('[data-page-state="error"]')).toBeTruthy();
+    expect(container.textContent).toContain("Duplicate candidates");
+    const retry = [...container.querySelectorAll("button")].find(button => button.textContent === "Try again") as HTMLButtonElement;
+    expect(retry).toBeTruthy();
+    await act(async () => { retry.click(); retry.click(); }); await flush();
+    expect(gets).toBe(2); expect(posts).toBe(0);
+    expect(container.querySelector('[data-page-state="error"]')).toBeNull();
+    expect(action()).toBeTruthy();
+  });
+
   it.each([401, 403, 500])("does not trap a readonly %s failure with no write", async status => {
     vi.stubGlobal("fetch", async () => new Response(null, {status})); await render();
     expect(unloadBlocked()).toBe(false); await leave(); expect(browser.location.pathname).toBe("/home");

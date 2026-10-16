@@ -75,9 +75,9 @@ describe("TasksService", () => {
     await service.create("member-a", { id: "task-a-1", title: "A1" });
     await service.create("member-a", { id: "task-a-2", title: "A2" });
     await service.create("member-b", { id: "task-b-1", title: "B1" });
-    await service.setStatus("member-a", "task-a-1", "doing");
-    await service.setStatus("member-a", "task-a-2", "doing");
-    await service.setStatus("member-b", "task-b-1", "doing");
+    await service.setStatus("member-a", "task-a-1", "doing", "todo");
+    await service.setStatus("member-a", "task-a-2", "doing", "todo");
+    await service.setStatus("member-b", "task-b-1", "doing", "todo");
     const page = await service.list("member-a", { status: "doing" }, { page: 1, pageSize: 20 });
     expect(page.pagination.total).toBe(2);
     expect(page.items.every((task) => task.memberId === "member-a")).toBe(true);
@@ -118,15 +118,15 @@ describe("TasksService", () => {
     const repository = new FakeTasksRepository();
     const service = createService(repository);
     const created = (await service.create("member-a", { id: "task-1", title: "Alpha" })).task;
-    await expect(service.setStatus("member-a", "task-1", "blocked")).rejects.toMatchObject({ code: "TASK_TRANSITION_INVALID", status: 422 });
-    await expect(service.setStatus("member-a", "task-1", "doing")).resolves.toMatchObject({ status: "doing" });
-    await expect(service.setStatus("member-a", "task-1", "doing")).resolves.toMatchObject({ status: "doing" }); // 幂等重发
-    const done = await service.setStatus("member-a", "task-1", "done");
+    await expect(service.setStatus("member-a", "task-1", "blocked", "todo")).rejects.toMatchObject({ code: "TASK_TRANSITION_INVALID", status: 422 });
+    await expect(service.setStatus("member-a", "task-1", "doing", "todo")).resolves.toMatchObject({ status: "doing" });
+    await expect(service.setStatus("member-a", "task-1", "doing", "todo")).resolves.toMatchObject({ status: "doing" }); // 幂等重发
+    const done = await service.setStatus("member-a", "task-1", "done", "doing");
     expect(done.progress).toBe(100);
     expect(done.completedAt).toBe(NOW.toISOString());
     await expect(service.setProgress("member-a", "task-1", 40)).rejects.toMatchObject({ code: "TASK_PROGRESS_INVALID", status: 400 });
-    await expect(service.setStatus("member-a", "task-1", "doing")).rejects.toMatchObject({ code: "TASK_TRANSITION_INVALID", status: 422 });
-    const reopened = await service.setStatus("member-a", "task-1", "todo");
+    await expect(service.setStatus("member-a", "task-1", "doing", "done")).rejects.toMatchObject({ code: "TASK_TRANSITION_INVALID", status: 422 });
+    const reopened = await service.setStatus("member-a", "task-1", "todo", "done");
     expect(reopened.completedAt).toBeNull();
     expect(reopened.progress).toBe(100); // 重开不回退进度
     void created;
@@ -144,18 +144,53 @@ describe("TasksService", () => {
     const replay = await service.update("member-a", "task-1", { title: "Tab one", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: created.updatedAt });
     expect(replay.updatedAt).toBe(first.updatedAt);
     await expect(service.update("member-a", "task-1", { title: "Bad", expectedUpdatedAt: "yesterday" })).rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
-    await expect(service.update("member-a", "task-1", { title: "Unconditional" })).resolves.toMatchObject({ title: "Unconditional" });
+    await expect(service.update("member-a", "task-1", { title: "Unconditional" })).rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
+    expect((await service.get("member-a", "task-1")).task.title).toBe("Tab one");
+  });
+
+  it("reports the same non-retryable conflict when the CAS loses the race", async () => {
+    const repository = new FakeTasksRepository();
+    const service = createService(repository);
+    await service.create("member-a", { id: "task-1", title: "Alpha" });
+    repository.casFails = true;
+    await expect(service.setStatus("member-a", "task-1", "doing", "todo"))
+      .rejects.toMatchObject({ code: "TASK_STATUS_CONFLICT", status: 409, retryable: false });
+    repository.casFails = false;
+    // The pre-read guard answers the same way for the same reason.
+    await expect(service.setStatus("member-a", "task-1", "doing", "done"))
+      .rejects.toMatchObject({ code: "TASK_STATUS_CONFLICT", status: 409, retryable: false });
+    await expect(service.setStatus("member-a", "task-1", "doing"))
+      .rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
+  });
+
+  it("converges a deleted task's replay but refuses a delete naming a stale version", async () => {
+    const repository = new FakeTasksRepository();
+    const audit = new FakeAudit();
+    const service = createService(repository, audit);
+    const created = await service.create("member-a", { id: "task-1", title: "Alpha" });
+    const createdVersion = created.task.updatedAt;
+    const updated = await service.update("member-a", "task-1", { title: "Alpha v2", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: createdVersion });
+    await expect(service.delete("member-a", "task-1", createdVersion))
+      .rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    expect((await service.get("member-a", "task-1")).task.title).toBe("Alpha v2");
+
+    const first = await service.delete("member-a", "task-1", updated.updatedAt);
+    expect(first.taskId).toBe("task-1");
+    await expect(service.delete("member-a", "task-1", updated.updatedAt)).resolves.toEqual(first);
+    await expect(service.delete("member-a", "task-1", "yesterday")).rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
+    expect(audit.events.filter((event) => event.action === "task.deleted")).toHaveLength(1);
   });
 
   it("rejects a status change whose expected current status is stale, but accepts one already at the target", async () => {
     const repository = new FakeTasksRepository();
     const service = createService(repository);
     await service.create("member-a", { id: "task-1", title: "Alpha" });
-    await service.setStatus("member-a", "task-1", "doing");
+    await service.setStatus("member-a", "task-1", "doing", "todo");
     await expect(service.setStatus("member-a", "task-1", "done", "todo")).rejects.toMatchObject({ code: "TASK_STATUS_CONFLICT", status: 409 });
     await expect(service.setStatus("member-a", "task-1", "doing", "todo")).resolves.toMatchObject({ status: "doing" });
     await expect(service.setStatus("member-a", "task-1", "done", "doing")).resolves.toMatchObject({ status: "done" });
     await expect(service.setStatus("member-a", "task-1", "todo", "nope")).rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
+    await expect(service.setStatus("member-a", "task-1", "todo")).rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
   });
 
   it("emits one recipient-owned notification only after a real status transition", async () => {
@@ -164,8 +199,8 @@ describe("TasksService", () => {
     const service = createService(repository, undefined, notifications);
     await service.create("member-a", { id: "task-1", title: "Alpha" });
 
-    await service.setStatus("member-a", "task-1", "doing");
-    await service.setStatus("member-a", "task-1", "doing");
+    await service.setStatus("member-a", "task-1", "doing", "todo");
+    await service.setStatus("member-a", "task-1", "doing", "todo");
 
     expect(notifications.events).toHaveLength(1);
     expect(notifications.events[0]).toMatchObject({
@@ -186,8 +221,8 @@ describe("TasksService", () => {
     const service = createService(repository, audit, notifications);
     await service.create("member-a", { id: "task-1", title: "Alpha" });
 
-    await expect(service.setStatus("member-a", "task-1", "doing")).rejects.toThrow("notification unavailable");
-    await expect(service.setStatus("member-a", "task-1", "doing")).resolves.toMatchObject({ status: "doing" });
+    await expect(service.setStatus("member-a", "task-1", "doing", "todo")).rejects.toThrow("notification unavailable");
+    await expect(service.setStatus("member-a", "task-1", "doing", "todo")).resolves.toMatchObject({ status: "doing" });
 
     expect(audit.events.filter((event) => event.action === "task.status_changed")).toHaveLength(1);
     expect(notifications.events).toHaveLength(1);
@@ -252,7 +287,7 @@ describe("TasksService", () => {
     await expect(service.get("member-b", "task-1")).rejects.toMatchObject({ code: "TASK_NOT_FOUND", status: 404 });
     await expect(service.update("member-b", "task-1", { title: "hacked" })).rejects.toMatchObject({ code: "TASK_NOT_FOUND", status: 404 });
     await expect(service.setStatus("member-b", "task-1", "doing")).rejects.toMatchObject({ code: "TASK_NOT_FOUND", status: 404 });
-    await expect(service.delete("member-b", "task-1")).rejects.toMatchObject({ code: "TASK_NOT_FOUND", status: 404 });
+    await expect(service.delete("member-b", "task-1", (await service.get("member-a", "task-1")).task.updatedAt)).rejects.toMatchObject({ code: "TASK_NOT_FOUND", status: 404 });
   });
 
   it("links only visible knowledge, idempotently, and under the link limit", async () => {
@@ -291,14 +326,14 @@ describe("TasksService", () => {
     await service.create("member-a", { id: "task-1", title: "Alpha" });
     await service.setProgress("member-a", "task-1", 40);
     await service.setProgress("member-a", "task-1", 40);
-    await service.setStatus("member-a", "task-1", "doing");
-    await service.setStatus("member-a", "task-1", "doing");
+    await service.setStatus("member-a", "task-1", "doing", "todo");
+    await service.setStatus("member-a", "task-1", "doing", "todo");
     await service.replaceTags("member-a", "task-1", ["urgent"]);
     await service.replaceTags("member-a", "task-1", ["urgent"]);
-    await service.update("member-a", "task-1", { title: "Alpha v2", priority: "high" });
+    await service.update("member-a", "task-1", { title: "Alpha v2", priority: "high", expectedUpdatedAt: (await service.get("member-a", "task-1")).task.updatedAt });
     await service.addLink("member-a", "task-1", "knowledge-a");
-    const done = await service.setStatus("member-a", "task-1", "done");
-    await service.delete("member-a", "task-1");
+    const done = await service.setStatus("member-a", "task-1", "done", "doing");
+    await service.delete("member-a", "task-1", done.updatedAt);
     expect(audit.events.map((event) => event.action)).toEqual([
       "task.created", "task.linked", "task.progress_changed", "task.status_changed", "task.tags_replaced",
       "task.updated", "task.status_changed", "task.deleted",
@@ -360,10 +395,12 @@ class FakeTasksRepository implements TasksRepositoryPort {
   pendingStatusNotifications = new Map<string, TaskStatusNotificationIntent>();
   statusVersions = new Map<string, number>();
   visibleKnowledge = new Set<string>(["knowledge-a"]);
+  casFails = false;
   count = 0;
   linkCount = 0;
   subtasks = new Map<string, TaskSubtask>();
   dependencies = new Map<string, TaskDependency>();
+  tombstones = new Map<string, string>();
 
   async insertWithKnowledge(input: TaskCreate, knowledgeItemId: string, linkId: string, audits: readonly CreateAuditEvent[] = []): Promise<boolean> {
     if (!this.visibleKnowledge.has(knowledgeItemId)) return false;
@@ -400,6 +437,7 @@ class FakeTasksRepository implements TasksRepositoryPort {
     return task;
   }
   async compareAndSetStatus(memberId: string, id: string, expectedStatus: Task["status"], status: Task["status"], completedAt: number | null, progress: number, updatedAt: number) {
+    if (this.casFails) return false;
     const task = await this.findOwned(memberId, id);
     if (!task || task.status !== expectedStatus) return false;
     const version = (this.statusVersions.get(id) ?? 0) + 1;
@@ -439,8 +477,19 @@ class FakeTasksRepository implements TasksRepositoryPort {
     task.updatedAt = new Date(updatedAt).toISOString();
     return true;
   }
-  async delete(memberId: string, id: string) {
-    return (await this.findOwned(memberId, id)) !== null && this.tasks.delete(id);
+  async delete(memberId: string, id: string, expectedUpdatedAt: number, deletedAt: number) {
+    const task = this.tasks.get(id);
+    const owned = task !== undefined && task.memberId === memberId;
+    // Mirrors the SQL: only the named version of a live owned row is removed.
+    if (owned && Date.parse(task.updatedAt) !== expectedUpdatedAt) return { kind: "version_conflict" as const };
+    if (owned) this.tasks.delete(id);
+    const key = `${memberId}:${id}`;
+    // The first deletion of a live owned row records the receipt, and a replay reads
+    // that receipt instead of writing a second one.
+    if (owned) this.tombstones.set(key, new Date(deletedAt).toISOString());
+    const receipt = this.tombstones.get(key);
+    if (!receipt) return null;
+    return { kind: owned ? "deleted" as const : "replayed" as const, tombstone: { taskId: id, deletedAt: receipt } };
   }
   async countByMember(memberId: string) { return this.count || [...this.tasks.values()].filter((task) => task.memberId === memberId).length; }
   async summary(): Promise<TaskSummary> { return { todo: 0, doing: 0, blocked: 0, done: 0, canceled: 0, dueToday: 0, overdue: 0 }; }

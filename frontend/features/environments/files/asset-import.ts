@@ -4,12 +4,12 @@ import { loadAssetAvailability } from '../../../lib/asset-availability';
 import { assetUploadModel } from '../../../components/assets/asset-upload-model';
 import { assetContentType } from '../../../lib/asset-upload-data';
 import { createAssetWorkflow, type AssetWorkflowState } from '../../../lib/asset-upload-workflow';
-import { describeAssetFile, type AssetIntent, type AssetIntentStorage } from '../../../lib/asset-upload-intent';
+import { describeAssetFile, type AssetFileDescription, type AssetIntentStorage } from '../../../lib/asset-upload-intent';
 import { validateSubmissionTarget, type SubmissionTarget } from '../../../lib/submission-data';
 
 export type VmAssetState = Readonly<{
   kind: 'idle' | 'reading' | 'preview' | 'workflow' | 'error'; busy: boolean; error?: string;
-  selected?: Readonly<{path: string; file: AssetIntent['file']}>;
+  selected?: Readonly<{path: string; file: AssetFileDescription}>;
   flow?: AssetWorkflowState;
   parsed?: Readonly<{assetId: string; markdown: string}>;
 }>;

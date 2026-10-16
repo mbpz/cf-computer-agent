@@ -12,7 +12,7 @@ import { MenuEditor, describeMenuChanges } from "./menu-editor";
 import { useCreateDraft } from "../../lib/use-create-draft";
 import { discardBlockedAdminMenuDraft, discardBlockedMenuPositionDraft, loadAdminMenuDraft, loadMenuPositionDraft, menuEditorBaseline, persistAdminMenuDraft, persistMenuPositionDraft, releaseMenuPositionDraft, type MenuEditorFields } from "../../lib/admin-menu-draft";
 import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
-import type { AdminMenu, AdminMenuCreate, AdminMenuUpdate } from "../../lib/admin-menus-data";
+import { menuById, menuDescendants, type AdminMenu, type AdminMenuCreate, type AdminMenuUpdate } from "../../lib/admin-menus-data";
 
 export function AdminMenusPage({ onLoadRetry, state, locale, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked = false, readPending = false, readRequired = false, recordBlocked = false, onDiscardRecord, draftMemberId, suppressDraft = false }: { onLoadRetry?: () => void; state: { kind: "loading" } | { kind: "error" | "forbidden"; message?: string } | { kind: "ready"; menus: readonly AdminMenu[] }; locale?: LocaleRuntime; onUpdate?: (menu: AdminMenu, input: AdminMenuUpdate) => Promise<boolean> | void; onCreate?: (input: AdminMenuCreate) => Promise<boolean>; onDelete?: (menu: AdminMenu) => void; pendingId?: string | null; error?: string | null; writeBlocked?: boolean; readPending?: boolean; readRequired?: boolean; recordBlocked?: boolean; onDiscardRecord?: () => void; draftMemberId?: string; suppressDraft?: boolean }) {
   // The page shell is constant (research §4.3): the header renders for every state. Its
@@ -30,14 +30,26 @@ type PositionAttempt = { menu: AdminMenu; position: number };
 type ReadyProps = Omit<Parameters<typeof AdminMenusPage>[0], "state"> & { menus: readonly AdminMenu[]; header: (actions?: ReactNode) => ReactNode };
 /** Per-node props handed to every row; `menu` is added as the tree recurses. */
 type MenuNodeProps = { positionAttempts: Record<string, PositionAttempt>; locale?: LocaleRuntime; positionFor?: (id: string) => string | undefined; onPosition?: (menuId: string, position: string) => void; onUpdate?: (menu: AdminMenu, input: AdminMenuUpdate) => Promise<boolean> | void; onEdit?: (menu: AdminMenu) => void; onDelete?: (menu: AdminMenu) => void; pendingId?: string | null; writeBlocked?: boolean; recordBlocked?: boolean; editingMenuId?: string | null };
-function findMenu(menus: readonly AdminMenu[], id: string): AdminMenu | undefined {
-  for (const menu of menus) { if (menu.id === id) return menu; const child = findMenu(menu.children, id); if (child) return child; }
+/** A parent is removable only when every nested entry is administrator-owned:
+ * system entries are immutable, so their parents stay undeletable. */
+function removableSubtree(menu: AdminMenu): boolean {
+  return !menu.isSystem && menuDescendants([menu], menu.id).every((item) => !item.isSystem);
+}
+/** The impact a deletion confirmation must display and the operator must acknowledge. */
+function describeDeleteImpact(menu: AdminMenu, locale?: LocaleRuntime): string {
+  const affected = menuDescendants([menu], menu.id);
+  const impact = frontendText(locale, "ADMIN_MENUS_DELETE_IMPACT");
+  if (affected.length === 0) return impact;
+  const nested = frontendText(locale, "ADMIN_MENUS_DELETE_SUBTREE_IMPACT")
+    .replace("{count}", String(affected.length))
+    .replace("{keys}", affected.map((item) => item.key).join(", "));
+  return `${impact} ${nested}`;
 }
 function ReadyMenus({ menus, locale, header, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked = false, onDiscardRecord, draftMemberId, suppressDraft = false }: ReadyProps) {
   const [composer] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadAdminMenuDraft(draftMemberId));
   const [positionRecord] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadMenuPositionDraft(draftMemberId));
   const restored = composer.kind === "ready" ? composer.draft : null;
-  const restoredMenu = restored?.mode === "edit" ? findMenu(menus, restored.menuId) : undefined;
+  const restoredMenu = restored?.mode === "edit" ? menuById(menus, restored.menuId) : undefined;
   const editorRecordBlocked = composer.kind === "blocked" || Boolean(restored?.mode === "edit" && !restoredMenu);
   const [editorBlocked, setEditorBlocked] = useState(editorRecordBlocked);
   const [positionBlocked, setPositionBlocked] = useState(positionRecord.kind === "blocked");
@@ -70,7 +82,7 @@ function ReadyMenus({ menus, locale, header, onLoadRetry, onUpdate, onDelete, on
   useEffect(() => {
     if (!draftMemberId || positionBlocked || suppressDraft) return;
     const dirty = Object.entries(positions).flatMap(([menuId, position]) => {
-      const menu = findMenu(menus, menuId);
+      const menu = menuById(menus, menuId);
       return menu && position !== String(menu.position) ? [{ menuId, position }] : [];
     });
     const saved = persistMenuPositionDraft(draftMemberId, dirty);
@@ -93,7 +105,7 @@ function ReadyMenus({ menus, locale, header, onLoadRetry, onUpdate, onDelete, on
   };
   const requestConfirmation = (menu: AdminMenu, input?: AdminMenuUpdate) => {
     if (busy || readPending || editor || confirmationRef.current || menu.isSystem) return;
-    if (input ? !onUpdate : !onDelete || menu.children.length > 0) return;
+    if (input ? !onUpdate : !onDelete || !removableSubtree(menu)) return;
     const next = { menu, input, menus }; confirmationRef.current = next; setConfirmation(next);
   };
   const confirmAction = () => {
@@ -122,7 +134,7 @@ function ReadyMenus({ menus, locale, header, onLoadRetry, onUpdate, onDelete, on
     {menus.length ? <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_MENUS_TREE")}</CardTitle></CardHeader><CardContent><FileTree ariaLabel={frontendText(locale, "ADMIN_MENUS_TREE")} value={editor?.menu?.id ?? null} defaultExpandedIds={folderIds(menus)} classNames={{ item: "h-auto min-h-9 py-1" }}>{menus.map((menu) => menuBranch(menu, nodeProps))}</FileTree></CardContent></Card> : <PageState kind="empty" title={frontendText(locale, "ADMIN_MENUS_EMPTY")} description={frontendText(locale, "ADMIN_MENUS_DESCRIPTION")} />}
   </section><ConfirmAction open={validConfirmation}
     title={frontendText(locale, confirmation?.input ? "ADMIN_MENUS_CONFIRM_TITLE" : "ADMIN_MENUS_DELETE_CONFIRM_TITLE")}
-    description={confirmation ? `${confirmation.menu.key} · ${confirmation.menu.path || confirmation.menu.id}. ${confirmation.input ? describeMenuChanges(confirmation.menu, confirmation.input, locale) : frontendText(locale, "ADMIN_MENUS_DELETE_IMPACT")}` : ""}
+    description={confirmation ? `${confirmation.menu.key} · ${confirmation.menu.path || confirmation.menu.id}. ${confirmation.input ? describeMenuChanges(confirmation.menu, confirmation.input, locale) : describeDeleteImpact(confirmation.menu, locale)}` : ""}
     cancelLabel={frontendText(locale, "COMMON_CANCEL")} confirmLabel={frontendText(locale, "ADMIN_MENUS_APPLY_CONFIRM")}
     destructive={!confirmation?.input || confirmation.input.status === "disabled" || confirmation.input.visible === false}
     onCancel={cancelConfirmation} onConfirm={confirmAction} /></>;
@@ -161,5 +173,5 @@ function MenuNodeActions({ menu, positionAttempts, locale, positionFor, onPositi
   }, [menu, attempt]);
   const position = Number(rowDraft.fields.position);
   const update = (input: AdminMenuUpdate) => { if (!busy && !rowDraft.isConfirming()) onUpdate?.(menu, input); };
-  return <>{menu.isSystem && <Badge variant="outline">{frontendText(locale, "ADMIN_MENUS_SYSTEM")}</Badge>}<Badge variant={menu.status === "active" ? "secondary" : "outline"}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_ACTIVE") : frontendText(locale, "ADMIN_MENUS_DISABLED")}</Badge>{onEdit && !menu.isSystem && <Button type="button" data-menu-edit-open aria-haspopup="dialog" aria-expanded={editingMenuId === menu.id} size="sm" variant="outline" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onEdit(menu); }}>{frontendText(locale, "ADMIN_MENUS_EDIT")}</Button>}<label className="flex items-center gap-1 text-xs"><span className="sr-only">{frontendText(locale, "ADMIN_MENUS_POSITION")}</span><input className="h-8 w-16 rounded-md border bg-background px-2 text-sm" type="number" min={0} value={rowDraft.fields.position} disabled={menu.isSystem || busy} onChange={(event) => rowDraft.edit("position", event.target.value)} /></label><Button type="button" size="sm" variant="outline" disabled={menu.isSystem || busy || position === menu.position || !rowDraft.fields.position.trim() || !Number.isSafeInteger(position) || position < 0 || position > 10000} onClick={() => { const value = rowDraft.current.current.position; const position = Number(value); if (value.trim() && Number.isSafeInteger(position) && position >= 0 && position <= 10000) update({ position, expected: menuSnapshot(menu) }); }}>{frontendText(locale, "ADMIN_MENUS_SAVE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ status: menu.status === "active" ? "disabled" : "active", expected: menuSnapshot(menu) })}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_DISABLE") : frontendText(locale, "ADMIN_MENUS_ENABLE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ visible: !menu.visible, expected: menuSnapshot(menu) })}>{frontendText(locale, menu.visible ? "ADMIN_MENUS_HIDE" : "ADMIN_MENUS_SHOW")}</Button>{!menu.isSystem && menu.children.length === 0 && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onDelete?.(menu); }}>{frontendText(locale, "ADMIN_MENUS_DELETE")}</Button>}{rowDraft.confirmation}</>;
+  return <>{menu.isSystem && <Badge variant="outline">{frontendText(locale, "ADMIN_MENUS_SYSTEM")}</Badge>}<Badge variant={menu.status === "active" ? "secondary" : "outline"}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_ACTIVE") : frontendText(locale, "ADMIN_MENUS_DISABLED")}</Badge>{onEdit && !menu.isSystem && <Button type="button" data-menu-edit-open aria-haspopup="dialog" aria-expanded={editingMenuId === menu.id} size="sm" variant="outline" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onEdit(menu); }}>{frontendText(locale, "ADMIN_MENUS_EDIT")}</Button>}<label className="flex items-center gap-1 text-xs"><span className="sr-only">{frontendText(locale, "ADMIN_MENUS_POSITION")}</span><input className="h-8 w-16 rounded-md border bg-background px-2 text-sm" type="number" min={0} value={rowDraft.fields.position} disabled={menu.isSystem || busy} onChange={(event) => rowDraft.edit("position", event.target.value)} /></label><Button type="button" size="sm" variant="outline" disabled={menu.isSystem || busy || position === menu.position || !rowDraft.fields.position.trim() || !Number.isSafeInteger(position) || position < 0 || position > 10000} onClick={() => { const value = rowDraft.current.current.position; const position = Number(value); if (value.trim() && Number.isSafeInteger(position) && position >= 0 && position <= 10000) update({ position, expected: menuSnapshot(menu) }); }}>{frontendText(locale, "ADMIN_MENUS_SAVE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ status: menu.status === "active" ? "disabled" : "active", expected: menuSnapshot(menu) })}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_DISABLE") : frontendText(locale, "ADMIN_MENUS_ENABLE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ visible: !menu.visible, expected: menuSnapshot(menu) })}>{frontendText(locale, menu.visible ? "ADMIN_MENUS_HIDE" : "ADMIN_MENUS_SHOW")}</Button>{removableSubtree(menu) && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onDelete?.(menu); }}>{frontendText(locale, "ADMIN_MENUS_DELETE")}</Button>}{rowDraft.confirmation}</>;
 }

@@ -114,29 +114,46 @@ export async function loadRemotePrivateKnowledgeNote(knowledgeItemId: string, re
   return normalizeRemoteNote(data?.note, knowledgeItemId);
 }
 
+export interface PrivateKnowledgeNotePage {
+  items: PrivateKnowledgeNoteListItem[];
+  nextCursor: string | null;
+}
+
+/** One cursor-paged note read; the server omits `nextCursor` at the end of the list. */
+export async function loadPrivateKnowledgeNotesPage({ cursor, requester = fetch, signal }: { cursor?: string | null; requester?: Fetcher; signal?: AbortSignal } = {}): Promise<PrivateKnowledgeNotePage> {
+  const params = new URLSearchParams({ limit: "8" });
+  if (cursor) params.set("cursor", cursor);
+  const data = await apiFetch<{ items?: unknown[]; nextCursor?: unknown }>(`/api/knowledge/notes?${params.toString()}`, { requester, signal });
+  if (!Array.isArray(data?.items)) throw new Error("KNOWLEDGE_NOTES_INVALID");
+  return {
+    items: data.items.flatMap(normalizeNoteListRow),
+    nextCursor: typeof data.nextCursor === "string" && data.nextCursor ? data.nextCursor : null,
+  };
+}
+
 export async function loadPrivateKnowledgeNotes(requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNoteListItem[]> {
-  const data = await apiFetch<unknown>("/api/knowledge/notes?limit=8", { requester, signal });
-  if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray((data as { items?: unknown }).items)) throw new Error("KNOWLEDGE_NOTES_INVALID");
-  return (data as { items: unknown[] }).items.flatMap((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-    const record = value as Record<string, unknown>;
-    if (typeof record.id !== "string" || !ID_PATTERN.test(record.id) || typeof record.knowledgeItemId !== "string" || !ID_PATTERN.test(record.knowledgeItemId)
-      || record.visibility !== "private" || typeof record.title !== "string" || typeof record.body !== "string"
-      || typeof record.createdAt !== "string" || typeof record.updatedAt !== "string") return [];
-    const access = record.access;
-    if (access !== "owner" && access !== "shared") throw new Error("KNOWLEDGE_NOTES_INVALID");
-    return [{
-      v: 1 as const,
-      id: record.id,
-      knowledgeItemId: record.knowledgeItemId,
-      title: record.title,
-      body: record.body,
-      visibility: "private" as const,
-      access,
-      updatedAt: record.updatedAt,
-      createdAt: record.createdAt,
-    }];
-  });
+  return (await loadPrivateKnowledgeNotesPage({ requester, signal })).items;
+}
+
+function normalizeNoteListRow(value: unknown): PrivateKnowledgeNoteListItem[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const record = value as Record<string, unknown>;
+  if (typeof record.id !== "string" || !ID_PATTERN.test(record.id) || typeof record.knowledgeItemId !== "string" || !ID_PATTERN.test(record.knowledgeItemId)
+    || record.visibility !== "private" || typeof record.title !== "string" || typeof record.body !== "string"
+    || typeof record.createdAt !== "string" || typeof record.updatedAt !== "string") return [];
+  const access = record.access;
+  if (access !== "owner" && access !== "shared") throw new Error("KNOWLEDGE_NOTES_INVALID");
+  return [{
+    v: 1 as const,
+    id: record.id,
+    knowledgeItemId: record.knowledgeItemId,
+    title: record.title,
+    body: record.body,
+    visibility: "private" as const,
+    access,
+    updatedAt: record.updatedAt,
+    createdAt: record.createdAt,
+  }];
 }
 
 export async function listPrivateKnowledgeNoteShares(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNoteShare[]> {
@@ -177,10 +194,18 @@ export async function revokePrivateKnowledgeNoteShare(knowledgeItemId: string, r
   await apiFetch<void>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note/shares/${encodeURIComponent(recipientMemberId)}`, { requester: statusRequester(requester, 204), signal, method: "DELETE" });
 }
 
+export interface PrivateKnowledgeNoteWrite {
+  /** Stable key of this write, reused when a lost response is retried. */
+  id: string;
+  /** The version the editor read; null only for a first, unversioned create. */
+  expectedUpdatedAt: string | null;
+}
+
 export async function saveRemotePrivateKnowledgeNote(
   knowledgeItemId: string,
   draft: PrivateKnowledgeNoteDraft,
   citations: readonly PrivateKnowledgeNoteCitation[],
+  write: PrivateKnowledgeNoteWrite,
   requester: Fetcher = fetch,
   signal?: AbortSignal,
 ): Promise<RemotePrivateKnowledgeNote> {
@@ -190,7 +215,7 @@ export async function saveRemotePrivateKnowledgeNote(
     signal,
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ title: draft.title ?? "", body: draft.body ?? "", citations }),
+    body: JSON.stringify({ id: write.id, expectedUpdatedAt: write.expectedUpdatedAt, title: draft.title ?? "", body: draft.body ?? "", citations }),
   });
   return normalizeRemoteNote(data?.note, knowledgeItemId);
 }

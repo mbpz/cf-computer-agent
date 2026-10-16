@@ -19,6 +19,8 @@ import type { LibraryService } from "../library/service";
 import type { AnalyticsRepository } from "../analytics/repository";
 import type { DuplicateCandidatesService } from "../duplicates/service";
 import type { MaintenanceControlService } from "../maintenance/control";
+import type { CapacitySnapshot, Snapshot } from "../maintenance/contracts";
+import { AdminOperationReceipts, operationRequestHash, recordedOperation } from "../operations/receipts";
 import type { MemberInvitationsService } from "../member-invitations/service";
 import type { MemberInvitation } from "../member-invitations/types";
 
@@ -37,7 +39,11 @@ export interface AdminRouteServices {
   analytics: AnalyticsRepository;
   duplicates: DuplicateCandidatesService;
   maintenance: MaintenanceControlService;
+  operationReceipts: AdminOperationReceipts;
 }
+
+/** Bounded client operation number; the identity a recorded operation replays under. */
+const STABLE_OPERATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
 export async function routeAdminApi(
   request: Request,
@@ -62,21 +68,39 @@ export async function routeAdminApi(
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
     requireNoQuery(url);
+    const draining = maintenanceAction[1] === "begin-drain";
     const input = parseMaintenanceControlInput(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
-    const snapshot = maintenanceAction[1] === "begin-drain"
+    // Closing admission takes the instance out of service, so the caller must
+    // retype the maintenance window it is acting on. A request that does not
+    // carry that confirmation is refused before the coordinator is touched.
+    if (input.confirmation !== input.window) {
+      throw new AppError("MAINTENANCE_CONFIRMATION_REQUIRED", "Maintenance control requires the typed window confirmation", 400);
+    }
+    const kind = draining ? "maintenance.begin_drain" as const : "maintenance.resume" as const;
+    const intent = { kind, window: input.window, epoch: input.epoch };
+    const requestHash = await operationRequestHash(intent);
+    const replayed = await recordedOperation<Snapshot>(services.operationReceipts, kind, input.operationId, requestHash);
+    if (replayed) return jsonResponse(replayed, 200, context.requestId);
+    const snapshot = draining
       ? await services.maintenance.beginDrain(input.window, input.epoch)
       : await services.maintenance.resume(input.window, input.epoch);
-    await services.audit.writeAudit({
-      id: crypto.randomUUID(),
-      actorKind: "member",
+    return jsonResponse(await services.operationReceipts.record<Snapshot>({
+      kind,
+      operationId: input.operationId,
+      requestHash,
       actorId: actor.memberId,
-      action: maintenanceAction[1] === "begin-drain" ? "maintenance.drain_started" : "maintenance.resumed",
-      resourceType: "maintenance",
-      resourceId: "production",
-      metadata: { window: input.window, epoch: input.epoch },
-      createdAt: new Date().toISOString(),
-    });
-    return jsonResponse(snapshot, 200, context.requestId);
+      response: snapshot,
+      audit: {
+        id: crypto.randomUUID(),
+        actorKind: "member",
+        actorId: actor.memberId,
+        action: draining ? "maintenance.drain_started" : "maintenance.resumed",
+        resourceType: "maintenance",
+        resourceId: "production",
+        metadata: { window: input.window, epoch: input.epoch },
+        createdAt: new Date().toISOString(),
+      },
+    }), 200, context.requestId);
   }
 
   if (url.pathname === "/api/admin/analytics/overview") {
@@ -150,16 +174,45 @@ export async function routeAdminApi(
   if (url.pathname === "/api/admin/assets/orphans/reclaim") {
     requireCapability(principal, "submission:read-all");
     if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const actor = requireAdminMember(principal);
     requireNoQuery(url);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["keys"],
+      ["operationId", "keys", "confirmCount"],
       "ASSET_ORPHAN_REQUEST_INVALID",
     );
-    if (!Array.isArray(input.keys) || input.keys.length > 50 || input.keys.some((key) => typeof key !== "string")) {
-      throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
+    const keys = orphanKeys(input.keys);
+    const operationId = requireOperationId(input.operationId, "ASSET_ORPHAN_REQUEST_INVALID");
+    // Deleting an object cannot be undone, so the caller states exactly how many
+    // objects it confirmed. A request that does not confirm that impact is
+    // refused before any object is read or removed.
+    if (input.confirmCount !== keys.length) {
+      throw new AppError("ASSET_ORPHAN_CONFIRMATION_REQUIRED", "Reclaim requires the confirmed number of objects", 400);
     }
-    return jsonResponse(await services.assets.reclaimOrphans(input.keys as string[]), 200, context.requestId);
+    const intent = { kind: "asset.orphans.reclaim", actorId: actor.memberId, keys };
+    const requestHash = await operationRequestHash(intent);
+    const replayed = await recordedOperation<{ deleted: string[]; skipped: string[] }>(
+      services.operationReceipts, "asset.orphans.reclaim", operationId, requestHash,
+    );
+    if (replayed) return jsonResponse(replayed, 200, context.requestId);
+    const result = await services.assets.reclaimOrphans(keys);
+    return jsonResponse(await services.operationReceipts.record({
+      kind: "asset.orphans.reclaim",
+      operationId,
+      requestHash,
+      actorId: actor.memberId,
+      response: result,
+      audit: {
+        id: crypto.randomUUID(),
+        actorKind: "member",
+        actorId: actor.memberId,
+        action: "asset.orphans_reclaimed",
+        resourceType: "asset",
+        resourceId: null,
+        metadata: { deletedCount: result.deleted.length, skippedCount: result.skipped.length },
+        createdAt: new Date().toISOString(),
+      },
+    }), 200, context.requestId);
   }
 
   const assetPreview = /^\/api\/admin\/assets\/([^/]+)\/(parsed|original)$/.exec(url.pathname);
@@ -258,7 +311,16 @@ export async function routeAdminApi(
 
   if (url.pathname === "/api/admin/tags") {
     requireCapability(principal, "space:manage");
-    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    if (request.method === "GET") {
+      requireAdminMember(principal);
+      requirePageQuery(url, ["spaceId"]);
+      const spaceId = url.searchParams.get("spaceId");
+      if (spaceId === null || spaceId.length === 0) {
+        throw new AppError("TAG_REQUEST_INVALID", "Tag request is invalid", 400);
+      }
+      return jsonResponse(await services.tags.listActivePage(spaceId, pageRequest(url)), 200, context.requestId);
+    }
+    if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
     requireAdminMember(principal);
     requireNoQuery(url);
     const input = strictRecord(
@@ -298,7 +360,7 @@ export async function routeAdminApi(
     if (status !== "active" && status !== "disabled") {
       throw new AppError("MEMBER_STATUS_INVALID", "Member status is invalid", 400);
     }
-    const member = await services.members.setContributorStatus(actor, decodePathId(memberStatus[1]!), status);
+    const member = await services.members.setContributorStatus(actor, decodePathId(memberStatus[1]!), status, input.expectedStatus);
     return jsonResponse({ member: memberDto(member) }, 200, context.requestId);
   }
 
@@ -457,6 +519,15 @@ export async function routeAdminApi(
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     const actor = requireAdminMember(principal);
     requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["operationId"],
+      "SOURCE_REPARSE_INVALID",
+    );
+    // Publishing a promoted candidate creates a revision, so the caller states the
+    // operation number that makes a lost-response retry replay the recorded
+    // revision instead of publishing the same candidate twice.
+    const operationId = requireOperationId(input.operationId, "SOURCE_REPARSE_INVALID");
     const reviewer = { id: actor.memberId, role: actor.role, status: "active" as const };
     const jobId = decodePathId(reparsePublish[1]!);
     const promotion = await services.sourceReparse.promote(jobId, actor.memberId);
@@ -469,7 +540,7 @@ export async function routeAdminApi(
       collectionId: preview.requestedCollectionId,
       tagIds: [],
       ...(snapshot.publishedKnowledgeItemId === null ? {} : { knowledgeItemId: snapshot.publishedKnowledgeItemId }),
-    });
+    }, { operationId });
     return jsonResponse({ promotion, revision }, 200, context.requestId);
   }
   const reparsePromotion = /^\/api\/admin\/reparse-jobs\/([^/]+)\/promote$/.exec(url.pathname);
@@ -536,9 +607,9 @@ function requireEnumFilter<T extends string>(url: URL, name: string, allowed: re
   return value as T;
 }
 
-function requirePageQuery(url: URL): void {
+function requirePageQuery(url: URL, extraKeys: readonly string[] = []): void {
   for (const key of url.searchParams.keys()) {
-    if (key !== "limit" && key !== "cursor") {
+    if (key !== "limit" && key !== "cursor" && !extraKeys.includes(key)) {
       throw new AppError("PAGE_INVALID", "Pagination parameters are invalid", 400);
     }
     if (url.searchParams.getAll(key).length !== 1) {
@@ -555,13 +626,39 @@ function optionalString(value: unknown): string | undefined {
   return value === undefined ? undefined : stringValue(value);
 }
 
-function parseMaintenanceControlInput(value: unknown): { window: string; epoch: number } {
-  const input = strictRecord(value, ["window", "epoch"], "MAINTENANCE_REQUEST_INVALID");
+function parseMaintenanceControlInput(value: unknown): { operationId: string; window: string; epoch: number; confirmation: string } {
+  const input = strictRecord(value, ["operationId", "window", "epoch", "confirmation"], "MAINTENANCE_REQUEST_INVALID");
   if (typeof input.window !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(input.window)
-    || typeof input.epoch !== "number" || !Number.isSafeInteger(input.epoch) || input.epoch < 0) {
+    || typeof input.epoch !== "number" || !Number.isSafeInteger(input.epoch) || input.epoch < 0
+    || typeof input.confirmation !== "string") {
     throw new AppError("MAINTENANCE_REQUEST_INVALID", "Maintenance control request is invalid", 400);
   }
-  return { window: input.window, epoch: input.epoch };
+  return {
+    operationId: requireOperationId(input.operationId, "MAINTENANCE_REQUEST_INVALID"),
+    window: input.window,
+    epoch: input.epoch,
+    confirmation: input.confirmation,
+  };
+}
+
+/** A client operation number: the identity a lost-response retry replays under. */
+function requireOperationId(value: unknown, code: string): string {
+  if (typeof value !== "string" || !STABLE_OPERATION_ID.test(value)) {
+    throw new AppError(code, "Operation ID is invalid", 400);
+  }
+  return value;
+}
+
+function orphanKeys(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 50) {
+    throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
+  }
+  const keys: string[] = [];
+  for (const key of value as unknown[]) {
+    if (typeof key !== "string") throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
+    keys.push(key);
+  }
+  return keys;
 }
 
 function optionalNullableString(value: unknown): string | null | undefined {

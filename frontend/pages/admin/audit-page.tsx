@@ -4,7 +4,7 @@ import { FilterSelect } from "../../components/ui/filter-select";
 import { AppliedFilters } from "../../components/ui/applied-filters";
 import { DataTable } from "../../components/data-table";
 import { PageState } from "../../components/ui/page-state";
-import type { AdminAuditEvent, AdminAuditPage } from "../../lib/admin-audit-data";
+import { AUDIT_RELATED_PATHS, type AdminAuditEvent, type AdminAuditPage } from "../../lib/admin-audit-data";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 
@@ -44,6 +44,17 @@ export function AuditPage({ state, action = "", pending = false, localError, onR
       columns={[
         { key: "action", header: frontendText(locale, "ADMIN_AUDIT_COLUMN_ACTION"), cellClassName: "whitespace-normal", cell: (event) => <span className="line-clamp-1 font-medium">{event.action || frontendText(locale, "ADMIN_AUDIT_ACTION_UNAVAILABLE")}</span> },
         { key: "actor", header: frontendText(locale, "ADMIN_AUDIT_COLUMN_ACTOR"), width: "240px", cellClassName: "whitespace-normal", cell: (event) => <span className="line-clamp-1 text-muted-foreground">{event.actor || frontendText(locale, "ADMIN_AUDIT_ACTOR_UNAVAILABLE")}</span> },
+        { key: "related", header: frontendText(locale, "ADMIN_AUDIT_COLUMN_RELATED"), width: "260px", cellClassName: "whitespace-normal", cell: (event) => {
+          // Read-only reference: link only to a destination that exists, otherwise show the type and id as text.
+          const type = event.resourceType;
+          const id = event.resourceId ?? "";
+          if (!type) return null;
+          const label = id ? `${type} · ${id}` : type;
+          const base = AUDIT_RELATED_PATHS[type];
+          return base && id
+            ? <a data-audit-related={type} href={`${base}/${encodeURIComponent(id)}`} className="line-clamp-1 font-medium text-primary hover:underline">{label}</a>
+            : <span data-audit-related={type} className="line-clamp-1 text-muted-foreground">{label}</span>;
+        } },
         { key: "createdAt", header: frontendText(locale, "ADMIN_AUDIT_COLUMN_TIME"), width: "220px", cellClassName: "whitespace-normal", cell: (event) => <time className="line-clamp-1 text-muted-foreground">{event.createdAt || frontendText(locale, "ADMIN_AUDIT_DATE_UNAVAILABLE")}</time> },
       ]}
     />

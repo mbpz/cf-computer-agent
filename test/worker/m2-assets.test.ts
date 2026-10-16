@@ -550,10 +550,48 @@ describe("M2 asset upload boundary", () => {
     const reclaim = await memberApi("asset-admin", "/api/admin/assets/orphans/reclaim", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ keys: ["staging/not-present"] }),
+      body: JSON.stringify({ operationId: "orphan-reclaim-1", keys: ["staging/not-present"], confirmCount: 1 }),
     });
     expect(reclaim.status).toBe(200);
     await expect(reclaim.json()).resolves.toEqual({ deleted: [], skipped: ["staging/not-present"] });
+  });
+
+  it("requires the confirmed object count and replays one recorded reclamation", async () => {
+    const contributor = await memberApi("asset-owner", "/api/admin/assets/orphans/reclaim", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operationId: "orphan-reclaim-guest", keys: ["staging/not-present"], confirmCount: 1 }),
+    });
+    expect(contributor.status).toBe(403);
+
+    const post = (body: unknown) => memberApi("asset-admin", "/api/admin/assets/orphans/reclaim", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    // Without the number of objects the operator confirmed, nothing is read or deleted.
+    await expectApiError(post({ operationId: "orphan-reclaim-2", keys: ["staging/not-present"] }), 400, "ASSET_ORPHAN_CONFIRMATION_REQUIRED");
+    await expectApiError(post({ operationId: "orphan-reclaim-2", keys: ["staging/not-present"], confirmCount: 2 }), 400, "ASSET_ORPHAN_CONFIRMATION_REQUIRED");
+    // A reclamation is also an operation, so it cannot be sent without its identity.
+    await expectApiError(post({ keys: ["staging/not-present"], confirmCount: 1 }), 400, "ASSET_ORPHAN_REQUEST_INVALID");
+    expect((await env.DB.prepare("SELECT COUNT(*) AS total FROM admin_operation_receipts").first<{ total: number }>())?.total).toBe(0);
+
+    const first = await post({ operationId: "orphan-reclaim-2", keys: ["staging/not-present"], confirmCount: 1 });
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.toEqual({ deleted: [], skipped: ["staging/not-present"] });
+
+    // The same number replays the recorded answer; it does not delete again or add an audit.
+    const replay = await post({ operationId: "orphan-reclaim-2", keys: ["staging/not-present"], confirmCount: 1 });
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toEqual({ deleted: [], skipped: ["staging/not-present"] });
+    // The same number used for a different object set is an explicit conflict.
+    await expectApiError(post({ operationId: "orphan-reclaim-2", keys: ["staging/other"], confirmCount: 1 }), 409, "ADMIN_OPERATION_CONFLICT");
+
+    expect((await env.DB.prepare("SELECT COUNT(*) AS total FROM admin_operation_receipts WHERE kind = 'asset.orphans.reclaim'").first<{ total: number }>())?.total).toBe(1);
+    const audits = await env.DB.prepare("SELECT metadata FROM audit_events WHERE action = 'asset.orphans_reclaimed'").all<{ metadata: string }>();
+    expect(audits.results).toHaveLength(1);
+    expect(JSON.parse(audits.results[0]!.metadata)).toEqual({ deletedCount: 0, skippedCount: 1 });
   });
 });
 

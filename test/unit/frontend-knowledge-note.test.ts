@@ -41,9 +41,11 @@ describe("private reader notes", () => {
       return new Response(JSON.stringify({ note: null }), { status: 200, headers: { "content-type": "application/json" } });
     };
     await expect(loadRemotePrivateKnowledgeNote("knowledge-a", requester)).resolves.toBeNull();
-    await expect(saveRemotePrivateKnowledgeNote("knowledge-a", { title: "Saved", body: "Body" }, [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 2, endLine: 4 }], requester)).resolves.toMatchObject({ title: "Saved", body: "Body", visibility: "private" });
+    await expect(saveRemotePrivateKnowledgeNote("knowledge-a", { title: "Saved", body: "Body" }, [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 2, endLine: 4 }], { id: "note-op-1", expectedUpdatedAt: null }, requester)).resolves.toMatchObject({ title: "Saved", body: "Body", visibility: "private" });
     expect(requests[0]?.path).toBe("/api/knowledge/knowledge-a/note");
-    expect(JSON.parse(String(requests[1]?.init?.body))).toMatchObject({ citations: [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 2, endLine: 4 }] });
+    // The write carries its stable key and the version the editor read, so a
+    // retry reuses the same identity instead of appending a second write.
+    expect(JSON.parse(String(requests[1]?.init?.body))).toMatchObject({ id: "note-op-1", expectedUpdatedAt: null, citations: [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 2, endLine: 4 }] });
   });
 
   it("loads a bounded private note list and drops malformed rows", async () => {

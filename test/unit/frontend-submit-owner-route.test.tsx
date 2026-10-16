@@ -17,6 +17,22 @@ describe("submission owner lifecycle", () => {
 
   async function openOwner(post: typeof fetch = async () => Response.json({ submission: { id: "submission-a" } })) {
     const fallback = createMaturityRouteFetch({ routeId: "submit", state: "ready", role: "contributor", permissionMask: "0x0" });
+    // The composer now takes its destination from the member Space list and keeps
+    // its text in the server draft, so this boundary serves both.
+    const destination = { id: "space-a", slug: "space-a", name: "Shared Space", description: "", kind: "shared", status: "active", position: 0, readOnly: false, createdAt: "2026-08-13T00:00:00.000Z", updatedAt: "2026-08-13T00:00:00.000Z" };
+    let serverDraft = { kind: "markdown", title: "A", content: "private A", requestedSpaceId: "space-a", requestedCollectionId: null as string | null, requestedVisibility: "shared" };
+    const draftResponse = (init?: RequestInit) => {
+      if ((init?.method ?? "GET").toUpperCase() !== "GET") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, string>;
+        serverDraft = {
+          kind: body.kind ?? serverDraft.kind, title: body.title ?? "", content: body.content ?? "",
+          requestedSpaceId: body.requestedSpaceId ?? "space-a",
+          requestedCollectionId: (body.requestedCollectionId ?? null) as string | null,
+          requestedVisibility: body.requestedVisibility ?? "shared",
+        };
+      }
+      return Response.json({ id: "draft-a", submitterId: "member-a", status: "draft", createdAt: "2026-08-13T00:00:00.000Z", updatedAt: "2026-08-13T00:00:01.000Z", ...serverDraft });
+    };
     journey = await mountApp({
       url: "https://app.test/submit",
       configureBrowser(browser) {
@@ -24,12 +40,16 @@ describe("submission owner lifecycle", () => {
         saveOfflineSubmissionDraft("member-b", b, browser.localStorage);
       },
       fetch: (input, init) => {
+        const path = new URL(String(input), "https://app.test").pathname;
         if (String(input) === "/api/session") return Promise.resolve(Response.json({
           member: { id: "member-a", email: "a@app.test", role: "contributor" },
           capabilities: ["knowledge:read", "submission:create", "submission:read-own"],
           permissionMask: "0x0", logoutUrl: "/auth/logout",
         }));
         if (String(input) === "/api/submissions" && init?.method === "POST") return post(input, init);
+        if (path === "/api/spaces") return Promise.resolve(Response.json({ items: [destination] }));
+        if (path === `/api/spaces/${destination.id}/collections`) return Promise.resolve(Response.json({ items: [] }));
+        if (path.startsWith("/api/submissions/drafts")) return Promise.resolve(draftResponse(init));
         return fallback(input, init);
       },
     });
@@ -39,13 +59,29 @@ describe("submission owner lifecycle", () => {
 
   async function renderOwner(memberId: string) {
     await act(async () => { journey!.root.render(<SubmitRoute locale={createLocaleRuntime()} memberId={memberId} />); });
+    // Switching owners mounts a new form, whose destination read restarts.
+    await waitForDestination();
   }
 
   async function submit() {
+    await waitForDestination();
     await act(async () => {
       journey!.container.querySelector("form")!.dispatchEvent(new journey!.browser.Event("submit", { bubbles: true, cancelable: true }));
     });
     await flush();
+  }
+
+  /** The composer takes its destination from the member Space list, so it can send only once that read lands. */
+  async function waitForDestination() {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        await waitForApp(() => journey!.container.querySelector("[data-submission-target=\"ready\"]") !== null);
+        return;
+      } catch {
+        // The harness window is shorter than a slow destination read.
+      }
+    }
+    throw new Error("submission destination was not loaded");
   }
 
   async function flush() {
@@ -94,6 +130,7 @@ describe("submission owner lifecycle", () => {
     const bodies: string[] = [];
     const mounted = await openOwner(async (_input, init) => { bodies.push(String(init?.body)); return Response.json({ submission: { id: "accepted" } }); });
     await renderOwner("member-a");
+    await waitForDestination();
     await act(async () => {
       const mode = mounted.container.querySelector("#submission-mode") as HTMLSelectElement;
       mode.value = "code"; mode.dispatchEvent(new mounted.browser.Event("change", { bubbles: true }));
@@ -117,6 +154,7 @@ describe("submission owner lifecycle", () => {
     const form = mounted.container.querySelector("form")!;
     const titleChange = props<{ onChange: (event: { currentTarget: HTMLInputElement }) => void }>(title).onChange;
     const bodyChange = props<{ onChange: (event: { currentTarget: HTMLTextAreaElement }) => void }>(body).onChange;
+    await waitForDestination();
     await act(async () => {
       title.value = "Latest title"; titleChange({ currentTarget: title });
       body.value = "Latest body"; bodyChange({ currentTarget: body });

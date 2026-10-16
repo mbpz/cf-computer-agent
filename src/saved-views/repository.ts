@@ -14,8 +14,10 @@ export interface SavedViewsRepositoryPort {
   create(input: SavedViewCreate): Promise<SavedView>;
   list(memberId: string, request: PageRequest): Promise<SavedViewPage>;
   findOwned(memberId: string, id: string): Promise<SavedView | null>;
+  findByClientKey(memberId: string, clientKey: string): Promise<SavedView | null>;
   update(memberId: string, id: string, input: SavedViewUpdate): Promise<SavedView | null>;
-  delete(memberId: string, id: string): Promise<boolean>;
+  /** Convergent per (member, view): a repeat delete of a recorded deletion succeeds. */
+  delete(memberId: string, id: string, deletedAt: string): Promise<boolean>;
 }
 
 type SavedViewRow = {
@@ -36,11 +38,12 @@ export class SavedViewsRepository implements SavedViewsRepositoryPort {
   async create(input: SavedViewCreate): Promise<SavedView> {
     try {
       await this.db.prepare(
-        `INSERT INTO saved_views (id, member_id, name, schema_version, filters_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO saved_views (id, member_id, client_key, name, schema_version, filters_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         input.id,
         input.memberId,
+        input.clientKey,
         input.name,
         input.schemaVersion,
         JSON.stringify(input.filters),
@@ -49,9 +52,15 @@ export class SavedViewsRepository implements SavedViewsRepositoryPort {
       ).run();
     } catch (error) {
       if (isNameConflict(error)) throw new SavedViewsRepositoryConflictError("name");
+      // A concurrent replay of the same key wins the unique index; the caller
+      // re-reads that recorded row instead of reporting a conflict.
+      if (isClientKeyConflict(error)) {
+        const existing = await this.findByClientKey(input.memberId, input.clientKey);
+        if (existing) return existing;
+      }
       throw error;
     }
-    return input;
+    return { id: input.id, memberId: input.memberId, name: input.name, schemaVersion: 1, filters: input.filters, createdAt: input.createdAt, updatedAt: input.updatedAt };
   }
 
   async list(memberId: string, request: PageRequest): Promise<SavedViewPage> {
@@ -85,6 +94,14 @@ export class SavedViewsRepository implements SavedViewsRepositoryPort {
     ).bind(memberId, id).first<SavedViewRow>());
   }
 
+  async findByClientKey(memberId: string, clientKey: string): Promise<SavedView | null> {
+    if (clientKey === "") return null;
+    return mapSavedView(await this.db.prepare(
+      `SELECT id, member_id, name, schema_version, filters_json, created_at, updated_at
+       FROM saved_views WHERE member_id = ? AND client_key = ? LIMIT 1`,
+    ).bind(memberId, clientKey).first<SavedViewRow>());
+  }
+
   async update(memberId: string, id: string, input: SavedViewUpdate): Promise<SavedView | null> {
     try {
       const result = await this.db.prepare(
@@ -102,9 +119,23 @@ export class SavedViewsRepository implements SavedViewsRepositoryPort {
     return updated;
   }
 
-  async delete(memberId: string, id: string): Promise<boolean> {
-    const result = await this.db.prepare("DELETE FROM saved_views WHERE member_id = ? AND id = ?").bind(memberId, id).run();
-    return result.meta.changes === 1;
+  async delete(memberId: string, id: string, deletedAt: string): Promise<boolean> {
+    // An owner-scoped receipt records the deletion, so a replay of the same
+    // delete converges on success instead of reporting the view as missing.
+    const receipt = await this.db.prepare(
+      "SELECT 1 AS recorded FROM saved_view_delete_receipts WHERE member_id = ? AND view_id = ? LIMIT 1",
+    ).bind(memberId, id).first<{ recorded: number }>();
+    if (receipt) return true;
+    // The delete and its receipt commit together, and the receipt is only
+    // written when the guarded delete actually removed this owner's row.
+    const results = await this.db.batch([
+      this.db.prepare("DELETE FROM saved_views WHERE member_id = ? AND id = ?").bind(memberId, id),
+      this.db.prepare(
+        `INSERT OR IGNORE INTO saved_view_delete_receipts (member_id, view_id, deleted_at)
+         SELECT ?, ?, ? WHERE changes() = 1`,
+      ).bind(memberId, id, deletedAt),
+    ]);
+    return results[0]!.meta.changes === 1;
   }
 }
 
@@ -113,9 +144,10 @@ function mapSavedView(row: SavedViewRow | null): SavedView | null {
 }
 
 function mapSavedViewRow(row: SavedViewRow): SavedView {
-  let filters: unknown;
-  try { filters = JSON.parse(row.filters_json) as unknown; } catch { throw new AppError("SAVED_VIEW_CORRUPT", "Saved view data is corrupt", 500, true); }
-  if (!isSavedViewFilters(filters) || row.schema_version !== 1) {
+  let stored: unknown;
+  try { stored = JSON.parse(row.filters_json) as unknown; } catch { throw new AppError("SAVED_VIEW_CORRUPT", "Saved view data is corrupt", 500, true); }
+  const filters = parseSavedViewFilters(stored);
+  if (!filters || row.schema_version !== 1) {
     throw new AppError("SAVED_VIEW_CORRUPT", "Saved view data is corrupt", 500, true);
   }
   return {
@@ -129,16 +161,42 @@ function mapSavedViewRow(row: SavedViewRow): SavedView {
   };
 }
 
-function isSavedViewFilters(value: unknown): value is SavedView["filters"] {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+// Rows written before the search filters existed store only the six original keys; a
+// missing search condition reads as unset rather than corrupting the whole row.
+const SAVED_VIEW_FILTER_KEYS = ["v", "q", "spaceId", "collectionId", "tagIds", "tagMode", "kind", "authorId", "publishedFrom", "publishedTo"] as const;
+
+function parseSavedViewFilters(value: unknown): SavedView["filters"] | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  return Object.keys(record).length === 6
-    && record.v === 1
-    && typeof record.q === "string"
-    && (record.spaceId === null || typeof record.spaceId === "string")
-    && (record.collectionId === null || typeof record.collectionId === "string")
-    && Array.isArray(record.tagIds) && record.tagIds.every((tag) => typeof tag === "string")
-    && (record.tagMode === "and" || record.tagMode === "or");
+  if (Object.keys(record).some((key) => !(SAVED_VIEW_FILTER_KEYS as readonly string[]).includes(key))) return null;
+  const spaceId = record.spaceId ?? null;
+  const collectionId = record.collectionId ?? null;
+  const kind = record.kind ?? null;
+  const authorId = record.authorId ?? null;
+  const publishedFrom = record.publishedFrom ?? null;
+  const publishedTo = record.publishedTo ?? null;
+  const tagIds = record.tagIds;
+  if (record.v !== 1 || typeof record.q !== "string") return null;
+  if (spaceId !== null && typeof spaceId !== "string") return null;
+  if (collectionId !== null && typeof collectionId !== "string") return null;
+  if (authorId !== null && typeof authorId !== "string") return null;
+  if (kind !== null && kind !== "text" && kind !== "markdown" && kind !== "code") return null;
+  if (publishedFrom !== null && typeof publishedFrom !== "string") return null;
+  if (publishedTo !== null && typeof publishedTo !== "string") return null;
+  if (!Array.isArray(tagIds) || !tagIds.every((tag) => typeof tag === "string")) return null;
+  if (record.tagMode !== "and" && record.tagMode !== "or") return null;
+  return {
+    v: 1,
+    q: record.q,
+    spaceId,
+    collectionId,
+    tagIds: [...tagIds] as string[],
+    tagMode: record.tagMode,
+    kind,
+    authorId,
+    publishedFrom,
+    publishedTo,
+  };
 }
 
 function decodeCursor(value: string): SavedViewCursor {
@@ -161,5 +219,9 @@ function isIsoTimestamp(value: string): boolean {
 
 function isNameConflict(error: unknown): boolean {
   return error instanceof Error && /UNIQUE constraint failed:\s*saved_views\.member_id,\s*saved_views\.name/iu.test(error.message);
+}
+
+function isClientKeyConflict(error: unknown): boolean {
+  return error instanceof Error && /UNIQUE constraint failed:\s*saved_views\.member_id,\s*saved_views\.client_key/iu.test(error.message);
 }
 

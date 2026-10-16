@@ -8,6 +8,7 @@ describe("Saved View frontend data", () => {
   it("sends create and update filters accepted by the actual service", async () => {
     const repository = {
       create: vi.fn(async (input) => input),
+      findByClientKey: vi.fn(async () => null),
       update: vi.fn(async (_member, id, input) => ({ id, ...input })),
     } as unknown as SavedViewsRepositoryPort;
     const service = new SavedViewsService(repository, { id: () => "view-contract" });
@@ -18,14 +19,14 @@ describe("Saved View frontend data", () => {
         : await service.update("member-contract", "view-contract", body);
       return Response.json(result, { status: init?.method === "POST" ? 201 : 200 });
     };
-    await expect(createSavedView(" Docs ", { q: " docs ", tagIds: ["tag-a"] }, requester)).resolves.toMatchObject({ name: "Docs", filters: { v: 1, q: "docs" } });
+    await expect(createSavedView(" Docs ", { q: " docs ", tagIds: ["tag-a"] }, "save-key-1", requester)).resolves.toMatchObject({ name: "Docs", filters: { v: 1, q: "docs" } });
     await expect(updateSavedView("view-contract", "Docs", { q: "next" }, requester)).resolves.toMatchObject({ filters: { v: 1, q: "next" } });
   });
   it.each([
     { id: "view-1", name: "Docs" },
     { id: "view-1", name: "Other", updatedAt: "2026-10-02T00:00:00.000Z", filters: { v: 1, q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or" } },
   ])("does not acknowledge an incomplete or mismatched create receipt %j", async (body) => {
-    await expect(createSavedView("Docs", { q: "docs" }, async () => Response.json(body, { status: 201 }))).rejects.toThrow("SAVED_VIEW_INVALID");
+    await expect(createSavedView("Docs", { q: "docs" }, "save-key-1", async () => Response.json(body, { status: 201 }))).rejects.toThrow("SAVED_VIEW_INVALID");
   });
   it("does not treat a 200 HTML delete response as confirmed deletion", async () => {
     await expect(deleteSavedView("view-1", async () => new Response("<html>login</html>"))).rejects.toThrow("SAVED_VIEW_INVALID");
@@ -42,13 +43,13 @@ describe("Saved View frontend data", () => {
     expect(requests).toBe(20);
   });
   it("does not accept a wrong-id read or a different view as reconciliation", async () => {
-    const item = { id: "view-other", name: "Docs", updatedAt: "2026-10-02T00:00:00.000Z", filters: { v: 1, q: "other", spaceId: null, collectionId: null, tagIds: [], tagMode: "or" } };
+    const item = { id: "view-other", name: "Docs", updatedAt: "2026-10-02T00:00:00.000Z", filters: { v: 1, q: "other", spaceId: null, collectionId: null, tagIds: [], tagMode: "or", kind: null, authorId: null, publishedFrom: null, publishedTo: null } };
     await expect(savedViewIsAbsent("view-1", async () => Response.json(item))).rejects.toThrow("SAVED_VIEW_INVALID");
     await expect(findSavedView("Docs", { q: "docs" }, async () => Response.json({ items: [item] }))).resolves.toBeNull();
   });
   it("normalizes only the bounded view/filter contract", () => {
     expect(normalizeSavedView({ id: "view-1", name: "Docs", filters: { v: 1, q: "docs", tagIds: ["tag-a", 4], tagMode: "and" } })).toEqual({
-      id: "view-1", name: "Docs", updatedAt: "", filters: { v: 1, q: "docs", spaceId: null, collectionId: null, tagIds: ["tag-a"], tagMode: "and" },
+      id: "view-1", name: "Docs", updatedAt: "", filters: { v: 1, q: "docs", spaceId: null, collectionId: null, tagIds: ["tag-a"], tagMode: "and", kind: null, authorId: null, publishedFrom: null, publishedTo: null },
     });
     expect(normalizeSavedView({ id: "", name: "Docs" })).toBeNull();
   });
@@ -57,14 +58,14 @@ describe("Saved View frontend data", () => {
     const requester = vi.fn(async (input: string | URL | Request, _init?: RequestInit) => {
       const path = String(input);
       if (path === "/api/saved-views?limit=50") return Response.json({ items: [{ id: "view-1", name: "Docs", filters: { q: "docs" } }] });
-      if (path === "/api/saved-views") return Response.json({ id: "view-2", name: "Docs", updatedAt: "2026-10-02T00:00:00.000Z", filters: { v: 1, q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or" } }, { status: 201 });
+      if (path === "/api/saved-views") return Response.json({ id: "view-2", name: "Docs", updatedAt: "2026-10-02T00:00:00.000Z", filters: { v: 1, q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or", kind: null, authorId: null, publishedFrom: null, publishedTo: null } }, { status: 201 });
       return new Response(null, { status: 204 });
     });
     await expect(loadSavedViews(requester)).resolves.toHaveLength(1);
-    await expect(createSavedView("Docs", { q: "docs" }, requester)).resolves.toMatchObject({ id: "view-2" });
+    await expect(createSavedView("Docs", { q: "docs" }, "save-key-1", requester)).resolves.toMatchObject({ id: "view-2" });
     await deleteSavedView("view/2", requester);
     expect(requester).toHaveBeenLastCalledWith("/api/saved-views/view%2F2", expect.objectContaining({ method: "DELETE" }));
     expect(requester.mock.calls[1]?.[1]).toMatchObject({ method: "POST", headers: { "content-type": "application/json" } });
-    expect(JSON.parse(String(requester.mock.calls[1]?.[1]?.body))).toEqual({ name: "Docs", filters: { q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or" } });
+    expect(JSON.parse(String(requester.mock.calls[1]?.[1]?.body))).toEqual({ clientKey: "save-key-1", name: "Docs", filters: { q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or", kind: null, authorId: null, publishedFrom: null, publishedTo: null } });
   });
 });

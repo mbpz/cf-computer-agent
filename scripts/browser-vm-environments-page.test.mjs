@@ -11,7 +11,14 @@ before(async()=>{
  await build({stdin:{contents:`export {getEnvironmentManager} from './frontend/features/environments/environment-manager'; export {App} from './frontend/app'; export {writeWorkspaceHistory} from './frontend/lib/workspace-location';`,resolveDir:process.cwd(),loader:'ts'},outfile:dir+'/module.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',define:{'import.meta.env.DEV':'false'}});
  const m=await import(dir+'/module.mjs');createManager=m.getEnvironmentManager;App=m.App;navigate=m.writeWorkspaceHistory;
 });
-after(async()=>{if(dir)await rm(dir,{recursive:true,force:true});});
+after(async()=>{
+ // The batch runs this file with no runner timeout, so a timer the page arms and
+ // never clears would hang the file instead of failing a test. The runtime's 300000 ms
+ // auto-save interval, the reconcile deadline and the checkpoint open timeout must all
+ // be gone once every test has finished.
+ assert.deepEqual(process.getActiveResourcesInfo().filter(name=>name==='Timeout'),[],'the environment page must release every timer it started');
+ if(dir)await rm(dir,{recursive:true,force:true});
+});
 const owners=[];afterEach(()=>{for(const x of owners.splice(0))x.dispose();});
 const env={id:'env-a',memberId:'member-a',name:'Linux',type:'personal',taskId:null,version:1,createdAt:'2026-09-30T00:00:00.000Z',updatedAt:'2026-09-30T00:00:00.000Z'};
 const page=(items=[env],n=1,total=items.length)=>({items,pagination:{page:n,pageSize:20,total,totalPages:Math.ceil(total/20)}});
@@ -75,13 +82,68 @@ async function renderApp(t, requester, permissionMask='0x200000') {
   return requester(path,init);
  }})){originals.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});}
  const {createRoot}=await import('react-dom/client');
- let root=createRoot(host);t.after(async()=>{await act(async()=>root.unmount());await window.happyDOM.close();for(const [key,descriptor] of originals){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}});
- await act(async()=>root.render(React.createElement(App)));return{host,window,root,remount:async()=>{await act(async()=>root.unmount());root=createRoot(host);await act(async()=>root.render(React.createElement(App)));}};
+ let root=createRoot(host),mounted=true;
+ const unmount=async()=>{if(!mounted)return;mounted=false;await act(async()=>root.unmount());};
+ t.after(async()=>{await unmount();await window.happyDOM.close();for(const [key,descriptor] of originals){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}});
+ await act(async()=>root.render(React.createElement(App)));
+ return{host,window,root,unmount,remount:async()=>{await unmount();mounted=true;root=createRoot(host);await act(async()=>root.render(React.createElement(App)));}};
 }
+/** The runtime composition resolves asynchronously, so DOM assertions wait for it. */
+async function until(check,label){for(let i=0;i<200;i++){if(check())return;await act(async()=>{await new Promise(resolve=>setTimeout(resolve,5));});}assert.fail(`did not settle: ${label}`);}
 test('actual App exposes member environment list and no fake running or automatic network',async t=>{
- const calls=[];const {host}=await renderApp(t,async(path,init)=>{calls.push(path);return Response.json(page());});
+ const calls=[];const {host}=await renderApp(t,async(path,init)=>{calls.push(path);return Response.json(path.startsWith('/api/environments/tombstones')?{items:[],pagination:{page:1,pageSize:100,total:0,totalPages:0}}:page());});
  assert.ok(host.querySelector('[data-environments-page]'),'actual environment page must render');assert.ok(host.textContent.includes('Linux'));
- assert.deepEqual(calls,['/api/environments?page=1&pageSize=20']);assert.equal(host.querySelector('[data-vm-start]'),null);
+ assert.ok(calls.includes('/api/environments?page=1&pageSize=20'));
+ await until(()=>host.querySelector('[data-environments-runtime="ready"]')!==null,'runtime state');
+ assert.match(host.querySelector('[data-environments-runtime="ready"]').textContent,/deliberately ships no VM engine or guest images/);
+ assert.equal(host.querySelector('[data-environments-runtime-unavailable]'),null);
+ // The runtime object exists but nothing is running: no start control is offered
+ // before a selection and the metadata row keeps its unverified wording.
+ assert.equal(host.querySelector('[data-vm-start]'),null);
+ assert.equal(host.querySelector('[data-environment-files]'),null);
+ assert.match(host.textContent,/runtime unverified/);
+});
+test('selected environment mounts the lazy file surface with a disabled, explained start',async t=>{
+ const calls=[];const {host}=await renderApp(t,async(path,init)=>{calls.push(path);return Response.json(path.startsWith('/api/environments/tombstones')?{items:[],pagination:{page:1,pageSize:100,total:0,totalPages:0}}:page());});
+ await until(()=>host.querySelector('[data-environments-runtime="ready"]')!==null,'runtime state');
+ assert.equal(host.querySelector('[data-environment-files]'),null,'file surface is not mounted before selection');
+ await act(async()=>{host.querySelector('[data-environment-files-open]').click();});
+ const surface=host.querySelector('[data-environment-files]');assert.ok(surface,'file surface renders for the selected environment');
+ assert.equal(surface.getAttribute('data-environment-files-for'),'env-a');
+ const start=host.querySelector('[data-vm-start]');assert.ok(start,'a start control is shown as explicitly unavailable');assert.equal(start.disabled,true);assert.equal(start.getAttribute('aria-disabled'),'true');
+ assert.equal(host.querySelector('[data-environment-files-runtime]').getAttribute('data-environment-files-runtime'),'VM_SESSION_UNAVAILABLE');
+ assert.match(host.textContent,/Start is disabled because this version deliberately ships no VM engine or guest images\./);
+ await until(()=>host.textContent.includes('Start an environment to access its shared files.'),'lazy FilesPanel placeholder');
+ assert.equal(host.querySelector('[data-environment-files] [data-file-entry]'),null,'an unavailable runtime never lists files');
+ await act(async()=>{host.querySelector('[data-environment-files-close]').click();});
+ assert.equal(host.querySelector('[data-environment-files]'),null,'the surface closes without touching the manager');
+ assert.ok(calls.includes('/api/environments?page=1&pageSize=20'));
+});
+test('unmounting the environments page releases the runtime composition',async t=>{
+ const calls=[];const {host,unmount}=await renderApp(t,async(path,init)=>{calls.push(path);return Response.json(path.startsWith('/api/environments/tombstones')?{items:[],pagination:{page:1,pageSize:100,total:0,totalPages:0}}:page());});
+ await until(()=>host.querySelector('[data-environments-runtime="ready"]')!==null,'runtime state');
+ await unmount();
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,50));});
+ assert.equal(host.querySelector('[data-environments-runtime]'),null,'unmount must remove the runtime tree');
+ assert.equal(host.querySelector('[data-environments-page]'),null);
+ // Teardown stopped the runtime, so nothing can still be driving it: no further
+ // request may be issued after the page is gone.
+ const settled=calls.length;await act(async()=>{await new Promise(resolve=>setTimeout(resolve,50));});
+ assert.equal(calls.length,settled,'no request may be issued after unmount');
+});
+test('the file surface and VM runtime are only reachable through dynamic imports',async()=>{
+ const result=await build({entryPoints:['frontend/features/environments/environments-page.tsx'],bundle:true,write:false,metafile:true,platform:'browser',format:'esm',jsx:'automatic',packages:'external',logLevel:'silent'});
+ const inputs=result.metafile.inputs;
+ const staticTargets=path=>(inputs[path]?.imports??[]).filter(edge=>edge.kind==='import-statement').map(edge=>edge.path);
+ const staticClosure=new Set(),queue=['frontend/features/environments/environments-page.tsx'];
+ while(queue.length){const path=queue.pop();if(!path||staticClosure.has(path))continue;staticClosure.add(path);queue.push(...staticTargets(path));}
+ for(const path of ['frontend/features/environments/files/files-panel.tsx','frontend/features/environments/account-vm-runtime.mjs','frontend/features/environments/authenticated-vm-runtime.ts','frontend/features/environments/storage/checkpoints.mjs','frontend/features/environments/storage/checkpoint-identity.mjs','tools/browser-vm/alpine-iso.mjs']){
+  assert.ok(Object.hasOwn(inputs,path),`${path} must still be bundled`);
+  assert.equal(staticClosure.has(path),false,`${path} must stay out of the eager graph`);
+ }
+ const dynamicTargets=new Set(Object.values(inputs).flatMap(input=>input.imports.filter(edge=>edge.kind==='dynamic-import').map(edge=>edge.path)));
+ assert.ok(dynamicTargets.has('frontend/features/environments/files/files-panel.tsx'),'the file surface loads through a literal dynamic import');
+ assert.ok(dynamicTargets.has('frontend/features/environments/authenticated-vm-runtime.ts'),'the VM runtime loads through a literal dynamic import');
 });
 test('VM permission cannot be inferred from task permission or direct route access',async t=>{
  let calls=0;const {host}=await renderApp(t,async()=>{calls++;return Response.json(page());},'0x80000');
@@ -446,7 +508,10 @@ test('resolved unknown create clears its submitted draft and permits clean navig
   if(init.method==='GET')return Response.json(page());writes++;id=JSON.parse(init.body).operationId;throw Error('lost');
  });
  const form=await openCreate(host);await fill(window,form.querySelector('[name=name]'),'Accepted');await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
- await act(async()=>host.querySelector('[data-environment-lookup]').click());assert.equal(form.querySelector('[name=name]').value,'');
+ await act(async()=>host.querySelector('[data-environment-lookup]').click());
+ // The unknown outcome already closed the composer, so the captured form node is
+ // detached; the settled draft is only observable through a freshly opened one.
+ assert.equal((await openCreate(host)).querySelector('[name=name]').value,'');
  await act(async()=>{assert.equal(navigate('push','/not-found'),'committed');});assert.equal(writes,1);
 });
 test('a late create list refresh cannot erase a newer local draft',async t=>{
@@ -472,7 +537,7 @@ test('rename invalid input keeps editor and dirty discard cannot submit a hidden
 });
 
 test('rename retains its original version after a list refresh and hands unknown result to the same-ID owner',async t=>{
- let reads=0;const writes=[];const {host,window}=await renderApp(t,async(path,init)=>{if(init.method==='GET')return Response.json(page([{...env,version:++reads}]));writes.push(JSON.parse(init.body));throw Error('lost');});
+ let reads=0;const writes=[];const {host,window}=await renderApp(t,async(path,init)=>{if(path.startsWith('/api/environments/tombstones'))return Response.json({items:[],pagination:{page:1,pageSize:100,total:0,totalPages:0}});if(init.method==='GET')return Response.json(page([{...env,version:++reads}]));writes.push(JSON.parse(init.body));throw Error('lost');});
  await act(async()=>host.querySelector('[data-environment-rename]').click());
  const form=host.querySelector('[role=dialog] form');await fill(window,form.querySelector('input'),'Frozen rename');
  // The row can be refreshed independently; the mounted editor retains version 1.

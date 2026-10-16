@@ -7,7 +7,7 @@ export type WorkspacePageKind =
   | "home" | "knowledge" | "search" | "agent" | "submit" | "my-submissions" | "graph"
   | "environments" | "tasks" | "goals" | "projects" | "calendar" | "today" | "focus" | "review" | "inbox" | "boards" | "notifications" | "messages" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
   | "admin-assets" | "admin-members" | "admin-roles" | "admin-role-new" | "admin-role-detail" | "admin-menus"
-  | "admin-spaces" | "admin-audit" | "admin-analytics" | "coming-soon";
+  | "admin-spaces" | "admin-audit" | "admin-analytics" | "admin-knowledge-trash" | "coming-soon";
 
 export type WorkspaceRouteGroup = "workspace" | "admin";
 
@@ -55,6 +55,7 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "admin-roles", path: "/admin/roles", pageKind: "admin-roles", availability: "ready", labelKey: "NAV_ROLES", group: "admin", moduleKey: "admin", capability: "role:manage" },
   { id: "admin-menus", path: "/admin/menus", pageKind: "admin-menus", availability: "ready", labelKey: "NAV_MENUS", group: "admin", moduleKey: "admin", capability: "menu:manage" },
   { id: "admin-spaces", path: "/admin/spaces", pageKind: "admin-spaces", availability: "ready", labelKey: "NAV_SPACES", group: "admin", moduleKey: "admin", capability: "space:manage" },
+  { id: "admin-recycle-bin", path: "/admin/knowledge/trash", pageKind: "admin-knowledge-trash", availability: "ready", labelKey: "NAV_RECYCLE_BIN", group: "admin", moduleKey: "admin", capability: "knowledge:review" },
   { id: "admin-audit", path: "/admin/audit", pageKind: "admin-audit", availability: "ready", labelKey: "NAV_AUDIT", group: "admin", moduleKey: "data", capability: "audit:read" },
   { id: "admin-analytics", path: "/admin/analytics", pageKind: "admin-analytics", availability: "ready", labelKey: "NAV_SITE_ANALYTICS", group: "admin", moduleKey: "data", capability: "audit:read" },
   { id: "notifications", path: "/notifications", pageKind: "notifications", availability: "ready", labelKey: "NAV_NOTIFICATIONS", group: "workspace", moduleKey: "collaboration", capability: null },

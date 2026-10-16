@@ -4,13 +4,13 @@ import { addDependency, addTaskLink, createSubtask, createTask, deleteSubtask, d
 type TaskFields = { title: string; notes: string; priority: "low" | "medium" | "high"; dueAt: string | null };
 export type TaskWriteIntent =
   | { op: "create"; taskId: string; fields: TaskFields }
-  | { op: "update"; taskId: string; fields: TaskFields; expectedUpdatedAt?: string }
-  | { op: "status"; taskId: string; status: TaskItem["status"]; expectedStatus?: TaskItem["status"] }
+  | { op: "update"; taskId: string; fields: TaskFields; expectedUpdatedAt: string }
+  | { op: "status"; taskId: string; status: TaskItem["status"]; expectedStatus: TaskItem["status"] }
   | { op: "progress"; taskId: string; progress: number; expectedUpdatedAt?: string }
   | { op: "tags"; taskId: string; tags: string[]; expectedUpdatedAt?: string }
   | { op: "link"; taskId: string; knowledgeItemId: string; expectedUpdatedAt?: string }
   | { op: "unlink"; taskId: string; linkId: string; expectedUpdatedAt?: string }
-  | { op: "delete"; taskId: string }
+  | { op: "delete"; taskId: string; expectedUpdatedAt: string }
   | { op: "subtask-create"; taskId: string; subtaskId: string; title: string; status: TaskSubtaskStatus; position: number }
   | { op: "subtask-update"; taskId: string; subtaskId: string; title: string; status: TaskSubtaskStatus; position: number; expectedUpdatedAt: string }
   | { op: "subtask-delete"; taskId: string; subtaskId: string; expectedUpdatedAt: string }
@@ -19,16 +19,17 @@ export type TaskWriteIntent =
 export type StoredTaskWrite = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intent: TaskWriteIntent };
 
 // Every operation is an absolute or id-keyed write, so sending the same intent again cannot add a second effect.
+// The frozen intent always carries its precondition, so a retry re-sends the version this edit read, never a newer one.
 export function runTaskWrite(intent: TaskWriteIntent): Promise<unknown> {
   switch (intent.op) {
     case "create": return createTask({ id: intent.taskId, ...intent.fields });
-    case "update": return updateTask(intent.taskId, intent.expectedUpdatedAt === undefined ? intent.fields : { ...intent.fields, expectedUpdatedAt: intent.expectedUpdatedAt });
+    case "update": return updateTask(intent.taskId, { ...intent.fields, expectedUpdatedAt: intent.expectedUpdatedAt });
     case "status": return setTaskStatus(intent.taskId, intent.status, fetch, intent.expectedStatus);
     case "progress": return setTaskProgress(intent.taskId, intent.progress, fetch, intent.expectedUpdatedAt);
     case "tags": return replaceTaskTags(intent.taskId, intent.tags, fetch, intent.expectedUpdatedAt);
     case "link": return addTaskLink(intent.taskId, intent.knowledgeItemId, fetch, intent.expectedUpdatedAt);
     case "unlink": return removeTaskLink(intent.taskId, intent.linkId, fetch, intent.expectedUpdatedAt);
-    case "delete": return deleteTask(intent.taskId);
+    case "delete": return deleteTask(intent.taskId, intent.expectedUpdatedAt);
     case "subtask-create": return createSubtask(intent.taskId, { id: intent.subtaskId, title: intent.title, status: intent.status, position: intent.position });
     case "subtask-update": return updateSubtask(intent.taskId, intent.subtaskId, { title: intent.title, status: intent.status, position: intent.position, expectedUpdatedAt: intent.expectedUpdatedAt });
     case "subtask-delete": return deleteSubtask(intent.taskId, intent.subtaskId, intent.expectedUpdatedAt);
@@ -121,16 +122,16 @@ export function validTaskWrite(value: unknown): value is TaskWriteIntent {
   if (typeof v.taskId !== "string" || !ID.test(v.taskId)) return false;
   switch (v.op) {
     case "create": return exactKeys(v, ["op", "taskId", "fields"]) && validFields(v.fields);
-    case "update": return (exactKeys(v, ["op", "taskId", "fields"]) || (exactKeys(v, ["op", "taskId", "fields", "expectedUpdatedAt"])
-      && typeof v.expectedUpdatedAt === "string" && Number.isFinite(Date.parse(v.expectedUpdatedAt)))) && validFields(v.fields);
-    case "status": return (exactKeys(v, ["op", "taskId", "status"]) || (exactKeys(v, ["op", "taskId", "status", "expectedStatus"])
-      && typeof v.expectedStatus === "string" && statuses.includes(v.expectedStatus))) && typeof v.status === "string" && statuses.includes(v.status);
+    case "update": return exactKeys(v, ["op", "taskId", "fields", "expectedUpdatedAt"])
+      && typeof v.expectedUpdatedAt === "string" && Number.isFinite(Date.parse(v.expectedUpdatedAt)) && validFields(v.fields);
+    case "status": return exactKeys(v, ["op", "taskId", "status", "expectedStatus"])
+      && typeof v.expectedStatus === "string" && statuses.includes(v.expectedStatus) && typeof v.status === "string" && statuses.includes(v.status);
     case "progress": return optionalVersion(v, ["op", "taskId", "progress"]) && Number.isInteger(v.progress) && (v.progress as number) >= 0 && (v.progress as number) <= 100;
     case "tags": return optionalVersion(v, ["op", "taskId", "tags"]) && Array.isArray(v.tags) && v.tags.length <= 10
       && v.tags.every((tag) => typeof tag === "string" && !!tag.trim() && [...tag].length <= 32);
     case "link": return optionalVersion(v, ["op", "taskId", "knowledgeItemId"]) && typeof v.knowledgeItemId === "string" && ID.test(v.knowledgeItemId);
     case "unlink": return optionalVersion(v, ["op", "taskId", "linkId"]) && typeof v.linkId === "string" && ID.test(v.linkId);
-    case "delete": return exactKeys(v, ["op", "taskId"]);
+    case "delete": return exactKeys(v, ["op", "taskId", "expectedUpdatedAt"]) && versioned(v.expectedUpdatedAt);
     case "subtask-create": return exactKeys(v, ["op", "taskId", "subtaskId", "title", "status", "position"]) && subtaskBody(v);
     case "subtask-update": return exactKeys(v, ["op", "taskId", "subtaskId", "title", "status", "position", "expectedUpdatedAt"]) && subtaskBody(v) && versioned(v.expectedUpdatedAt);
     case "subtask-delete": return exactKeys(v, ["op", "taskId", "subtaskId", "expectedUpdatedAt"]) && structureId(v.subtaskId) && versioned(v.expectedUpdatedAt);

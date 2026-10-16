@@ -417,6 +417,67 @@ describe("discussion HTTP contract", () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM discussion_messages WHERE thread_id = ?").bind(created.thread.id).first("count")).toBe(22);
   });
 
+  it("converges repeated context thread creation on one row and always rejects a revoked target", async () => {
+    const asA = ((path: string | URL | Request, init?: RequestInit) => api(String(path), sessionA, init)) as typeof fetch;
+    const asB = ((path: string | URL | Request, init?: RequestInit) => api(String(path), sessionB, init)) as typeof fetch;
+    const taskContext = { kind: "task" as const, id: "task-a" };
+    const created = await ensureDiscussionThread(taskContext, asA);
+    expect(created.created).toBe(true);
+    // Repeating the same visible target converges on one context with one identity.
+    await expect(ensureDiscussionThread(taskContext, asA)).resolves.toMatchObject({ created: false, thread: { id: created.thread.id } });
+    await expect(loadContextDiscussionThread(taskContext, asA)).resolves.toMatchObject({ id: created.thread.id });
+    expect(await discussionThreadRows("task", "task-a")).toBe(1);
+    // Another member cannot create the target's thread and never gets a second row.
+    await expect(ensureDiscussionThread(taskContext, asB)).rejects.toMatchObject({ status: 404 });
+    await expect(loadContextDiscussionThread(taskContext, asB)).rejects.toMatchObject({ status: 404 });
+    expect(await discussionThreadRows("task", "task-a")).toBe(1);
+
+    const knowledgeContext = { kind: "knowledge" as const, id: "knowledge-a" };
+    const concurrent = await Promise.all([
+      ensureDiscussionThread(knowledgeContext, asA),
+      ensureDiscussionThread(knowledgeContext, asB),
+      ensureDiscussionThread(knowledgeContext, asA),
+    ]);
+    expect(new Set(concurrent.map(({ thread }) => thread.id)).size).toBe(1);
+    expect(concurrent.filter(({ created: wasCreated }) => wasCreated)).toHaveLength(1);
+    expect(await discussionThreadRows("knowledge", "knowledge-a")).toBe(1);
+
+    // A revoked target is always rejected: create, read, list and send.
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only', published_by = 'member-a' WHERE id = 'discussion-revision'").run();
+    const threadId = concurrent[0]!.thread.id;
+    await expect(ensureDiscussionThread(knowledgeContext, asB)).rejects.toMatchObject({ status: 404 });
+    await expect(loadContextDiscussionThread(knowledgeContext, asB)).rejects.toMatchObject({ status: 404 });
+    await expect(loadDiscussionThread(threadId, asB)).rejects.toMatchObject({ status: 404 });
+    await expect(loadDiscussionMessages(threadId, { limit: 20 }, asB)).rejects.toMatchObject({ status: 404 });
+    await expect(sendDiscussionMessage({ context: knowledgeContext, body: "Revoked target", clientKey: "revoked-target" }, asB))
+      .rejects.toMatchObject({ status: 404 });
+    await expect(loadDiscussionThreads({ limit: 20 }, asB)).resolves.toEqual({ items: [] });
+    expect(await discussionThreadRows("knowledge", "knowledge-a")).toBe(1);
+  });
+
+  it("keeps the thread row while a revoked context shrinks the list and refuses direct hits", async () => {
+    const asA = ((path: string | URL | Request, init?: RequestInit) => api(String(path), sessionA, init)) as typeof fetch;
+    const asB = ((path: string | URL | Request, init?: RequestInit) => api(String(path), sessionB, init)) as typeof fetch;
+    const context = { kind: "knowledge" as const, id: "knowledge-a" };
+    const created = await ensureDiscussionThread(context, asB);
+    const sent = await sendDiscussionMessage({ context, body: "Shared history", clientKey: "shared-history" }, asB);
+    await expect(loadDiscussionThreads({ limit: 20 }, asB)).resolves.toMatchObject({ items: [{ id: created.thread.id }] });
+    await expect(loadDiscussionThread(created.thread.id, asB)).resolves.toMatchObject({ lastSequence: sent.message.sequence });
+
+    // The revision stops being shared: only the admin side keeps it, the contributor is revoked.
+    await env.DB.prepare("UPDATE members SET role = 'admin' WHERE id = 'member-a'").run();
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only' WHERE id = 'discussion-revision'").run();
+    await expect(loadDiscussionThreads({ limit: 20 }, asB)).resolves.toEqual({ items: [] });
+    await expect(loadDiscussionThreads({ limit: 20 }, asA)).resolves.toMatchObject({ items: [{ id: created.thread.id }] });
+    await expect(loadDiscussionThread(created.thread.id, asB)).rejects.toMatchObject({ status: 404 });
+    await expect(loadDiscussionMessages(created.thread.id, { limit: 20 }, asB)).rejects.toMatchObject({ status: 404 });
+    await expect(loadContextDiscussionThread(context, asB)).rejects.toMatchObject({ status: 404 });
+    // Revocation hides the thread without deleting its history for authorized readers.
+    expect(await discussionThreadRows("knowledge", "knowledge-a")).toBe(1);
+    await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM discussion_messages WHERE thread_id = ?").bind(created.thread.id).first("count")).resolves.toBe(1);
+    await expect(loadDiscussionMessages(created.thread.id, { limit: 20 }, asA)).resolves.toMatchObject({ items: [sent.message] });
+  });
+
   it("creates or gets a context thread and exposes stable member-authorized cursor pages", async () => {
     const created = await api("/api/discussions/context", sessionA, {
       method: "POST",
@@ -661,6 +722,13 @@ async function seedKnowledge(): Promise<void> {
   await env.DB.prepare("INSERT INTO knowledge_items (id, space_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('knowledge-a', 'default', NULL, 'active', 'indexed', ?, ?)").bind(now, now).run();
   await env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('discussion-revision', 'knowledge-a', 'discussion-version', '/workspace/published/default/knowledge-a/discussion-revision.md', ?, 'Discussion Knowledge', '[]', 'shared', 'member-a', ?)").bind(hash, now).run();
   await env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'discussion-revision' WHERE id = 'knowledge-a'").run();
+}
+
+async function discussionThreadRows(contextKind: string, contextId: string): Promise<number> {
+  const row = await env.DB.prepare(
+    "SELECT COUNT(*) AS total FROM discussion_threads WHERE context_kind = ? AND context_id = ?",
+  ).bind(contextKind, contextId).first<{ total: number }>();
+  return row?.total ?? 0;
 }
 
 async function expectAccessKeys(expected: string[][]): Promise<void> {

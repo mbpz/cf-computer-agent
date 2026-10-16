@@ -62,10 +62,31 @@ export async function updateAdminMenu(id: string, input: AdminMenuUpdate, reques
   return menu;
 }
 
-export async function deleteAdminMenu(id: string, requester: Fetcher = fetch): Promise<void> {
-  const data = await apiFetch<{ menu?: unknown }>(`/api/admin/menus/${encodeURIComponent(id)}`, { requester, method: "DELETE" });
+export async function deleteAdminMenu(id: string, expectedDescendantIds: readonly string[] = [], requester: Fetcher = fetch): Promise<void> {
+  // A parent removal must carry the exact subtree impact the operator confirmed;
+  // the server refuses a stale acknowledgment with MENU_IMPACT_CONFLICT.
+  const data = await apiFetch<{ menu?: unknown }>(`/api/admin/menus/${encodeURIComponent(id)}`, { requester, method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedDescendants: [...expectedDescendantIds] }) });
   const menu = normalizeAdminMenu(data.menu);
   if (!menu || menu.id !== id) throw new Error("MENU_RESPONSE_INVALID");
+}
+
+/** Everything nested under `id`, in tree order: the impact a deletion confirmation
+ * has to display and acknowledge. */
+export function menuDescendants(menus: readonly AdminMenu[], id: string): AdminMenu[] {
+  return flattenMenuSubtree(menuById(menus, id)?.children ?? []);
+}
+
+/** The management tree is a tree of `children` arrays, so every lookup recurses. */
+export function menuById(menus: readonly AdminMenu[], id: string): AdminMenu | undefined {
+  for (const menu of menus) {
+    if (menu.id === id) return menu;
+    const nested = menuById(menu.children, id);
+    if (nested) return nested;
+  }
+}
+
+function flattenMenuSubtree(menus: readonly AdminMenu[]): AdminMenu[] {
+  return menus.flatMap((menu) => [menu, ...flattenMenuSubtree(menu.children)]);
 }
 
 function matchesMenu(menu: AdminMenu, input: AdminMenuUpdate | AdminMenuCreate): boolean {

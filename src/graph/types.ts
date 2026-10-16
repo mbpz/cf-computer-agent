@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import { encodeOpaqueCursor } from "../pagination";
 import {
   GRAPH_DEFAULT_DEPTH,
   GRAPH_DEFAULT_LIMIT,
@@ -51,6 +52,8 @@ export interface GraphSnapshot {
   rootId: string | null;
   depth: 1 | 2;
   truncated: boolean;
+  /** The continuation cursor of a truncated projection; null when the window is complete. */
+  nextCursor: string | null;
 }
 
 export interface GraphQuery {
@@ -107,6 +110,8 @@ export function normalizeGraphSnapshot(
   nodes: readonly GraphNode[],
   edges: readonly GraphEdge[],
   query: GraphQuery,
+  /** Where this window starts and how a continuation of it is bound to the query. */
+  window: { offset?: number; cursorScopeKey?: string } = {},
 ): GraphSnapshot {
   assertQuery(query);
 
@@ -117,14 +122,19 @@ export function normalizeGraphSnapshot(
   }
   const sortedNodes = [...uniqueNodes.values()].sort(byId);
   const nodeLimit = query.limit;
-  const nodesTruncated = sortedNodes.length > nodeLimit;
   const rootId = query.rootId;
   const rootNode = rootId === null
     ? undefined
     : sortedNodes.find((node) => graphNodeMatchesRoot(node.id, rootId));
-  const visibleNodes = rootNode === undefined
-    ? sortedNodes.slice(0, nodeLimit)
-    : [rootNode, ...sortedNodes.filter((node) => node.id !== rootNode.id).slice(0, nodeLimit - 1)];
+  // The cursor continues the same ordered window: `offset` counts the non-root nodes
+  // already returned, and a drilled-down root stays pinned to every window so the
+  // member never loses the node they asked about.
+  const remainder = rootNode === undefined ? sortedNodes : sortedNodes.filter((node) => node.id !== rootNode.id);
+  const start = Math.min(Math.max(window.offset ?? 0, 0), remainder.length);
+  const windowSize = rootNode === undefined ? nodeLimit : Math.max(0, nodeLimit - 1);
+  const windowNodes = remainder.slice(start, start + windowSize);
+  const visibleNodes = rootNode === undefined ? windowNodes : [rootNode, ...windowNodes];
+  const nodesTruncated = remainder.length > start + windowNodes.length;
   const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
 
   const uniqueEdges = new Map<string, GraphEdge>();
@@ -138,6 +148,12 @@ export function normalizeGraphSnapshot(
     .sort(byId);
   const edgeLimit = Math.min(query.limit * 2, GRAPH_MAX_EDGE_LIMIT);
   const edgesTruncated = sortedEdges.length > edgeLimit;
+  const nextOffset = start + windowNodes.length;
+  // Only a further node can be continued: a window the root alone fills has nothing
+  // left to append, and an edge-only truncation is not a window boundary.
+  const nextCursor = window.cursorScopeKey !== undefined && nodesTruncated && windowNodes.length > 0
+    ? encodeOpaqueCursor({ v: 1, kind: "graph", scopeKey: window.cursorScopeKey, offset: nextOffset })
+    : null;
 
   return {
     nodes: visibleNodes,
@@ -145,6 +161,7 @@ export function normalizeGraphSnapshot(
     rootId: query.rootId,
     depth: query.depth,
     truncated: nodesTruncated || edgesTruncated,
+    nextCursor,
   };
 }
 

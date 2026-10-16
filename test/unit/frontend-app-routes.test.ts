@@ -11,6 +11,7 @@ describe("React app route dispatch", () => {
     ["/admin/submissions", "admin-submissions"], ["/admin/duplicates", "admin-duplicates"], ["/admin/assets", "admin-assets"],
     ["/admin/members", "admin-members"], ["/admin/spaces", "admin-spaces"], ["/admin/audit", "admin-audit"],
     ["/admin/roles", "admin-roles"], ["/admin/roles/new", "admin-role-new"], ["/admin/roles/editor", "admin-role-detail"],
+    ["/admin/knowledge/trash", "admin-knowledge-trash"], ["/admin/knowledge/knowledge-1", "admin-knowledge-item"],
   ])("dispatches %s", (path, expected) => {
     expect(pageKindForPath(path)).toBe(expected);
   });

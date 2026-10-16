@@ -2,7 +2,7 @@
 
 import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TasksRepository } from "../../src/tasks/repository";
+import { TASK_TOMBSTONE_RETENTION_MS, TasksRepository } from "../../src/tasks/repository";
 import { createApp } from "../../src/app";
 import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
@@ -127,7 +127,7 @@ describe("tasks repository", () => {
     await repository.replaceTags("member-a", "task-1", ["urgent"]);
     expect(await repository.listTags("member-a", "task-1")).toEqual(["urgent"]);
     expect(await repository.listTags("member-b", "task-1")).toEqual([]);
-    expect(await repository.delete("member-a", "task-1")).toBe(true);
+    expect(await repository.delete("member-a", "task-1", NOW, NOW)).toMatchObject({ kind: "deleted", tombstone: { taskId: "task-1" } });
     expect(await repository.countByMember("member-a")).toBe(0);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_tags").first<{ n: number }>()).toMatchObject({ n: 0 });
   });
@@ -227,9 +227,10 @@ describe("tasks HTTP contract", () => {
     await expect((await api("/api/tasks?page=1&pageSize=20", sessionA)).json()).resolves.toMatchObject({ items: [{ id: "task-1" }], pagination: { total: 1 } });
     await expect((await api("/api/tasks/summary", sessionA)).json()).resolves.toMatchObject({ todo: 1 });
     await expect((await api("/api/tasks/task-1", sessionA)).json()).resolves.toMatchObject({ task: { id: "task-1" }, tags: [], links: [] });
-    const patched = await api("/api/tasks/task-1", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Alpha v2", notes: "note", priority: "low", dueAt: null }) });
+    const beforeEdit = await (await api("/api/tasks/task-1", sessionA)).json() as { task: { updatedAt: string } };
+    const patched = await api("/api/tasks/task-1", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Alpha v2", notes: "note", priority: "low", dueAt: null, expectedUpdatedAt: beforeEdit.task.updatedAt }) });
     expect(await patched.json()).toMatchObject({ title: "Alpha v2", priority: "low", dueAt: null });
-    const status = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    const status = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) });
     expect(await status.json()).toMatchObject({ status: "doing" });
     const progress = await api("/api/tasks/task-1/progress", sessionA, { method: "POST", body: JSON.stringify({ progress: 40 }) });
     expect(await progress.json()).toMatchObject({ progress: 40 });
@@ -241,30 +242,172 @@ describe("tasks HTTP contract", () => {
     expect(await detail.json()).toMatchObject({ tags: ["urgent"], links: [{ knowledgeItemId: "knowledge-a" }] });
     const linkId = ((await (await api("/api/tasks/task-1", sessionA)).json()) as { links: Array<{ id: string }> }).links[0]!.id;
     expect((await api(`/api/tasks/task-1/links/${linkId}`, sessionA, { method: "DELETE" })).status).toBe(204);
-    expect((await api("/api/tasks/task-1", sessionA, { method: "DELETE" })).status).toBe(204);
-    expect((await api("/api/tasks?page=1&pageSize=20", sessionA)).status).toBe(200);
+    const deleted = await api("/api/tasks/task-1", sessionA, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: await taskVersion("task-1", sessionA) }) });
+    expect(deleted.status).toBe(200);
+    const receipt = await deleted.json() as { tombstone: { taskId: string; deletedAt: string } };
+    expect(receipt.tombstone.taskId).toBe("task-1");
+    expect(Number.isFinite(Date.parse(receipt.tombstone.deletedAt))).toBe(true);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_tombstones").first<{ n: number }>()).toMatchObject({ n: 1 });
+    await expect((await api("/api/tasks?page=1&pageSize=20", sessionA)).json()).resolves.toMatchObject({ items: [], pagination: { total: 0 } });
   });
 
   it("deletes an owned calendar-and-VM-linked task without granting another member access", async () => {
     expect((await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "linked-task", title: "Linked task" }) })).status).toBe(201);
     await env.DB.exec("INSERT INTO calendar_events (id, member_id, client_key, kind, title, starts_at, ends_at, timezone, status, task_id, created_at, updated_at) VALUES ('linked-event', 'member-a', 'linked-event-key', 'event', 'Keep calendar', 100, 200, 'UTC', 'scheduled', 'linked-task', 1, 1);");
     await env.DB.exec("INSERT INTO browser_environments (id, member_id, name, type, task_id, created_at, updated_at) VALUES ('linked-vm', 'member-a', 'Keep VM', 'personal', 'linked-task', 1, 1);");
-    expect((await api("/api/tasks/linked-task", sessionB, { method: "DELETE" })).status).toBe(404);
+    const linkedVersion = await taskVersion("linked-task", sessionA);
+    expect((await api("/api/tasks/linked-task", sessionB, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: linkedVersion }) })).status).toBe(404);
     expect(await env.DB.prepare("SELECT task_id FROM calendar_events WHERE id = 'linked-event'").first()).toEqual({ task_id: "linked-task" });
-    expect((await api("/api/tasks/linked-task", sessionA, { method: "DELETE" })).status).toBe(204);
+    const deleted = await api("/api/tasks/linked-task", sessionA, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: linkedVersion }) });
+    expect(deleted.status).toBe(200);
+    const firstReceipt = await deleted.json() as { tombstone: { taskId: string; deletedAt: string } };
     expect(await env.DB.prepare("SELECT member_id, task_id, title FROM calendar_events WHERE id = 'linked-event'").first()).toEqual({ member_id: "member-a", task_id: null, title: "Keep calendar" });
     expect(await env.DB.prepare("SELECT member_id, task_id, version, name FROM browser_environments WHERE id = 'linked-vm'").first()).toEqual({ member_id: "member-a", task_id: null, version: 2, name: "Keep VM" });
     expect(await env.DB.prepare("SELECT id FROM tasks WHERE id = 'linked-task'").first()).toBeNull();
-    // Existing DELETE contract: absent tasks return 404, with no second detach.
-    expect((await api("/api/tasks/linked-task", sessionA, { method: "DELETE" })).status).toBe(404);
+    expect(await env.DB.prepare("SELECT member_id, task_id FROM task_tombstones").all()).toMatchObject({ results: [{ member_id: "member-a", task_id: "linked-task" }] });
+    // A retry after a lost response converges on the recorded receipt: no second detach,
+    // no second tombstone, and the same deletion instant.
+    const replay = await api("/api/tasks/linked-task", sessionA, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: linkedVersion }) });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({ tombstone: firstReceipt.tombstone });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_tombstones").first<{ n: number }>()).toMatchObject({ n: 1 });
     expect(await env.DB.prepare("SELECT version FROM browser_environments WHERE id = 'linked-vm'").first()).toEqual({ version: 2 });
+  });
+
+  it("refuses a status write without the status it replaces and reports one conflict shape", async () => {
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-status", title: "Alpha" }) });
+    const bare = await api("/api/tasks/task-status/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    expect(bare.status).toBe(400);
+    await expect(bare.json()).resolves.toMatchObject({ error: { code: "TASK_INVALID" } });
+    await expect((await api("/api/tasks/task-status", sessionA)).json()).resolves.toMatchObject({ task: { status: "todo" } });
+
+    expect((await api("/api/tasks/task-status/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) })).status).toBe(200);
+    // A stale snapshot is a deliberate re-read conflict, never an automatic retry.
+    const stale = await api("/api/tasks/task-status/status", sessionA, { method: "POST", body: JSON.stringify({ status: "done", expectedStatus: "todo" }) });
+    expect(stale.status).toBe(409);
+    await expect(stale.json()).resolves.toMatchObject({ error: { code: "TASK_STATUS_CONFLICT", retryable: false } });
+    // An absolute same-status replay of the same precondition stays a convergent no-op.
+    const replayed = await api("/api/tasks/task-status/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) });
+    expect(replayed.status).toBe(200);
+    await expect(replayed.json()).resolves.toMatchObject({ status: "doing" });
+  });
+
+  it("keeps the status outbox writable after a repair rewinds status_version", async () => {
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-rewind", title: "Rewind" }) });
+    await api("/api/tasks/task-rewind/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) });
+    await api("/api/tasks/task-rewind/status", sessionA, { method: "POST", body: JSON.stringify({ status: "todo", expectedStatus: "doing" }) });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_status_notification_intents WHERE task_id = 'task-rewind'").first<{ n: number }>()).toMatchObject({ n: 2 });
+
+    // A repair rewinds the version, so the next write re-uses the receipt of the same event.
+    await env.DB.prepare("UPDATE tasks SET status_version = 0 WHERE id = 'task-rewind'").run();
+    const written = await api("/api/tasks/task-rewind/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) });
+    expect(written.status).toBe(200);
+    await expect(written.json()).resolves.toMatchObject({ status: "doing" });
+    // The re-used receipt is neither duplicated nor fatal, and the transition is still audited once.
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_status_notification_intents WHERE task_id = 'task-rewind'").first<{ n: number }>()).toMatchObject({ n: 2 });
+    expect(await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM audit_events WHERE resource_id = 'task-rewind' AND action = 'task.status_changed'",
+    ).first<{ n: number }>()).toMatchObject({ n: 3 });
+  });
+
+  it("converges repeated deletion on one retained receipt and never exposes a tombstone as a live task", async () => {
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-dr", title: "Delete me", priority: "high" }) });
+    await api("/api/tasks/task-dr/tags", sessionA, { method: "PUT", body: JSON.stringify({ tags: ["urgent"] }) });
+    const version = await taskVersion("task-dr", sessionA);
+    const first = await api("/api/tasks/task-dr", sessionA, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: version }) });
+    expect(first.status).toBe(200);
+    const receipt = await first.json() as { tombstone: { taskId: string; deletedAt: string } };
+    expect(receipt.tombstone.taskId).toBe("task-dr");
+    expect(Number.isFinite(Date.parse(receipt.tombstone.deletedAt))).toBe(true);
+
+    // One tombstone is the only trace: the live row and its children are gone, so no
+    // task reader (detail, numbered list, summary) can surface it as a live task.
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_tombstones").first<{ n: number }>()).toMatchObject({ n: 1 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM tasks WHERE id = 'task-dr'").first<{ n: number }>()).toMatchObject({ n: 0 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_tags WHERE task_id = 'task-dr'").first<{ n: number }>()).toMatchObject({ n: 0 });
+    await expect((await api("/api/tasks/task-dr", sessionA)).json()).resolves.toMatchObject({ error: { code: "TASK_NOT_FOUND" } });
+    await expect((await api("/api/tasks?page=1&pageSize=20", sessionA)).json()).resolves.toMatchObject({ items: [], pagination: { total: 0 } });
+    await expect((await api("/api/tasks/summary", sessionA)).json()).resolves.toMatchObject({ todo: 0, doing: 0, done: 0, dueToday: 0, overdue: 0 });
+
+    // A retry after a lost response reads the recorded outcome instead of a second write.
+    const replay = await api("/api/tasks/task-dr", sessionA, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: version }) });
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toEqual({ tombstone: receipt.tombstone });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_tombstones").first<{ n: number }>()).toMatchObject({ n: 1 });
+    const audits = await env.DB.prepare(
+      "SELECT action, COUNT(*) AS n FROM audit_events WHERE resource_id = 'task-dr' GROUP BY action",
+    ).all<{ action: string; n: number }>();
+    expect(audits.results).toHaveLength(3);
+    expect(audits.results.map((row) => `${row.action}:${row.n}`).sort()).toEqual(["task.created:1", "task.deleted:1", "task.tags_replaced:1"]);
+
+    // Another member's delete is still 404 and records nothing for them.
+    expect((await api("/api/tasks/task-dr", sessionB, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: version }) })).status).toBe(404);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_tombstones WHERE member_id = 'member-b'").first<{ n: number }>()).toMatchObject({ n: 0 });
+
+    // The receipt is retained for a bounded period; past it a replay is answered as not found.
+    await env.DB.prepare("UPDATE task_tombstones SET deleted_at = deleted_at - ?").bind(TASK_TOMBSTONE_RETENTION_MS + DAY).run();
+    expect((await api("/api/tasks/task-dr", sessionA, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: version }) })).status).toBe(404);
+  });
+
+  it("refuses a delete that names a stale version and a delete without a precondition", async () => {
+    const created = await (await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-del", title: "Alpha" }) })).json() as { task: { updatedAt: string } };
+    // A bare DELETE never removes an unconditional target.
+    const bare = await api("/api/tasks/task-del", sessionA, { method: "DELETE" });
+    expect(bare.status).toBe(400);
+    await expect(bare.json()).resolves.toMatchObject({ error: { code: "TASK_INVALID" } });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_tombstones WHERE task_id = 'task-del'").first<{ n: number }>()).toMatchObject({ n: 0 });
+
+    const edited = await (await api("/api/tasks/task-del", sessionA, {
+      method: "PATCH", body: JSON.stringify({ title: "Newer edit", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: created.task.updatedAt }),
+    })).json() as { updatedAt: string };
+    // An old intent cannot discard the newer member edit, and it records no receipt.
+    const stale = await api("/api/tasks/task-del", sessionA, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: created.task.updatedAt }) });
+    expect(stale.status).toBe(409);
+    await expect(stale.json()).resolves.toMatchObject({ error: { code: "TASK_VERSION_CONFLICT" } });
+    await expect((await api("/api/tasks/task-del", sessionA)).json()).resolves.toMatchObject({ task: { title: "Newer edit", updatedAt: edited.updatedAt } });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM task_tombstones WHERE task_id = 'task-del'").first<{ n: number }>()).toMatchObject({ n: 0 });
+
+    // The version the caller read still deletes, and the stale receipt is not reused as the outcome.
+    const deleted = await api("/api/tasks/task-del", sessionA, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: edited.updatedAt }) });
+    expect(deleted.status).toBe(200);
+    const receipt = await deleted.json() as { tombstone: { taskId: string; deletedAt: string } };
+    const replay = await api("/api/tasks/task-del", sessionA, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: created.task.updatedAt }) });
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toEqual({ tombstone: receipt.tombstone });
+    const audits = await env.DB.prepare(
+      "SELECT action, COUNT(*) AS n FROM audit_events WHERE resource_id = 'task-del' GROUP BY action",
+    ).all<{ action: string; n: number }>();
+    expect(audits.results.map((row) => `${row.action}:${row.n}`).sort()).toEqual(["task.created:1", "task.deleted:1", "task.updated:1"]);
+  });
+
+  it("refuses a detail update without the version it read and lets exactly one concurrent edit win", async () => {
+    const created = await (await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-cas", title: "Alpha" }) })).json() as { task: { updatedAt: string } };
+    const bare = await api("/api/tasks/task-cas", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Unconditional", notes: "", priority: "medium", dueAt: null }) });
+    expect(bare.status).toBe(400);
+    await expect(bare.json()).resolves.toMatchObject({ error: { code: "TASK_INVALID" } });
+    await expect((await api("/api/tasks/task-cas", sessionA)).json()).resolves.toMatchObject({ task: { title: "Alpha", updatedAt: created.task.updatedAt } });
+
+    // Two sessions edit the version they both read: the SQL predicate picks one winner.
+    const patch = (title: string) => api("/api/tasks/task-cas", sessionA, {
+      method: "PATCH", body: JSON.stringify({ title, notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: created.task.updatedAt }),
+    });
+    const [left, right] = await Promise.all([patch("Left"), patch("Right")]);
+    expect([left.status, right.status].sort()).toEqual([200, 409]);
+    const winner = left.status === 200 ? left : right;
+    const loser = left.status === 409 ? left : right;
+    await expect(loser.json()).resolves.toMatchObject({ error: { code: "TASK_VERSION_CONFLICT" } });
+    const won = await winner.json() as { title: string; updatedAt: string };
+
+    // Retrying the loser's stale intent cannot overwrite the newer member edit.
+    expect((await patch(won.title === "Left" ? "Right" : "Left")).status).toBe(409);
+    await expect((await api("/api/tasks/task-cas", sessionA)).json()).resolves.toMatchObject({ task: { title: won.title, updatedAt: won.updatedAt } });
   });
 
   it("strictly paginates every task filter without leaking another member's total", async () => {
     const today = Date.now() - (Date.now() % DAY) + 3_600_000;
     await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-a", title: "Alpha", priority: "high", dueAt: new Date(today).toISOString() }) });
     await api("/api/tasks", sessionB, { method: "POST", body: JSON.stringify({ id: "task-b", title: "Alpha", priority: "high" }) });
-    await api("/api/tasks/task-a/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    await api("/api/tasks/task-a/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) });
     await api("/api/tasks/task-a/tags", sessionA, { method: "PUT", body: JSON.stringify({ tags: ["urgent"] }) });
     for (const query of ["status=doing", "priority=high", "tag=urgent", "due=today", "q=Alpha"]) {
       const response = await api(`/api/tasks?page=1&pageSize=20&${query}`, sessionA);
@@ -287,11 +430,12 @@ describe("tasks HTTP contract", () => {
     await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
     const linked = await api("/api/tasks/task-1/links", sessionA, { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a" }) });
     const linkId = ((await linked.json()) as { link: { id: string } }).link.id;
+    const idorVersion = await taskVersion("task-1", sessionA);
     for (const [path, init] of [
       ["/api/tasks/task-1", { method: "GET" }],
       ["/api/tasks/task-1", { method: "PATCH", body: JSON.stringify({ title: "hacked" }) }],
-      ["/api/tasks/task-1", { method: "DELETE" }],
-      ["/api/tasks/task-1/status", { method: "POST", body: JSON.stringify({ status: "doing" }) }],
+      ["/api/tasks/task-1", { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: idorVersion }) }],
+      ["/api/tasks/task-1/status", { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) }],
       ["/api/tasks/task-1/progress", { method: "POST", body: JSON.stringify({ progress: 10 }) }],
       ["/api/tasks/task-1/tags", { method: "PUT", body: JSON.stringify({ tags: ["x"] }) }],
       ["/api/tasks/task-1/links", { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a" }) }],
@@ -385,8 +529,8 @@ describe("tasks HTTP contract", () => {
 
   it("accepts identical status replays without adding an audit event", async () => {
     await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
-    const first = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
-    const replay = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    const first = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) });
+    const replay = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) });
 
     expect(first.status).toBe(200);
     await expect(first.json()).resolves.toMatchObject({ status: "doing" });
@@ -412,8 +556,8 @@ describe("tasks HTTP contract", () => {
     await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-race", title: "Race" }) });
 
     const [left, right] = await Promise.all([
-      api("/api/tasks/task-race/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) }),
-      api("/api/tasks/task-race/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) }),
+      api("/api/tasks/task-race/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) }),
+      api("/api/tasks/task-race/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) }),
     ]);
 
     expect([left.status, right.status]).toEqual([200, 200]);
@@ -452,9 +596,9 @@ describe("tasks HTTP contract", () => {
     await waitOnExecutionContext(context);
     expect(response.status).toBe(403);
     await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
-    await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
-    await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "done" }) });
-    const transition = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "todo" }) });
+    await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "done", expectedStatus: "doing" }) });
+    const transition = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing", expectedStatus: "done" }) });
     expect(transition.status).toBe(422);
     const audit = await env.DB.prepare("SELECT action FROM audit_events WHERE action LIKE 'task.%' ORDER BY created_at, id").all<{ action: string }>();
     expect(audit.results.map((row) => row.action)).toEqual(["task.created", "task.status_changed", "task.status_changed"]);
@@ -470,6 +614,11 @@ async function api(path: string, token: string, init: RequestInit = {}): Promise
   const response = await createApp().fetch!(new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
   await waitOnExecutionContext(context);
   return response;
+}
+
+async function taskVersion(id: string, token: string): Promise<string> {
+  const detail = await (await api(`/api/tasks/${id}`, token)).json() as { task: { updatedAt: string } };
+  return detail.task.updatedAt;
 }
 
 async function signedAutomationRequest(url: string): Promise<Request<unknown, IncomingRequestCfProperties<unknown>>> {

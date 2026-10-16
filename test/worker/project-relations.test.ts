@@ -80,3 +80,72 @@ describe("member-scoped project relation editor API", () => {
     expect(page.pagination.total).toBe(22);
   });
 });
+
+// Carries an explicit version so a stale intent can be delivered after the project has moved on.
+async function staleRoute(path: string, method: "POST" | "DELETE", body: Record<string, unknown>, memberId = "a") {
+  const request = new Request(`https://app.test/api/projects/${path}`, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  return routeProjectsApi(request, new URL(request.url), { requestId: "relations" }, { kind: "member", memberId, identitySubject: memberId, email: `${memberId}@test.example`, role: "contributor" }, { projects: service() });
+}
+
+type RelationPage = { projectId: string; expectedUpdatedAt: string; kind: string; items: Array<{ id: string; linked: boolean }> };
+
+describe("workbench-projects ordered relation intents", () => {
+  beforeEach(async () => {
+    await reset(); await applyD1Migrations(env.DB, MIGRATIONS);
+    for (const owner of ["a", "b"]) {
+      await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, 'contributor', 'active', '2026-01-01', '2026-01-01')").bind(owner, owner, `${owner}@test.example`).run();
+      await service().create(owner, { id: `p-${owner}`, clientKey: `p-${owner}`, title: `Project ${owner}` });
+      for (let n = 0; n < 23; n++) {
+        const id = `${owner}-${String(n).padStart(2, "0")}`;
+        await env.DB.prepare("INSERT INTO goals (id, member_id, client_key, title, status, progress, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', 0, 1, 1)").bind(id, owner, id, id).run();
+        await env.DB.prepare("INSERT INTO tasks (id, member_id, title, notes, status, progress, priority, created_at, updated_at) VALUES (?, ?, ?, '', 'todo', 0, 'medium', 1, 1)").bind(id, owner, id).run();
+      }
+    }
+  });
+
+  it.each(["goals", "tasks"])("workbench-projects:query_or_idempotency:link/unlink-project-goal|task — 关联与解除关联逆序到达时拒绝旧意图；响应丢失并刷新后可只读核对且不得重放覆盖新状态，跨成员仍为 404（%s）", async (kind) => {
+    const key = kind === "goals" ? "goalId" : "taskId";
+    const target = "a-00";
+    const projects = service();
+    const readPage = async (): Promise<RelationPage> => (await (await route(`p-a/${kind}?page=1&pageSize=50`))!.json()) as RelationPage;
+
+    // (a) link at v0 -> v1; a late stale UNLINK carrying v0 is rejected and the edge stays linked.
+    const v0 = (await projects.get("a", "p-a")).updatedAt;
+    const linkResponse = await staleRoute(`p-a/${kind}`, "POST", { [key]: target, expectedUpdatedAt: v0 });
+    expect(linkResponse?.status).toBe(200);
+    const v1 = (await projects.get("a", "p-a")).updatedAt;
+    expect(v1).not.toBe(v0);
+    await expect(staleRoute(`p-a/${kind}/${target}`, "DELETE", { expectedUpdatedAt: v0 })).rejects.toMatchObject({ status: 409, code: "PROJECT_VERSION_CONFLICT" });
+    expect((await readPage()).items.find((row) => row.id === target)?.linked).toBe(true);
+
+    // (b) unlink at v1 -> v2; a late stale LINK carrying v1 must not overwrite the newer unlinked state.
+    const unlinkResponse = await staleRoute(`p-a/${kind}/${target}`, "DELETE", { expectedUpdatedAt: v1 });
+    expect(unlinkResponse?.status).toBe(200);
+    const v2 = (await projects.get("a", "p-a")).updatedAt;
+    expect(v2).not.toBe(v1);
+    await expect(staleRoute(`p-a/${kind}`, "POST", { [key]: target, expectedUpdatedAt: v1 })).rejects.toMatchObject({ status: 409, code: "PROJECT_VERSION_CONFLICT" });
+    expect((await readPage()).items.find((row) => row.id === target)?.linked).toBe(false);
+
+    // Response-loss retry re-reads the current version and converges on the same unlinked state.
+    const retried = await staleRoute(`p-a/${kind}/${target}`, "DELETE", { expectedUpdatedAt: v2 });
+    expect(retried?.status).toBe(200);
+    const v3 = (await projects.get("a", "p-a")).updatedAt;
+    expect(v3).not.toBe(v2);
+
+    // (c) Read-only reconciliation after the refresh reports the authoritative version and state.
+    const reconciliation = await readPage();
+    expect(reconciliation.items.find((row) => row.id === target)?.linked).toBe(false);
+    expect(reconciliation.expectedUpdatedAt).toBe(v3);
+    expect(reconciliation.expectedUpdatedAt).toBe((await projects.get("a", "p-a")).updatedAt);
+
+    // (d) Cross-member, cross-project and cross-target intents fail 404 before version validation.
+    await expect(staleRoute(`p-a/${kind}`, "POST", { [key]: target, expectedUpdatedAt: "not-a-version" }, "b")).rejects.toMatchObject({ status: 404, code: "PROJECT_NOT_FOUND" });
+    await expect(staleRoute(`p-b/${kind}`, "POST", { [key]: target, expectedUpdatedAt: "not-a-version" }, "a")).rejects.toMatchObject({ status: 404, code: "PROJECT_NOT_FOUND" });
+    await expect(staleRoute(`p-a/${kind}`, "POST", { [key]: "b-00", expectedUpdatedAt: "not-a-version" }, "a")).rejects.toMatchObject({ status: 404, code: kind === "goals" ? "PROJECT_GOAL_NOT_FOUND" : "PROJECT_TASK_NOT_FOUND" });
+    // The foreign target is never attached, even with the current version.
+    await expect(staleRoute(`p-a/${kind}`, "POST", { [key]: "b-00", expectedUpdatedAt: v3 }, "a")).rejects.toMatchObject({ status: 404 });
+    const finalPage = await readPage();
+    expect(finalPage.items.find((row) => row.id === target)?.linked).toBe(false);
+    expect(finalPage.items.some((row) => row.id === "b-00")).toBe(false);
+  });
+});

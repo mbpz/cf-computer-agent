@@ -79,7 +79,7 @@ function libraryCapture() {
 async function publicationCapture(mutant: "none" | "audit" | "target" | "visibility") {
   const parsed = await parseSource({ kind: "markdown", content: "# Trusted\n\nBody.\n" });
   const preview: ReviewSubmissionSnapshot = {
-    submissionId: "submission", submitterId: "member", status: "review_pending", requestedSpaceId: "space",
+    submissionId: "submission", submitterId: "member", updatedAt: "2026-08-22T00:00:00.000Z", status: "review_pending", requestedSpaceId: "space",
     requestedCollectionId: "collection", requestedVisibility: "admin_only", kind: "markdown", title: "Requested",
     rawContent: parsed.normalizedMarkdown,
     sourceVersion: { id: "source-version", kind: "markdown", content: parsed.normalizedMarkdown,

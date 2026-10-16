@@ -71,7 +71,20 @@ export interface UpdateCollection {
   updatedAt: string;
 }
 
-export type SpacePage = Page<Space>;
+/** Grouped, DB-derived archive impact for one Space. Every field is a real row count. */
+export interface SpaceImpact {
+  collections: number;
+  knowledgeItems: number;
+  revisions: number;
+  links: number;
+}
+
+/** A Space list item carries the impact the admin sees before archiving it. */
+export interface SpaceListItem extends Space {
+  impact: SpaceImpact;
+}
+
+export type SpacePage = Page<SpaceListItem>;
 export type CollectionPage = Page<Collection>;
 export type SpacePageRequest = PageRequest;
 export type CollectionPageRequest = PageRequest;

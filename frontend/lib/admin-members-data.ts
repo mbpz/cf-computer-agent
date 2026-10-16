@@ -13,8 +13,8 @@ export async function loadAdminMembers({ page, pageSize, status, requester = fet
   return data;
 }
 
-export async function updateMemberStatus(memberId: string, status: "active" | "disabled", requester: Fetcher = fetch): Promise<AdminMember> {
-  const data = await apiFetch<{ member?: unknown }>(`/api/admin/members/${encodeURIComponent(memberId)}/status`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+export async function updateMemberStatus(memberId: string, status: "active" | "disabled", expectedStatus: "active" | "disabled", requester: Fetcher = fetch): Promise<AdminMember> {
+  const data = await apiFetch<{ member?: unknown }>(`/api/admin/members/${encodeURIComponent(memberId)}/status`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, expectedStatus }) });
   const member = normalizeMember(data?.member);
   if (member.id !== memberId || member.status !== status || member.role !== "contributor") throw new Error("MEMBER_RESPONSE_INVALID");
   return member;

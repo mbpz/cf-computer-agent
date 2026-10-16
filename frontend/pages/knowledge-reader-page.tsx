@@ -6,25 +6,43 @@ import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { Button } from "../components/ui/button";
 import { CodeBlock } from "../components/agents/code-block";
+import { KnowledgeDerivativesPanel } from "../components/knowledge/knowledge-derivatives-panel";
+import { KnowledgeResearchRunPanel, type DraftableReport } from "../components/knowledge/knowledge-research-panel";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
+import { defaultSubmissionTarget } from "../lib/submission-data";
+import { useKnowledgeDerivatives, useItemResearchRuns } from "../lib/use-knowledge-derivatives";
 import { useReaderNoteShares } from "../lib/use-reader-note-shares";
 import type { KnowledgeBacklinkItem, KnowledgeRevision, KnowledgeRevisionDiff, KnowledgeSourceLocation, RelatedKnowledgeItem } from "../lib/knowledge-reader-data";
 import type { FavoriteWritePhase } from "../lib/reader-favorite-intent";
 import { useReaderNote } from "../lib/use-reader-note";
 import { contextDiscussionHref } from "./messages/discussion-model";
 
-export type KnowledgeReaderState = { kind: "loading" } | { kind: "ready" } | { kind: "error"; message: string };
+export type KnowledgeReaderState = { kind: "loading" } | { kind: "ready" } | { kind: "forbidden" } | { kind: "error"; message: string };
 
 type DiffState = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; diff: KnowledgeRevisionDiff } | { kind: "error" };
 type RelatedState = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly RelatedKnowledgeItem[] } | { kind: "error" };
 type BacklinkState = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly KnowledgeBacklinkItem[] } | { kind: "error" };
 type KnowledgeReaderRevisionInput = Pick<KnowledgeRevision, "id" | "markdown"> & Partial<KnowledgeRevision>;
 
+/**
+ * The citation window the generators accept (1–8 ids of this item). The chunk
+ * the reader has selected leads, so "generate from what I am looking at" and
+ * "generate from the revision" are the same request shape. A revision whose
+ * chunks carry no citation id yields no window at all, and the panel says so
+ * instead of sending something the server would have to refuse.
+ */
+function derivativeSources(revision: KnowledgeRevision, selectedChunkId: string | null): string[] {
+  const available = revision.chunks.flatMap((chunk) => chunk.citationId ? [chunk.citationId] : []);
+  const selected = revision.chunks.find((chunk) => chunk.id === selectedChunkId)?.citationId;
+  const ordered = selected ? [selected, ...available.filter((id) => id !== selected)] : available;
+  return [...new Set(ordered)];
+}
+
 export function KnowledgeReaderPage(props: Parameters<typeof KnowledgeReaderSessionPage>[0]) {
   return <KnowledgeReaderSessionPage key={`${props.memberId ?? ""}:${props.revision.knowledgeItemId ?? ""}`} {...props} />;
 }
 
-function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, locale, state = { kind: "ready" }, onRetry, diffState = { kind: "idle" }, onCompare, relatedState = { kind: "idle" }, onRetryRelated, backlinkState = { kind: "idle" }, onRetryBacklinks, favorite, favoriteError = false, favoritePhase = "idle", onCheckFavorite, onToggleFavorite }: { memberId?: string; revision: KnowledgeReaderRevisionInput; renderMarkdown: (markdown: string) => ReactNode; locale?: LocaleRuntime; state?: KnowledgeReaderState; onRetry?: () => void; diffState?: DiffState; onCompare?: () => void; relatedState?: RelatedState; onRetryRelated?: () => void; backlinkState?: BacklinkState; onRetryBacklinks?: () => void; favorite?: boolean | null; favoriteError?: boolean; favoritePhase?: FavoriteWritePhase; onCheckFavorite?: () => void | Promise<void>; onToggleFavorite?: () => void | Promise<void> }) {
+function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, locale, canCreateSubmission = false, state = { kind: "ready" }, onRetry, diffState = { kind: "idle" }, onCompare, relatedState = { kind: "idle" }, onRetryRelated, backlinkState = { kind: "idle" }, onRetryBacklinks, favorite, favoriteError = false, favoritePhase = "idle", onCheckFavorite, onToggleFavorite }: { memberId?: string; revision: KnowledgeReaderRevisionInput; renderMarkdown: (markdown: string) => ReactNode; locale?: LocaleRuntime; canCreateSubmission?: boolean; state?: KnowledgeReaderState; onRetry?: () => void; diffState?: DiffState; onCompare?: () => void; relatedState?: RelatedState; onRetryRelated?: () => void; backlinkState?: BacklinkState; onRetryBacklinks?: () => void; favorite?: boolean | null; favoriteError?: boolean; favoritePhase?: FavoriteWritePhase; onCheckFavorite?: () => void | Promise<void>; onToggleFavorite?: () => void | Promise<void> }) {
   const normalizedRevision: KnowledgeRevision = {
     id: revision.id,
     knowledgeItemId: revision.knowledgeItemId ?? "",
@@ -51,6 +69,19 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
   const sharing = useReaderNoteShares(memberId, normalizedRevision.knowledgeItemId, note, locale);
   sharingBlock.current = sharing.isBlocking;
   const selectedChunk = normalizedRevision.chunks.find((chunk) => chunk.id === selectedChunkId);
+  // The reader's generation surface is bound to the item and the revision it was
+  // opened on, never to whatever request happens to settle first.
+  const derivatives = useKnowledgeDerivatives({
+    knowledgeItemId: normalizedRevision.knowledgeItemId,
+    revisionId: normalizedRevision.id,
+    citationIds: derivativeSources(normalizedRevision, selectedChunkId),
+  });
+  const research = useItemResearchRuns({ memberId, knowledgeItemId: normalizedRevision.knowledgeItemId, canCreateSubmission });
+  const reportState = derivatives.stateFor("report");
+  const draftableReport: DraftableReport | null = reportState.kind === "ready"
+    && reportState.artifact.kind === "report" && reportState.artifact.reportId
+    ? { runId: reportState.artifact.researchRunId, reportId: reportState.artifact.reportId, title: reportState.artifact.title }
+    : null;
   // The entry's own title only exists once the revision has loaded: showing the untitled
   // fallback (or any other real-looking title) before that would both mislead the reader
   // and make "untitled" indistinguishable from "not loaded yet".
@@ -65,7 +96,9 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
     void note.save(citations);
   };
   return <div className="space-y-5">
-    {note.draft.confirmation}{sharing.confirmation}
+    {/* A revoked read leaves no private note/share decision mounted: the confirmation
+        dialogue names a recipient, so it only exists while the reader is authorized. */}
+    {state.kind === "ready" && <>{note.draft.confirmation}{sharing.confirmation}</>}
     <PageHeader
       title={headerTitle}
       description={headerDescription}
@@ -74,6 +107,9 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
     />
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "KNOWLEDGE_READER_LOADING")} />
       : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "KNOWLEDGE_READER_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>
+        : state.kind === "forbidden" ? <PageState kind="forbidden" title={frontendText(locale, "KNOWLEDGE_READER_REVOKED")} description={frontendText(locale, "KNOWLEDGE_READER_REVOKED_DESCRIPTION")}>
+          <Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>
+        </PageState>
         : <article data-reader-layout className="space-y-5">
     <ExpandableTabs className="lg:hidden" ariaLabel={frontendText(locale, "KNOWLEDGE_READER_MOBILE_PANELS")} value={mobilePanel} onValueChange={setMobilePanel} items={[
       { id: "outline", label: frontendText(locale, "KNOWLEDGE_READER_TAB_OUTLINE"), controls: "reader-outline-panel", icon: <ListBulletsIcon size={16} aria-hidden="true" /> },
@@ -85,6 +121,21 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
       </aside>
       <main className="min-w-0 space-y-5">
         <Card><CardContent><div className="prose prose-slate max-w-none text-sm leading-7">{renderMarkdown(normalizedRevision.markdown)}</div></CardContent></Card>
+        <KnowledgeDerivativesPanel
+          locale={locale}
+          knowledgeItemId={normalizedRevision.knowledgeItemId}
+          derivatives={derivatives}
+          runningRunId={research.runningRunId}
+          renderMarkdown={renderMarkdown}
+        />
+        <KnowledgeResearchRunPanel
+          locale={locale}
+          knowledgeItemId={normalizedRevision.knowledgeItemId}
+          research={research}
+          canCreateSubmission={canCreateSubmission}
+          report={draftableReport}
+          draftTarget={defaultSubmissionTarget}
+        />
         {diffState.kind !== "idle" && <RevisionDiffPanel locale={locale} state={diffState} />}
       </main>
       <aside id="reader-sources-panel" data-reader-sources className={(mobilePanel === "sources" ? "block" : "hidden") + " space-y-5 lg:block"}>

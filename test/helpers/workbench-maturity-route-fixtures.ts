@@ -4,11 +4,22 @@ import { extendedPayload } from "./workbench-extended-route-fixtures";
 export type MaturityRouteId = (typeof WORKBENCH_MATURITY_CAPABILITIES)[number]["routeId"];
 export type MaturityProbeState = "loading" | "empty" | "error" | "ready";
 
+/** The role id the role-detail probe addresses; its ready fixture must resolve this exact id. */
+const ADMIN_ROLE_DETAIL_ID = "admin-role-route-audit";
+
 export const DIRECT_PATH_BY_ROUTE = {
   "project-timeline": "/projects/project-route-audit/timeline",
   "knowledge-reader": "/knowledge/knowledge-route-audit",
   "message-thread": "/messages/thread-route-audit",
   "admin-submission-detail": "/admin/submissions/submission-route-audit",
+  "admin-role-new": "/admin/roles/new",
+  "admin-role-detail": `/admin/roles/${ADMIN_ROLE_DETAIL_ID}`,
+  // The recycle bin owns this fixed path and the trash page kind resolves from it.
+  "admin-recycle-bin": "/admin/knowledge/trash",
+  "admin-knowledge-trash": "/admin/knowledge/trash",
+  // The item route may not be probed with the trash path: app-routes.ts resolves
+  // the fixed path first, so any other id stands in for one knowledge item.
+  "admin-knowledge-item": "/admin/knowledge/knowledge-route-audit",
 } as const satisfies Partial<Record<MaturityRouteId, string>>;
 
 export const READY_MARKER_BY_ROUTE = {
@@ -41,6 +52,18 @@ export const READY_MARKER_BY_ROUTE = {
   "knowledge-reader": "READY::knowledge-reader",
   "message-thread": "[data-message-id=\"private-message-route-audit\"]",
   "admin-submission-detail": "READY::admin-submission-detail",
+  // Create role renders its form from local state, so its ready observable is the
+  // page's own heading rather than anything the role read returns.
+  "admin-role-new": "Create role",
+  "admin-role-detail": "READY::admin-role-detail",
+  // The recycle bin and its fixed-path page kind render the same list, so each
+  // carries its own item title: recycle-bin-page.tsx prints `item.title` in the
+  // row (plus `data-trash-retention={item.id}` for the retained revision facts).
+  "admin-recycle-bin": "READY::admin-recycle-bin",
+  "admin-knowledge-trash": "READY::admin-knowledge-trash",
+  // knowledge-item-page.tsx prints `item.title` in the identity card of the item
+  // the read resolved, so a wrong item would not satisfy this marker.
+  "admin-knowledge-item": "READY::admin-knowledge-item",
 } as const satisfies Record<MaturityRouteId, string>;
 
 export const PRIVATE_THREAD_MARKERS = Object.freeze({
@@ -114,6 +137,10 @@ export function currentNavigationFixture(role: "contributor" | "admin", permissi
     navLeaf("admin-roles", "NAV_ROLES", "/admin/roles", "admin"),
     navLeaf("admin-menus", "NAV_MENUS", "/admin/menus", "admin"),
     navLeaf("admin-spaces", "NAV_SPACES", "/admin/spaces", "admin"),
+    // The recycle bin is registered as a governance-menu route (shared/workspace-route-capabilities.ts
+    // owns the path), and the shell labels the rendered entry from routeCapability(path), so this leaf
+    // is what the recycle-bin probe clicks to reach /admin/knowledge/trash.
+    navLeaf("admin-recycle-bin", "NAV_RECYCLE_BIN", "/admin/knowledge/trash", "admin"),
     navLeaf("admin-audit", "NAV_AUDIT", "/admin/audit", "admin"),
     navLeaf("admin-analytics", "NAV_SITE_ANALYTICS", "/admin/analytics", "admin"),
   ]);
@@ -136,6 +163,12 @@ function navLeaf(key: string, labelKey: string, path: string, groupName: "worksp
 
 function commonAuxiliaryResponse(path: string): Response | null {
   if (path === "/api/assets/availability") return Response.json({ storageEnabled: false, reason: "ASSET_STORAGE_NOT_CONFIGURED", maxBytes: 10 * 1024 * 1024 });
+  // The member submission composer takes its destination from the Space list and
+  // keeps its text in a server draft; both are ordinary auxiliary reads here.
+  if (path === "/api/spaces?limit=50") {
+    return Response.json({ items: [{ id: "space-route-audit", slug: "route-audit", name: "Route audit Space", description: "", kind: "shared", status: "active", position: 0, readOnly: false, createdAt: NOW, updatedAt: NOW }] });
+  }
+  if (path === "/api/spaces/space-route-audit/collections?limit=50") return Response.json({ items: [] });
   if (path === "/api/saved-views?limit=50") return Response.json({ items: [] });
   if (path === "/api/knowledge/favorites?limit=20") return Response.json({ items: [] });
   if (path === "/api/knowledge/research-runs?limit=8") return Response.json({ items: [] });
@@ -184,6 +217,19 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (path === "/api/knowledge/recent?limit=8") return probeResponse(state, { items: [] }, { items: [{ knowledgeItemId: "ready-home", title: "READY::home", lastVisitedAt: NOW, visitCount: 1 }] });
       return null;
     case "submit":
+      if (String(path).startsWith("/api/submissions/drafts")) {
+        // The composer mirrors its text into a server draft; echoing the request
+        // keeps this route audit about the submission, not about draft storage.
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, string> : undefined;
+        return Response.json({
+          id: "draft-route-audit", submitterId: "contributor-route-auditor", status: "draft",
+          kind: body?.kind ?? "markdown", title: body?.title ?? "Route audit draft", content: body?.content ?? "Route audit draft content",
+          requestedSpaceId: body?.requestedSpaceId ?? "space-route-audit",
+          requestedCollectionId: body?.requestedCollectionId ?? null,
+          requestedVisibility: body?.requestedVisibility ?? "shared",
+          createdAt: NOW, updatedAt: NOW,
+        });
+      }
       if (path === "/api/submissions") return probeResponse(state, { submission: { id: "submission-created-route-audit" }, similarCandidates: [] }, { submission: { id: "submission-created-route-audit" }, similarCandidates: [] });
       return null;
     case "knowledge":
@@ -268,11 +314,46 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
     case "admin-roles":
       if (path === "/api/admin/roles") return probeResponse(state, { items: [] }, { items: [{ id: "ready-admin-roles", key: "ready-role", name: "READY::admin-roles", description: "route fixture", allowBits: "0x0", memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false }] });
       return null;
+    case "admin-role-new":
+      // Create role draws its form from local state and only consumes the shared controller's
+      // read for draft/read-required gating, so every state still answers this one endpoint.
+      if (path === "/api/admin/roles") return probeResponse(state, { items: [] }, { items: [adminRole("ready-admin-role-new", "ready-role-new", "Ready created role")] });
+      return null;
+    case "admin-role-detail":
+      if (path === "/api/admin/roles") {
+        // The requested role must be found by id, and a second role proves the page selects
+        // rather than renders the first item.
+        return probeResponse(state, { items: [] }, { items: [
+          adminRole(ADMIN_ROLE_DETAIL_ID, "ready-role-detail", "READY::admin-role-detail"),
+          adminRole("ready-admin-role-other", "ready-role-other", "Ready unrelated role"),
+        ] });
+      }
+      return null;
     case "admin-menus":
       if (path === "/api/admin/menus") return probeResponse(state, { tree: [] }, { tree: [{ id: "ready-admin-menus", parentId: null, key: "ready-admin-menus", labelKey: "READY_ADMIN_MENUS", path: "/fixture", icon: null, groupName: "admin", position: 1, requiredBits: "0x0", status: "active", visible: true, isSystem: false, children: [] }] });
       return null;
+    case "admin-recycle-bin":
+      // The recycle bin's cursor read; the page keeps only the items the server
+      // names, so an empty page is the empty state and one item is the ready one.
+      if (pathname(path) === "/api/admin/knowledge/trash") return probeResponse(state,
+        { items: [] },
+        { items: [trashedKnowledge("ready-admin-recycle-bin", "READY::admin-recycle-bin")] });
+      return null;
+    case "admin-knowledge-trash":
+      // The fixed /admin/knowledge/trash page kind reuses the recycle-bin route, so
+      // it answers the identical read with its own marker item.
+      if (pathname(path) === "/api/admin/knowledge/trash") return probeResponse(state,
+        { items: [] },
+        { items: [trashedKnowledge("ready-admin-knowledge-trash", "READY::admin-knowledge-trash")] });
+      return null;
+    case "admin-knowledge-item":
+      // loadAdminKnowledgeItem reads the item the path names; the page fails closed
+      // unless the current revision names that same item and claims to be current.
+      if (path === "/api/knowledge/knowledge-route-audit") return probeResponse(state, {},
+        { knowledge: adminKnowledgeItem("knowledge-route-audit", "READY::admin-knowledge-item") });
+      return null;
     case "admin-spaces":
-      if (path === "/api/admin/spaces?limit=50") return probeResponse(state, { items: [] }, { items: [{ id: "ready-admin-spaces", name: "READY::admin-spaces", slug: "ready-space", status: "active", kind: "shared", readOnly: false, description: "", position: 0, createdAt: "2026-09-28T00:00:00.000Z", updatedAt: "2026-09-28T00:00:00.000Z" }] });
+      if (path === "/api/admin/spaces?limit=50") return probeResponse(state, { items: [] }, { items: [{ id: "ready-admin-spaces", name: "READY::admin-spaces", slug: "ready-space", status: "active", kind: "shared", readOnly: false, description: "", position: 0, impact: { collections: 0, knowledgeItems: 0, revisions: 0, links: 0 }, createdAt: "2026-09-28T00:00:00.000Z", updatedAt: "2026-09-28T00:00:00.000Z" }] });
       if (path === "/api/admin/spaces/ready-admin-spaces/collections?limit=50") return Response.json({ items: [] });
       return null;
     case "admin-audit":
@@ -318,6 +399,35 @@ function knowledgeRevision() {
 
 function reviewDetail() {
   return { preview: { submissionId: "submission-route-audit", title: "READY::admin-submission-detail", submitterId: "contributor-route-auditor", status: "review_pending", requestedVisibility: "shared", requestedSpaceId: "default", requestedCollectionId: null, tagIds: [], sourceVersion: { content: "review route fixture" }, safety: { findings: [] } } };
+}
+
+function adminRole(id: string, key: string, name: string) {
+  return { id, key, name, description: "route fixture", allowBits: "0x0", memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
+}
+
+/**
+ * One trashed knowledge item as the recycle bin's own read defines it. The purge
+ * deadline is derived from the same 30-day window the purge path enforces, so the
+ * fixture states exactly `trashedAt + 30 days` and a purgeable item.
+ */
+function trashedKnowledge(id: string, title: string) {
+  return {
+    id, spaceId: "space-route-audit", collectionId: null, revisionId: `${id}-revision`, title,
+    visibility: "shared", status: "trashed", publishedAt: NOW, updatedAt: NOW, searchStatus: "indexed",
+    retention: { trashedAt: "2026-08-01T00:00:00.000Z", purgeEligibleAt: NOW, purgeable: true },
+  };
+}
+
+/**
+ * The governed item the admin item read resolves. The current revision names the
+ * same item and claims `isCurrent`, which the page requires before it renders.
+ */
+function adminKnowledgeItem(id: string, title: string) {
+  return {
+    id, spaceId: "space-route-audit", collectionId: null, title, tagIds: [], visibility: "shared", searchStatus: "indexed",
+    publishedAt: NOW, updatedAt: NOW,
+    currentRevision: { id: `${id}-revision`, knowledgeItemId: id, title, visibility: "shared", publishedAt: NOW, isCurrent: true, previousRevisionId: null, indexStatus: "indexed" },
+  };
 }
 
 function analytics(withMarker: boolean) {

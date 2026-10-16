@@ -1,9 +1,10 @@
 import { requireCapability } from "../authorization/policy";
 import { AppError, jsonResponse, methodNotAllowed, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
-import { decodeOpaqueCursor, deriveCursorScopeKey } from "../pagination";
+import { decodeOpaqueCursor } from "../pagination";
+import { deriveGraphCursorScopeKey } from "../graph/cursor";
 import type { GraphProjectionService } from "../graph/service";
-import { graphNodeMatchesRoot, parseGraphQuery } from "../graph/types";
+import { graphNodeMatchesRoot, parseGraphQuery, type GraphQuery } from "../graph/types";
 
 export interface GraphRouteServices {
   graph: Pick<GraphProjectionService, "get">;
@@ -23,16 +24,7 @@ export async function routeGraphApi(
 
   const query = parseGraphQuery(url.searchParams);
   if (query.cursor !== null && query.cursor !== undefined) {
-    await validateCursor(query.cursor, {
-      memberId: member.memberId,
-      scope: query.scope,
-      rootId: query.rootId,
-      depth: query.depth,
-      types: query.types.join(","),
-      ...(query.from ? { from: query.from } : {}),
-      ...(query.to ? { to: query.to } : {}),
-      ...(query.changeKind ? { changeKind: query.changeKind } : {}),
-    });
+    await validateCursor(query.cursor, member.memberId, query);
   }
 
   const snapshot = await services.graph.get(member.memberId, query);
@@ -42,16 +34,7 @@ export async function routeGraphApi(
   return jsonResponse(snapshot, 200, context.requestId);
 }
 
-async function validateCursor(cursor: string, scope: {
-  memberId: string;
-  scope: string;
-  rootId: string | null;
-  depth: number;
-  types: string;
-  from?: string;
-  to?: string;
-  changeKind?: string;
-}): Promise<void> {
+async function validateCursor(cursor: string, memberId: string, query: GraphQuery): Promise<void> {
   let decoded: unknown;
   try {
     decoded = decodeOpaqueCursor(cursor);
@@ -64,8 +47,9 @@ async function validateCursor(cursor: string, scope: {
   if (keys.join(",") !== "kind,offset,scopeKey,v") throw graphPageInvalid();
   if (record.v !== 1 || record.kind !== "graph" || typeof record.scopeKey !== "string"
     || !Number.isSafeInteger(record.offset) || (record.offset as number) < 0) throw graphPageInvalid();
-  const expected = await deriveCursorScopeKey("graph", scope);
-  if (record.scopeKey !== expected) throw graphPageInvalid();
+  // The same binding the service mints with, so a continuation is only accepted for
+  // the member, scope, root, depth, types and range that produced it.
+  if (record.scopeKey !== await deriveGraphCursorScopeKey(memberId, query)) throw graphPageInvalid();
 }
 
 function requireMember(principal: Principal): Extract<Principal, { kind: "member" }> {

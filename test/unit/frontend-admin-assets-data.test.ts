@@ -26,4 +26,13 @@ describe("admin asset preview data boundary", () => {
     const requester = vi.fn().mockResolvedValue(new Response(JSON.stringify({ assetId: "asset-1" }), { status: 200 }));
     await expect(loadAdminAssetPreview("asset-1", requester)).rejects.toThrow("ASSET_PREVIEW_INVALID");
   });
+
+  it("surfaces the server's parse attempts and latest error, and invents neither when absent", async () => {
+    const withJob = vi.fn(async () => new Response(JSON.stringify({ items: [{ asset: { id: "asset-1", originalName: "guide.pdf" }, job: { status: "failed_retryable", attempts: 2, lastErrorCode: "ASSET_PARSE_FAILED" } }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }), { status: 200 }));
+    await expect(loadAdminAssets({ page: 1, pageSize: 20, requester: withJob })).resolves.toMatchObject({ items: [{ attempts: 2, lastErrorCode: "ASSET_PARSE_FAILED" }] });
+    const withoutProgress = vi.fn(async () => new Response(JSON.stringify({ items: [{ asset: { id: "asset-2", originalName: "guide.pdf" }, job: { status: "queued" } }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }), { status: 200 }));
+    const bare = await loadAdminAssets({ page: 1, pageSize: 20, requester: withoutProgress });
+    expect(bare.items[0]).not.toHaveProperty("attempts");
+    expect(bare.items[0]).not.toHaveProperty("lastErrorCode");
+  });
 });

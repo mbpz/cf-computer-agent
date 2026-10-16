@@ -15,18 +15,28 @@ import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskP
 export interface TaskRelationVersion { expectedUpdatedAt?: number; updatedAt: number; }
 export interface TaskDependencyVersion extends TaskRelationVersion { expectedUpdatedAt: number; }
 
+export interface TaskTombstone { taskId: string; deletedAt: string; }
+/**
+ * `deleted` removed the live row this call named; `replayed` converged on a receipt
+ * recorded earlier; `version_conflict` left a newer live row in place.
+ */
+export type TaskDeleteOutcome = { kind: "deleted" | "replayed"; tombstone: TaskTombstone } | { kind: "version_conflict" };
+
+/** A delete receipt stays replayable for the 30-day period the repo already keeps trashed knowledge. */
+export const TASK_TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 export interface TasksRepositoryPort {
   insert(input: TaskCreate): Promise<boolean>;
   insertWithKnowledge(input: TaskCreate, knowledgeItemId: string, linkId: string, audits?: readonly CreateAuditEvent[]): Promise<boolean>;
   findOwned(memberId: string, id: string): Promise<Task | null>;
   list(memberId: string, request: TaskListRequest): Promise<TaskPage>;
-  update(memberId: string, id: string, input: TaskUpdate, expectedUpdatedAt?: number): Promise<Task | null>;
+  update(memberId: string, id: string, input: TaskUpdate, expectedUpdatedAt: number): Promise<Task | null>;
   compareAndSetStatus(memberId: string, id: string, expectedStatus: TaskStatus, status: TaskStatus, completedAt: number | null, progress: number, updatedAt: number): Promise<boolean>;
   listPendingStatusNotifications(memberId: string, taskId: string, limit: number): Promise<TaskStatusNotificationIntent[]>;
   markStatusNotificationDelivered(memberId: string, intentId: string, deliveredAt: number): Promise<boolean>;
   updateProgress(memberId: string, id: string, progress: number, updatedAt: number, expectedUpdatedAt?: number): Promise<Task | null>;
   touch(memberId: string, id: string, updatedAt: number, expectedUpdatedAt?: number): Promise<boolean>;
-  delete(memberId: string, id: string): Promise<boolean>;
+  delete(memberId: string, id: string, expectedUpdatedAt: number, deletedAt: number): Promise<TaskDeleteOutcome | null>;
   countByMember(memberId: string): Promise<number>;
   summary(memberId: string, now: Date): Promise<TaskSummary>;
   listTags(memberId: string, taskId: string): Promise<string[]>;
@@ -140,11 +150,10 @@ export class TasksRepository implements TasksRepositoryPort {
     );
   }
 
-  async update(memberId: string, id: string, input: TaskUpdate, expectedUpdatedAt?: number): Promise<Task | null> {
-    const condition = expectedUpdatedAt === undefined ? "" : " AND updated_at = ?";
+  async update(memberId: string, id: string, input: TaskUpdate, expectedUpdatedAt: number): Promise<Task | null> {
     const result = await this.db.prepare(
-      `UPDATE tasks SET title = ?, notes = ?, priority = ?, due_at = ?, updated_at = ? WHERE member_id = ? AND id = ?${condition}`,
-    ).bind(input.title, input.notes, input.priority, input.dueAt, input.updatedAt, memberId, id, ...(expectedUpdatedAt === undefined ? [] : [expectedUpdatedAt])).run();
+      `UPDATE tasks SET title = ?, notes = ?, priority = ?, due_at = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ?`,
+    ).bind(input.title, input.notes, input.priority, input.dueAt, input.updatedAt, memberId, id, expectedUpdatedAt).run();
     return result.meta.changes === 1 ? this.findOwned(memberId, id) : null;
   }
 
@@ -192,11 +201,37 @@ export class TasksRepository implements TasksRepositoryPort {
     return result.meta.changes === 1;
   }
 
-  async delete(memberId: string, id: string): Promise<boolean> {
-    const result = await this.db.prepare("DELETE FROM tasks WHERE member_id = ? AND id = ?").bind(memberId, id).run();
-    // workerd counts FK-cascade rows (task_tags/task_links) in meta.changes,
-    // so a delete with children reports more than 1 change.
-    return result.meta.changes > 0;
+  async delete(memberId: string, id: string, expectedUpdatedAt: number, deletedAt: number): Promise<TaskDeleteOutcome | null> {
+    // One batch, so every predicate is evaluated against a single committed state.
+    // 1. The receipt is claimed only for the version the caller edited, and only when
+    //    a live owned row at that version exists: a re-sent delete can never write a
+    //    second receipt (PK per member/task), and a task re-created under the same id
+    //    refreshes it.
+    // 2. The same version of the live row is then removed; children keep cascading.
+    //    workerd counts cascaded rows in meta.changes, so only `> 0` is meaningful.
+    // 3. The retained receipt is read in the same transaction, and an expired receipt
+    //    is not a receipt: a very late replay is answered as not found.
+    // 4. A surviving live row means the version moved: the caller must reload instead
+    //    of discarding a newer edit, and no receipt may be presented as its outcome.
+    const results = await this.db.batch([
+      this.db.prepare(
+        `INSERT INTO task_tombstones (member_id, task_id, deleted_at)
+         SELECT ?, ?, ? FROM tasks WHERE member_id = ? AND id = ? AND updated_at = ?
+         ON CONFLICT(member_id, task_id) DO UPDATE SET deleted_at = excluded.deleted_at`,
+      ).bind(memberId, id, deletedAt, memberId, id, expectedUpdatedAt),
+      this.db.prepare("DELETE FROM tasks WHERE member_id = ? AND id = ? AND updated_at = ?").bind(memberId, id, expectedUpdatedAt),
+      this.db.prepare(
+        "SELECT task_id, deleted_at FROM task_tombstones WHERE member_id = ? AND task_id = ? AND deleted_at > ?",
+      ).bind(memberId, id, deletedAt - TASK_TOMBSTONE_RETENTION_MS),
+      this.db.prepare("SELECT 1 AS live FROM tasks WHERE member_id = ? AND id = ?").bind(memberId, id),
+    ]);
+    if (results[3]!.results[0] !== undefined) return { kind: "version_conflict" };
+    const row = results[2]!.results[0] as { task_id: string; deleted_at: number } | undefined;
+    if (!row) return null;
+    return {
+      kind: results[1]!.meta.changes > 0 ? "deleted" : "replayed",
+      tombstone: { taskId: row.task_id, deletedAt: new Date(row.deleted_at).toISOString() },
+    };
   }
 
   async countByMember(memberId: string): Promise<number> {

@@ -78,9 +78,33 @@ describe("tasks data layer", () => {
 
   it("validates the target of every task mutation receipt", async () => {
     const wrong = fetchJson({ id: "other", title: "Alpha" });
-    await expect(setTaskStatus("owned", "done", wrong)).rejects.toThrow();
+    await expect(setTaskStatus("owned", "done", wrong, "doing")).rejects.toThrow();
     await expect(setTaskProgress("owned", 10, wrong)).rejects.toThrow();
-    await expect(updateTask("owned", { title: "Alpha", notes: "", priority: "medium", dueAt: null }, wrong)).rejects.toThrow();
+    await expect(updateTask("owned", { title: "Alpha", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: "2026-10-10T00:00:00.000Z" }, wrong)).rejects.toThrow();
+  });
+
+  it("always sends the status this write replaces", async () => {
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const requester = (async (url, init) => {
+      calls.push({ url: String(url), init });
+      return Response.json({ id: "owned", title: "Alpha", notes: "", status: "doing", progress: 0, priority: "medium", dueAt: null, completedAt: null, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-02T00:00:00.000Z" });
+    }) as typeof fetch;
+    await setTaskStatus("owned", "doing", requester, "todo");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("/api/tasks/owned/status");
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ status: "doing", expectedStatus: "todo" });
+  });
+
+  it("always sends the version a detail update edits", async () => {
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const requester = (async (url, init) => {
+      calls.push({ url: String(url), init });
+      return Response.json({ id: "owned", title: "Alpha", notes: "", status: "todo", progress: 0, priority: "medium", dueAt: null, completedAt: null, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-02T00:00:00.000Z" });
+    }) as typeof fetch;
+    await updateTask("owned", { title: "Alpha", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: "2026-10-01T00:00:00.000Z" }, requester);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.init?.method).toBe("PATCH");
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ title: "Alpha", notes: "", priority: "medium", dueAt: null, expectedUpdatedAt: "2026-10-01T00:00:00.000Z" });
   });
 
   it.each([undefined, "2026-10-10T00:00:00.000Z"])("preserves link DELETE payload and identity for version %s", async (version) => {
@@ -107,9 +131,9 @@ describe("tasks data layer", () => {
 
   it("treats a 404 on delete as success", async () => {
     const gone = (async () => new Response(null, { status: 404, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
-    await expect(deleteTask("task-gone", gone)).resolves.toBeUndefined();
+    await expect(deleteTask("task-gone", "2026-10-10T00:00:00.000Z", gone)).resolves.toBeUndefined();
     const error = (async () => new Response(JSON.stringify({ error: { code: "TASK_NOT_FOUND", message: "x", retryable: false } }), { status: 500 })) as unknown as typeof fetch;
-    await expect(deleteTask("task-broken", error)).rejects.toMatchObject({ status: 500 });
+    await expect(deleteTask("task-broken", "2026-10-10T00:00:00.000Z", error)).rejects.toMatchObject({ status: 500 });
   });
 });
 

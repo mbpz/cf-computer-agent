@@ -337,7 +337,7 @@ export async function routeMemberApi(
     }
     if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
     requireNoQuery(url);
-    const input = savedViewInput(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
+    const input = savedViewInput(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), true);
     return jsonResponse(await services.savedViews.create(member.memberId, input), 201, context.requestId);
   }
 
@@ -565,7 +565,7 @@ function optionalNullableString(value: unknown): string | null | undefined {
   return stringValue(value);
 }
 
-function savedViewInput(value: unknown): { name: unknown; filters: unknown } {
-  const input = strictRecord(value, ["name", "filters"], "SAVED_VIEW_INVALID");
-  return { name: input.name, filters: input.filters };
+function savedViewInput(value: unknown, allowClientKey = false): { name: unknown; filters: unknown; clientKey?: unknown } {
+  const input = strictRecord(value, allowClientKey ? ["name", "filters", "clientKey"] : ["name", "filters"], "SAVED_VIEW_INVALID");
+  return { name: input.name, filters: input.filters, clientKey: input.clientKey };
 }

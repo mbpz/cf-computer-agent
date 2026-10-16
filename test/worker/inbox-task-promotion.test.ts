@@ -72,7 +72,8 @@ describe("inbox atomic task promotion", () => {
   });
   it("does not recreate a task after its promoted target has been deleted", async () => {
     const receipt = await (await promote()).json<any>();
-    await http(`/api/tasks/${receipt.taskId}`, "DELETE");
+    const detail = await (await http(`/api/tasks/${receipt.taskId}`)).json<any>();
+    expect((await http(`/api/tasks/${receipt.taskId}`, "DELETE", { expectedUpdatedAt: detail.task.updatedAt })).status).toBe(200);
     expect((await promote()).status).toBe(422); expect(await count("tasks")).toBe(0);
   });
   it("rejects replay pointing at another member's task", async () => {

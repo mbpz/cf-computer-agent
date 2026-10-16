@@ -3,7 +3,7 @@ import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeReaderRoute } from "../../frontend/app";
-import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (text: string) => <div data-test-markdown>{text}</div> }));
@@ -51,7 +51,21 @@ describe("knowledge reader composite read ownership", () => {
   async function mount(memberId = "member-a", knowledgeItemId = "knowledge-a") { await act(async () => root.render(<KnowledgeReaderRoute locale={locale} memberId={memberId} knowledgeItemId={knowledgeItemId} />)); await flush(); }
   function button(label: string) { const target = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label); expect(target).toBeDefined(); return target!; }
   async function compare() { await act(async () => button("Compare with previous").click()); await flush(); }
-  function expectCleared() { expect(container.querySelector("[data-reader-layout]")).toBeNull(); expect(container.textContent).not.toContain("Private"); expect(container.textContent).toContain("Unable to load this knowledge entry."); }
+  function expectCleared() {
+    expect(container.querySelector("[data-reader-layout]")).toBeNull();
+    expect(container.textContent).not.toContain("Private");
+    // A revoked read is its own state: no generic retryable error, and no private
+    // note, shares, favorite, links or body left anywhere in the DOM.
+    expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+    expect(container.querySelector("[data-page-state='error']")).toBeNull();
+    expect(container.textContent).toContain(frontendText(locale, "KNOWLEDGE_READER_REVOKED"));
+    expect(container.querySelector("[data-reader-note]")).toBeNull();
+    expect(container.querySelector("[data-related-knowledge]")).toBeNull();
+    expect(container.querySelector("[data-backlinks]")).toBeNull();
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(container.querySelector("[data-test-markdown]")).toBeNull();
+    expect([...container.querySelectorAll("button")].some((button) => /favorite/i.test(button.textContent ?? ""))).toBe(false);
+  }
   function readRequests() { return requests.filter(r => sectionNames.some(name => r.url.pathname.endsWith(`/${name}`)) || r.url.pathname.includes("/diff/")); }
 
   it.each(sectionNames.flatMap(name => [401, 403].map(status => ({ name, status }))))("revokes body and all panels on $name $status, aborting and retiring late reads", async ({ name, status }) => {
@@ -234,6 +248,46 @@ describe("knowledge reader composite read ownership", () => {
     expect(container.textContent).toContain("Private body knowledge-a");
     await act(async () => backlink.resolve(deny(401))); await flush();
     expect(container.textContent).toContain("Private body knowledge-a");
+    expect(requests.every(request => !request.init?.method || request.init.method === "GET")).toBe(true);
+  });
+
+  it.each([401, 403])("re-authorizes the note, shares, links and favorite behind an explicit %s revocation", async (status) => {
+    const privateNote = { id: "note-a", ownerId: "member-a", knowledgeItemId: "knowledge-a", title: "Private note title", body: "Private note body", visibility: "private", access: "owner", citations: [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 1, endLine: 2 }], updatedAt: stamp };
+    const activeShare = { noteId: "note-a", recipientMemberId: "member-b", createdAt: stamp, revokedAt: null };
+    let revoked = false;
+    respond = url => {
+      if (url.pathname.endsWith("/note")) return Response.json({ note: privateNote });
+      if (url.pathname.endsWith("/shares")) return Response.json({ shares: [activeShare] });
+      if (url.pathname.endsWith("/favorite")) return Response.json({ favorite: true });
+      if (url.pathname === diffPath) return revoked ? deny(status) : reply(url);
+      return reply(url);
+    };
+    await mount();
+    expect(container.querySelector("[data-test-markdown]")!.textContent).toContain("Private body knowledge-a");
+    const note = container.querySelector("[data-reader-note]")!;
+    expect(note).not.toBeNull();
+    expect((note.querySelector("#reader-note-body") as HTMLTextAreaElement).value).toBe("Private note body");
+    expect(note.textContent).toContain("member-b");
+    expect(container.textContent).toContain("Private related");
+    expect(container.textContent).toContain("Private backlink");
+    expect(button("Remove from favorites").getAttribute("aria-pressed")).toBe("true");
+
+    revoked = true;
+    await compare();
+    expectCleared();
+    expect(container.textContent).not.toContain("Private note body");
+    expect(container.textContent).not.toContain("member-b");
+    expect(container.querySelectorAll("select")).toHaveLength(0);
+    expect(container.textContent).not.toContain("Private related");
+    expect(container.textContent).not.toContain("Private backlink");
+
+    revoked = false;
+    await act(async () => button("Try again").click()); await flush();
+    expect(container.querySelector("[data-test-markdown]")!.textContent).toContain("Private body knowledge-a");
+    expect((container.querySelector("#reader-note-body") as HTMLTextAreaElement).value).toBe("Private note body");
+    expect(container.textContent).toContain("Private related");
+    expect(container.textContent).toContain("Private backlink");
+    expect(button("Remove from favorites").getAttribute("aria-pressed")).toBe("true");
     expect(requests.every(request => !request.init?.method || request.init.method === "GET")).toBe(true);
   });
   const mutations = () => requests.filter(r => ["PUT", "DELETE"].includes(r.init?.method ?? ""));

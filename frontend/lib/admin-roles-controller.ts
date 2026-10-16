@@ -21,13 +21,32 @@ export interface AdminRolesController {
   recordBlocked: boolean;
   discardRecord: () => void;
   retryRead: () => void;
+  /** Re-sends the recorded intent with its original client key so the server replays one result. */
+  retryWrite: () => Promise<boolean>;
   /** Records the intent before sending it, keeps the write lock until an authoritative read lands. */
   mutate: (intent: AdminRoleWriteIntent, operation: () => Promise<unknown>, errorKey: string) => Promise<boolean>;
   /** Convenience wrappers so the routes never re-implement an intent or an endpoint call. */
-  saveRole: (roleId: string, allowBits: string) => Promise<boolean>;
+  saveRole: (roleId: string, allowBits: string, expectedAllowBits: string) => Promise<boolean>;
   createRole: (input: { key: string; name: string; description?: string; allowBits: string }) => Promise<boolean>;
   assignMember: (roleId: string, targetId: string) => Promise<boolean>;
   unassignMember: (roleId: string, targetId: string) => Promise<boolean>;
+}
+
+const writeErrorKeys: Record<AdminRoleWriteIntent["op"], string> = {
+  update: "ADMIN_ROLES_SAVE_ERROR",
+  create: "ADMIN_ROLES_CREATE_ERROR",
+  assign: "ADMIN_ROLES_MEMBER_ASSIGN_ERROR",
+  unassign: "ADMIN_ROLES_MEMBER_ASSIGN_ERROR",
+};
+
+/** The single intent-to-endpoint mapping, reused by the first attempt and by a keyed retry. */
+function requestFor(intent: AdminRoleWriteIntent): Promise<unknown> {
+  if (intent.op === "update") return updateAdminRole(intent.roleId, { allowBits: intent.allowBits, expectedAllowBits: intent.expectedAllowBits });
+  if (intent.op === "create") {
+    return createAdminRole({ operationId: intent.operationId, key: intent.key, name: intent.name, allowBits: intent.allowBits, ...(intent.description.length === 0 ? {} : { description: intent.description }) });
+  }
+  if (intent.op === "assign") return assignAdminRoleMember(intent.roleId, intent.memberId);
+  return unassignAdminRoleMember(intent.roleId, intent.memberId);
 }
 
 /**
@@ -114,8 +133,7 @@ export function useAdminRolesController({ locale, memberId }: { locale: LocaleRu
     if (state.kind !== "ready") setState({ kind: "loading" });
     void read();
   };
-  const mutate = async (intent: AdminRoleWriteIntent, operation: () => Promise<unknown>, errorKey: string) => {
-    if (recordBlockedRef.current || !epoch.current || state.kind !== "ready" || writeRef.current || readRef.current || blockedRef.current) return false;
+  const send = async (intent: AdminRoleWriteIntent, operation: () => Promise<unknown>, errorKey: string) => {
     if (memberId && !saveAdminRoleWrite(memberId, intent)) {
       setRecordNotice(frontendText(locale, "ADMIN_ROLES_NOT_RECORDED"));
       return false;
@@ -146,17 +164,46 @@ export function useAdminRolesController({ locale, memberId }: { locale: LocaleRu
       }
     }
   };
+  const mutate = async (intent: AdminRoleWriteIntent, operation: () => Promise<unknown>, errorKey: string) => {
+    if (recordBlockedRef.current || !epoch.current || state.kind !== "ready" || writeRef.current || readRef.current || blockedRef.current) return false;
+    return send(intent, operation, errorKey);
+  };
+  // A keyed retry is not a new write: the recorded intent keeps its client key,
+  // so the server returns the recorded result instead of a duplicate conflict.
+  const retryWrite = async () => {
+    const intent = intentRef.current;
+    if (!intent || recordBlockedRef.current || !epoch.current || state.kind !== "ready" || writeRef.current || readRef.current) return false;
+    return send(intent, () => requestFor(intent), writeErrorKeys[intent.op]);
+  };
   function discardRecord() {
     if (!memberId || !recordBlockedRef.current || !discardBlockedAdminRoleWrite(memberId)) return;
     recordBlockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
   }
   const guarded = <A extends unknown[]>(operation: (...args: A) => Promise<boolean>) => (...args: A) => recordBlocked ? Promise.resolve(false) : operation(...args);
-  const saveRole = guarded((roleId: string, allowBits: string) => mutate({ op: "update", roleId, allowBits }, () => updateAdminRole(roleId, { allowBits }), "ADMIN_ROLES_SAVE_ERROR"));
-  const createRole = guarded((input: { key: string; name: string; description?: string; allowBits: string }) => mutate({ op: "create", key: input.key, name: input.name, allowBits: input.allowBits }, () => createAdminRole(input), "ADMIN_ROLES_CREATE_ERROR"));
-  const assignMember = guarded((roleId: string, targetId: string) => mutate({ op: "assign", roleId, memberId: targetId }, () => assignAdminRoleMember(roleId, targetId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR"));
-  const unassignMember = guarded((roleId: string, targetId: string) => mutate({ op: "unassign", roleId, memberId: targetId }, () => unassignAdminRoleMember(roleId, targetId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR"));
+  const saveRole = guarded((roleId: string, allowBits: string, expectedAllowBits: string) => {
+    const intent: AdminRoleWriteIntent = { op: "update", roleId, allowBits: allowBits.toLowerCase(), expectedAllowBits: expectedAllowBits.toLowerCase() };
+    return mutate(intent, () => requestFor(intent), writeErrorKeys.update);
+  });
+  const createRole = guarded((input: { key: string; name: string; description?: string; allowBits: string }) => {
+    const key = input.key.trim(); const name = input.name.trim(); const description = input.description ?? ""; const allowBits = input.allowBits.toLowerCase();
+    // A retry of the same creation must carry the same operation number.
+    const stored = memberId ? loadAdminRoleWrite(memberId) : { kind: "empty" as const };
+    const operationId = stored.kind === "ready" && stored.intent.op === "create" && stored.intent.key === key
+      && stored.intent.name === name && stored.intent.description === description && stored.intent.allowBits === allowBits
+      ? stored.intent.operationId : crypto.randomUUID();
+    const intent: AdminRoleWriteIntent = { op: "create", operationId, key, name, description, allowBits };
+    return mutate(intent, () => requestFor(intent), writeErrorKeys.create);
+  });
+  const assignMember = guarded((roleId: string, targetId: string) => {
+    const intent: AdminRoleWriteIntent = { op: "assign", roleId, memberId: targetId };
+    return mutate(intent, () => requestFor(intent), writeErrorKeys.assign);
+  });
+  const unassignMember = guarded((roleId: string, targetId: string) => {
+    const intent: AdminRoleWriteIntent = { op: "unassign", roleId, memberId: targetId };
+    return mutate(intent, () => requestFor(intent), writeErrorKeys.unassign);
+  });
   return {
-    state, saving, recordBlocked, discardRecord, retryRead, mutate, saveRole, createRole, assignMember, unassignMember,
+    state, saving, recordBlocked, discardRecord, retryRead, retryWrite, mutate, saveRole, createRole, assignMember, unassignMember,
     writeBlocked: reading || needsRead,
     readPending: reading || saving,
     readRequired: needsRead,

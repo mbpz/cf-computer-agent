@@ -1,14 +1,32 @@
-import { validReviewNote, type ReviewDecision, type ReviewOperation } from "../components/review/review-detail-data";
+import { isCanonicalTimestamp, validReviewNote, type ReviewDecision, type ReviewOperation } from "../components/review/review-detail-data";
 
 export type StoredReviewDecision = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intent: ReviewOperation };
 const storageKey = (memberId: string, submissionId: string) => `memory-garden:review-decision:v1:${encodeURIComponent(memberId)}:${encodeURIComponent(submissionId)}`;
 const currentKey = (memberId: string) => `memory-garden:review-decision-current:v1:${encodeURIComponent(memberId)}`;
 const idPattern = /^[A-Za-z0-9_-]+$/u;
-const actions = new Set<ReviewDecision>(["publish", "reject", "request_changes"]);
+const operationIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+const actions: Record<ReviewDecision, true> = { publish: true, reject: true, request_changes: true };
 function isId(value: unknown): value is string { return typeof value === "string" && idPattern.test(value); }
+function isReviewDecision(value: unknown): value is ReviewDecision {
+  return typeof value === "string" && Object.hasOwn(actions, value);
+}
 function expectedPath(id: string, action: ReviewDecision): string {
   const path = action === "request_changes" ? "request-revision" : action;
   return `/api/admin/submissions/${encodeURIComponent(id)}/${path}`;
+}
+/**
+ * A decision body may carry the client's operation number and the submission
+ * version it was read at. Both are optional (a body without them is the legacy
+ * natural-identity request) and must appear together.
+ */
+function validDecisionIdentity(record: Record<string, unknown>): boolean {
+  const { operationId, expectedUpdatedAt } = record;
+  if (operationId === undefined && expectedUpdatedAt === undefined) return true;
+  return typeof operationId === "string" && operationIdPattern.test(operationId)
+    && isCanonicalTimestamp(expectedUpdatedAt);
+}
+function decisionPayloadKeys(record: Record<string, unknown>): string[] {
+  return Object.keys(record).filter((key) => key !== "operationId" && key !== "expectedUpdatedAt");
 }
 function validBody(action: ReviewDecision, body: string): boolean {
   if (body.length > 16000) return false;
@@ -16,8 +34,10 @@ function validBody(action: ReviewDecision, body: string): boolean {
   try { parsed = JSON.parse(body); } catch { return false; }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
   const record = parsed as Record<string, unknown>;
+  if (!validDecisionIdentity(record)) return false;
+  const keys = decisionPayloadKeys(record);
   if (action === "publish") {
-    return Object.keys(record).length === 5
+    return keys.length === 5
       && typeof record.title === "string" && record.title.length <= 500 && !record.title.includes("\u0000")
       && (record.visibility === "shared" || record.visibility === "admin_only")
       && isId(record.spaceId)
@@ -26,15 +46,15 @@ function validBody(action: ReviewDecision, body: string): boolean {
   }
   const reason = record.reasonCode;
   const noteOk = typeof record.note === "string" && validReviewNote(record.note);
-  return Object.keys(record).length === 2 && noteOk && (
+  return keys.length === 2 && noteOk && (
     action === "request_changes" ? reason === "needs_revision" : reason === "not_relevant" || reason === "duplicate" || reason === "unsafe"
   );
 }
 export function validReviewDecision(value: unknown): value is ReviewOperation {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  if (Object.keys(record).length !== 4 || !isId(record.id) || typeof record.action !== "string" || !actions.has(record.action as ReviewDecision)) return false;
-  const action = record.action as ReviewDecision;
+  if (Object.keys(record).length !== 4 || !isId(record.id) || !isReviewDecision(record.action)) return false;
+  const action = record.action;
   return record.path === expectedPath(record.id, action) && typeof record.body === "string" && validBody(action, record.body);
 }
 function same(left: ReviewOperation, right: ReviewOperation): boolean {

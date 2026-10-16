@@ -242,8 +242,11 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     const dueAt = detail && fields.dueAt === localTaskDate(detail.task.dueAt) ? detail.task.dueAt : date?.toISOString() ?? null;
     const patch = { title, notes, priority: fields.priority, dueAt };
     const priority = patch.priority as "low" | "medium" | "high";
-    if (taskId) void perform({ clean: ["fields"], op: { op: "update", taskId, fields: { ...patch, priority }, ...(detail ? { expectedUpdatedAt: detail.task.updatedAt } : {}) } });
-    else { createId.current ??= crypto.randomUUID(); void perform({ clean: ["fields"], op: { op: "create", taskId: createId.current, fields: { ...patch, priority } } }); }
+    if (taskId === null) { createId.current ??= crypto.randomUUID(); void perform({ clean: ["fields"], op: { op: "create", taskId: createId.current, fields: { ...patch, priority } } }); return; }
+    // An existing task is only saved against the version this editor read: without a
+    // loaded detail there is no precondition, so the save is refused, never sent bare.
+    if (!detail) { setError(true); return; }
+    void perform({ clean: ["fields"], op: { op: "update", taskId, fields: { ...patch, priority }, expectedUpdatedAt: detail.task.updatedAt } });
   }
   function saveTags() {
     if (!taskId || locked) return;
@@ -274,7 +277,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     </div></div>}
     {notice && <p role={notice === "TASKS_WRITE_APPLIED" ? "status" : "alert"}>{t(notice)}</p>}
     {error && <p role="alert">{t("TASKS_ACTION_FAILED")} {t("TASKS_INVALID_FORM")}</p>}
-    {reading ? <p role="status">{t("TASKS_LOADING")}</p> : readError ? <div role="alert"><p>{t("COMMON_UNABLE_TO_LOAD")}</p><Button onClick={() => void read()}>{t("TASKS_RELOAD_DETAIL")}</Button></div> : <>
+    {reading ? <p role="status">{t("TASKS_LOADING")}</p> : readError || (taskId !== null && detail === null) ? <div role="alert"><p>{t("COMMON_UNABLE_TO_LOAD")}</p><Button onClick={() => void read()}>{t("TASKS_RELOAD_DETAIL")}</Button></div> : <>
       <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); save(); }}>
         <label className="block">{t("TASKS_FIELD_TITLE")}<Input aria-label={t("TASKS_FIELD_TITLE")} value={fields.title} maxLength={400} required disabled={locked} onChange={(event) => edit("fields", { ...currentDraft.current.fields, title: event.currentTarget.value })} /></label>
         <label className="block">{t("TASKS_FIELD_NOTES")}<Input aria-label={t("TASKS_FIELD_NOTES")} value={fields.notes} maxLength={10000} disabled={locked} onChange={(event) => edit("fields", { ...currentDraft.current.fields, notes: event.currentTarget.value })} /></label>

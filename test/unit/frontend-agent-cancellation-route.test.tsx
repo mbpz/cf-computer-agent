@@ -863,6 +863,66 @@ describe("agent request cancellation route", () => {
     await act(async () => { late.resolve(new Response()); }); await flush();
     expect(container.textContent).toContain("Grounded answer");
   });
+
+  it("states an explicit no-evidence refusal instead of rendering an empty answer", async () => {
+    vi.stubGlobal("fetch", async () => frame({ answer: "知识库中没有足够依据回答这个问题。", conversationId: "conv-refused", evidenceConfidence: 0.1, citations: [], sources: [], messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT", suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "KNOWLEDGE_CHAT_EXPAND_SCOPE"] }));
+    await render(); await question("Unclear question"); await submit();
+    const refusal = container.querySelector<HTMLElement>("[data-agent-refused]");
+    expect(refusal).toBeTruthy();
+    expect(refusal!.getAttribute("role")).toBe("status");
+    expect(refusal!.textContent).toContain("Not enough evidence");
+    expect(refusal!.textContent).toContain("Rewrite the question");
+    expect(refusal!.textContent).toContain("changing sources explicitly starts a new conversation");
+    // The server's refusal prose is a transport marker, never shown as the answer body.
+    expect(container.textContent).not.toContain("知识库中没有足够依据回答这个问题。");
+    expect(container.textContent).not.toContain("Low confidence");
+    // The refused turn still keeps its conversation recoverable.
+    expect(container.querySelector('a[href="/agent?conversationId=conv-refused"]')).not.toBeNull();
+  });
+
+  it("distinguishes a quota deferral, a degraded backend and a transport failure", async () => {
+    let mode: "quota" | "degraded" | "transport" = "degraded";
+    vi.stubGlobal("fetch", async () => {
+      if (mode === "transport") throw new TypeError("Failed to fetch");
+      const code = mode === "quota" ? "AI_QUOTA_EXHAUSTED" : "AI_UNAVAILABLE";
+      return new Response(`data: ${JSON.stringify({ stage: "error", error: { code, message: "unavailable", status: 503, retryable: true } })}\n\n`, { headers: { "content-type": "text/event-stream" } });
+    });
+    await render();
+    await question("Degraded turn"); await submit();
+    expect(container.querySelector('[data-agent-unavailable="degraded"]')).toBeTruthy();
+    expect(container.querySelector('[data-page-state="degraded"]')).toBeTruthy();
+    expect(container.textContent).toContain("temporarily unavailable");
+    mode = "quota";
+    await question("Quota turn"); await submit();
+    expect(container.querySelector('[data-agent-unavailable="quota"]')).toBeTruthy();
+    expect(container.textContent).toContain("quota is exhausted");
+    mode = "transport";
+    await question("Transport turn"); await submit();
+    expect(container.querySelector("[data-agent-unavailable]")).toBeNull();
+    expect(container.querySelector('[data-page-state="error"]')).toBeTruthy();
+  });
+
+  it("keeps the conversation across a dropped connection and re-reads citations after an explicit retry", async () => {
+    const requests: RequestInit[] = [];
+    vi.stubGlobal("fetch", async (_url: unknown, init?: RequestInit) => {
+      requests.push(init!);
+      if (requests.length === 1) throw new TypeError("Failed to fetch");
+      return frame({ answer: "Recovered answer", conversationId: "conv-recovered", evidenceConfidence: 0.9, citations: ["cite-1"], sources: [{ citationId: "cite-1", knowledgeItemId: "knowledge-a", title: "Launch guide", spaceId: "space-a" }], idempotencyKey: new Headers(init?.headers).get("idempotency-key") });
+    });
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-recovery" />));
+    await question("Original question"); await submit();
+    expect(container.textContent).toContain("Unconfirmed question");
+    await click("Retry original question");
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.body).toBe(requests[0]?.body);
+    expect(new Headers(requests[1]?.headers).get("idempotency-key")).toBe(new Headers(requests[0]?.headers).get("idempotency-key"));
+    expect(container.textContent).toContain("Recovered answer");
+    expect(container.querySelector('a[href="/knowledge/knowledge-a#cite-1"]')).not.toBeNull();
+    // The recovered conversation — not a fresh one — carries the next distinct question.
+    await question("Follow-up"); await submit();
+    expect(requests).toHaveLength(3);
+    expect(JSON.parse(String(requests[2]?.body))).toMatchObject({ question: "Follow-up", conversationId: "conv-recovered" });
+  });
 });
 function frame(payload: unknown, init: ResponseInit = {}) { return new Response(`data: ${JSON.stringify({ stage: "answer", body: payload })}\n\n`, { headers: { "content-type": "text/event-stream" }, ...init }); }
 function answer(text: string, conversationId: string) { return frame({ answer: text, conversationId, evidenceConfidence: 0.3, citations: [], sources: [] }); }

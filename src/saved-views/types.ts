@@ -9,6 +9,10 @@ export interface SavedViewFilters {
   collectionId: string | null;
   tagIds: string[];
   tagMode: SavedViewTagMode;
+  kind: "text" | "markdown" | "code" | null;
+  authorId: string | null;
+  publishedFrom: string | null;
+  publishedTo: string | null;
 }
 
 export interface SavedView {
@@ -24,6 +28,8 @@ export interface SavedView {
 export interface SavedViewCreate {
   id: string;
   memberId: string;
+  /** Stable key of the creating request: a replay resolves to the same view. */
+  clientKey: string;
   name: string;
   schemaVersion: 1;
   filters: SavedViewFilters;

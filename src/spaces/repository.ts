@@ -1,7 +1,7 @@
 import { decodePageCursor, encodePageCursor, type PageRequest } from "../pagination";
 import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
-import type { Collection, CollectionPage, CreateCollection, CreateSpace, Space, SpacePage, UpdateCollection, UpdateSpace } from "./types";
+import type { Collection, CollectionPage, CreateCollection, CreateSpace, Space, SpaceImpact, SpaceListItem, SpacePage, UpdateCollection, UpdateSpace } from "./types";
 
 export type SpacesRepositoryConflictKind = "slug" | "space_read_only" | "invalid_parent" | "write_conflict" | "request_conflict";
 export class SpacesRepositoryConflictError extends Error { constructor(readonly kind: SpacesRepositoryConflictKind) { super(`Space conflict: ${kind}`); } }
@@ -10,8 +10,10 @@ export interface SpacesRepositoryPort { findSpaceById(id: string): Promise<Space
 export interface CollectionsRepositoryPort { createCollectionIdempotent?(input: CreateCollection, audit: CreateAuditEvent, requestKey: string, payload: string): Promise<Collection>; findCollectionById(id: string): Promise<Collection | null>; createCollection(input: CreateCollection): Promise<Collection>; createCollectionWithAudit?(input: CreateCollection, audit: CreateAuditEvent): Promise<Collection>; updateCollection(id: string, input: UpdateCollection): Promise<Collection | null>; updateCollectionWithAudit?(id: string, input: UpdateCollection, audit: CreateAuditEvent): Promise<Collection | null>; listCollections(spaceId: string, request: PageRequest): Promise<CollectionPage>; }
 
 type SpaceRow = { id: string; slug: string; name: string; description: string; kind: Space["kind"]; status: Space["status"]; position: number; read_only: number; created_at: string; updated_at: string };
+type ImpactCountRow = { space_id: string; count: number };
 type CollectionRow = { id: string; space_id: string; parent_id: string | null; name: string; description: string; status: Collection["status"]; position: number; created_at: string; updated_at: string };
 const positionCursorBounds = { minSort: 0, maxSort: 1_000_000 } as const;
+const EMPTY_SPACE_IMPACT: SpaceImpact = { collections: 0, knowledgeItems: 0, revisions: 0, links: 0 };
 
 export class SpacesRepository implements SpacesRepositoryPort, CollectionsRepositoryPort {
   constructor(private readonly db: D1Database, private readonly audit?: AuditRepository) {}
@@ -77,7 +79,34 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
   async listSpaces(request: PageRequest): Promise<SpacePage> {
     const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, positionCursorBounds);
     const rows = cursor ? await this.db.prepare(`${spaceSelect} WHERE (position > ? OR (position = ? AND id > ?)) ORDER BY position ASC, id ASC LIMIT ?`).bind(cursor.sort, cursor.sort, cursor.id, request.limit + 1).all<SpaceRow>() : await this.db.prepare(`${spaceSelect} ORDER BY position ASC, id ASC LIMIT ?`).bind(request.limit + 1).all<SpaceRow>();
-    return page(rows.results.map(mapSpaceRow), request.limit);
+    const paged = page(rows.results.map(mapSpaceRow), request.limit);
+    const impacts = await this.loadSpaceImpacts(paged.items.map((space) => space.id));
+    return {
+      ...paged,
+      items: paged.items.map((space): SpaceListItem => ({ ...space, impact: impacts.get(space.id) ?? EMPTY_SPACE_IMPACT })),
+    };
+  }
+
+  /**
+   * One grouped query per impact category for the whole returned page (never one query
+   * per Space). A Space with no rows in a category has no group row, so its true count is
+   * zero; a failing query rejects the whole read instead of fabricating zero.
+   */
+  private async loadSpaceImpacts(spaceIds: string[]): Promise<Map<string, SpaceImpact>> {
+    const impacts = new Map<string, SpaceImpact>(spaceIds.map((id) => [id, { ...EMPTY_SPACE_IMPACT }]));
+    if (spaceIds.length === 0) return impacts;
+    const placeholders = spaceIds.map(() => "?").join(", ");
+    const [collections, knowledgeItems, revisions, links] = await Promise.all([
+      this.db.prepare(`SELECT space_id, COUNT(*) AS count FROM collections WHERE status = 'active' AND space_id IN (${placeholders}) GROUP BY space_id`).bind(...spaceIds).all<ImpactCountRow>(),
+      this.db.prepare(`SELECT space_id, COUNT(*) AS count FROM knowledge_items WHERE status = 'active' AND space_id IN (${placeholders}) GROUP BY space_id`).bind(...spaceIds).all<ImpactCountRow>(),
+      this.db.prepare(`SELECT k.space_id AS space_id, COUNT(*) AS count FROM knowledge_items k JOIN revisions r ON r.id = k.current_revision_id WHERE k.status = 'active' AND k.space_id IN (${placeholders}) GROUP BY k.space_id`).bind(...spaceIds).all<ImpactCountRow>(),
+      this.db.prepare(`SELECT k.space_id AS space_id, COUNT(*) AS count FROM task_links tl JOIN knowledge_items k ON k.id = tl.knowledge_item_id WHERE k.status = 'active' AND k.space_id IN (${placeholders}) GROUP BY k.space_id`).bind(...spaceIds).all<ImpactCountRow>(),
+    ]);
+    assignImpact(impacts, collections.results, "collections");
+    assignImpact(impacts, knowledgeItems.results, "knowledgeItems");
+    assignImpact(impacts, revisions.results, "revisions");
+    assignImpact(impacts, links.results, "links");
+    return impacts;
   }
   async findCollectionById(id: string): Promise<Collection | null> { return mapCollection(await this.db.prepare(`${collectionSelect} WHERE id = ?`).bind(id).first<CollectionRow>()); }
   async createCollection(input: CreateCollection): Promise<Collection> {
@@ -270,6 +299,12 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
 const spaceSelect = "SELECT id, slug, name, description, kind, status, position, read_only, created_at, updated_at FROM spaces";
 const collectionSelect = "SELECT id, space_id, parent_id, name, description, status, position, created_at, updated_at FROM collections";
 const defined = <T extends object>(value: T): T => Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+function assignImpact(impacts: Map<string, SpaceImpact>, rows: ImpactCountRow[], key: keyof SpaceImpact): void {
+  for (const row of rows) {
+    const impact = impacts.get(row.space_id);
+    if (impact) impact[key] = row.count;
+  }
+}
 function throwKnownSpaceConflict(error: unknown): never { if (error instanceof SpacesRepositoryConflictError) throw error; if (error instanceof Error && error.message.includes("NOT NULL constraint failed: spaces.slug")) throw new SpacesRepositoryConflictError("write_conflict"); if (isSlugConflict(error)) throw new SpacesRepositoryConflictError("slug"); throw error; }
 function isSlugConflict(error: unknown): boolean { return error instanceof Error && ["UNIQUE constraint failed: spaces.slug", "D1_ERROR: UNIQUE constraint failed: spaces.slug: SQLITE_CONSTRAINT", "D1_ERROR: UNIQUE constraint failed: spaces.slug: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)"].includes(error.message); }
 function isCollectionChangeGuardFailure(error: unknown): boolean { return error instanceof Error && error.message.includes("NOT NULL constraint failed: collections.space_id"); }

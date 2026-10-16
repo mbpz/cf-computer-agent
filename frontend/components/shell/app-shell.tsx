@@ -1,6 +1,6 @@
 import { useNotificationSummary } from "../../lib/use-notification-summary";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
-import { Bell, BookOpen, CalendarBlank, CaretDown, ChartLine, ChatCircle, Check, Checks, DotsThree, Files, FolderSimple, GearSix, House, Kanban, MagnifyingGlass, Moon, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, Sun, Target, Timer, UploadSimple, UsersThree } from "@phosphor-icons/react";
+import { Bell, BookOpen, CalendarBlank, CaretDown, ChartLine, ChatCircle, Check, Checks, DotsThree, Files, FolderSimple, GearSix, House, Kanban, MagnifyingGlass, Moon, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, Sun, Target, Timer, Trash, UploadSimple, UsersThree } from "@phosphor-icons/react";
 import { ROUTES } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
 import type { FrontendLocale } from "../../lib/i18n";
@@ -210,7 +210,7 @@ function navigationTree(group: "workspace" | "admin", session: SessionSnapshot):
   }
   const admin = allowed("/admin");
   if (!admin) return [];
-  const children: NavigationNode[] = ["/admin/submissions", "/admin/duplicates", "/admin/assets"].map((path) => allowed(path)).filter(Boolean).map((item) => ({ id: item!.path, route: item!, labelKey: item!.labelKey, ...menuAvailability(item!.path) }));
+  const children: NavigationNode[] = ["/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/knowledge/trash"].map((path) => allowed(path)).filter(Boolean).map((item) => ({ id: item!.path, route: item!, labelKey: item!.labelKey, ...menuAvailability(item!.path) }));
   const governance: NavigationNode[] = ["/admin/members", "/admin/roles", "/admin/menus", "/admin/spaces", "/admin/audit", "/admin/analytics"].map((path) => allowed(path)).filter(Boolean).map((item) => ({ id: item!.path, route: item!, labelKey: item!.labelKey, ...menuAvailability(item!.path) }));
   if (governance.length) children.push({ id: "governance", labelKey: "SHELL_GROUP_GOVERNANCE", availability: "ready", children: governance });
   return [{ id: "admin", route: admin, labelKey: admin.labelKey, ...menuAvailability(admin.path), children }];
@@ -246,6 +246,7 @@ function NavIcon({ path, className }: { path: string | null; className?: string 
   if (path === "/admin") return <ShieldCheck {...props} />;
   if (path === "/admin/submissions") return <NotePencil {...props} />;
   if (path === "/admin/assets") return <Stack {...props} />;
+  if (path === "/admin/knowledge/trash") return <Trash {...props} />;
   if (path === "/admin/members") return <UsersThree {...props} />;
   if (path === "/admin/roles") return <ShieldCheck {...props} />;
   if (path === "/admin/menus") return <DotsThree {...props} />;

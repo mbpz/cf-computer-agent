@@ -1,10 +1,13 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { applyD1Migrations, env, reset } from "cloudflare:test";
+import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { SpacesRepository } from "../../src/spaces/repository";
 import { SpacesService } from "../../src/spaces/service";
 import { AuditRepository } from "../../src/audit/repository";
+import { createApp } from "../../src/app";
+import { MembersRepository } from "../../src/members/repository";
+import { SessionService } from "../../src/identity/session";
 import { MIGRATIONS } from "../fixtures/d1";
 
 describe("Spaces D1 control plane", () => {
@@ -266,6 +269,148 @@ describe("Spaces D1 control plane", () => {
       .resolves.toMatchObject({ status: "active", updatedAt: timestamp });
   });
 });
+
+describe("Space archive impact", () => {
+  let admin = "";
+
+  beforeEach(async () => {
+    await reset();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('impact-admin', 'subject-impact-admin', 'impact-admin@example.test', 'admin', 'active', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z')",
+    ).run();
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
+    admin = (await sessions.create((await members.findById("impact-admin"))!)).token;
+  });
+
+  it("derives real per-Space impact and shrinks library/search reads when the Space is archived", async () => {
+    const created = await api("/api/admin/spaces", admin, { method: "POST", body: JSON.stringify({ slug: "impact-space", name: "Impact Space", position: 0 }) });
+    expect(created.status).toBe(201);
+    const { space } = await created.json<{ space: { id: string } }>();
+    const spaceId = space.id;
+    const collectionA = await api("/api/admin/collections", admin, { method: "POST", body: JSON.stringify({ spaceId, name: "Active A", position: 0 }) });
+    const collectionB = await api("/api/admin/collections", admin, { method: "POST", body: JSON.stringify({ spaceId, name: "Active B", position: 1 }) });
+    expect([collectionA.status, collectionB.status]).toEqual([201, 201]);
+    const { collection: activeCollection } = await collectionA.json<{ collection: { id: string } }>();
+    const now = "2026-10-01T00:00:00.000Z";
+    // A disabled collection is not live content and must not be counted.
+    await env.DB.prepare("INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at) VALUES ('impact-disabled-collection', ?, NULL, 'Disabled', '', 'disabled', 2, ?, ?)").bind(spaceId, now, now).run();
+
+    await seedIndexedItem(spaceId, activeCollection.id, "alpha", "impact-admin", now);
+    await seedIndexedItem(spaceId, activeCollection.id, "beta", "impact-admin", now);
+    await seedIndexedItem(spaceId, activeCollection.id, "gamma", "impact-admin", now);
+    await seedIndexedItem(spaceId, activeCollection.id, "trashed", "impact-admin", now, "trashed");
+    await seedTaskLinks("impact-admin", now, ["alpha", "beta"]);
+
+    const listed = await (await api("/api/admin/spaces", admin)).json<{
+      items: Array<{ id: string; status: string; updatedAt: string; impact: { collections: number; knowledgeItems: number; revisions: number; links: number } }>;
+    }>();
+    const entry = listed.items.find((item) => item.id === spaceId)!;
+
+    // Impact equals the actual rows, queried directly from the tables.
+    const direct = {
+      collections: await countRows("SELECT COUNT(*) AS count FROM collections WHERE space_id = ? AND status = 'active'", spaceId),
+      knowledgeItems: await countRows("SELECT COUNT(*) AS count FROM knowledge_items WHERE space_id = ? AND status = 'active'", spaceId),
+      revisions: await countRows("SELECT COUNT(*) AS count FROM knowledge_items k JOIN revisions r ON r.id = k.current_revision_id WHERE k.space_id = ? AND k.status = 'active'", spaceId),
+      links: await countRows("SELECT COUNT(*) AS count FROM task_links tl JOIN knowledge_items k ON k.id = tl.knowledge_item_id WHERE k.space_id = ? AND k.status = 'active'", spaceId),
+    };
+    expect(direct).toEqual({ collections: 2, knowledgeItems: 3, revisions: 3, links: 2 });
+    expect(entry.impact).toEqual(direct);
+
+    // Real library and search reads see the live content before the archive.
+    expect(await knowledgeTotal(spaceId, admin)).toBe(3);
+    expect(await searchTotal(spaceId, admin, "impact")).toBe(3);
+
+    const archived = await api(`/api/admin/spaces/${spaceId}`, admin, { method: "PATCH", body: JSON.stringify({ status: "disabled", expectedUpdatedAt: entry.updatedAt }) });
+    expect(archived.status).toBe(200);
+    expect((await archived.json<{ space: { status: string } }>()).space.status).toBe("disabled");
+
+    // The content stops being live: the search index rows are gone and reads shrink to zero.
+    expect(await searchTotal(spaceId, admin, "impact")).toBe(0);
+    expect(await knowledgeTotal(spaceId, admin)).toBe(0);
+    const chunkScope = "SELECT c.id FROM chunks c JOIN knowledge_items k ON k.current_revision_id = c.revision_id WHERE k.status = 'active' AND k.space_id = ?";
+    expect(await countRows(`SELECT COUNT(*) AS count FROM chunks_fts WHERE chunk_id IN (${chunkScope})`, spaceId)).toBe(0);
+    expect(await countRows(`SELECT COUNT(*) AS count FROM chunks_fts_shared WHERE chunk_id IN (${chunkScope})`, spaceId)).toBe(0);
+    expect(await countRows("SELECT COUNT(*) AS count FROM knowledge_items WHERE space_id = ? AND search_status = 'pending'", spaceId)).toBe(3);
+    const afterArchive = await (await api("/api/admin/spaces", admin)).json<{ items: Array<{ id: string; status: string }> }>();
+    expect(afterArchive.items.find((item) => item.id === spaceId)!.status).toBe("disabled");
+
+    // Exactly one audit for the archive; a stale retry neither writes nor audits.
+    expect(await countRows("SELECT COUNT(*) AS count FROM audit_events WHERE action = 'space.updated' AND resource_id = ?", spaceId)).toBe(1);
+    const stale = await api(`/api/admin/spaces/${spaceId}`, admin, { method: "PATCH", body: JSON.stringify({ name: "Stale", expectedUpdatedAt: entry.updatedAt }) });
+    expect(stale.status).toBe(409);
+    expect((await stale.json<{ error: { code: string } }>()).error.code).toBe("SPACE_WRITE_CONFLICT");
+    expect(await countRows("SELECT COUNT(*) AS count FROM audit_events WHERE action = 'space.updated' AND resource_id = ?", spaceId)).toBe(1);
+  });
+});
+
+async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("content-type", "application/json");
+  headers.set("origin", "https://memory.crgmhrc.asia");
+  headers.set("cookie", `__Host-memory-session=${token}`);
+  const request = new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers });
+  const context = createExecutionContext();
+  const response = await createApp().fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
+  await waitOnExecutionContext(context);
+  return response;
+}
+
+async function countRows(sql: string, ...bindings: unknown[]): Promise<number> {
+  const row = await env.DB.prepare(sql).bind(...bindings).first<{ count: number }>();
+  if (!row) throw new Error("missing count row");
+  return row.count;
+}
+
+async function knowledgeTotal(spaceId: string, token: string): Promise<number> {
+  const response = await api(`/api/knowledge?spaceId=${encodeURIComponent(spaceId)}`, token);
+  expect(response.status).toBe(200);
+  const page = await response.json<{ items: unknown[]; pagination: { total: number } }>();
+  expect(page.items).toHaveLength(page.pagination.total);
+  return page.pagination.total;
+}
+
+async function searchTotal(spaceId: string, token: string, term: string): Promise<number> {
+  const response = await api(`/api/knowledge/search?q=${encodeURIComponent(term)}&spaceId=${encodeURIComponent(spaceId)}`, token);
+  expect(response.status).toBe(200);
+  return (await response.json<{ pagination: { total: number } }>()).pagination.total;
+}
+
+async function seedIndexedItem(spaceId: string, collectionId: string | null, key: string, memberId: string, timestamp: string, status: "active" | "trashed" = "active"): Promise<void> {
+  const item = `impact-item-${key}`, revision = `impact-revision-${key}`, source = `impact-source-${key}`,
+    submission = `impact-submission-${key}`, version = `impact-version-${key}`, chunk = `impact-chunk-${key}`, job = `impact-job-${key}`;
+  const title = `Impact ${key}`, body = `impact ${key} body`, hash = `impact-hash-${key}`;
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, 'markdown', 'published', ?, ?, ?, ?)")
+      .bind(submission, memberId, spaceId, collectionId, title, body, timestamp, timestamp),
+    env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES (?, ?, ?, ?, 'markdown', ?, ?, ?)")
+      .bind(source, memberId, spaceId, collectionId, title, timestamp, timestamp),
+    env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES (?, ?, ?, 1, ?, ?, 'm1-v1', ?)")
+      .bind(version, source, submission, body, hash, timestamp),
+    env.DB.prepare("INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, 'indexed', ?, ?)")
+      .bind(item, spaceId, collectionId, status, timestamp, timestamp),
+    env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES (?, ?, ?, ?, ?, ?, '[]', 'shared', ?, ?)")
+      .bind(revision, item, version, `/impact-${key}.md`, hash, title, memberId, timestamp),
+    env.DB.prepare("UPDATE knowledge_items SET current_revision_id = ? WHERE id = ?").bind(revision, item),
+    env.DB.prepare("INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body, index_field) VALUES (?, ?, 0, '[]', 1, 1, ?, ?, '', ?, 'body')")
+      .bind(chunk, revision, body, title, body),
+    env.DB.prepare("INSERT INTO jobs (id, kind, resource_id, state, attempts, available_at, created_at, updated_at) VALUES (?, 'index_revision', ?, 'completed', 1, ?, ?, ?)")
+      .bind(job, revision, timestamp, timestamp, timestamp),
+    env.DB.prepare("INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code) SELECT rowid, id, ?, '', '', search_body, '' FROM chunks WHERE id = ?").bind(title, chunk),
+    env.DB.prepare("INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code) SELECT rowid, id, ?, '', '', search_body, '' FROM chunks WHERE id = ?").bind(title, chunk),
+  ]);
+}
+
+async function seedTaskLinks(memberId: string, timestamp: number | string, keys: string[]): Promise<void> {
+  const milliseconds = typeof timestamp === "number" ? timestamp : Date.parse(timestamp);
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO tasks (id, member_id, title, notes, status, progress, priority, created_at, updated_at) VALUES ('impact-task', ?, 'Impact task', '', 'todo', 0, 'medium', ?, ?)")
+      .bind(memberId, milliseconds, milliseconds),
+    ...keys.map((key, index) => env.DB.prepare("INSERT INTO task_links (id, task_id, member_id, knowledge_item_id, created_at) VALUES (?, 'impact-task', ?, ?, ?)")
+      .bind(`impact-link-${index}`, memberId, `impact-item-${key}`, milliseconds)),
+  ]);
+}
 
 function collectionInput(overrides: Partial<{
   id: string; spaceId: string; parentId: string | null; name: string; description: string; status: "active" | "disabled"; position: number; createdAt: string; updatedAt: string;

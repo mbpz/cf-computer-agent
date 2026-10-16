@@ -8,12 +8,17 @@ import { analyzeSensitiveContent } from "./sensitive-advisor";
 import type { ChunkDraft } from "../sources/chunker";
 import type {
   KnowledgeVisibility,
+  DecisionReceipt,
+  KnowledgeLifecycleOperation,
+  KnowledgeLifecycleOperationKind,
   PublicationIntent,
   PublicationRecoveryResult,
   BatchReviewAction,
+  BatchReviewActionIdentity,
   BatchReviewResult,
   PublicationRepositoryPort,
   PublicationReviewer,
+  ReviewDecisionOperation,
   GovernedKnowledgeItem,
   GovernedKnowledgePage,
   PurgePlan,
@@ -23,9 +28,11 @@ import type {
   PublishSubmissionInput,
   RejectionReasonCode,
   ReviewDecision,
+  RollbackResult,
   ReviewPreview,
   ReviewSubmissionSnapshot,
   ChunkRebuildReport,
+  TrashedKnowledgeRetention,
 } from "./types";
 
 const MAX_TITLE_CODE_POINTS = 200;
@@ -35,7 +42,83 @@ const MAX_REVIEW_NOTE_BYTES = 4_000;
 const MAX_TAGS = 20;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
 const SAFE_KNOWLEDGE_ITEM_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const STABLE_OPERATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+
+/**
+ * The client's decision identity. Both fields are optional so a client that
+ * predates the contract keeps its natural-identity convergence.
+ */
+export interface ReviewDecisionOperationInput {
+  operationId?: unknown;
+  expectedUpdatedAt?: unknown;
+}
+
+/**
+ * The client's lifecycle identity for one knowledge write. The operation number
+ * is optional so a client that predates the contract keeps natural-identity
+ * convergence; when it is present a lost response is replayed from its receipt
+ * instead of acting a second time.
+ */
+export interface KnowledgeOperationInput {
+  operationId?: unknown;
+}
+
+function isCanonicalTimestamp(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(Date.parse(value))
+    && new Date(value).toISOString() === value;
+}
+
+function replayRecordedReceipt(
+  receipt: DecisionReceipt,
+  submissionId: string,
+  operation: ReviewDecisionOperation,
+): PublishedRevision {
+  if (receipt.requestHash !== operation.requestHash) {
+    throw new AppError(
+      "PUBLICATION_OPERATION_CONFLICT",
+      "Operation number was already used for a different decision",
+      409,
+      false,
+      { submissionId, operationId: operation.operationId },
+    );
+  }
+  return JSON.parse(receipt.responseJson) as PublishedRevision;
+}
+
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * The recycle bin's retained window for one trashed item. It is derived from the
+ * same constant the purge path enforces, so the surface can state the deadline
+ * without owning a second copy of the policy, and `purgeable` is the honest
+ * answer of the purge precondition itself (the cutoff comparison is inclusive
+ * on the deadline, exactly like the repository's `updated_at > cutoff` refusal).
+ */
+export function trashRetention(trashedAt: string, now: Date = new Date()): TrashedKnowledgeRetention {
+  const eligibleAt = new Date(Date.parse(trashedAt) + TRASH_RETENTION_MS);
+  return {
+    trashedAt,
+    purgeEligibleAt: eligibleAt.toISOString(),
+    purgeable: now.getTime() >= eligibleAt.getTime(),
+  };
+}
+
+function replayLifecycleReceipt<T>(
+  receipt: DecisionReceipt,
+  knowledgeItemId: string,
+  operation: KnowledgeLifecycleOperation,
+): T {
+  if (receipt.requestHash !== operation.requestHash) {
+    throw new AppError(
+      "KNOWLEDGE_OPERATION_CONFLICT",
+      "Operation number was already used for a different knowledge write",
+      409,
+      false,
+      { knowledgeItemId, operationId: operation.operationId },
+    );
+  }
+  return JSON.parse(receipt.responseJson) as T;
+}
 
 export class PublicationService {
   constructor(
@@ -67,10 +150,26 @@ export class PublicationService {
     reviewer: PublicationReviewer,
     submissionId: string,
     input: PublishSubmissionInput,
+    operationInput?: ReviewDecisionOperationInput,
   ): Promise<PublishedRevision> {
     requireActiveAdmin(reviewer);
     const stableSubmissionId = requireId(submissionId);
     const normalized = normalizePublishInput(input);
+    const operation = operationInput === undefined
+      ? undefined
+      : await this.decisionOperation(
+        operationInput,
+        (): AppError => invalidPublicationInput(),
+        [stableSubmissionId, reviewer.id, "review.publish", normalized.title, normalized.visibility,
+          normalized.spaceId, normalized.collectionId, [...normalized.tagIds].sort(),
+          normalized.knowledgeItemId ?? null, normalized.visibilityReasonCode ?? null],
+      );
+    // A retried decision replays its recorded answer without touching target
+    // validation or content storage again.
+    if (operation) {
+      const receipt = await this.repository.findDecisionReceipt(stableSubmissionId, operation.operationId);
+      if (receipt) return replayRecordedReceipt(receipt, stableSubmissionId, operation);
+    }
     const preview = await this.repository.getPreview(stableSubmissionId);
     if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
     const expandsVisibility = preview.requestedVisibility === "admin_only" && normalized.visibility === "shared";
@@ -90,26 +189,36 @@ export class PublicationService {
     const chunks = await validatedPublicationChunks(preview);
     let intent: PublicationIntent;
     try {
-      intent = await this.repository.createOrReadIntent(stableSubmissionId, reviewer.id, normalized);
+      intent = await this.repository.createOrReadIntent(stableSubmissionId, reviewer.id, normalized, operation);
     } catch (error) {
       throwPublicationError(error);
     }
     assertStableIntent(intent, preview, reviewer.id, normalized);
-    return this.resumeIntent(intent, chunks);
+    return this.resumeIntent(intent, chunks, operation);
   }
 
   async reject(
     reviewer: PublicationReviewer,
     submissionId: string,
     input: { reasonCode: RejectionReasonCode; note: string },
+    operationInput?: ReviewDecisionOperationInput,
   ): Promise<ReviewDecision> {
     requireActiveAdmin(reviewer);
     if (!isRejectionReason(input?.reasonCode)) throw invalidDecision();
+    const stableSubmissionId = requireId(submissionId);
+    const note = normalizeReviewNote(input.note);
+    const operation = operationInput === undefined
+      ? undefined
+      : await this.decisionOperation(
+        operationInput,
+        (): AppError => invalidDecision(),
+        [stableSubmissionId, reviewer.id, "review.reject", input.reasonCode, note],
+      );
     try {
-      return await this.repository.reject(requireId(submissionId), reviewer.id, {
+      return await this.repository.reject(stableSubmissionId, reviewer.id, {
         reasonCode: input.reasonCode,
-        note: normalizeReviewNote(input.note),
-      });
+        note,
+      }, operation);
     } catch (error) {
       throwDecisionError(error);
     }
@@ -119,17 +228,57 @@ export class PublicationService {
     reviewer: PublicationReviewer,
     submissionId: string,
     input: { reasonCode: "needs_revision"; note: string },
+    operationInput?: ReviewDecisionOperationInput,
   ): Promise<ReviewDecision> {
     requireActiveAdmin(reviewer);
     if (input?.reasonCode !== "needs_revision") throw invalidDecision();
+    const stableSubmissionId = requireId(submissionId);
+    const note = normalizeReviewNote(input.note);
+    const operation = operationInput === undefined
+      ? undefined
+      : await this.decisionOperation(
+        operationInput,
+        (): AppError => invalidDecision(),
+        [stableSubmissionId, reviewer.id, "review.request_revision", "needs_revision", note],
+      );
     try {
-      return await this.repository.requestRevision(requireId(submissionId), reviewer.id, {
+      return await this.repository.requestRevision(stableSubmissionId, reviewer.id, {
         reasonCode: "needs_revision",
-        note: normalizeReviewNote(input.note),
-      });
+        note,
+      }, operation);
     } catch (error) {
       throwDecisionError(error);
     }
+  }
+
+  /**
+   * Normalizes the client's operation number and expected submission version,
+   * then hashes the whole request so a reused number with different content is
+   * a conflict instead of a silent replay of the wrong decision.
+   */
+  private async decisionOperation(
+    input: ReviewDecisionOperationInput,
+    invalid: () => AppError,
+    requestFields: readonly unknown[],
+  ): Promise<ReviewDecisionOperation> {
+    const operationId = input.operationId;
+    if (operationId !== undefined
+      && (typeof operationId !== "string" || !STABLE_OPERATION_ID.test(operationId))) throw invalid();
+    const expectedVersion = input.expectedUpdatedAt;
+    if (expectedVersion !== undefined && !isCanonicalTimestamp(expectedVersion)) throw invalid();
+    if (operationId === undefined) {
+      if (expectedVersion === undefined) throw invalid();
+      return {
+        operationId: `version:${expectedVersion}`,
+        expectedVersion,
+        requestHash: await sha256Hex(JSON.stringify([...requestFields, expectedVersion])),
+      };
+    }
+    return {
+      operationId,
+      expectedVersion,
+      requestHash: await sha256Hex(JSON.stringify([...requestFields, expectedVersion ?? null])),
+    };
   }
 
   async batchReview(reviewer: PublicationReviewer, actions: unknown): Promise<BatchReviewResult> {
@@ -138,11 +287,18 @@ export class PublicationService {
     const items: BatchReviewResult["items"] = [];
     for (const action of normalized) {
       try {
+        // Each item carries its own decision identity, so a replayed batch
+        // re-uses the receipts of the items that already committed and a failed
+        // item can be retried alone without deciding its neighbours twice.
+        const identity: ReviewDecisionOperationInput | undefined =
+          action.operationId === undefined && action.expectedUpdatedAt === undefined
+            ? undefined
+            : { operationId: action.operationId, expectedUpdatedAt: action.expectedUpdatedAt };
         const result = action.action === "publish"
-          ? await this.publish(reviewer, action.submissionId, action)
+          ? await this.publish(reviewer, action.submissionId, action, identity)
           : action.action === "reject"
-            ? await this.reject(reviewer, action.submissionId, action)
-            : await this.requestRevision(reviewer, action.submissionId, action);
+            ? await this.reject(reviewer, action.submissionId, action, identity)
+            : await this.requestRevision(reviewer, action.submissionId, action, identity);
         items.push({ submissionId: action.submissionId, action: action.action, status: "succeeded", result });
       } catch (error) {
         const appError = error instanceof AppError
@@ -164,14 +320,22 @@ export class PublicationService {
     reviewer: PublicationReviewer,
     knowledgeItemId: string,
     revisionId: string,
-  ): Promise<PublishedRevision> {
+    operationInput?: KnowledgeOperationInput,
+  ): Promise<RollbackResult> {
     requireActiveAdmin(reviewer);
     const itemId = requireId(knowledgeItemId);
     const targetRevisionId = requireId(revisionId);
-    let result;
+    const identity = await this.lifecycleOperation(operationInput, [
+      itemId, reviewer.id, "knowledge.rollback", targetRevisionId,
+    ]);
+    const recorded = await this.replayLifecycle<RollbackResult>(itemId, identity);
+    if (recorded) return recorded;
+    let result: RollbackResult;
     try {
       result = await this.repository.rollback(itemId, targetRevisionId, reviewer.id);
     } catch (error) {
+      const concurrent = await this.replayLifecycle<RollbackResult>(itemId, identity);
+      if (concurrent) return concurrent;
       if (isRepositoryConflict(error, "rollback_target_invalid")) {
         throw new AppError("ROLLBACK_TARGET_INVALID", "Revision does not belong to an active knowledge item", 400);
       }
@@ -181,17 +345,35 @@ export class PublicationService {
       throw error;
     }
     const searchStatus = await this.repository.processIndexJob(result.id);
-    return { ...result, searchStatus };
+    const answer: RollbackResult = { ...result, searchStatus };
+    if (!identity) return answer;
+    // Recorded only after the rolled-back Revision and its index job exist, so a
+    // replay answers with the rollback that actually committed.
+    return this.recordLifecycle(itemId, "knowledge.rollback", reviewer.id, identity, answer);
   }
 
-  async trash(reviewer: PublicationReviewer, knowledgeItemId: string): Promise<GovernedKnowledgeItem> {
+  async trash(
+    reviewer: PublicationReviewer,
+    knowledgeItemId: string,
+    operationInput?: KnowledgeOperationInput,
+  ): Promise<GovernedKnowledgeItem> {
     requireActiveAdmin(reviewer);
-    return this.changeLifecycle(reviewer.id, requireId(knowledgeItemId), "trash");
+    const itemId = requireId(knowledgeItemId);
+    return this.changeLifecycle(reviewer.id, itemId, "trash", await this.lifecycleOperation(operationInput, [
+      itemId, reviewer.id, "knowledge.trash",
+    ]));
   }
 
-  async restore(reviewer: PublicationReviewer, knowledgeItemId: string): Promise<GovernedKnowledgeItem> {
+  async restore(
+    reviewer: PublicationReviewer,
+    knowledgeItemId: string,
+    operationInput?: KnowledgeOperationInput,
+  ): Promise<GovernedKnowledgeItem> {
     requireActiveAdmin(reviewer);
-    return this.changeLifecycle(reviewer.id, requireId(knowledgeItemId), "restore");
+    const itemId = requireId(knowledgeItemId);
+    return this.changeLifecycle(reviewer.id, itemId, "restore", await this.lifecycleOperation(operationInput, [
+      itemId, reviewer.id, "knowledge.restore",
+    ]));
   }
 
   async listTrashed(reviewer: PublicationReviewer, request: PageRequest = { limit: 20 }): Promise<GovernedKnowledgePage> {
@@ -203,17 +385,26 @@ export class PublicationService {
     reviewer: PublicationReviewer,
     knowledgeItemId: string,
     now: Date = new Date(),
+    operationInput?: KnowledgeOperationInput,
   ): Promise<PurgeResult> {
     requireActiveAdmin(reviewer);
     if (!this.contentRemover) {
       throw new AppError("KNOWLEDGE_PURGE_UNAVAILABLE", "Knowledge purge storage is unavailable", 503, true);
     }
     const itemId = requireId(knowledgeItemId);
+    const identity = await this.lifecycleOperation(operationInput, [itemId, reviewer.id, "knowledge.purge"]);
+    // A replayed purge answers with the revision count the first attempt
+    // destroyed; it never falls through to the "already purged" tombstone, which
+    // can only state that nothing was left to do.
+    const recorded = await this.replayLifecycle<PurgeResult>(itemId, identity);
+    if (recorded) return recorded;
     const cutoff = new Date(now.getTime() - TRASH_RETENTION_MS).toISOString();
     let plan: PurgePlan | { alreadyPurged: true };
     try {
       plan = await this.repository.preparePurge(itemId, cutoff);
     } catch (error) {
+      const concurrent = await this.replayLifecycle<PurgeResult>(itemId, identity);
+      if (concurrent) return concurrent;
       if (isRepositoryConflict(error, "purge_target_invalid")) {
         throw new AppError("KNOWLEDGE_PURGE_TARGET_INVALID", "Knowledge item is not in the recycle bin", 400);
       }
@@ -223,18 +414,78 @@ export class PublicationService {
       throw error;
     }
     if ("alreadyPurged" in plan) {
-      return { knowledgeItemId: itemId, status: "purged", purgedRevisionCount: 0, alreadyPurged: true };
+      const nothingToDo: PurgeResult = {
+        knowledgeItemId: itemId, status: "purged", purgedRevisionCount: 0, alreadyPurged: true,
+      };
+      if (!identity) return nothingToDo;
+      return this.recordLifecycle(itemId, "knowledge.purge", reviewer.id, identity, nothingToDo);
     }
     try {
       await this.contentRemover.remove(plan.contentPaths);
     } catch {
       throw new AppError("KNOWLEDGE_PURGE_CONTENT_UNAVAILABLE", "Published content cleanup is temporarily unavailable", 503, true);
     }
+    let result: PurgeResult;
     try {
-      return await this.repository.finalizePurge(plan, reviewer.id);
+      result = await this.repository.finalizePurge(plan, reviewer.id);
     } catch (error) {
+      const concurrent = await this.replayLifecycle<PurgeResult>(itemId, identity);
+      if (concurrent) return concurrent;
       if (isRepositoryConflict(error, "purge_conflict")) {
         throw new AppError("KNOWLEDGE_PURGE_CONFLICT", "Knowledge item changed during cleanup", 409, true);
+      }
+      throw error;
+    }
+    if (!identity) return result;
+    return this.recordLifecycle(itemId, "knowledge.purge", reviewer.id, identity, result);
+  }
+
+  /**
+   * Normalizes the client's operation number into the write's identity. The
+   * number is optional so a client that predates the contract keeps its
+   * natural-identity convergence, and the hashed request makes a reused number
+   * with different content a conflict instead of a replay of the wrong write.
+   */
+  private async lifecycleOperation(
+    input: KnowledgeOperationInput | undefined,
+    requestFields: readonly unknown[],
+  ): Promise<KnowledgeLifecycleOperation | undefined> {
+    const operationId = input?.operationId;
+    if (operationId === undefined) return undefined;
+    if (typeof operationId !== "string" || !STABLE_OPERATION_ID.test(operationId)) throw invalidLifecycleRequest();
+    return { operationId, requestHash: await sha256Hex(JSON.stringify(requestFields)) };
+  }
+
+  /** The recorded answer of an operation that already committed, if any. */
+  private async replayLifecycle<T>(
+    knowledgeItemId: string,
+    identity: KnowledgeLifecycleOperation | undefined,
+  ): Promise<T | undefined> {
+    if (!identity) return undefined;
+    const receipt = await this.repository.findLifecycleReceipt(knowledgeItemId, identity.operationId);
+    return receipt ? replayLifecycleReceipt<T>(receipt, knowledgeItemId, identity) : undefined;
+  }
+
+  private async recordLifecycle<T extends GovernedKnowledgeItem | RollbackResult | PurgeResult>(
+    knowledgeItemId: string,
+    kind: KnowledgeLifecycleOperationKind,
+    actorId: string,
+    identity: KnowledgeLifecycleOperation,
+    response: T,
+  ): Promise<T> {
+    try {
+      return await this.repository.recordLifecycleReceipt({
+        knowledgeItemId, kind, actorId, operation: identity,
+      }, response);
+    } catch (error) {
+      if (isRepositoryConflict(error, "operation_conflict")) {
+        throw new AppError(
+          "KNOWLEDGE_OPERATION_CONFLICT",
+          "Operation number was already used for a different knowledge write",
+          409,
+          false,
+          { knowledgeItemId, operationId: identity.operationId },
+        );
       }
       throw error;
     }
@@ -244,13 +495,18 @@ export class PublicationService {
     reviewerId: string,
     knowledgeItemId: string,
     operation: "trash" | "restore",
+    identity?: KnowledgeLifecycleOperation,
   ): Promise<GovernedKnowledgeItem> {
+    const replay = await this.replayLifecycle<GovernedKnowledgeItem>(knowledgeItemId, identity);
+    if (replay) return replay;
     let item;
     try {
       item = operation === "trash"
         ? await this.repository.trash(knowledgeItemId, reviewerId)
         : await this.repository.restore(knowledgeItemId, reviewerId);
     } catch (error) {
+      const concurrent = await this.replayLifecycle<GovernedKnowledgeItem>(knowledgeItemId, identity);
+      if (concurrent) return concurrent;
       if (isRepositoryConflict(error, "lifecycle_target_invalid")) {
         throw new AppError("KNOWLEDGE_LIFECYCLE_TARGET_INVALID", "Knowledge item lifecycle state is invalid", 400);
       }
@@ -260,7 +516,15 @@ export class PublicationService {
       throw error;
     }
     const searchStatus = await this.repository.processIndexJob(item.revisionId);
-    return { ...item, searchStatus };
+    const answer: GovernedKnowledgeItem = { ...item, searchStatus };
+    if (!identity) return answer;
+    return this.recordLifecycle(
+      knowledgeItemId,
+      operation === "trash" ? "knowledge.trash" : "knowledge.restore",
+      reviewerId,
+      identity,
+      answer,
+    );
   }
 
   async recoverPending(limit: number): Promise<PublicationRecoveryResult> {
@@ -313,7 +577,15 @@ export class PublicationService {
     return result;
   }
 
-  private async resumeIntent(intent: PublicationIntent, chunks: ChunkDraft[]): Promise<PublishedRevision> {
+  private async resumeIntent(
+    intent: PublicationIntent,
+    chunks: ChunkDraft[],
+    operation?: ReviewDecisionOperation,
+  ): Promise<PublishedRevision> {
+    if (operation) {
+      const recorded = await this.repository.findDecisionReceipt(intent.submissionId, operation.operationId);
+      if (recorded) return replayRecordedReceipt(recorded, intent.submissionId, operation);
+    }
     if (intent.state === "failed_terminal") throw publicationContentMismatch();
 
     if (intent.state === "pending_content") {
@@ -331,7 +603,16 @@ export class PublicationService {
 
     const revision = await this.repository.finalize(intent, chunks);
     const searchStatus = await this.repository.processIndexJob(revision.id);
-    return { ...revision, searchStatus };
+    const published: PublishedRevision = { ...revision, searchStatus };
+    if (!operation) return published;
+    // Recorded only after the immutable Revision and its index job exist, so a
+    // replay answers with the decision that actually committed.
+    return this.repository.recordDecisionReceipt({
+      submissionId: intent.submissionId,
+      kind: "review.publish",
+      actorId: intent.reviewerId,
+      operation,
+    }, published);
   }
 }
 
@@ -361,7 +642,7 @@ function normalizeBatchReviewActions(value: unknown): BatchReviewAction[] {
     if (!isBoundedId(submissionId) || ids.has(submissionId)) throw batchReviewInvalid();
     ids.add(submissionId);
     if (record.action === "publish") {
-      if (!hasOnlyKeys(record, ["submissionId", "action", "title", "visibility", "spaceId", "collectionId", "tagIds", "knowledgeItemId", "visibilityReasonCode"])) throw batchReviewInvalid();
+      if (!hasOnlyKeys(record, ["submissionId", "action", "operationId", "expectedUpdatedAt", "title", "visibility", "spaceId", "collectionId", "tagIds", "knowledgeItemId", "visibilityReasonCode"])) throw batchReviewInvalid();
       try {
         return { submissionId, action: "publish", ...normalizePublishInput({
           title: record.title as string,
@@ -371,31 +652,46 @@ function normalizeBatchReviewActions(value: unknown): BatchReviewAction[] {
           tagIds: record.tagIds as string[],
           ...(record.knowledgeItemId === undefined ? {} : { knowledgeItemId: record.knowledgeItemId as string }),
           ...(record.visibilityReasonCode === undefined ? {} : { visibilityReasonCode: record.visibilityReasonCode as "admin_visibility_expansion" }),
-        }) } satisfies BatchReviewAction;
+        }), ...batchItemIdentity(record) } satisfies BatchReviewAction;
       } catch {
         throw batchReviewInvalid();
       }
     }
     if (record.action === "reject") {
-      if (!hasOnlyKeys(record, ["submissionId", "action", "reasonCode", "note"])
+      if (!hasOnlyKeys(record, ["submissionId", "action", "operationId", "expectedUpdatedAt", "reasonCode", "note"])
         || !isRejectionReason(record.reasonCode)) throw batchReviewInvalid();
       try {
-        return { submissionId, action: "reject", reasonCode: record.reasonCode, note: normalizeReviewNote(record.note as string) } satisfies BatchReviewAction;
+        return { submissionId, action: "reject", reasonCode: record.reasonCode, note: normalizeReviewNote(record.note as string), ...batchItemIdentity(record) } satisfies BatchReviewAction;
       } catch {
         throw batchReviewInvalid();
       }
     }
     if (record.action === "request_revision") {
-      if (!hasOnlyKeys(record, ["submissionId", "action", "reasonCode", "note"])
+      if (!hasOnlyKeys(record, ["submissionId", "action", "operationId", "expectedUpdatedAt", "reasonCode", "note"])
         || record.reasonCode !== "needs_revision") throw batchReviewInvalid();
       try {
-        return { submissionId, action: "request_revision", reasonCode: "needs_revision", note: normalizeReviewNote(record.note as string) } satisfies BatchReviewAction;
+        return { submissionId, action: "request_revision", reasonCode: "needs_revision", note: normalizeReviewNote(record.note as string), ...batchItemIdentity(record) } satisfies BatchReviewAction;
       } catch {
         throw batchReviewInvalid();
       }
     }
     throw batchReviewInvalid();
   });
+}
+
+/**
+ * The optional identity of one batch item. Both fields must appear together and
+ * be well formed — exactly the rule a single decision enforces — so a batch item
+ * and its later single-surface retry resolve to the same recorded operation. A
+ * malformed identity invalidates the whole request rather than silently
+ * degrading the item to an unprotected write.
+ */
+function batchItemIdentity(record: Record<string, unknown>): BatchReviewActionIdentity {
+  const { operationId, expectedUpdatedAt } = record;
+  if (operationId === undefined && expectedUpdatedAt === undefined) return {};
+  if (typeof operationId !== "string" || !STABLE_OPERATION_ID.test(operationId)
+    || !isCanonicalTimestamp(expectedUpdatedAt)) throw batchReviewInvalid();
+  return { operationId, expectedUpdatedAt };
 }
 
 function hasOnlyKeys(record: Record<string, unknown>, allowed: readonly string[]): boolean {
@@ -548,7 +844,13 @@ function isBoundedId(value: unknown): value is string {
 }
 function isRejectionReason(value: unknown): value is RejectionReasonCode { return value === "not_relevant" || value === "duplicate" || value === "unsafe"; }
 function isRepositoryConflict(error: unknown, kind: string): boolean { return (error as { kind?: unknown })?.kind === kind; }
+/** Machine-readable conflict context reported by the repository, if any. */
+function repositoryConflictDetails(error: unknown): unknown {
+  if (error === null || typeof error !== "object" || !("details" in error)) return undefined;
+  return error.details;
+}
 function throwPublicationError(error: unknown): never {
+  const details = repositoryConflictDetails(error);
   if (isRepositoryConflict(error, "target_invalid")) {
     throw new AppError(
       "PUBLICATION_TARGET_INVALID",
@@ -556,22 +858,62 @@ function throwPublicationError(error: unknown): never {
       400,
     );
   }
+  if (isRepositoryConflict(error, "version_conflict")) {
+    throw new AppError(
+      "PUBLICATION_VERSION_CONFLICT",
+      "Submission changed since it was read; reload before retrying",
+      409,
+      false,
+      details,
+    );
+  }
+  if (isRepositoryConflict(error, "operation_conflict")) {
+    throw new AppError(
+      "PUBLICATION_OPERATION_CONFLICT",
+      "Operation number was already used for a different decision",
+      409,
+      false,
+      details,
+    );
+  }
   if (isRepositoryConflict(error, "submission_not_pending")) {
-    throw new AppError("PUBLICATION_STATE_CONFLICT", "Submission is no longer pending review", 409);
+    throw new AppError("PUBLICATION_STATE_CONFLICT", "Submission is no longer pending review", 409, false, details);
   }
   if (isRepositoryConflict(error, "intent_mismatch")) {
-    throw new AppError("PUBLICATION_STATE_CONFLICT", "Publication intent does not match the original review", 409);
+    throw new AppError("PUBLICATION_STATE_CONFLICT", "Publication intent does not match the original review", 409, false, details);
   }
   throw error;
 }
 function throwDecisionError(error: unknown): never {
+  const details = repositoryConflictDetails(error);
+  if (isRepositoryConflict(error, "operation_conflict")) {
+    throw new AppError(
+      "REVIEW_OPERATION_CONFLICT",
+      "Operation number was already used for a different decision",
+      409,
+      false,
+      details,
+    );
+  }
+  if (isRepositoryConflict(error, "version_conflict")) {
+    throw new AppError(
+      "REVIEW_VERSION_CONFLICT",
+      "Submission changed since it was read; reload before retrying",
+      409,
+      false,
+      details,
+    );
+  }
   if (isRepositoryConflict(error, "decision_conflict") || isRepositoryConflict(error, "submission_not_pending")) {
-    throw new AppError("REVIEW_STATE_CONFLICT", "Submission is no longer pending review", 409);
+    throw new AppError("REVIEW_STATE_CONFLICT", "Submission is no longer pending review", 409, false, details);
   }
   throw error;
 }
 function invalidPublicationInput(): AppError { return new AppError("PUBLICATION_INPUT_INVALID", "Publication input is invalid", 400); }
 function invalidDecision(): AppError { return new AppError("REVIEW_DECISION_INVALID", "Review decision is invalid", 400); }
+function invalidLifecycleRequest(): AppError {
+  return new AppError("KNOWLEDGE_LIFECYCLE_REQUEST_INVALID", "Knowledge lifecycle request is invalid", 400);
+}
 function hasMalformedSurrogate(content: string): boolean {
   for (let index = 0; index < content.length; index += 1) {
     const unit = content.charCodeAt(index);

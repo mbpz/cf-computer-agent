@@ -11,6 +11,8 @@ import { discussionContextHref, threadDiscussionHref } from "./discussion-model"
 export type MessagesPageState =
   | { kind: "loading" }
   | { kind: "error" }
+  /** `list` = the whole messages surface is denied; `thread` = a direct context entry is no longer available. */
+  | { kind: "revoked"; target: "list" | "thread" }
   | { kind: "ready"; items: readonly DiscussionThread[]; nextCursor?: string };
 
 export function MessagesPage({ locale, state, page, limit, pending, onRetry, onNext, onPrevious, onLimitChange }: {
@@ -32,6 +34,18 @@ export function MessagesPage({ locale, state, page, limit, pending, onRetry, onN
     />
     {state.kind === "loading" && <div><span className="sr-only">{frontendText(locale, "MESSAGES_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "MESSAGES_LOADING")} /></div>}
     {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "MESSAGES_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button></PageState>}
+    {/* Revoked access is its own state, not a retryable read failure: the list is
+        hidden, the copy names the revocation, and retry re-checks the member boundary. */}
+    {state.kind === "revoked" && <PageState
+      kind="forbidden"
+      title={frontendText(locale, state.target === "thread" ? "MESSAGES_THREAD_REVOKED" : "MESSAGES_REVOKED")}
+      description={frontendText(locale, state.target === "thread" ? "MESSAGES_THREAD_REVOKED_DESCRIPTION" : "MESSAGES_REVOKED_DESCRIPTION")}
+    >
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button>
+        <a href="/messages" className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent">{frontendText(locale, "MESSAGES_BACK")}</a>
+      </div>
+    </PageState>}
     {state.kind === "ready" && <>
     <div data-messages-scroll="true" className="min-h-0 max-h-[calc(100vh-18rem)] flex-1 space-y-3 overflow-y-auto pr-1" aria-busy={pending || undefined}>
       {state.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "MESSAGES_EMPTY")} /> : state.items.map((thread) => <Card key={thread.id}>

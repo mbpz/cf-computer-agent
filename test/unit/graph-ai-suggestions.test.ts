@@ -6,6 +6,7 @@ const snapshot: GraphSnapshot = {
   rootId: null,
   depth: 2,
   truncated: false,
+  nextCursor: null,
   nodes: [
     { id: "meeting:m-1", kind: "meeting", label: "产品评审", status: "done", href: null, metadata: {} },
     { id: "decision:d-1", kind: "decision", label: "采用边缘部署", status: "done", href: null, metadata: {} },

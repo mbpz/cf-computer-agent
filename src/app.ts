@@ -22,10 +22,12 @@ import { TimelineService } from "./ai/timeline-service";
 import { BriefService } from "./ai/brief-service";
 import { ComparisonService } from "./ai/comparison-service";
 import { AuditRepository } from "./audit/repository";
+import { AdminSummaryRepository } from "./admin-summary/repository";
 import { AnalyticsRepository } from "./analytics/repository";
 import { requireCapability } from "./authorization/policy";
 import { RolesRepository } from "./authorization/roles-repository";
 import { MenusRepository } from "./authorization/menus-repository";
+import { AdminOperationReceipts } from "./operations/receipts";
 import { APP_CONFIG } from "./config";
 import { AppError, createRequestContext, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, parseJsonRequest, requireSameOrigin, withStrictTransportSecurity, type RequestContext } from "./http";
 import { AutomationAuthenticator } from "./identity/automation";
@@ -47,6 +49,7 @@ import { PrivateNotesRepository } from "./private-notes/repository";
 import { PrivateNotesService } from "./private-notes/service";
 import { routeAdminApi } from "./routes/admin";
 import { routeAdminReviewApi } from "./routes/admin-review";
+import { routeAdminSummaryApi } from "./routes/admin-summary";
 import { routeAdminRolesApi } from "./routes/admin-roles";
 import { routeAdminMenusApi } from "./routes/admin-menus";
 import { routeAgentApi } from "./routes/agent";
@@ -259,7 +262,11 @@ function knownWorkspaceRoute(pathname: string): boolean {
     || /^\/knowledge\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
     || /^\/messages\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
     || /^\/projects\/[A-Za-z0-9_-]{1,128}\/timeline$/u.test(pathname)
-    || /^\/admin\/submissions\/[A-Za-z0-9_-]{1,128}$/u.test(pathname);
+    || /^\/admin\/submissions\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
+    // The recycle bin's fixed path is a registry route above; this pattern carries
+    // its item-administration page (`/admin/knowledge/:id`), which app-routes.ts
+    // resolves to the same page kind family.
+    || /^\/admin\/knowledge\/[A-Za-z0-9_-]{1,128}$/u.test(pathname);
 }
 
 function createRequestServices(
@@ -286,6 +293,7 @@ function createRequestServices(
   const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName, dependencies.workScope);
   const publicationRecords = new PublicationRepository(env.DB, { workScope: dependencies.workScope });
   const tags = new TagsService(new TagsRepository(env.DB));
+  const operationReceipts = new AdminOperationReceipts(env.DB);
   const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit, dependencies.workScope);
   const sources = new SourcesRepository(env.DB);
   const submissions = new SubmissionsService(new SubmissionsRepository(env.DB, audit));
@@ -429,6 +437,7 @@ function createRequestServices(
       projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
       calendar: new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords }),
     }, undefined, dependencies.workScope),
+    adminSummary: new AdminSummaryRepository(env.DB, audit, analyticsNow),
     environments: new EnvironmentsService(new EnvironmentsRepository(env.DB)),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
@@ -437,6 +446,7 @@ function createRequestServices(
     roles,
     menus,
     maintenance,
+    operationReceipts,
   };
 }
 
@@ -512,6 +522,8 @@ async function dispatchApiRequest(
   if (library) return library;
   const adminReview = await routeAdminReviewApi(request, url, context, principal, services);
   if (adminReview) return adminReview;
+  const adminSummary = await routeAdminSummaryApi(request, url, context, principal, services);
+  if (adminSummary) return adminSummary;
 
   if (url.pathname === "/api/notes") {
     if (request.method === "GET") {

@@ -61,18 +61,41 @@ describe("numbered admin audit and members routes", () => {
     ]);
   });
 
-  it("keeps repeated explicit status assignments state-idempotent without claiming an exactly-once audit", async () => {
+  it("records one explicit status assignment and shrinks the disabled member's menu and deep links", async () => {
     await seedContributor();
-    expect((await api("/api/admin/members/contributor/status", { status: "disabled" })).status).toBe(200);
-    expect((await api("/api/admin/members/contributor/status", { status: "disabled" })).status).toBe(200);
-    expect(await new MembersRepository(env.DB).findById("contributor")).toMatchObject({ status: "disabled" });
+    const repository = new MembersRepository(env.DB);
+    const memberToken = (await new SessionService(env.DB, repository, { waitUntil: () => undefined }).create((await repository.findById("contributor"))!)).token;
+    expect((await api("/api/navigation", memberToken)).status).toBe(200);
+    expect((await api("/api/admin/members/contributor/status", { status: "disabled", expectedStatus: "active" })).status).toBe(200);
+    const disabled = (await repository.findById("contributor"))!;
+    expect(disabled.status).toBe("disabled");
+    // The same absolute assignment converges: no second write and one audit event.
+    expect((await api("/api/admin/members/contributor/status", { status: "disabled", expectedStatus: "active" })).status).toBe(200);
+    expect(await repository.findById("contributor")).toMatchObject({ status: "disabled", updatedAt: disabled.updatedAt });
     const events = await env.DB.prepare("SELECT metadata FROM audit_events WHERE action = 'member.status_updated' ORDER BY rowid").all();
-    // Existing HTTP contract has no persisted request identity. Recovery must not
-    // silently replay PATCH and misrepresent these two audits as exactly once.
     expect(events.results).toEqual([
       { metadata: '{"previousStatus":"active","newStatus":"disabled"}' },
-      { metadata: '{"previousStatus":"disabled","newStatus":"disabled"}' },
     ]);
+    // The member's existing session loses menu, command source and deep links at once.
+    expect((await api("/api/session", memberToken)).status).toBe(403);
+    expect((await api("/api/navigation", memberToken)).status).toBe(403);
+    expect((await api("/api/admin/roles", memberToken)).status).toBe(403);
+  });
+
+  it("rejects a stale client precondition instead of silently re-writing the status", async () => {
+    await seedContributor();
+    const repository = new MembersRepository(env.DB);
+    expect((await api("/api/admin/members/contributor/status", { status: "disabled", expectedStatus: "active" })).status).toBe(200);
+    const disabled = (await repository.findById("contributor"))!;
+    // A caller holding the pre-disable view must not silently re-enable over a newer change.
+    const stale = await api("/api/admin/members/contributor/status", { status: "active", expectedStatus: "active" });
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: "MEMBER_STATUS_CONFLICT" } });
+    expect(await repository.findById("contributor")).toMatchObject({ status: "disabled", updatedAt: disabled.updatedAt });
+    expect((await env.DB.prepare("SELECT metadata FROM audit_events WHERE action = 'member.status_updated' ORDER BY rowid").all()).results).toEqual([
+      { metadata: '{"previousStatus":"active","newStatus":"disabled"}' },
+    ]);
+    expect((await api("/api/admin/members/contributor/status", { status: "disabled", expectedStatus: "pending" })).status).toBe(400);
   });
 
   it("protects administrator rows and rejects invalid status or missing targets without a write audit", async () => {
@@ -100,8 +123,10 @@ describe("numbered admin audit and members routes", () => {
     await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('contributor', 'contributor-sub', 'contributor@example.test', 'contributor', 'active', ?, ?)").bind("2026-08-28T00:00:00.000Z", "2026-08-28T00:00:00.000Z").run();
   }
 
-  async function api(path: string, body?: { status: string }): Promise<Response> {
-    const request = new Request(`https://memory.crgmhrc.asia${path}`, { method: body ? "PATCH" : "GET", ...(body ? { body: JSON.stringify(body) } : {}), headers: { cookie: `__Host-memory-session=${admin}`, origin: "https://memory.crgmhrc.asia", "content-type": "application/json" } });
+  async function api(path: string, bodyOrToken?: { status: string; expectedStatus?: string } | string): Promise<Response> {
+    const body = typeof bodyOrToken === "string" ? undefined : bodyOrToken;
+    const token = typeof bodyOrToken === "string" ? bodyOrToken : admin;
+    const request = new Request(`https://memory.crgmhrc.asia${path}`, { method: body ? "PATCH" : "GET", ...(body ? { body: JSON.stringify(body) } : {}), headers: { cookie: `__Host-memory-session=${token}`, origin: "https://memory.crgmhrc.asia", "content-type": "application/json" } });
     const context = createExecutionContext(); const response = await createApp().fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context); await waitOnExecutionContext(context); return response;
   }
 });

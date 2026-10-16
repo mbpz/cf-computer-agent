@@ -302,6 +302,142 @@ describe("focus workbench route", () => {
     expect((await transition("/api/focus/focus-1/complete", sessionA)).status).toBe(200);
     expect((await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ clientKey: "bad", taskId: "focus-task-b" }) })).status).toBe(404);
   });
+
+  it("workbench-focus:query_or_idempotency:start-focus — two windows starting with different keys keep one active session and one calendar block, a retry stays idempotent, and members stay isolated", async () => {
+    const [left, right] = await Promise.all([
+      api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "focus-win-left", clientKey: "focus-win-left", taskId: "focus-task-a" }) }),
+      api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "focus-win-right", clientKey: "focus-win-right", taskId: "focus-task-a" }) }),
+    ]);
+    expect([left.status, right.status].sort((a, b) => a - b)).toEqual([201, 409]);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions WHERE member_id = 'focus-a'").first("count")).toBe(1);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions WHERE member_id = 'focus-a' AND status IN ('active', 'paused')").first("count")).toBe(1);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_events WHERE member_id = 'focus-a'").first("count")).toBe(1);
+
+    const leftWon = left.status === 201;
+    const winningIntent = leftWon
+      ? { id: "focus-win-left", clientKey: "focus-win-left", taskId: "focus-task-a" }
+      : { id: "focus-win-right", clientKey: "focus-win-right", taskId: "focus-task-a" };
+    const started = await (leftWon ? left : right).json() as { session: { id: string; calendarEventId: string; elapsedMs: number } };
+
+    const replay = await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify(winningIntent) });
+    expect(replay.status).toBe(200);
+    const replayed = await replay.json() as { created: boolean; session: { id: string; calendarEventId: string; elapsedMs: number } };
+    expect(replayed.created).toBe(false);
+    expect(replayed.session.id).toBe(started.session.id);
+    expect(replayed.session.elapsedMs).toBe(0);
+    expect(replayed.session.calendarEventId).toBe(started.session.calendarEventId);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions WHERE member_id = 'focus-a'").first("count")).toBe(1);
+
+    const bStart = await api("/api/focus", sessionB, { method: "POST", body: JSON.stringify({ id: "focus-win-b", clientKey: "focus-win-b", taskId: "focus-task-b" }) });
+    expect(bStart.status).toBe(201);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions WHERE member_id = 'focus-b'").first("count")).toBe(1);
+    expect((await api(`/api/focus/${started.session.id}`, sessionB)).status).toBe(404);
+  });
+
+  it("workbench-focus:query_or_idempotency:pause-focus — concurrent pauses accumulate elapsed time once, and a stale request cannot touch a newly started session", async () => {
+    await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "pause-1", clientKey: "pause-1", taskId: "focus-task-a" }) });
+    vi.setSystemTime(new Date(NOW.getTime() + 60_000));
+    const original = await (await api("/api/focus/pause-1", sessionA)).json() as { updatedAt: string };
+
+    const [first, second] = await Promise.all([
+      api("/api/focus/pause-1/pause", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: original.updatedAt }) }),
+      api("/api/focus/pause-1/pause", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: original.updatedAt }) }),
+    ]);
+    expect([first.status, second.status].sort((a, b) => a - b)).toEqual([200, 409]);
+    const conflict = first.status === 409 ? first : second;
+    const conflictBody = await conflict.json() as { error: { code: string; retryable: boolean } };
+    expect(conflictBody.error.retryable).toBe(false);
+    expect(["FOCUS_VERSION_CONFLICT", "FOCUS_CONFLICT"]).toContain(conflictBody.error.code);
+    const winner = first.status === 200 ? first : second;
+    const paused = await winner.json() as { status: string; elapsedMs: number; updatedAt: string };
+    expect(paused).toMatchObject({ status: "paused", elapsedMs: 60_000 });
+
+    const retry = await api("/api/focus/pause-1/pause", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: paused.updatedAt }) });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toMatchObject({ status: "paused", elapsedMs: 60_000, updatedAt: paused.updatedAt });
+
+    expect((await transition("/api/focus/pause-1/complete", sessionA)).status).toBe(200);
+    expect((await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "pause-2", clientKey: "pause-2", taskId: "focus-task-a" }) })).status).toBe(201);
+    expect((await api("/api/focus/pause-1/pause", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: original.updatedAt }) })).status).toBe(409);
+    expect(await (await api("/api/focus/pause-2", sessionA)).json()).toMatchObject({ status: "active", elapsedMs: 0 });
+  });
+
+  it("workbench-focus:query_or_idempotency:resume-focus — one concurrent resume sets the start time once, a completed session cannot restart, and cross-member resume is refused", async () => {
+    await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "resume-1", clientKey: "resume-1", taskId: "focus-task-a" }) });
+    vi.setSystemTime(new Date(NOW.getTime() + 60_000));
+    const paused = await (await transition("/api/focus/resume-1/pause", sessionA)).json() as { status: string; elapsedMs: number; updatedAt: string };
+    expect(paused).toMatchObject({ status: "paused", elapsedMs: 60_000 });
+
+    vi.setSystemTime(new Date(NOW.getTime() + 120_000));
+    const [first, second] = await Promise.all([
+      api("/api/focus/resume-1/resume", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: paused.updatedAt }) }),
+      api("/api/focus/resume-1/resume", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: paused.updatedAt }) }),
+    ]);
+    expect([first.status, second.status].sort((a, b) => a - b)).toEqual([200, 409]);
+    const conflict = first.status === 409 ? first : second;
+    const conflictBody = await conflict.json() as { error: { code: string; retryable: boolean } };
+    expect(conflictBody.error.retryable).toBe(false);
+    expect(["FOCUS_VERSION_CONFLICT", "FOCUS_CONFLICT"]).toContain(conflictBody.error.code);
+    const winner = first.status === 200 ? first : second;
+    const resumed = await winner.json() as { status: string; startedAt: string; elapsedMs: number; updatedAt: string };
+    expect(resumed).toMatchObject({ status: "active", startedAt: new Date(NOW.getTime() + 120_000).toISOString(), elapsedMs: 60_000 });
+
+    const retry = await api("/api/focus/resume-1/resume", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: resumed.updatedAt }) });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toMatchObject({ status: "active", startedAt: resumed.startedAt, elapsedMs: 60_000 });
+
+    const completed = await (await transition("/api/focus/resume-1/complete", sessionA)).json() as { status: string; startedAt: string; elapsedMs: number; updatedAt: string };
+    expect(completed).toMatchObject({ status: "completed", startedAt: resumed.startedAt });
+    const restart = await api("/api/focus/resume-1/resume", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: completed.updatedAt }) });
+    expect(restart.status).toBe(200);
+    expect(await restart.json()).toMatchObject({ status: "completed", startedAt: resumed.startedAt, elapsedMs: completed.elapsedMs });
+    expect((await api("/api/focus/resume-1/resume", sessionB, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: completed.updatedAt }) })).status).toBe(404);
+  });
+
+  it("workbench-focus:query_or_idempotency:complete-focus — a complete/abandon race accepts exactly one terminal write and repeat completion accumulates no extra time", async () => {
+    await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "finish-1", clientKey: "finish-1", taskId: "focus-task-a" }) });
+    vi.setSystemTime(new Date(NOW.getTime() + 90_000));
+    const before = await (await api("/api/focus/finish-1", sessionA)).json() as { updatedAt: string };
+    const [complete, abandon] = await Promise.all([
+      api("/api/focus/finish-1/complete", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: before.updatedAt }) }),
+      api("/api/focus/finish-1/abandon", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: before.updatedAt }) }),
+    ]);
+    expect([complete.status, abandon.status].sort((a, b) => a - b)).toEqual([200, 409]);
+    const conflict = complete.status === 409 ? complete : abandon;
+    expect(await conflict.json()).toMatchObject({ error: { code: "FOCUS_CONFLICT" } });
+    const terminal = await (complete.status === 200 ? complete : abandon).json() as { status: string; endedAt: string; elapsedMs: number; updatedAt: string };
+    expect(["completed", "abandoned"]).toContain(terminal.status);
+    expect(terminal).toMatchObject({ endedAt: new Date(NOW.getTime() + 90_000).toISOString(), elapsedMs: 90_000 });
+    expect(await env.DB.prepare("SELECT status FROM focus_sessions WHERE member_id = 'focus-a'").first("status")).toBe(terminal.status);
+    expect(await env.DB.prepare("SELECT status FROM calendar_events WHERE member_id = 'focus-a'").first("status")).toBe(terminal.status === "completed" ? "completed" : "canceled");
+
+    const repeat = await api("/api/focus/finish-1/complete", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: terminal.updatedAt }) });
+    expect(repeat.status).toBe(200);
+    expect(await repeat.json()).toMatchObject({ status: terminal.status, endedAt: terminal.endedAt, elapsedMs: terminal.elapsedMs, updatedAt: terminal.updatedAt });
+  });
+
+  it("workbench-focus:query_or_idempotency:abandon-focus — the abandon race accepts one terminal transition, retries never rewrite it, and other members are refused", async () => {
+    await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "race-1", clientKey: "race-1", taskId: "focus-task-a" }) });
+    vi.setSystemTime(new Date(NOW.getTime() + 45_000));
+    const before = await (await api("/api/focus/race-1", sessionA)).json() as { updatedAt: string };
+    const [complete, abandon] = await Promise.all([
+      api("/api/focus/race-1/complete", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: before.updatedAt }) }),
+      api("/api/focus/race-1/abandon", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: before.updatedAt }) }),
+    ]);
+    expect([complete.status, abandon.status].sort((a, b) => a - b)).toEqual([200, 409]);
+    const conflict = complete.status === 409 ? complete : abandon;
+    expect(await conflict.json()).toMatchObject({ error: { code: "FOCUS_CONFLICT" } });
+    const terminal = await (abandon.status === 200 ? abandon : complete).json() as { status: string; endedAt: string; elapsedMs: number; updatedAt: string };
+    expect(["completed", "abandoned"]).toContain(terminal.status);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions WHERE member_id = 'focus-a'").first("count")).toBe(1);
+
+    const retry = await api("/api/focus/race-1/abandon", sessionA, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: terminal.updatedAt }) });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toMatchObject({ status: terminal.status, endedAt: terminal.endedAt, elapsedMs: terminal.elapsedMs, updatedAt: terminal.updatedAt });
+    expect(await env.DB.prepare("SELECT status FROM focus_sessions WHERE member_id = 'focus-a'").first("status")).toBe(terminal.status);
+
+    expect((await api("/api/focus/race-1/abandon", sessionB, { method: "POST", body: JSON.stringify({ expectedUpdatedAt: terminal.updatedAt }) })).status).toBe(404);
+  });
 });
 
 async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {

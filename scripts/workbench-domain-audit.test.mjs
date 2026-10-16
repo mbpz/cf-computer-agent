@@ -31,24 +31,45 @@ function withRepositoryProbe(relativePath, transform, assertion) {
     rmSync(probeRoot, { recursive: true, force: true });
   }
 }
-test("review replay targets resolve to three bounded decisions alongside detail comments", () => {
+test("review replay targets resolve to the bounded submission decisions alongside detail review and reparse writes", () => {
   const facts = runtimeEvidenceSnapshot({ repositoryRoot });
-  for (const capability of ["workbench-admin-submissions", "workbench-admin-submission-detail"]) {
-    assert.deepEqual(Object.keys(facts.mutations[capability]).sort(), [
-            "POST /api/admin/submissions/:id/publish",
+  const expected = {
+    "workbench-admin-submissions": [
+      "POST /api/admin/submissions/:id/publish",
       "POST /api/admin/submissions/:id/reject",
       "POST /api/admin/submissions/:id/request-revision",
-      ...(capability === "workbench-admin-submission-detail" ? ["PUT /api/admin/submissions/:id/comments/requests/:id"] : []),
-    ]);
+      "POST /api/admin/submissions/batch-review",
+    ],
+    "workbench-admin-submission-detail": [
+      "PATCH /api/admin/knowledge/:id/revisions/:rev/chunks/:id/status",
+      "PATCH /api/admin/reparse-jobs/:id/candidate",
+      "POST /api/admin/reparse-jobs/:id/promote",
+      "POST /api/admin/reparse-jobs/:id/publish",
+      "POST /api/admin/source-versions/:id/reparse",
+      "POST /api/admin/submissions/:id/publish",
+      "POST /api/admin/submissions/:id/reject",
+      "POST /api/admin/submissions/:id/request-revision",
+      "PUT /api/admin/submissions/:id/comments/requests/:id",
+    ],
+  };
+  for (const [capability, operations] of Object.entries(expected)) {
+    assert.deepEqual(Object.keys(facts.mutations[capability]).sort(), operations, `${capability}: review decision and reparse writes must stay exactly inventoried`);
   }
 });
 
 test("task link removal stays discoverable through inline conditional request options", () => {
   const facts = runtimeEvidenceSnapshot({ repositoryRoot });
+  const relationStrategies = {
+    "DELETE /api/tasks/:id/dependencies/:id": "conditional_write",
+    "DELETE /api/tasks/:id/subtasks/:id": "conditional_write",
+    "PATCH /api/tasks/:id/subtasks/:id": "conditional_write",
+    "POST /api/tasks/:id/dependencies": "idempotency_key",
+    "POST /api/tasks/:id/subtasks": "idempotency_key",
+  };
   for (const [capability, linkId] of [["workbench-tasks", ":linkId"], ["workbench-inbox", ":id"]]) {
-    assert.ok(facts.mutations[capability][`DELETE /api/tasks/:id/links/${linkId}`]);
-    for (const operation of ["DELETE /api/tasks/:id/dependencies/:id", "DELETE /api/tasks/:id/subtasks/:id", "PATCH /api/tasks/:id/subtasks/:id", "POST /api/tasks/:id/dependencies", "POST /api/tasks/:id/subtasks"]) {
-      assert.equal(facts.mutations[capability][operation].strategy, "gap", "discovery alone is not recovery proof");
+    assert.equal(facts.mutations[capability][`DELETE /api/tasks/:id/links/${linkId}`].strategy, "conditional_write", "inline conditional options must still expose the link removal as a proven write");
+    for (const [operation, strategy] of Object.entries(relationStrategies)) {
+      assert.equal(facts.mutations[capability][operation].strategy, strategy, "a proven relation write must not fall back to gap");
     }
   }
 });
@@ -116,8 +137,8 @@ test("review path analysis discovers an undeclared conditional endpoint", () => 
 
 test("every maturity capability has one conservative domain audit record", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
-  assert.equal(audit.length, 34);
-  assert.equal(new Set(audit.map((record) => record.id)).size, 34);
+  assert.equal(audit.length, 39);
+  assert.equal(new Set(audit.map((record) => record.id)).size, 39);
 
   for (const record of audit) {
     for (const path of [
@@ -142,7 +163,16 @@ test("focus union actions expand to four real routes and review persistence has 
     "POST /api/focus", "POST /api/focus/:id/abandon", "POST /api/focus/:id/complete",
     "POST /api/focus/:id/pause", "POST /api/focus/:id/resume",
   ]);
-  for (const fact of Object.values(facts.mutations["workbench-focus"])) assert.equal(fact.strategy, "gap");
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(facts.mutations["workbench-focus"]).map(([operation, fact]) => [operation, fact.strategy])),
+    {
+      "POST /api/focus": "idempotency_key",
+      "POST /api/focus/:id/abandon": "conditional_write",
+      "POST /api/focus/:id/complete": "conditional_write",
+      "POST /api/focus/:id/pause": "conditional_write",
+      "POST /api/focus/:id/resume": "conditional_write",
+    },
+  );
   assert.equal(facts.mutations["workbench-review"]["GET /api/workbench/review#persist-snapshot"].strategy, "idempotency_key");
 });
 
@@ -338,7 +368,7 @@ test("current frontend ownership discovers the required visible mutation minimum
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
   const expected = {
     "workbench-inbox": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/dependencies/:id", "DELETE /api/tasks/:id/links/:id", "DELETE /api/tasks/:id/subtasks/:id", "PATCH /api/inbox/:id", "PATCH /api/tasks/:id", "PATCH /api/tasks/:id/subtasks/:id", "POST /api/inbox", "POST /api/inbox/:id/promote/task", "POST /api/tasks", "POST /api/tasks/:id/dependencies", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "POST /api/tasks/:id/subtasks", "PUT /api/tasks/:id/tags"],
-    "workbench-agent": ["PATCH /api/knowledge/chat/conversations/:id/scope", "POST /api/knowledge/chat", "POST /api/knowledge/chat/conversations/:id/cancel", "POST /api/knowledge/chat/conversations/:id/feedback"],
+    "workbench-agent": ["PATCH /api/knowledge/chat/conversations/:id/scope", "POST /api/knowledge/chat/conversations/:id/cancel", "POST /api/knowledge/chat/conversations/:id/feedback"],
     "workbench-tasks": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/dependencies/:id", "DELETE /api/tasks/:id/links/:linkId", "DELETE /api/tasks/:id/subtasks/:id", "PATCH /api/tasks/:id", "PATCH /api/tasks/:id/subtasks/:id", "POST /api/tasks", "POST /api/tasks/:id/dependencies", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "POST /api/tasks/:id/subtasks", "PUT /api/tasks/:id/tags"],
     "workbench-admin-duplicates": ["POST /api/admin/duplicates/:submissionId/decision"],
     "workbench-admin-members": ["PATCH /api/admin/members/:id/status"],
@@ -378,7 +408,11 @@ test("message-thread send and knowledge-reader visit are independently accounted
   const visit = reader.mutationEvidence["GET /api/knowledge/:id#record-visit"];
   assert.ok(visit, "reader visit recording requires a generated operation fact distinct from ordinary GET");
   assert.equal(visit.apiPath, "/api/knowledge/:id");
-  assert.equal(visit.strategy, "gap");
+  assert.equal(visit.strategy, "idempotency_key");
+  assert.deepEqual(
+    { path: visit.safety.path, symbol: visit.safety.symbol },
+    { path: "src/recent-visits/repository.ts", symbol: "RecentVisitsRepository.record" },
+  );
   assert.deepEqual(
     { path: visit.source.path, symbol: visit.source.symbol },
     { path: "src/routes/library.ts", symbol: "routeLibraryApi" },
@@ -433,7 +467,7 @@ test("removing role detail API ownership and its mutation cannot bypass source d
 
 test("frontend scanner fails closed when request options method is not statically resolved", () => {
   withRepositoryProbe("frontend/lib/agent-data.ts", (source) => source.replace(
-    /(  const data = await apiFetch<[^\n]+>\("\/api\/knowledge\/chat", )(\{[\s\S]*?^  \}\);)/mu,
+    /(  await apiFetch\(`\/api\/knowledge\/chat\/conversations\/\$\{encodeURIComponent\(conversationId\)\}\/scope`, )(\{[\s\S]*?^  \}\);)/mu,
     (_, callPrefix, inlineOptions) => `  const requestOptions = ${inlineOptions.slice(0, -2)};\n${callPrefix}requestOptions);`,
   ), (probeRoot) => {
     assert.throws(
@@ -445,12 +479,12 @@ test("frontend scanner fails closed when request options method is not staticall
 
 test("frontend scanner preserves no-options GET and inline mutation methods", () => {
   withRepositoryProbe("frontend/lib/agent-data.ts", (source) => source.replace(
-    "  const data = await apiFetch<{ answer?: unknown;",
-    "  void apiFetch(\"/api/knowledge/recent\");\n  const data = await apiFetch<{ answer?: unknown;",
+    "  const data = await apiFetch<{ cancelled?: unknown }>(",
+    "  void apiFetch(\"/api/knowledge/chat/conversations\");\n  const data = await apiFetch<{ cancelled?: unknown }>(",
   ), (probeRoot) => {
     const evidence = runtimeEvidenceSnapshot({ repositoryRoot: probeRoot });
-    assert.ok(evidence.mutations["workbench-agent"]["POST /api/knowledge/chat"]);
-    assert.equal(evidence.mutations["workbench-agent"]["GET /api/knowledge/recent"], undefined);
+    assert.ok(evidence.mutations["workbench-agent"]["POST /api/knowledge/chat/conversations/:id/cancel"]);
+    assert.equal(evidence.mutations["workbench-agent"]["GET /api/knowledge/chat/conversations"], undefined);
   });
 });
 

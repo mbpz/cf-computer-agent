@@ -250,6 +250,44 @@ describe("task editor through the real route", () => {
     await flush(); expect(writes).toHaveLength(1); await click("Retry same operation");
     expect(writes).toHaveLength(2); expect(writes[0]!.body).toEqual(writes[1]!.body);
   });
+  it("never offers a detail update before the version it edits is known", async () => {
+    let resolveDetail!: (response: Response) => void;
+    responder = (url, init) => url === "/api/tasks/task-alpha" && !init?.method ? new Promise<Response>((done) => { resolveDetail = done; }) : undefined;
+    await mount(); await click("Edit: Alpha (task-alpha)");
+    expect(container.querySelector('[aria-label="Task title"]')).toBeNull();
+    expect([...container.querySelectorAll("button")].some((node) => node.textContent === "Save task")).toBe(false);
+    expect(writes).toHaveLength(0);
+    await act(async () => resolveDetail(Response.json({ task, tags: [], links: [] }))); await flush();
+    await change("Task title", "Versioned"); await click("Save task");
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.body).toMatchObject({ title: "Versioned", expectedUpdatedAt: task.updatedAt });
+  });
+  it("reuses the frozen intent on retry instead of a newer version read back meanwhile", async () => {
+    const newer = { ...task, title: "Alpha edited elsewhere", updatedAt: "2026-09-27T09:00:00Z" };
+    let attempts = 0; let advanced = false;
+    responder = (url, init) => {
+      if (init?.method === "PATCH") {
+        attempts += 1;
+        return attempts === 1 ? Promise.reject(new TypeError("offline")) : Response.json({ ...saved, ...JSON.parse(String(init.body)) });
+      }
+      if (url === "/api/tasks/task-alpha") return Response.json({ task: advanced ? newer : saved, tags: [], links: [] });
+      return undefined;
+    };
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" memberId="alice" />)); await flush();
+    await click("Edit: Alpha (task-alpha)");
+    await change("Task title", "Retry me"); await click("Save task");
+    expect(container.textContent).toContain("The write result is unknown");
+    expect(writes).toHaveLength(1);
+    const frozen = JSON.parse(browser.sessionStorage.getItem("memory-garden:task-write:v1:alice")!) as { intent: { expectedUpdatedAt: string } };
+    expect(frozen.intent.expectedUpdatedAt).toBe(task.updatedAt);
+    advanced = true;
+    await click("Retry same operation");
+    expect(writes).toHaveLength(2);
+    expect(writes[1]!.body).toEqual(writes[0]!.body);
+    expect(writes[1]!.body.expectedUpdatedAt).toBe(task.updatedAt);
+    expect(writes[1]!.body.expectedUpdatedAt).not.toBe(newer.updatedAt);
+    expect(browser.sessionStorage.getItem("memory-garden:task-write:v1:alice")).toBeNull();
+  });
   it("opens details, saves fields including clearing due date, and changes tags and associations", async () => {
     await mount(); await click("Edit: Alpha (task-alpha)");
     await change("Task title", "Edited"); await change("Task notes", "Note"); await change("Task due date", "2026-09-28T12:30"); await click("Save task");

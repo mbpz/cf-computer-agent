@@ -12,6 +12,18 @@ export interface ReviewPublishInput {
 export interface ReviewDetailData {
   readonly detail: ReviewDetailModel;
   readonly publish: ReviewPublishInput;
+  /** Authoritative submission version, absent for a server that predates it. */
+  readonly version?: string;
+}
+
+/**
+ * The authoritative submission version (`submissions.updated_at`). A decision
+ * carries it as a precondition so a stale decision conflicts instead of
+ * overwriting a newer state.
+ */
+export function isCanonicalTimestamp(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(Date.parse(value))
+    && new Date(value).toISOString() === value;
 }
 
 export function normalizeReviewPreview(input: unknown): ReviewDetailData | null {
@@ -44,7 +56,15 @@ export function normalizeReviewPreview(input: unknown): ReviewDetailData | null 
     content: typeof sourceVersion.content === "string" ? sourceVersion.content : typeof preview.rawContent === "string" ? preview.rawContent : "",
     warnings,
   });
-  return detail && /^[A-Za-z0-9_-]+$/u.test(publish.spaceId) ? { detail, publish } : null;
+  if (!detail || !/^[A-Za-z0-9_-]+$/u.test(publish.spaceId)) return null;
+  // A version that is present but not an exact instant cannot be used as a
+  // precondition, and silently dropping it would send an unprotected decision.
+  if (preview.updatedAt !== undefined && !isCanonicalTimestamp(preview.updatedAt)) return null;
+  return {
+    detail,
+    publish,
+    ...(preview.updatedAt === undefined ? {} : { version: preview.updatedAt }),
+  };
 }
 
 export async function loadReviewDetail(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ReviewDetailData> {
@@ -74,13 +94,22 @@ export function validReviewNote(note: string): boolean {
     && !/[\u0000-\u001f\u007f-\u009f]/u.test(note) && !/[\uD800-\uDFFF]/u.test(note);
 }
 
-export function prepareReviewDecision(id: string, action: ReviewDecision, publish: ReviewPublishInput, details?: ReviewNoteInput): ReviewOperation {
+export function prepareReviewDecision(id: string, action: ReviewDecision, publish: ReviewPublishInput, details?: ReviewNoteInput, expectedUpdatedAt?: string): ReviewOperation {
   if (!/^[A-Za-z0-9_-]+$/u.test(id)) throw new Error("REVIEW_DETAIL_INVALID");
   const input = details ?? { reasonCode: action === "request_changes" ? "needs_revision" : "not_relevant", note: "" };
   if (action !== "publish" && (!validReviewNote(input.note) || (action === "request_changes"
     ? input.reasonCode !== "needs_revision" : !["not_relevant", "duplicate", "unsafe"].includes(input.reasonCode)))) throw new Error("REVIEW_NOTE_INVALID");
+  if (expectedUpdatedAt !== undefined && !isCanonicalTimestamp(expectedUpdatedAt)) throw new Error("REVIEW_VERSION_INVALID");
   const path = action === "request_changes" ? "request-revision" : action;
-  return Object.freeze({ id, action, path: `/api/admin/submissions/${encodeURIComponent(id)}/${path}`, body: JSON.stringify(action === "publish" ? publish : input) });
+  // One decision has one identity on both surfaces: the operation number is
+  // derived from the action, the submission and the version it was read at, so
+  // a lost-response retry from the queue or the detail page replays it.
+  const decision = expectedUpdatedAt === undefined ? {} : {
+    operationId: `review.${action}.${id}.${expectedUpdatedAt}`,
+    expectedUpdatedAt,
+  };
+  const body = action === "publish" ? { ...publish, ...decision } : { ...input, ...decision };
+  return Object.freeze({ id, action, path: `/api/admin/submissions/${encodeURIComponent(id)}/${path}`, body: JSON.stringify(body) });
 }
 
 export async function sendReviewDecision(operation: ReviewOperation, requester: Fetcher = fetch): Promise<ReviewReceipt> {

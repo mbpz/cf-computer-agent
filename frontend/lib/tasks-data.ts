@@ -86,21 +86,26 @@ export async function createTask(input: TaskCreateInput, requester: Fetcher = fe
   return { task: taskReceipt(data.task, id), created: data.created };
 }
 
-export async function updateTask(id: string, patch: { title: string; notes: string; priority: string; dueAt: string | null; expectedUpdatedAt?: string }, requester: Fetcher = fetch): Promise<TaskItem> {
+/** The edited version is required: the server refuses a detail update that does not name the version it replaces. */
+export async function updateTask(id: string, patch: { title: string; notes: string; priority: string; dueAt: string | null; expectedUpdatedAt: string }, requester: Fetcher = fetch): Promise<TaskItem> {
   return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) }), id);
 }
 
-export async function deleteTask(id: string, requester: Fetcher = fetch): Promise<void> {
+/** The deleted version is required: the server refuses a delete that does not name the version it removes, and answers a replayed delete with its recorded receipt. */
+export async function deleteTask(id: string, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<void> {
   try {
-    await apiFetch<void>(`/api/tasks/${encodeURIComponent(id)}`, { requester, method: "DELETE" });
+    await apiFetch<{ tombstone?: unknown }>(`/api/tasks/${encodeURIComponent(id)}`, {
+      requester, method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }),
+    });
   } catch (error) {
+    // A 404 (unknown id, another member, or an expired receipt) is still convergent.
     if (!(error instanceof ApiRequestError) || error.status !== 404) throw error;
   }
 }
 
-/** With `expectedStatus`, the server rejects with 409 if the task moved elsewhere, unless it is already at `status`. */
-export async function setTaskStatus(id: string, status: string, requester: Fetcher = fetch, expectedStatus?: string): Promise<TaskItem> {
-  const body = expectedStatus === undefined ? { status } : { status, expectedStatus };
+/** The status this write replaces is required: the server refuses a status write that cannot name its snapshot. */
+export async function setTaskStatus(id: string, status: string, requester: Fetcher = fetch, expectedStatus: string): Promise<TaskItem> {
+  const body = { status, expectedStatus };
   return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), id);
 }
 

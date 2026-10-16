@@ -430,10 +430,55 @@ describe("review detail read recovery", () => {
     expect(container.querySelector('[data-review-state="closed"]')?.textContent).toContain("no longer awaiting review");
     expect(button("Publish").disabled).toBe(true);
   });
+
+  it("sends the decision with the preview's authoritative version as one operation identity", async () => {
+    const version = "2026-08-22T00:00:00.000Z";
+    const posts: string[] = [];
+    await renderMember(withComments(async (_input, init) => {
+      if (init?.method === "POST") { posts.push(String(init.body)); return json({ revision: { id: "rev-1", knowledgeItemId: "ki-1", searchStatus: "indexed" } }); }
+      return preview("sub-1", "review_pending", version);
+    }));
+    await submitDecision("Publish"); await flush();
+
+    expect(posts).toHaveLength(1);
+    // The queue and the detail page derive this same identity from the same version.
+    expect(JSON.parse(posts[0]!)).toMatchObject({
+      title: "Title sub-1", spaceId: "default",
+      operationId: `review.publish.sub-1.${version}`, expectedUpdatedAt: version,
+    });
+  });
+
+  it("shows a stale decision as a version conflict and resolves it by re-reading the authoritative state", async () => {
+    const version = "2026-08-22T00:00:00.000Z";
+    let reads = 0; let posts = 0;
+    await renderMember(withComments(async (_input, init) => {
+      if (init?.method === "POST") {
+        posts += 1;
+        return new Response(JSON.stringify({
+          error: {
+            code: "REVIEW_VERSION_CONFLICT", message: "Submission changed since it was read", retryable: false,
+            details: { submissionId: "sub-1", status: "revision_requested", updatedAt: "2026-08-23T00:00:00.000Z" },
+          },
+        }), { status: 409, headers: { "content-type": "application/json" } });
+      }
+      reads += 1;
+      return reads === 1 ? preview("sub-1", "review_pending", version) : preview("sub-1", "revision_requested", "2026-08-23T00:00:00.000Z");
+    }));
+    await submitDecision("Publish"); await flush();
+
+    expect(posts).toBe(1);
+    expect(container.textContent).toContain("The submission state changed");
+    expect(container.textContent).not.toContain("Retry same decision");
+    await act(async () => button("Reload current state").click()); await flush();
+    // Re-reading resolves the unknown decision against the authoritative state.
+    expect(reads).toBe(2); expect(posts).toBe(1);
+    expect(browser.sessionStorage.getItem("memory-garden:review-decision:v1:member-a:sub-1")).toBeNull();
+    expect(container.textContent).toContain("revision_requested");
+  });
 });
 
 function json(value: unknown) { return new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } }); }
-function preview(id: string, status = "review_pending") { return json({ preview: { submissionId: id, submitterId: "member-1", status, requestedSpaceId: "default", requestedVisibility: "shared", requestedCollectionId: null, tagIds: [], title: `Title ${id}`, rawContent: `Content ${id}`, sourceVersion: { id: "version-1", content: `Content ${id}`, kind: "markdown", parserVersion: "m1" }, safety: { status: "safe", findings: [] }, chunks: [] } }); }
+function preview(id: string, status = "review_pending", updatedAt?: string) { return json({ preview: { submissionId: id, submitterId: "member-1", status, requestedSpaceId: "default", requestedVisibility: "shared", requestedCollectionId: null, tagIds: [], title: `Title ${id}`, rawContent: `Content ${id}`, ...(updatedAt === undefined ? {} : { updatedAt }), sourceVersion: { id: "version-1", content: `Content ${id}`, kind: "markdown", parserVersion: "m1" }, safety: { status: "safe", findings: [] }, chunks: [] } }); }
 function published(searchStatus: string) { return json({ revision: { id: "rev-1", knowledgeItemId: "ki-1", searchStatus } }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); }); }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((yes) => { resolve = yes; }); return { promise, resolve }; }

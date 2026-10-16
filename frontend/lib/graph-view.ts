@@ -1,7 +1,7 @@
 export type GraphViewLens = "workspace" | "knowledge" | "work";
 export type GraphViewRange = "all" | "7d" | "30d" | "90d";
 export type GraphViewChange = "all" | "added" | "updated" | "completed" | "archived";
-export type GraphView = { readonly query: string; readonly lens: GraphViewLens; readonly temporalRange: GraphViewRange; readonly changeKind: GraphViewChange };
+export type GraphView = { readonly query: string; readonly lens: GraphViewLens; readonly temporalRange: GraphViewRange; readonly changeKind: GraphViewChange; readonly rootId: string | null };
 export type StoredGraphView = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; view: GraphView };
 const storageKey = (memberId: string) => `memory-garden:graph-view:v1:${encodeURIComponent(memberId)}`;
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -18,20 +18,25 @@ function storage(): Storage {
 function text(value: unknown, max: number): value is string {
   return typeof value === "string" && [...value].length <= max && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
 }
+/** A stored drill-down: the graph node the member is focused on, or their cleared choice. */
+function validRootId(value: unknown): value is string | null {
+  return value === null || (text(value, 200) && value.length > 0);
+}
 export function blankGraphView(view: GraphView): boolean {
-  return view.query === "" && view.lens === "workspace" && view.temporalRange === "all" && view.changeKind === "all";
+  return view.query === "" && view.lens === "workspace" && view.temporalRange === "all" && view.changeKind === "all" && view.rootId === null;
 }
 export function validGraphView(value: unknown): value is GraphView {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return Object.keys(record).length === 4 && text(record.query, 200)
+  return Object.keys(record).length === 5 && text(record.query, 200)
     && typeof record.lens === "string" && lenses.has(record.lens)
     && typeof record.temporalRange === "string" && ranges.has(record.temporalRange)
     && typeof record.changeKind === "string" && changes.has(record.changeKind)
+    && validRootId(record.rootId)
     && !blankGraphView(record as GraphView);
 }
 function plain(view: GraphView): GraphView {
-  return { query: view.query, lens: view.lens, temporalRange: view.temporalRange, changeKind: view.changeKind };
+  return { query: view.query, lens: view.lens, temporalRange: view.temporalRange, changeKind: view.changeKind, rootId: view.rootId };
 }
 
 // Tab-scoped graph filters. Separate from an unconfirmed graph action.

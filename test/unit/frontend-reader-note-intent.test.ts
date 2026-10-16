@@ -16,6 +16,14 @@ describe("reader note tab intent journal", () => {
     expect(clear).toThrow(); settle(); expect(load()).toEqual({ kind: "ready", intent, outcome: "applied" }); clear(); expect(load()).toEqual({ kind: "empty" });
   });
   it("does not overwrite even an identical pending operation", () => { prepare(); expect(prepare).toThrow(); expect(load().kind).toBe("ready"); });
+  it("keeps the operation key stable across a reload so a retry resends it", () => {
+    prepare();
+    const reloaded = load();
+    expect(reloaded.kind).toBe("ready");
+    if (reloaded.kind === "ready") expect(reloaded.intent.id).toBe("operation-a");
+    // A different key is a different write; it cannot reuse this slot.
+    expect(() => prepareReaderNoteIntent("member-a", "knowledge-a", { ...intent, id: "operation-b" })).toThrow();
+  });
   it("does not expose another member or item's record", () => { prepare(); expect(loadReaderNoteIntent("member-b", "knowledge-a").kind).toBe("empty"); expect(loadReaderNoteIntent("member-a", "knowledge-b").kind).toBe("empty"); });
   it("refuses stale completion over a newer operation", () => {
     prepare(); settle(); clear(); const next = { ...intent, id: "operation-b" }; prepareReaderNoteIntent("member-a", "knowledge-a", next);

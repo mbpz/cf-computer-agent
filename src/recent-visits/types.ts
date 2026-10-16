@@ -20,7 +20,8 @@ export interface RecentVisit {
 export type RecentVisitPage = Page<RecentVisit>;
 
 export interface RecentVisitsRepositoryPort {
-  record(scope: RecentVisitScope, knowledgeItemId: string, visitedAt: string): Promise<void>;
+  /** `visitIdentity` is explicit: a replay of the same reading must not increment twice. */
+  record(scope: RecentVisitScope, knowledgeItemId: string, visitedAt: string, visitIdentity: string): Promise<void>;
   list(scope: RecentVisitScope, request: PageRequest): Promise<RecentVisitPage>;
 }
 

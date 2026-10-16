@@ -281,6 +281,27 @@ describe("members D1 control plane", () => {
     await expect(repository.findById(contributor.id)).resolves.toMatchObject({ status: "active" });
   });
 
+  it("binds the caller's status precondition in the member CAS and audits only the winner", async () => {
+    const audit = new AuditRepository(env.DB);
+    const repository = new MembersRepository(env.DB, audit);
+    const admin = await repository.insert(memberInput("admin", "admin"));
+    const contributor = await repository.insert(memberInput("contributor", "contributor"));
+    const now = "2026-08-13T00:00:00.000Z";
+    const event = (id: string, previousStatus: "active" | "disabled", newStatus: "active" | "disabled"): CreateAuditEvent => ({
+      id, actorKind: "member", actorId: admin.id, action: "member.status_updated", resourceType: "member",
+      resourceId: contributor.id, metadata: { previousStatus, newStatus }, createdAt: now,
+    });
+
+    // The client's precondition, not a fresher server read, decides the write.
+    await expect(repository.updateContributorStatusWithAudit("contributor", "active", "disabled", now, event("stale-status", "disabled", "active"))).resolves.toBeNull();
+    await expect(repository.findById("contributor")).resolves.toMatchObject({ status: "active" });
+    await expect(env.DB.prepare("SELECT id FROM audit_events WHERE id = 'stale-status'").first()).resolves.toBeNull();
+
+    const won = await repository.updateContributorStatusWithAudit("contributor", "disabled", "active", now, event("won-status", "active", "disabled"));
+    expect(won).toMatchObject({ status: "disabled" });
+    await expect(env.DB.prepare("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.status_updated'").first()).resolves.toEqual({ total: 1 });
+  });
+
   it("rejects a GitHub member after its member record is disabled", async () => {
     const identity = { subject: "github:902" as const, githubUserId: "902", email: "disabled@example.test" };
     const service = new MembersService(new MembersRepository(env.DB), {

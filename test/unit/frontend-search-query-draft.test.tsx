@@ -179,6 +179,94 @@ describe("search query draft ownership", () => {
     expect(input().value).toBe("");
     expect(unloadWarns()).toBe(false);
   });
+  function filterInput(selector: string) { return container.querySelector(selector) as HTMLInputElement; }
+  function editFilter(selector: string, value: string) { props<{ onChange: (event: unknown) => void }>(filterInput(selector)).onChange({ currentTarget: { value } }); }
+  async function submitFilters() { await act(async () => { container.querySelector("[data-search-filters]")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); await new Promise(resolve => setTimeout(resolve, 20)); }); }
+  async function chooseKind(optionLabel: string) {
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === "Type");
+    expect(trigger).toBeTruthy();
+    await act(async () => trigger!.click());
+    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === optionLabel);
+    expect(option, optionLabel).toBeTruthy();
+    await act(async () => option!.click());
+  }
+  const appliedDate = (url: string, key: string) => new URLSearchParams(url.slice(url.indexOf("?"))).get(key);
+
+  it("round-trips the four search filters through refresh and a saved view, and clears the list on a failed change", async () => {
+    const searchCalls: string[] = [];
+    let failSearch = false;
+    const previousRow = { knowledgeItemId: "knowledge-1", title: "Previous condition row", excerpt: "Excerpt", matchedFields: ["title"] };
+    const searchHandler = (url: string) => {
+      searchCalls.push(url);
+      if (failSearch) return Promise.reject(new TypeError("down"));
+      return Response.json({ items: [previousRow], degraded: false, pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+    };
+    let posted: { name: string; filters: Record<string, unknown> } | undefined;
+    const createdView = () => ({ id: "view-9", name: posted?.name ?? "", updatedAt: "2026-10-02T00:00:00.000Z", filters: { v: 1, ...(posted?.filters ?? {}) } });
+    const savedViewHandler = async (_url: string, init?: RequestInit) => {
+      if (init?.method === "POST") { posted = JSON.parse(String(init.body)) as { name: string; filters: Record<string, unknown> }; return Response.json(createdView(), { status: 201 }); }
+      return Response.json({ items: posted ? [createdView()] : [] });
+    };
+    await mount(savedViewHandler, searchHandler);
+
+    await chooseKind("Markdown");
+    await act(async () => editFilter("[data-search-filter-author]", "member-b"));
+    await act(async () => editFilter("[data-search-filter-published-from]", "2026-01-01"));
+    await act(async () => editFilter("[data-search-filter-published-to]", "2026-02-01"));
+    await submitFilters();
+
+    const location = new URLSearchParams(browser.location.search);
+    expect(location.get("kind")).toBe("markdown");
+    expect(location.get("authorId")).toBe("member-b");
+    expect(location.get("publishedFrom")).toBe("2026-01-01T00:00:00.000Z");
+    expect(location.get("publishedTo")).toBe("2026-02-01T00:00:00.000Z");
+    expect(location.get("q")).toBe("docs");
+    // The applied conditions are rendered back as removable text.
+    expect(container.querySelector("[data-applied-filters]")?.textContent).toContain("Author: member-b");
+    const sent = searchCalls.at(-1)!;
+    expect(appliedDate(sent, "kind")).toBe("markdown");
+    expect(appliedDate(sent, "authorId")).toBe("member-b");
+    expect(appliedDate(sent, "publishedFrom")).toBe("2026-01-01T00:00:00.000Z");
+    expect(appliedDate(sent, "publishedTo")).toBe("2026-02-01T00:00:00.000Z");
+
+    // A refresh restores the same conditions and asks for the same rows.
+    const callsBeforeRefresh = searchCalls.length;
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await mount(savedViewHandler, searchHandler);
+    expect(filterInput("[data-search-filter-author]").value).toBe("member-b");
+    expect(filterInput("[data-search-filter-published-from]").value).toBe("2026-01-01");
+    expect(appliedDate(searchCalls.at(-1)!, "kind")).toBe("markdown");
+    expect(searchCalls.length).toBeGreaterThan(callsBeforeRefresh);
+
+    // The saved view carries all four, and applying it restores them after leaving.
+    await act(async () => edit("Filtered")); await submit();
+    expect(posted!.filters).toEqual({ q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or", kind: "markdown", authorId: "member-b", publishedFrom: "2026-01-01T00:00:00.000Z", publishedTo: "2026-02-01T00:00:00.000Z" });
+    await act(async () => writeWorkspaceHistory("push", "/search?q=other"));
+    // Clear this tab's write journal so the apply path is exercised on its own; the
+    // journal itself is covered by the saved-view intent tests.
+    browser.sessionStorage.removeItem("memory-garden:saved-view:v1:member-a");
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await mount(savedViewHandler, searchHandler);
+    await click("[data-saved-view-controls] [data-saved-view-apply]");
+    const restored = new URLSearchParams(browser.location.search);
+    expect(restored.get("q")).toBe("docs");
+    expect(restored.get("kind")).toBe("markdown");
+    expect(restored.get("authorId")).toBe("member-b");
+    expect(restored.get("publishedFrom")).toBe("2026-01-01T00:00:00.000Z");
+    expect(restored.get("publishedTo")).toBe("2026-02-01T00:00:00.000Z");
+
+    // A failing condition change must not leave the previous conditions' rows on screen.
+    expect(container.textContent).toContain("Previous condition row");
+    failSearch = true;
+    await act(async () => editFilter("[data-search-filter-author]", "member-c"));
+    await submitFilters();
+    expect(container.textContent).not.toContain("Previous condition row");
+    expect(container.querySelector("[data-page-state='loading']")).toBeNull();
+    expect(container.querySelector("[data-applied-filters]")?.textContent).toContain("Author: member-c");
+  });
+
   it("does not keep a submitted query as an unsent draft", async () => {
     await mount();
     await act(async () => { editQuery("submitted"); searchSubmit(); });

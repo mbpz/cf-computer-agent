@@ -9,6 +9,7 @@ import { NodeFlags } from "typescript/unstable/ast";
 import {
   isArrayLiteralExpression,
   isAsExpression,
+  isBinaryExpression,
   isCallExpression,
   isFunctionDeclaration,
   isIdentifier,
@@ -99,124 +100,89 @@ const R0_EVIDENCE_CLASS_PATHS = new Map([
   ])],
 ]);
 const MANIFEST_GAP_POLICIES = new Map(Object.entries({
+  "workbench-admin": {"source": "manifest:0@a624a903fd09", "dimension": "api", "slug": "real-dashboard-summary", "symptom": "管理概览权威总数与独立状态已本地验证；维护面刻意只读呈现协调器状态（phase/epoch/window/active/records/limit/remaining/alert）并在运行手册中列出两个操作端点：没有配置 MAINTENANCE_CONTROL_TOKEN 时所有控制调用都返回 503 MAINTENANCE_CONTROL_UNAVAILABLE，按钮只能失败，因此 begin-drain/resume 保持刻意不可达的客户端写入。跨页写后对账、站点统计日期一致性及发布验收仍缺失。", "owner": "R6-001"},
+  "workbench-admin-analytics": {"source": "manifest:0@fa4e6b219f73", "dimension": "journey", "slug": "date-range-and-pagination", "symptom": "统计读取恢复、单事务快照和跨页写后对账已本地验证；发布与真实登录浏览器验收仍未闭环。", "owner": "R6-002"},
+  "workbench-admin-assets": {"source": "manifest:0@6434dc8da411", "dimension": "states", "slug": "parse-progress-and-recovery", "symptom": "资产页初始读失败恢复已本地验证；解析进度与完整恢复旅程不完整。", "owner": "R6-004"},
+  "workbench-admin-audit": {"source": "manifest:0@bfef1ebcb5d4", "dimension": "states", "slug": "raw-page-shape-and-retry", "symptom": "审计页 raw page 与 generation/page 解构不兼容，ready/empty 不可达且错误无重试。", "owner": "R6-009"},
+  "workbench-admin-duplicates": {"source": "manifest:0@dac694c1ad42", "dimension": "journey", "slug": "duplicate-decision-recovery", "symptom": "重复候选页初始读失败恢复已本地验证；决策收敛旅程未证明。", "owner": "R6-010"},
+  "workbench-admin-knowledge-item": {"source": "manifest:0@8f0ecc5f1a67", "dimension": "journey", "slug": "item-lifecycle-surface", "symptom": "参数化条目路由与来自回收站的页内入口已登记，服务端路由匹配与客户端 router 都认识 /admin/knowledge/:id，打开单个条目会渲染带操作编号日志的治理版本证据与 trash/rollback 操作（按生命周期回执回放）。替换权限、跨会话投影、发布与 signed-browser 验收仍未证明。条目页刻意没有导航行：/admin/knowledge/:id 是从回收站行进入的管理地址；由于没有读取单个已回收条目的端点，打开仍处于回收态的项目会明确声明它未处于活动状态并由回收站处理，先恢复再打开才是有效路径。", "owner": "R6-003"},
+  "workbench-admin-knowledge-trash": {"source": "manifest:0@479301ecaad2", "dimension": "journey", "slug": "fixed-path-page-kind", "symptom": "固定路径分支为 /admin/knowledge/trash 登记并在条目详情模式之前匹配，因此回收站除菜单路由外还拥有独立 pageKind 清点项；发布与 signed-browser 验收仍未证明。", "owner": "R6-003"},
+  "workbench-admin-members": {"source": "manifest:0@191629863c93", "dimension": "journey", "slug": "member-status-and-audit-navigation", "symptom": "成员页入口与四态夹具已有本地证据；状态修改是调用方 expectedStatus 条件写，重复请求收敛，禁用后成员的菜单与深链立即收缩；审计定位、发布与 signed-browser 验收仍未闭环。", "owner": "R6-005"},
+  "workbench-admin-menus": {"source": "manifest:0@fbd38c87ab91", "dimension": "journey", "slug": "projection-invalidation", "symptom": "菜单页入口与四态夹具已有本地证据；创建跨刷新读回同一回执，树快照 CAS 只接受一个并发写入，删除按回执收敛且胜者投影到成员会话；发布与 signed-browser 验收仍然开放。", "owner": "R6-007"},
+  "workbench-admin-recycle-bin": {"source": "manifest:0@122b1a43b151", "dimension": "journey", "slug": "recycle-bin-lifecycle-surface", "symptom": "回收站已由系统菜单行种子（migration 0072）登记，固定路径与 pageKind 亦已登记，因此 /admin/knowledge/trash 可从治理菜单到达并渲染带保留版本证据的回收列表；恢复与清除是冻结的客户端操作（正文携带操作编号），服务端按 (knowledge_item_id, operationId) 回执回放。保留期、清除权限、跨会话投影、发布与 signed-browser 验收仍未证明。该种子行按与审核菜单相同的 knowledge:review 能力门禁；活跃管理员按 schema 构造必然持有该位，因此拒绝证据是真实种子行上的掩码过滤加 shell 门禁，而不是双管理员夹具。", "owner": "R6-003"},
+  "workbench-admin-role-detail": {"source": "manifest:0@920d58a0c066", "dimension": "journey", "slug": "role-detail-edit-registration", "symptom": "角色权限详情路由已登记为能力根、由角色列表解析并复用共享角色控制器，发现、权限编辑、指派确认与写入阻止/重新读取面已有本地覆盖；角色编辑的跨会话投影、真实身份与 signed-browser 验收仍未证明。", "owner": "R6-006"},
+  "workbench-admin-role-new": {"source": "manifest:0@a4ac0a7bd452", "dimension": "journey", "slug": "role-creation-route-registration", "symptom": "角色新建路由已登记为能力根、可从治理列表到达并复用共享角色控制器，路由发现、创建表单、写入阻止与重新读取面已有本地覆盖；角色创建的跨会话投影、真实身份与 signed-browser 验收仍未证明。", "owner": "R6-006"},
+  "workbench-admin-roles": {"source": "manifest:0@ae50d9406053", "dimension": "isolation", "slug": "role-projection-and-session-hardening", "symptom": "角色页入口与四态夹具已有本地证据；角色列表已拒绝 contributor 与已撤销管理员，伪造/提权 session 在菜单与角色面被稳定拒绝，导航不再向提升掩码泄露管理分组；跨会话角色投影、发布与 signed-browser 验收仍未证明。", "owner": "R6-006"},
+  "workbench-admin-spaces": {"source": "manifest:0@67c4c4159e43", "dimension": "journey", "slug": "archive-content-impact", "symptom": "Space 页初始读失败恢复已本地验证；归档与内容影响确认未闭环。", "owner": "R6-008"},
+  "workbench-admin-submission-detail": {"source": "manifest:0@ec730e821f69", "dimension": "journey", "slug": "decision-idempotency-and-discovery", "symptom": "审核详情恢复、404/权限状态、对象匹配及导航已本地验证；服务端决策幂等和发布、索引、通知收敛仍待实现。", "owner": "R6-003"},
+  "workbench-admin-submissions": {"source": "manifest:0@44b459ad5dc5", "dimension": "journey", "slug": "queue-to-decision-recovery", "symptom": "审核队列读取恢复与详情导航已本地验证；发布、索引、通知的决策闭环和服务端幂等仍待实现。", "owner": "R6-003"},
+  "workbench-agent": {"source": "manifest:0@4d692899e183", "dimension": "states", "slug": "cited-completion-and-cancel-recovery", "symptom": "Agent 没有明确空答案状态，引用完成、取消恢复与配额降级未形成完整旅程。", "owner": "R3-016"},
+  "workbench-boards": {"source": "manifest:0@bdbe1129d2ea", "dimension": "query_or_idempotency", "slug": "move-concurrency-and-rollback", "symptom": "看板四列 loading/empty/retryable error/ready 夹具已有本地证据；服务端条件写收敛、精确乐观回滚与方向键移动已本地证明；拖拽旅程、发布与 signed-browser 验收仍未闭环。", "owner": "R4-012"},
+  "workbench-calendar": {"source": "manifest:0@40587965b020", "dimension": "journey", "slug": "date-navigation-and-timezone-journey", "symptom": "日历范围分页、稳定创建、版本条件取消与只读恢复已有本地证据；编辑 UI、跨模块写入与真实身份原生旅程仍未闭环。", "owner": "R4-016"},
+  "workbench-environments": {"source": "manifest:0@477b65a718d2", "dimension": "journey", "slug": "metadata-to-vm-acceptance", "symptom": "环境页私有元数据管理、编号写入回执与明确的“运行时未发布”状态已本地实现；VM 引擎与镜像已按决定移出范围（六个固定产物体积约 66 MiB，仓库 pin 未授予再分发许可，随包发布需要许可证清单与签署发布清单），元数据面的发布与真实身份验收仍未闭环。", "owner": "R8-009"},
+  "workbench-focus": {"source": "manifest:0@490b8bb2f9ca", "dimension": "journey", "slug": "session-selection-and-elapsed-time", "symptom": "专注原子写、唯一所属终态历史修复及孤立键重试已有本地证据；歧义历史不自动改写，标签页关闭丢失日志的边界明确，原生验收仍开放。", "owner": "R4-018"},
+  "workbench-goals": {"source": "manifest:0@c1a08c049848", "dimension": "journey", "slug": "goal-edit-and-progress-journey", "symptom": "目标缺少数字分页、编辑关联和进度状态完整闭环。", "owner": "R4-014"},
   "workbench-graph": {"source": "manifest:0@b37b0217ead2", "dimension": "journey", "slug": "graph-bounded-projection-and-action-recovery", "symptom": "图谱入口、读取状态与键盘交互已有本地覆盖；游标继续、交叉引用边界和完整动作重放及发布验收仍待闭环。", "owner": "R8-005"},
-  "workbench-project-timeline": {"source":"manifest:0@68e19ea2dd4d","dimension":"journey","slug":"timeline-edit-and-project-switch","symptom":"项目时间线缺少数字分页、跨项目旧响应保护及完整编辑旅程。","owner":"R4-036"},
-  "workbench-inbox": {"source":"manifest:0@923f12551753","dimension":"journey","slug":"capture-to-task-journey","symptom":"收集箱缺少数字分页、完整归档转任务旅程和过期响应保护。","owner":"R4-013"},
-  "workbench-goals": {"source":"manifest:0@c1a08c049848","dimension":"journey","slug":"goal-edit-and-progress-journey","symptom":"目标缺少数字分页、编辑关联和进度状态完整闭环。","owner":"R4-014"},
-  "workbench-projects": {"source":"manifest:0@17cb110cdd89","dimension":"journey","slug":"project-relationship-and-summary-recovery","symptom":"项目缺少数字分页、关联编辑、独立摘要恢复和过期响应保护。","owner":"R4-015"},
-  "workbench-calendar": {"source":"manifest:0@40587965b020","dimension":"journey","slug":"date-navigation-and-timezone-journey","symptom":"日历范围分页、稳定创建、版本条件取消与只读恢复已有本地证据；编辑 UI、跨模块写入与真实身份原生旅程仍未闭环。","owner":"R4-016"},
-  "workbench-today": {"source":"manifest:0@82df5d7acce3","dimension":"journey","slug":"bounded-summary-drilldown","symptom":"今日摘要已有有界计数说明、继续入口、重新授权详情、深层契约校验与整份失败只读恢复；完整跨日聚合及原生旅程证明仍待完成。","owner":"R4-017"},
-  "workbench-focus": {"source":"manifest:0@490b8bb2f9ca","dimension":"journey","slug":"session-selection-and-elapsed-time","symptom":"专注原子写、唯一所属终态历史修复及孤立键重试已有本地证据；歧义历史不自动改写，标签页关闭丢失日志的边界明确，原生验收仍开放。","owner":"R4-018"},
-  "workbench-review": {"source":"manifest:0@0938a4a68c88","dimension":"journey","slug":"period-filter-and-refresh-semantics","symptom":"复盘 UTC 日/ISO 周聚合、全量任务计数、显式刷新、原子周期快照及并发回滚已有本地证据；这是有界当前态投影，真实身份原生旅程和发布验收仍开放。","owner":"R4-019"},
-  "workbench-home": { source: "manifest:0@edfe01e1ad3d", dimension: "api", slug: "authoritative-summary-and-recent-recovery", symptom: "首页硬编码零指标，recent pending/error 被伪装为 ready/empty，且游标列表无继续入口。", owner: "R7-010" },
-  "workbench-submit": { source: "manifest:0@edeb39c3614b", dimension: "evidence", slug: "signed-submission-acceptance", symptom: "本地提交、pending、失败重试、成功及 submitter 幂等已证明，但发布与 signed-browser 验收仍缺失。", owner: "R8-009" },
-  "workbench-knowledge": { source: "manifest:0@edac5a3b202d", dimension: "states", slug: "auxiliary-data-recovery", symptom: "知识页辅助 recent、favorite、note、activity、review 请求失败仍被折叠或彼此割裂。", owner: "R2-010" },
-  "workbench-search": { source: "manifest:0@425b859782bc", dimension: "journey", slug: "filter-restore-and-result-open", symptom: "搜索降级、筛选恢复和打开结果的端到端旅程仍不完整。", owner: "R3-014" },
-  "workbench-agent": { source: "manifest:0@4d692899e183", dimension: "states", slug: "cited-completion-and-cancel-recovery", symptom: "Agent 没有明确空答案状态，引用完成、取消恢复与配额降级未形成完整旅程。", owner: "R3-016" },
-  "workbench-my-submissions": { source: "manifest:0@7f29b6446786", dimension: "journey", slug: "resubmission-and-status-recovery", symptom: "我的提交缺少退回后的重提和完整状态恢复旅程。", owner: "R3-001" },
-  "workbench-tasks": { source: "manifest:0@f69e69f87dec", dimension: "isolation", slug: "revocation-and-mutation-convergence", symptom: "撤权路径虽有探针，但 mutation、删除恢复及并发收敛尚未形成完整私有任务旅程。", owner: "R4-012" },
-  "workbench-boards": { source: "manifest:0@0f01e0145a2e", dimension: "query_or_idempotency", slug: "move-concurrency-and-rollback", symptom: "看板移动缺少键盘操作、并发冲突与精确乐观回滚的完整旅程。", owner: "R4-012" },
-  "workbench-environments": {"source": "manifest:0@56cf51e57da2", "dimension": "journey", "slug": "metadata-to-vm-acceptance", "symptom": "环境页已实现私有元数据管理，但不启动 VM；运行时接入、离页草稿保护、跨刷新未知写恢复、发布和真实身份验收仍开放。", "owner": "R8-009"},
-  "workbench-settings": { source: "manifest:0@5e57e601f4cd", dimension: "states", slug: "persisted-settings-boundary", symptom: "设置页没有路由级异步状态、持久化或保存 pending 边界。", owner: "R1-012" },
-  "workbench-admin": { source: "manifest:0@87a1d186875c", dimension: "api", slug: "real-dashboard-summary", symptom: "管理概览权威总数与独立状态已本地验证；跨页写后对账、站点统计日期一致性及发布验收仍缺失。", owner: "R6-001" },
-  "workbench-admin-submissions": { source: "manifest:0@44b459ad5dc5", dimension: "journey", slug: "queue-to-decision-recovery", symptom: "审核队列读取恢复与详情导航已本地验证；发布、索引、通知的决策闭环和服务端幂等仍待实现。", owner: "R6-003" },
-  "workbench-admin-duplicates": { source: "manifest:0@dac694c1ad42", dimension: "journey", slug: "duplicate-decision-recovery", symptom: "重复候选页初始读失败恢复已本地验证；决策收敛旅程未证明。", owner: "R6-010" },
-  "workbench-admin-assets": { source: "manifest:0@6434dc8da411", dimension: "states", slug: "parse-progress-and-recovery", symptom: "资产页初始读失败恢复已本地验证；解析进度与完整恢复旅程不完整。", owner: "R6-004" },
-  "workbench-admin-members": { source: "manifest:0@c8165462f20c", dimension: "journey", slug: "member-status-and-audit-navigation", symptom: "成员页初始读失败恢复已本地验证；禁用后的缓存失效与审计定位未闭环。", owner: "R6-005" },
-  "workbench-admin-roles": { source: "manifest:0@0b7f871268aa", dimension: "isolation", slug: "role-projection-and-session-hardening", symptom: "角色页缺少畸形提权 session、后端角色投影与 signed-browser 的完整拒绝证据。", owner: "R6-006" },
-  "workbench-admin-menus": { source: "manifest:0@769a73a9c99c", dimension: "journey", slug: "projection-invalidation", symptom: "菜单页初始读失败恢复已本地验证；跨 session 投影失效尚未形成产品旅程。", owner: "R6-007" },
-  "workbench-admin-spaces": { source: "manifest:0@67c4c4159e43", dimension: "journey", slug: "archive-content-impact", symptom: "Space 页初始读失败恢复已本地验证；归档与内容影响确认未闭环。", owner: "R6-008" },
-  "workbench-admin-audit": { source: "manifest:0@bfef1ebcb5d4", dimension: "states", slug: "raw-page-shape-and-retry", symptom: "审计页 raw page 与 generation/page 解构不兼容，ready/empty 不可达且错误无重试。", owner: "R6-009" },
-  "workbench-admin-analytics": { source: "manifest:0@fa4e6b219f73", dimension: "journey", slug: "date-range-and-pagination", symptom: "统计读取恢复、单事务快照和跨页写后对账已本地验证；发布与真实登录浏览器验收仍未闭环。", owner: "R6-002" },
-  "workbench-notifications": { source: "manifest:0@a0f9955f2fa0", dimension: "isolation", slug: "revoked-target-navigation", symptom: "通知目标撤权后的跳转与顶部未读收敛尚未闭环。", owner: "R5-005" },
-  "workbench-messages": { source: "manifest:0@6f83a4364e6d", dimension: "isolation", slug: "context-revocation-presentation", symptom: "上下文 thread 发现与 stale/revoked target 的明确呈现尚未闭环。", owner: "R5-011" },
-  "workbench-knowledge-reader": { source: "manifest:0@823eea297a96", dimension: "isolation", slug: "secondary-object-reauthorization", symptom: "阅读器私有笔记、分享、收藏和访问记录的完整二级对象撤权旅程未证明。", owner: "R3-012" },
-  "workbench-message-thread": { source: "manifest:0@fb654b86d344", dimension: "isolation", slug: "thread-context-revocation", symptom: "thread context 返回 403 时仍是通用错误，缺少明确撤权状态及深链发现证据。", owner: "R5-011" },
-  "workbench-admin-submission-detail": { source: "manifest:0@ec730e821f69", dimension: "journey", slug: "decision-idempotency-and-discovery", symptom: "审核详情恢复、404/权限状态、对象匹配及导航已本地验证；服务端决策幂等和发布、索引、通知收敛仍待实现。", owner: "R6-003" },
+  "workbench-home": {"source": "manifest:0@edfe01e1ad3d", "dimension": "api", "slug": "authoritative-summary-and-recent-recovery", "symptom": "首页硬编码零指标，recent pending/error 被伪装为 ready/empty，且游标列表无继续入口。", "owner": "R7-010"},
+  "workbench-inbox": {"source": "manifest:0@923f12551753", "dimension": "journey", "slug": "capture-to-task-journey", "symptom": "收集箱缺少数字分页、完整归档转任务旅程和过期响应保护。", "owner": "R4-013"},
+  "workbench-knowledge": {"source": "manifest:0@edac5a3b202d", "dimension": "states", "slug": "auxiliary-data-recovery", "symptom": "知识页辅助 recent、favorite、note、activity、review 请求失败仍被折叠或彼此割裂。", "owner": "R2-010"},
+  "workbench-knowledge-reader": {"source": "manifest:0@19c49018c6f1", "dimension": "isolation", "slug": "secondary-object-reauthorization", "symptom": "阅读器入口与直接读取状态已有本地证据；私有笔记、分享、收藏回执与按访问身份计数的读取已重新授权并保持成员隔离，陈旧版本冲突与重复撤销收敛已本地证明；衍生生成写入仍无幂等语义，related/backlink/revision 旅程、发布与 signed-browser 验收仍未闭环。", "owner": "R3-012"},
+  "workbench-message-thread": {"source": "manifest:0@a71545a92a97", "dimension": "isolation", "slug": "thread-context-revocation", "symptom": "线程页入口与 loading/empty/error/ready 夹具已有本地证据；上下文被拒时呈现明确撤权态而非通用可重试错误，刷新与后退都不再渲染私有消息，上下文入口可深链到规范线程路由；发布与 signed-browser 验收仍然开放。", "owner": "R5-011"},
+  "workbench-messages": {"source": "manifest:0@eec9cce3211d", "dimension": "isolation", "slug": "context-revocation-presentation", "symptom": "消息入口与 loading/empty/error/ready 夹具已有本地证据；上下文撤权后 thread 从列表收缩、直达被拒，页面呈现明确可恢复的撤权态而非错误或空态；发布与 signed-browser 验收仍未闭环。", "owner": "R5-011"},
+  "workbench-my-submissions": {"source": "manifest:0@3becacfabe04", "dimension": "journey", "slug": "resubmission-and-status-recovery", "symptom": "我的提交已接入重提与草稿/评论/目标读取面：重提跨重试与刷新复用同一提交幂等键；成员侧评论 POST 刻意不接线，因为只有 /api/admin 下有操作回执端点，重试可能重复评论，成员视图保持只读。完整状态恢复旅程、发布与 signed-browser 验收仍未闭环。", "owner": "R3-001"},
+  "workbench-notifications": {"source": "manifest:0@807eb6afccdc", "dimension": "isolation", "slug": "revoked-target-navigation", "symptom": "通知入口与 loading/empty/error/ready 夹具已有本地证据；打开已撤权目标仍提交已读并脱敏返回，未读总数收敛且页面呈现明确撤权态；发布与 signed-browser 验收仍然开放。", "owner": "R5-005"},
+  "workbench-project-timeline": {"source": "manifest:0@68e19ea2dd4d", "dimension": "journey", "slug": "timeline-edit-and-project-switch", "symptom": "项目时间线缺少数字分页、跨项目旧响应保护及完整编辑旅程。", "owner": "R4-036"},
+  "workbench-projects": {"source": "manifest:0@17cb110cdd89", "dimension": "journey", "slug": "project-relationship-and-summary-recovery", "symptom": "项目缺少数字分页、关联编辑、独立摘要恢复和过期响应保护。", "owner": "R4-015"},
+  "workbench-review": {"source": "manifest:0@0938a4a68c88", "dimension": "journey", "slug": "period-filter-and-refresh-semantics", "symptom": "复盘 UTC 日/ISO 周聚合、全量任务计数、显式刷新、原子周期快照及并发回滚已有本地证据；这是有界当前态投影，真实身份原生旅程和发布验收仍开放。", "owner": "R4-019"},
+  "workbench-search": {"source": "manifest:0@425b859782bc", "dimension": "journey", "slug": "filter-restore-and-result-open", "symptom": "搜索降级、筛选恢复和打开结果的端到端旅程仍不完整。", "owner": "R3-014"},
+  "workbench-settings": {"source": "manifest:0@5e57e601f4cd", "dimension": "states", "slug": "persisted-settings-boundary", "symptom": "设置页没有路由级异步状态、持久化或保存 pending 边界。", "owner": "R1-012"},
+  "workbench-submit": {"source": "manifest:0@e1f4cd55f662", "dimension": "evidence", "slug": "signed-submission-acceptance", "symptom": "本地提交、pending、失败重试、成功及 submitter 幂等已证明；成员提交闭环新增草稿、URL 取件与替代文件面：草稿更新按所有者与草稿状态条件写、重放同一载荷收敛，URL 取件与替代提交按幂等键回放原记录；草稿创建没有服务端键（idempotency_key 为 NULL，提交者唯一索引无法去重），只能靠客户端日志与最新草稿回读收敛；成员侧标签选择器刻意不接线（提交/草稿/重提载荷不接受 tagIds，标签在发布时附加）。发布与 signed-browser 验收仍缺失。", "owner": "R8-009"},
+  "workbench-tasks": {"source": "manifest:0@841ec94adf5e", "dimension": "isolation", "slug": "revocation-and-mutation-convergence", "symptom": "当前许可/撤权投影、禁止直达与四态夹具已有本地证据；详情更新必须携带已读版本，删除以版本条件 tombstone 回执收敛，子任务/依赖/关联/进度/标签操作已在共享编辑器入口绑定幂等或条件写证据；入口级删除控件、回收站模型、发布与 signed-browser 验收仍未闭环。", "owner": "R4-012"},
+  "workbench-today": {"source": "manifest:0@82df5d7acce3", "dimension": "journey", "slug": "bounded-summary-drilldown", "symptom": "今日摘要已有有界计数说明、继续入口、重新授权详情、深层契约校验与整份失败只读恢复；完整跨日聚合及原生旅程证明仍待完成。", "owner": "R4-017"},
 }));
 const DOMAIN_GAP_POLICIES = new Map(Object.entries({
-  "workbench-environments|POST /api/environments": { slug: "create-environment", symptom: "环境创建已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },
-  "workbench-environments|PATCH /api/environments/:id": { slug: "rename-environment", symptom: "环境重命名已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },
-  "workbench-environments|DELETE /api/environments/:id": { slug: "delete-environment", symptom: "环境删除已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },
-  "workbench-graph|POST /api/tasks": {"slug": "create-task", "symptom": "图谱创建任务缺少完整动作重放与响应丢失收敛证明。", "owner": "R8-005"},
-  "workbench-graph|POST /api/focus": {"slug": "start-focus", "symptom": "图谱启动专注缺少完整动作重放与并发收敛证明。", "owner": "R8-005"},
-  "workbench-graph|POST /api/projects/:id/timeline": {"slug": "create-timeline-item", "symptom": "图谱创建时间线项缺少完整动作重放与重复结果抑制证明。", "owner": "R8-005"},
-  "workbench-project-timeline|POST /api/projects/:id/timeline": {"slug":"create-timeline-item","symptom":"时间线创建缺少前端稳定意图键和断线重试去重证明。","owner":"R4-037"},
-  "workbench-project-timeline|POST /api/projects/:id/timeline/:id/status": {"slug":"transition-timeline-status","symptom":"时间线状态变更缺少预期版本条件及并发重放收敛证明。","owner":"R4-038"},
-  "workbench-inbox|DELETE /api/tasks/:id/links/:id": {"slug": "target-delete-link", "symptom": "从收集箱打开的共享任务编辑器，删除关联的恢复及目标授权证据尚未绑定到该入口。", "owner": "R4-005"},
-  "workbench-inbox|PATCH /api/tasks/:id": {"slug": "target-update-task", "symptom": "从收集箱打开的共享任务编辑器，详情更新的条件写入与未知结果恢复证据尚未绑定到该入口。", "owner": "R4-003"},
-  "workbench-inbox|POST /api/tasks": {"slug": "target-editor-create", "symptom": "共享任务编辑器源码包含创建分支；收集箱只传已有目标，仍需独立证明该入口不可触发创建分支。", "owner": "R4-002"},
-  "workbench-inbox|POST /api/tasks/:id/links": {"slug": "target-create-link", "symptom": "从收集箱打开的共享任务编辑器，新增关联的重放及二级目标授权证据尚未绑定到该入口。", "owner": "R4-005"},
-  "workbench-inbox|POST /api/tasks/:id/progress": {"slug": "target-append-progress", "symptom": "从收集箱打开的共享任务编辑器，追加进度的去重与未知结果恢复证据尚未绑定到该入口。", "owner": "R4-004"},
-  "workbench-inbox|POST /api/tasks/:id/status": {"slug": "target-task-status", "symptom": "从收集箱打开的共享任务编辑器，状态更新的并发与未知结果恢复证据尚未绑定到该入口。", "owner": "R4-004"},
-  "workbench-inbox|PUT /api/tasks/:id/tags": {"slug": "target-replace-tags", "symptom": "从收集箱打开的共享任务编辑器，替换标签的并发与集合回读证据尚未绑定到该入口。", "owner": "R4-005"},
-  "workbench-inbox|POST /api/inbox": {"slug":"create-inbox","symptom":"收集创建的前端逻辑意图没有稳定客户端键，响应丢失重试可能重复写入。","owner":"R4-020"},
-  "workbench-inbox|PATCH /api/inbox/:id": {"slug":"archive-inbox","symptom":"采集归档缺少条件更新、重放和并发收敛证明。","owner":"R4-021"},
-  "workbench-inbox|POST /api/inbox/:id/promote/task": {"slug":"promote-inbox-task","symptom":"采集转任务缺少跨实体原子转换及响应丢失后的稳定重试证明。","owner":"R4-022"},
-  "workbench-goals|POST /api/goals": {"slug":"create-goal","symptom":"目标创建的前端逻辑意图缺少稳定客户端键与重复写入抑制证明。","owner":"R4-023"},
-  "workbench-goals|POST /api/goals/:id/status": {"slug":"transition-goal-status","symptom":"目标状态变更缺少预期状态约束和并发重放收敛证明。","owner":"R4-024"},
-  "workbench-goals|POST /api/goals/:id/progress": {"slug":"update-goal-progress","symptom":"目标进度更新缺少版本条件和旧请求覆盖防护证明。","owner":"R4-025"},
-  "workbench-projects|POST /api/projects/:id/goals": { slug: "link-project-goal", symptom: "项目目标关联已有单次重复安全证据，但混合并发顺序与跨刷新未知结果恢复尚未证明。", owner: "R4-015" },
-  "workbench-projects|DELETE /api/projects/:id/goals/:id": { slug: "unlink-project-goal", symptom: "项目目标解除关联已有单次重复安全证据，但混合并发顺序与跨刷新未知结果恢复尚未证明。", owner: "R4-015" },
-  "workbench-projects|POST /api/projects/:id/tasks": { slug: "link-project-task", symptom: "项目任务关联已有单次重复安全证据，但混合并发顺序与跨刷新未知结果恢复尚未证明。", owner: "R4-015" },
-  "workbench-projects|DELETE /api/projects/:id/tasks/:id": { slug: "unlink-project-task", symptom: "项目任务解除关联已有单次重复安全证据，但混合并发顺序与跨刷新未知结果恢复尚未证明。", owner: "R4-015" },
-  "workbench-projects|POST /api/projects": {"slug":"create-project","symptom":"项目创建缺少前端稳定意图键和端到端重试去重证明。","owner":"R4-026"},
-  "workbench-projects|POST /api/projects/:id/status": {"slug":"transition-project-status","symptom":"项目状态变更缺少条件更新和重试冲突恢复证明。","owner":"R4-027"},
-  "workbench-calendar|POST /api/calendar/events": {"slug":"create-calendar-event","symptom":"日历事件创建缺少前端稳定客户端键和断线重试去重证明。","owner":"R4-028"},
-  "workbench-calendar|DELETE /api/calendar/events/:id": {"slug":"cancel-calendar-event","symptom":"日历事件取消缺少与编辑并发时的条件约束及重放证明。","owner":"R4-029"},
-  "workbench-focus|POST /api/focus": {"slug":"start-focus","symptom":"专注页稳定意图、完整载荷、刷新回执及日历原子写已有本地证明；旧孤立键不阻塞重试，跨标签与原生完整旅程仍待验收。","owner":"R4-030"},
-  "workbench-focus|POST /api/focus/:id/pause": {"slug":"pause-focus","symptom":"专注暂停已有标签页版本意图、精确会话对账与显式原版本重试；关标签页恢复及原生完整旅程仍待闭环。","owner":"R4-031"},
-  "workbench-focus|POST /api/focus/:id/resume": {"slug":"resume-focus","symptom":"专注恢复已有标签页版本意图与单调条件迁移、跨刷新对账；关标签页恢复及原生完整旅程仍待闭环。","owner":"R4-032"},
-  "workbench-focus|POST /api/focus/:id/complete": {"slug":"complete-focus","symptom":"专注完成的版本意图、终态回读与日历原子写已有本地证据，唯一所属终态历史可修复；歧义历史及原生验收仍待闭环。","owner":"R4-033"},
-  "workbench-focus|POST /api/focus/:id/abandon": {"slug":"abandon-focus","symptom":"专注放弃的版本意图、终态回读与日历失败回滚已有本地证据，唯一所属终态历史可修复；歧义历史及原生验收仍待闭环。","owner":"R4-034"},
-  "workbench-inbox|DELETE /api/tasks/:id": {"slug": "target-delete-task", "symptom": "从收集箱打开的共享任务编辑器，删除任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-010"},
-  "workbench-inbox|DELETE /api/tasks/:id/dependencies/:id": {"slug": "target-delete-dependency", "symptom": "从收集箱打开的共享任务编辑器，解除任务依赖已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-inbox|DELETE /api/tasks/:id/subtasks/:id": {"slug": "target-delete-subtask", "symptom": "从收集箱打开的共享任务编辑器，删除子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-inbox|PATCH /api/tasks/:id/subtasks/:id": {"slug": "target-update-subtask", "symptom": "从收集箱打开的共享任务编辑器，编辑子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-inbox|POST /api/tasks/:id/dependencies": {"slug": "target-create-dependency", "symptom": "从收集箱打开的共享任务编辑器，新增任务依赖已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-inbox|POST /api/tasks/:id/subtasks": {"slug": "target-create-subtask", "symptom": "从收集箱打开的共享任务编辑器，创建子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-tasks|DELETE /api/tasks/:id/dependencies/:id": {"slug": "delete-dependency", "symptom": "任务编辑器解除任务依赖已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-tasks|DELETE /api/tasks/:id/subtasks/:id": {"slug": "delete-subtask", "symptom": "任务编辑器删除子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-tasks|PATCH /api/tasks/:id/subtasks/:id": {"slug": "update-subtask", "symptom": "任务编辑器编辑子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-tasks|POST /api/tasks/:id/dependencies": {"slug": "create-dependency", "symptom": "任务编辑器新增任务依赖已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-tasks|POST /api/tasks/:id/subtasks": {"slug": "create-subtask", "symptom": "任务编辑器创建子任务已有局部实现，入口绑定的并发、撤权与未知结果恢复证据仍未完整闭环。", "owner": "R4-012"},
-  "workbench-tasks|DELETE /api/tasks/:id": { slug: "delete-task", symptom: "删除任务缺少已证明的重放与 uncertain-outcome 收敛策略。", owner: "R4-010" },
-  "workbench-tasks|DELETE /api/tasks/:id/links/:linkId": { slug: "delete-knowledge-link", symptom: "删除任务知识关联缺少已证明的幂等与目标授权策略。", owner: "R4-005" },
-  "workbench-tasks|PATCH /api/tasks/:id": { slug: "update-task", symptom: "任务详情更新缺少条件写入或幂等重放证明。", owner: "R4-003" },
-  "workbench-tasks|POST /api/tasks/:id/links": { slug: "create-knowledge-link", symptom: "创建任务知识关联缺少重放收敛与二级目标授权证明。", owner: "R4-005" },
-  "workbench-tasks|POST /api/tasks/:id/progress": { slug: "append-progress", symptom: "追加进度缺少稳定客户端键与重复事件收敛证明。", owner: "R4-004" },
-  "workbench-tasks|PUT /api/tasks/:id/tags": { slug: "replace-tags", symptom: "替换任务标签缺少并发条件与重放后权威集合证明。", owner: "R4-005" },
-  "workbench-admin-members|PATCH /api/admin/members/:id/status": { slug: "change-member-status", symptom: "成员状态修改缺少重放、session 收缩与缓存失效证明。", owner: "R6-005" },
-  "workbench-admin-roles|DELETE /api/admin/roles/:id/members": { slug: "remove-role-member", symptom: "重复移除角色成员返回 404，尚未定义安全收敛和审计语义。", owner: "R6-006" },
-  "workbench-admin-roles|PATCH /api/admin/roles/:id": { slug: "update-role", symptom: "角色权限更新缺少并发条件和重复请求策略。", owner: "R6-006" },
-  "workbench-admin-roles|POST /api/admin/roles": { slug: "create-role", symptom: "创建角色缺少稳定幂等键与 uncertain-outcome 重放策略。", owner: "R6-006" },
-  "workbench-admin-roles|POST /api/admin/roles/:id/members": { slug: "assign-role-member", symptom: "重复分配角色成员返回 409，尚未定义授权写入收敛语义。", owner: "R6-006" },
-  "workbench-admin-menus|DELETE /api/admin/menus/:id": { slug: "delete-menu", symptom: "菜单删除缺少重放、层级影响与跨 session 投影收敛证明。", owner: "R6-007" },
-  "workbench-admin-menus|POST /api/admin/menus": { slug: "create-menu", symptom: "菜单创建唯一键防重复，但缺少稳定重放回执及跨刷新意图恢复。", owner: "R6-007" },
-  "workbench-admin-menus|PATCH /api/admin/menus/:id": { slug: "update-menu", symptom: "菜单编辑已有浏览器快照和树 CAS 本地证据；旧客户端快照必填及跨会话投影仍未闭环。", owner: "R6-007" },
-  "workbench-messages|POST /api/discussions/context": { slug: "create-context-thread", symptom: "创建上下文 thread 缺少重放收敛和当前目标再授权证明。", owner: "R5-006" },
-  "workbench-knowledge-reader|DELETE /api/knowledge/:id/note/shares/:recipientId": { slug: "remove-note-share", symptom: "移除私有笔记分享缺少重放收敛与接收者访问即时收缩证明。", owner: "R3-011" },
-  "workbench-knowledge-reader|GET /api/knowledge/:id#record-visit": { slug: "record-reader-visit", symptom: "阅读器成功 GET 会增加 visit_count，但缺少重试去重或明确的一次访问语义。", owner: "R3-011" },
-  "workbench-knowledge-reader|POST /api/knowledge/:id/note/shares": { slug: "create-note-share", symptom: "创建私有笔记分享缺少幂等与知识目标再授权证明。", owner: "R3-011" },
-  "workbench-knowledge-reader|PUT /api/knowledge/:id/note": { slug: "update-private-note", symptom: "更新私有笔记缺少并发条件与 uncertain-outcome 收敛证明。", owner: "R3-011" },
-  "workbench-search|DELETE /api/saved-views/:id": { slug: "delete-saved-view", symptom: "删除 Saved View 缺少重放与 uncertain-outcome 收敛策略。", owner: "R3-014" },
-  "workbench-search|POST /api/saved-views": { slug: "create-saved-view", symptom: "创建 Saved View 缺少稳定幂等键与重复请求证明。", owner: "R3-014" },
-  "workbench-agent|PATCH /api/knowledge/chat/conversations/:id/scope": { slug: "update-conversation-scope", symptom: "Agent 会话范围更新缺少条件写入与撤权后收敛策略。", owner: "R3-016" },
-  "workbench-agent|POST /api/knowledge/chat": { slug: "submit-chat-turn", symptom: "Agent 提问缺少端到端稳定请求键和重复副作用证明。", owner: "R3-016" },
-  "workbench-agent|POST /api/knowledge/chat/conversations/:id/cancel": { slug: "cancel-conversation", symptom: "取消 Agent 会话缺少重复请求与终态收敛证明。", owner: "R3-016" },
   "workbench-admin-assets|POST /api/admin/assets/:id/retry": { slug: "retry-asset", symptom: "资产解析重试缺少稳定幂等键与重复任务抑制证明。", owner: "R6-004" },
-  "workbench-admin-spaces|PATCH /api/admin/spaces/:id": { slug: "update-space", symptom: "Space 编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。", owner: "R6-008" },
+  "workbench-admin-spaces|POST /api/admin/tags": {"slug": "create-admin-tag", "symptom": "标签创建没有客户端键或回执：响应丢失后重试会在同一 Space 的 slug 唯一键上冲突并返回 409 TAG_SLUG_CONFLICT，面板把它作为真实冲突呈现并要求显式重新读取，而不是回放已创建的标签。", "owner": "R6-008"},
   "workbench-admin-spaces|POST /api/admin/collections": { slug: "create-collection", symptom: "集合创建已有同编辑器稳定键及持久化回执；刷新或卸载后的意图恢复及无键旧客户端策略仍缺。", owner: "R6-008" },
-  "workbench-admin-spaces|PATCH /api/admin/collections/:id": { slug: "update-collection", symptom: "集合编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。", owner: "R6-008" },
   "workbench-admin-spaces|POST /api/admin/spaces": { slug: "create-space", symptom: "创建 Space 缺少稳定幂等键和重放策略。", owner: "R6-008" },
-  "workbench-knowledge-reader|DELETE /api/knowledge/:id/favorite": { slug: "remove-favorite", symptom: "取消收藏已有同编号重放回执与不重复副作用的本地证据；跨刷新未知结果恢复与真实身份验收仍未证明。", owner: "R3-011" },
+  "workbench-admin-spaces|PATCH /api/admin/collections/:id": { slug: "update-collection", symptom: "集合编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。", owner: "R6-008" },
+  "workbench-admin-spaces|PATCH /api/admin/spaces/:id": { slug: "update-space", symptom: "Space 编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。", owner: "R6-008" },
   "workbench-admin-submission-detail|PUT /api/admin/submissions/:id/comments/requests/:id": { slug: "add-review-comment", symptom: "审核评论唯一编号、同编号重试和精确回执已有本地会话证据；跨刷新恢复及发布验收仍开放。", owner: "R6-003" },
+  "workbench-admin-submission-detail|PATCH /api/admin/reparse-jobs/:id/candidate": { slug: "correct-reparse-candidate", symptom: "重复候选改写是盲值写入：只有 job 状态与管理员存在性谓词，没有操作编号或预期版本，两个并发改写都会落盘，响应丢失重试会再写一次。", owner: "R6-003" },
   "workbench-admin-submission-detail|POST /api/admin/submissions/:id/publish": { slug: "publish-submission", symptom: "发布决策缺少不可变 Revision 的重放收敛证明。", owner: "R6-003" },
   "workbench-admin-submission-detail|POST /api/admin/submissions/:id/reject": { slug: "reject-submission", symptom: "拒绝决策缺少幂等重放与并发冲突策略。", owner: "R6-003" },
   "workbench-admin-submission-detail|POST /api/admin/submissions/:id/request-revision": { slug: "request-revision", symptom: "退回修改决策缺少幂等、通知去重与并发策略。", owner: "R6-003" },
+  "workbench-admin-submission-detail|PATCH /api/admin/knowledge/:id/revisions/:rev/chunks/:id/status": { slug: "set-chunk-status", symptom: "分块状态更新是盲值写入：只有 revision 与管理员存在性谓词，没有操作编号或预期版本，重试会重写同一分块与其 FTS 行，不留回执。", owner: "R6-003" },
+  "workbench-admin-submissions|POST /api/admin/submissions/batch-review": { slug: "batch-review", symptom: "批量审核信封本身没有身份，条目各自独立执行；未同时携带 operationId 与 expectedUpdatedAt 的条目刻意不受保护，重试会重新应用这些条目。", owner: "R6-003" },
   "workbench-admin-submissions|POST /api/admin/submissions/:id/publish": { slug: "publish-submission", symptom: "审核队列发布操作缺少不可变 Revision 的重放收敛证明。", owner: "R6-003" },
   "workbench-admin-submissions|POST /api/admin/submissions/:id/reject": { slug: "reject-submission", symptom: "审核队列拒绝操作缺少幂等重放与并发冲突策略。", owner: "R6-003" },
   "workbench-admin-submissions|POST /api/admin/submissions/:id/request-revision": { slug: "request-revision", symptom: "审核队列退回操作缺少幂等、通知去重与并发策略。", owner: "R6-003" },
+  "workbench-agent|POST /api/knowledge/chat/conversations/:id/cancel": { slug: "cancel-conversation", symptom: "取消 Agent 会话缺少重复请求与终态收敛证明。", owner: "R3-016" },
+  "workbench-agent|PATCH /api/knowledge/chat/conversations/:id/scope": { slug: "update-conversation-scope", symptom: "Agent 会话范围更新缺少条件写入与撤权后收敛策略。", owner: "R3-016" },
+  "workbench-environments|POST /api/environments": { slug: "create-environment", symptom: "环境创建已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },
+  "workbench-environments|DELETE /api/environments/:id": { slug: "delete-environment", symptom: "环境删除已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },
+  "workbench-environments|PATCH /api/environments/:id": { slug: "rename-environment", symptom: "环境重命名已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },
+  "workbench-graph|POST /api/tasks": { slug: "create-task", symptom: "图谱创建任务缺少完整动作重放与响应丢失收敛证明。", owner: "R8-005" },
+  "workbench-graph|POST /api/projects/:id/timeline": { slug: "create-timeline-item", symptom: "图谱创建时间线项缺少完整动作重放与重复结果抑制证明。", owner: "R8-005" },
+  "workbench-graph|POST /api/focus": { slug: "start-focus", symptom: "图谱启动专注缺少完整动作重放与并发收敛证明。", owner: "R8-005" },
+  "workbench-inbox|DELETE /api/tasks/:id": { slug: "target-delete-task", symptom: "该操作在 HTTP 边界与列表入口已有 tombstone 回执收敛证据，但从收集箱打开的共享任务编辑器没有删除控件，本入口无法发起删除；回收站/恢复/保留期模型仍未批准，因此该入口绑定保持开放。", owner: "R4-010" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/research-runs/:runId/approve": { slug: "approve-research-run", symptom: "研究运行审批为读后写，缺少预期运行状态或重放键。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/research-runs/:runId/cancel": { slug: "cancel-research-run", symptom: "研究运行取消为读后写，缺少预期运行状态或重放键。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/research-runs/:runId/draft": { slug: "create-research-draft", symptom: "研究草稿写入没有幂等键，只能靠冻结请求日志恢复。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/brief": { slug: "generate-brief", symptom: "brief 衍生生成是前端可达的非幂等写入，重放与未知结果收敛语义未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/comparison": { slug: "generate-comparison", symptom: "comparison 衍生生成是前端可达的非幂等写入，重放与未知结果收敛语义未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/faq": { slug: "generate-faq", symptom: "faq 衍生生成是前端可达的非幂等写入，重放与未知结果收敛语义未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/flashcards": { slug: "generate-flashcards", symptom: "flashcards 衍生生成是前端可达的非幂等写入，重放与未知结果收敛语义未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/mindmap": { slug: "generate-mindmap", symptom: "mindmap 衍生生成是前端可达的非幂等写入，重放与未知结果收敛语义未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/quiz": { slug: "generate-quiz", symptom: "quiz 衍生生成是前端可达的非幂等写入，重放与未知结果收敛语义未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/report": { slug: "generate-report", symptom: "报告生成绑定研究运行且是非幂等写入，重放与未知结果收敛语义未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/summary": { slug: "generate-summary", symptom: "summary 衍生生成是前端可达的非幂等写入，重放与未知结果收敛语义未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/timeline": { slug: "generate-timeline", symptom: "timeline 衍生生成是前端可达的非幂等写入，重放与未知结果收敛语义未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/research-runs/:runId/pause": { slug: "pause-research-run", symptom: "研究运行暂停为读后写，缺少预期运行状态或重放键。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/research-runs/:runId/queries": { slug: "record-research-query", symptom: "研究查询记录为非幂等追加，缺少稳定客户端键。", owner: "R3-011" },
+  "workbench-knowledge-reader|DELETE /api/knowledge/:id/favorite": { slug: "remove-favorite", symptom: "取消收藏已有同编号重放回执与不重复副作用的本地证据；跨刷新未知结果恢复与真实身份验收仍未证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/research-runs": { slug: "start-research-run", symptom: "研究运行启动为读后写，缺少稳定客户端键与预期状态约束。", owner: "R3-011" },
+  "workbench-submit|POST /api/submissions/drafts": { slug: "create-submission-draft", symptom: "草稿创建没有服务端幂等键：idempotency_key 写入 NULL，提交者唯一索引无法去重，响应丢失或并发重复会插入第二条草稿；只有客户端日志与成员最新草稿回读能在重试前收敛。", owner: "R3-001" },
 }));
 const menuRecordKeys = new Set([
   "id", "routeId", "pathname", "requiredRole", "journey", "classification", "dimensions",
@@ -247,8 +213,8 @@ test("environment inventory does not promote metadata management to VM acceptanc
   assert.equal(record.classification, "partial");
   assert.equal(record.dimensions.get("journey"), "gap");
   assert.equal(record.dimensions.get("evidence"), "gap");
-  assert.ok(record.gaps.some(gap => gap.includes("does not start a VM")));
-  assert.ok(record.gaps.some(gap => gap.includes("cross-refresh uncertain-write recovery")));
+  assert.ok(record.gaps.some(gap => gap.includes("out of scope by decision")));
+  assert.ok(record.gaps.some(gap => gap.includes("real-identity acceptance of the metadata surface remain open")));
   assert.ok(record.testEvidence.includes("scripts/browser-vm-environments-page.test.mjs"));
 });
 
@@ -267,14 +233,19 @@ test("maturity records are structural, complete, and evidence-backed", () => {
       assert.equal(record.parentRouteId, undefined, `${record.id} menu route must not declare a parentRouteId`);
     } else {
       const sourceRoute = parameterizedById.get(record.routeId);
-      assert.ok(sourceRoute, `${record.id} has an unknown parameterized routeId`);
+      assert.ok(sourceRoute, `${record.id} has an unknown page-kind routeId`);
       assert.equal(record.routePattern, sourceRoute.routePattern, `${record.id} routePattern must match frontend/app-routes.ts`);
-      assert.ok(record.parentRouteId && routesById.has(record.parentRouteId), `${record.id} parameterized route requires a menu parentRouteId`);
-      const parentPath = routesById.get(record.parentRouteId).path;
-      const template = `${parentPath === "/" ? "" : parentPath}/:id${record.routeId === "project-timeline" ? "/timeline" : ""}`;
-      assert.equal(record.pathname, template, `${record.id} pathname must be the exact parent-owned route template`);
+      assert.ok(record.parentRouteId && routesById.has(record.parentRouteId), `${record.id} page-kind route requires a menu parentRouteId`);
+      if (sourceRoute.staticPath === undefined) {
+        const parentPath = routesById.get(record.parentRouteId).path;
+        const parentArea = parentPath.split("/").filter(Boolean)[0];
+        assert.ok(record.pathname.startsWith(`/${parentArea}/`), `${record.id} pathname must stay inside its parent's route area`);
+        assert.equal((record.pathname.match(/:id/gu) ?? []).length, 1, `${record.id} pathname must declare exactly one :id placeholder`);
+      } else {
+        assert.equal(record.pathname, sourceRoute.staticPath, `${record.id} static route pathname must equal its literal branch path`);
+      }
       const pattern = new RegExp(sourceRoute.routePattern.slice(1, sourceRoute.routePattern.lastIndexOf("/")), "u");
-      assert.ok(pattern.test(record.pathname.replace(":id", "route-audit-1")), `${record.id} template must resolve through its source route`);
+      assert.ok(pattern.test(record.pathname.replace(":id", "route-audit-1")), `${record.id} pathname must resolve through its source route`);
     }
     assert.ok(roles.has(record.requiredRole), `${record.id} has unsupported requiredRole`);
     assert.ok(record.journey.length > 0, `${record.id} journey is required`);
@@ -776,7 +747,7 @@ function loadContracts() {
   try {
     return {
       routes: routeRecords(sourceFile(snapshot, routeCapabilitiesPath), "WORKSPACE_ROUTE_CAPABILITIES"),
-      parameterizedRoutes: parameterizedRouteRecords(sourceFile(snapshot, appRoutesPath)),
+      parameterizedRoutes: pageKindRouteRecords(sourceFile(snapshot, appRoutesPath)),
       maturity: maturityRecords(sourceFile(snapshot, maturityCapabilitiesPath)),
     };
   } finally {
@@ -968,7 +939,7 @@ function maturityRecords(source) {
   });
 }
 
-function parameterizedRouteRecords(source) {
+function pageKindRouteRecords(source) {
   const declarations = [];
   const visit = (node) => {
     if (isFunctionDeclaration(node) && node.name?.text === "pageKindForPath") declarations.push(node);
@@ -977,20 +948,31 @@ function parameterizedRouteRecords(source) {
   visit(source);
   assert.equal(declarations.length, 1, "frontend/app-routes.ts must declare pageKindForPath exactly once");
   assert.ok(declarations[0].body, "pageKindForPath body is required");
-  return declarations[0].body.statements.filter(isIfStatement).map((statement, index) => parameterizedRouteRecord(statement, index));
+  return declarations[0].body.statements.filter(isIfStatement).map((statement, index) => pageKindRouteRecord(statement, index));
 }
 
-function parameterizedRouteRecord(statement, index) {
-  const context = `parameterized route ${index}`;
-  assert.ok(isCallExpression(statement.expression), `${context} condition must call RegExp.test`);
-  const condition = statement.expression;
-  assert.ok(isPropertyAccessExpression(condition.expression), `${context} condition must access RegExp.test`);
-  assert.equal(condition.expression.name.text, "test", `${context} condition must call RegExp.test`);
-  assert.ok(isRegularExpressionLiteral(condition.expression.expression), `${context} matcher must be a regex literal`);
-  assert.equal(condition.arguments.length, 1, `${context} matcher must receive pathname once`);
-  assert.ok(isIdentifier(condition.arguments[0]) && condition.arguments[0].text === "pathname", `${context} matcher must receive pathname`);
+// Every branch of pageKindForPath names exactly one route identity: a parameterised
+// regex matcher whose pathname is the parent-owned template, or an exact pathname
+// equality whose literal path is the route's own static pathname.
+function pageKindRouteRecord(statement, index) {
+  const context = `page-kind route ${index}`;
   assert.ok(isReturnStatement(statement.thenStatement) && isStringLiteral(statement.thenStatement.expression), `${context} must return a string route identity`);
-  return { routeId: statement.thenStatement.expression.text, routePattern: condition.expression.expression.getText() };
+  const routeId = statement.thenStatement.expression.text;
+  const condition = statement.expression;
+  if (!isBinaryExpression(condition)) {
+    assert.ok(isCallExpression(condition), `${context} condition must call RegExp.test or compare pathname exactly`);
+    assert.ok(isPropertyAccessExpression(condition.expression), `${context} condition must access RegExp.test`);
+    assert.equal(condition.expression.name.text, "test", `${context} condition must call RegExp.test`);
+    assert.ok(isRegularExpressionLiteral(condition.expression.expression), `${context} matcher must be a regex literal`);
+    assert.equal(condition.arguments.length, 1, `${context} matcher must receive pathname once`);
+    assert.ok(isIdentifier(condition.arguments[0]) && condition.arguments[0].text === "pathname", `${context} matcher must receive pathname`);
+    return { routeId, routePattern: condition.expression.expression.getText() };
+  }
+  assert.equal(condition.operatorToken.getText(), "===", `${context} static route must compare pathname exactly`);
+  assert.ok(isIdentifier(condition.left) && condition.left.text === "pathname", `${context} static route must compare pathname`);
+  assert.ok(isStringLiteral(condition.right) && condition.right.text.startsWith("/"), `${context} static route must compare an absolute pathname`);
+  const staticPath = condition.right.text;
+  return { routeId, routePattern: `/^${staticPath.replace(/[.*+?^${}()|[\]\\/]/gu, (character) => `\\${character}`)}$/u`, staticPath };
 }
 
 function arrayRecords(source, declarationName) {

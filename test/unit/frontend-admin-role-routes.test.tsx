@@ -3,6 +3,7 @@ import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminRolesRoute, AdminRoleNewRoute, AdminRoleDetailRoute } from "../../frontend/app";
+import { loadAdminRoleWrite } from "../../frontend/lib/admin-role-write-intent";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 
@@ -37,17 +38,63 @@ describe("role routes registered like sibling admin routes", () => {
 
   it("creates a role on its own route and navigates back to the list on success", async () => {
     const methods: string[] = [];
+    const bodies: string[] = [];
     vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
       methods.push(init?.method || "GET");
+      if (init?.body) bodies.push(String(init.body));
       if (init?.method === "POST") return new Response(JSON.stringify({ role: { ...role, id: "custom", key: "custom", name: "Custom", allowBits: "0x0", memberCount: 0, assignedMemberIds: [], isSystem: false } }), { status: 201, headers: { "content-type": "application/json" } });
       return json({ items: [role] });
     });
-    await act(async () => root.render(<AdminRoleNewRoute locale={locale()} />)); await flush();
+    await act(async () => root.render(<AdminRoleNewRoute locale={locale()} memberId="member-a" />)); await flush();
     await input("Role key", "custom"); await input("Role name", "Custom");
     const create = [...container.querySelectorAll("button")].find((item) => item.textContent === "Create role") as HTMLButtonElement;
     await act(async () => create.click()); await flush();
     expect(methods).toEqual(["GET", "POST", "GET"]);
     expect(browser.location.pathname).toBe("/admin/roles");
+    const body = JSON.parse(bodies[0]!) as { operationId?: unknown };
+    expect(typeof body.operationId).toBe("string");
+  });
+
+  it("reuses the recorded operation key when a creation is retried", async () => {
+    const posts: string[] = [];
+    let attempts = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        posts.push(String(init.body));
+        attempts += 1;
+        if (attempts === 1) return new Response(JSON.stringify({ error: { code: "INTERNAL_ERROR" } }), { status: 503, headers: { "content-type": "application/json" } });
+        return new Response(JSON.stringify({ role: { ...role, id: "custom", key: "custom", name: "Custom", allowBits: "0x0", memberCount: 0, assignedMemberIds: [], isSystem: false } }), { status: 201, headers: { "content-type": "application/json" } });
+      }
+      return json({ items: [role] });
+    });
+    await act(async () => root.render(<AdminRoleNewRoute locale={locale()} memberId="member-a" />)); await flush();
+    await input("Role key", "custom"); await input("Role name", "Custom");
+    const create = [...container.querySelectorAll("button")].find((item) => item.textContent === "Create role") as HTMLButtonElement;
+    await act(async () => create.click()); await flush();
+    // The unknown outcome keeps the recorded intent, key included, for a keyed retry.
+    const recorded = loadAdminRoleWrite("member-a");
+    expect(recorded.kind).toBe("ready");
+    expect(recorded.kind === "ready" && recorded.intent.op === "create" && recorded.intent.operationId).toBe(JSON.parse(posts[0]!).operationId);
+    const retry = container.querySelector("[data-role-write-retry]") as HTMLButtonElement | null;
+    expect(retry?.textContent).toBe("Retry the same change");
+    await act(async () => retry!.click()); await flush();
+    expect(posts.map((body) => JSON.parse(body).operationId)).toEqual([JSON.parse(posts[0]!).operationId, JSON.parse(posts[0]!).operationId]);
+    expect(loadAdminRoleWrite("member-a").kind).toBe("empty");
+    expect(browser.location.pathname).toBe("/admin/roles");
+  });
+
+  it("surfaces a rejected role creation instead of navigating as if it succeeded", async () => {
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") return new Response(JSON.stringify({ error: { code: "ROLE_KEY_DUPLICATE", message: "Role key is already in use" } }), { status: 409, headers: { "content-type": "application/json" } });
+      return json({ items: [role] });
+    });
+    browser.history.replaceState({}, "", "/admin/roles/new");
+    await act(async () => root.render(<AdminRoleNewRoute locale={locale()} />)); await flush();
+    await input("Role key", "custom"); await input("Role name", "Custom");
+    const create = [...container.querySelectorAll("button")].find((item) => item.textContent === "Create role") as HTMLButtonElement;
+    await act(async () => create.click()); await flush();
+    expect(browser.location.pathname).toBe("/admin/roles/new");
+    expect(container.textContent).toContain("Unable to create role.");
   });
 
   it("renders the selected role's permissions from the API on the detail route", async () => {

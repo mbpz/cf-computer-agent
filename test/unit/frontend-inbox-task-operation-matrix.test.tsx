@@ -210,3 +210,116 @@ describe.each(operations)("Inbox target editor $op journey", operation => {
   });
 
 });
+
+// The delete operation has no editor control: the shared editor embeds no delete action, so this
+// entry can only ever restore and settle an intent recorded elsewhere in the same tab. The
+// operation itself is proven at the HTTP boundary (test/worker/tasks.test.ts) and by the list entry.
+describe("Inbox target editor delete-target journey", () => {
+  let app: MountedApp | undefined;
+  let writes: { method: string; path: string; body: Record<string, unknown> }[];
+  let reads: string[];
+  let deleteStatus: number, readStatus: number;
+  const key = "memory-garden:task-write:v1:alice";
+  const marker = JSON.stringify({ version: 1, memberId: "alice", intent: { op: "delete", taskId: "task-1", expectedUpdatedAt: version } });
+  const unknown = () => app!.browser.document.querySelector("[data-task-write-unknown]");
+  const button = (label: string) => [...app!.browser.document.querySelectorAll("button")].find(node => node.textContent === label) as unknown as HTMLButtonElement;
+  const click = async (node: HTMLButtonElement) => {
+    expect(node).toBeTruthy(); expect(node.disabled).toBe(false);
+    await act(async () => {
+      node.click();
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 0);
+      await promise;
+    });
+  };
+  const target = { id: "task-1", title: "Target task", notes: "Owned notes", status: "todo", progress: 0, priority: "medium", dueAt: null, completedAt: null, createdAt: version, updatedAt: version };
+  async function mount(stored: string | null, member = "alice") {
+    writes = []; reads = []; deleteStatus = 200; readStatus = 200;
+    app = await mountApp({ url: `https://app.test${route}`, configureBrowser(browser) { if (stored !== null) browser.sessionStorage.setItem(key, stored); }, fetch: async (input, init) => {
+      const url = new URL(String(input), "https://app.test"), path = url.pathname, method = init?.method ?? "GET";
+      if (path === "/api/session") return Response.json({ member: { id: member, email: `${member}@app.test`, role: "contributor" }, capabilities: ["knowledge:read", "submission:create", "submission:read-own"], permissionMask: "0x100000", logoutUrl: "/auth/logout" });
+      if (path === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
+      if (path === "/api/telemetry/pageview") return new Response(null, { status: 204 });
+      if (path === "/api/notifications/summary") return Response.json({ unread: 0 });
+      if (path === "/api/inbox") return Response.json({ items: [{ id: "row", clientKey: "key", kind: "text", content: "Private row", sourceUrl: null, status: "promoted", promotedTaskId: "task-1", promotedSubmissionId: null, createdAt: version, updatedAt: version }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+      expect(path).toMatch(/^\/api\/tasks\/task-1(?:\/|$)/);
+      if (method !== "GET") {
+        // A recorded intent always precedes transport, for this entry as for the editor.
+        const pending = JSON.parse(app!.browser.sessionStorage.getItem(key)!);
+        expect(pending.memberId).toBe(member); expect(pending.intent.taskId).toBe("task-1");
+        writes.push({ method, path, body: JSON.parse(String(init?.body)) });
+        if (method === "DELETE") {
+          expect(pending.intent.op).toBe("delete");
+          return deleteStatus === 200 ? Response.json({ tombstone: { taskId: "task-1", deletedAt: version } })
+            : apiError(deleteStatus, deleteStatus === 409 ? "TASK_VERSION_CONFLICT" : "UNAVAILABLE", deleteStatus >= 500);
+        }
+        return Response.json({ ...target, ...JSON.parse(String(init?.body)) });
+      }
+      if (path.endsWith("/subtasks") || path.endsWith("/dependencies")) return Response.json([]);
+      reads.push(path);
+      if (readStatus !== 200) return apiError(readStatus, "TASK_NOT_FOUND");
+      return Response.json({ task: target, tags: [], links: [] });
+    } });
+    await waitForApp(() => listLoaded());
+  }
+  const listLoaded = () => !!app && (!!button("Open task") || app.browser.document.body.textContent!.includes("Unable to load"));
+  afterEach(async () => { await app?.unmount(); app = undefined; });
+
+  it("restores the recorded delete for this target and settles it by read-only check, never another write", async () => {
+    await mount(marker); await waitForApp(() => !!unknown());
+    expect(writes).toHaveLength(0);
+    // The task is gone, so the authoritative read settles the delete as applied.
+    readStatus = 404;
+    await click(button("Check the result")); await waitForApp(() => !unknown());
+    expect(writes).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    expect(app!.browser.document.body.textContent).toContain("The change was saved.");
+    // Every settling read targeted this entry's task, and none of them was a write.
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.filter((path) => path !== "/api/tasks/task-1")).toEqual([]);
+  });
+
+  it("reuses the recorded version when the delete is retried and keeps the receipt on a conflict", async () => {
+    await mount(marker); await waitForApp(() => !!unknown());
+    deleteStatus = 409;
+    await click(button("Retry same operation")); await waitForApp(() => writes.length === 1);
+    expect(writes[0]).toEqual({ method: "DELETE", path: "/api/tasks/task-1", body: { expectedUpdatedAt: version } });
+    expect(app!.browser.sessionStorage.getItem(key)).toBe(marker);
+    expect(unknown()).not.toBeNull();
+    deleteStatus = 200;
+    await click(button("Retry same operation")); await waitForApp(() => !unknown());
+    expect(writes[1]).toEqual(writes[0]);
+    expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it.each([401, 403])("clears private target content on a %s delete retry without forgetting the intent", async code => {
+    await mount(marker); await waitForApp(() => !!unknown());
+    deleteStatus = code;
+    await click(button("Retry same operation")); await waitForApp(() => !unknown());
+    expect(app!.browser.document.body.textContent).not.toContain("Private row");
+    expect(app!.browser.document.querySelector('[aria-label="Task title"]')).toBeNull();
+    expect(app!.browser.sessionStorage.getItem(key)).toBe(marker);
+    expect(writes).toHaveLength(1);
+  });
+
+  it("does not replay another member's recorded delete", async () => {
+    await mount(marker, "bob"); await waitForApp(() => !!button("Open task"));
+    expect(unknown()).toBeNull();
+    expect(app!.browser.sessionStorage.getItem(key)).toBe(marker);
+    expect(writes).toHaveLength(0);
+    expect(reads).toEqual([]);
+  });
+
+  it("exposes no create branch: the entry opens the promoted target and only ever writes to it", async () => {
+    await mount(null); await click(button("Open task"));
+    await waitForApp(() => !!button("Save task"));
+    // Edit mode for the promoted id: no create submit, no create-recovery shortcut, no POST /api/tasks.
+    expect(button("Create task")).toBeUndefined();
+    expect(app!.browser.document.querySelector("[data-task-create-recovery]")).toBeNull();
+    expect(app!.browser.document.body.textContent).not.toContain("New task");
+    expect(writes.filter((write) => write.method === "POST" && write.path === "/api/tasks")).toEqual([]);
+    expect(reads).toEqual(["/api/tasks/task-1"]);
+    await click(button("Save task"));
+    await waitForApp(() => writes.length === 1);
+    expect(writes[0]).toMatchObject({ method: "PATCH", path: "/api/tasks/task-1" });
+  });
+});

@@ -3,7 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, NotificationsRoute } from "../../frontend/app";
-import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { stubListViewport } from "../helpers/list-viewport";
 
@@ -594,6 +594,50 @@ describe("notification inbox route", () => {
     } finally {
       errors.mockRestore();
     }
+  });
+
+  it("shows the explicit revoked target state when opening a notification whose target access was revoked", async () => {
+    browser.history.replaceState({}, "", "/notifications");
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    let revoked = false;
+    const writes: string[] = [];
+    const revokedItem = { readAt: "2026-08-30T01:00:00.000Z", targetKind: null, targetId: null };
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/summary")) return Response.json({ unread: revoked ? 0 : 1 });
+      if (init?.method === "POST") {
+        writes.push(url);
+        // The worker returns 200 with a redacted target: the open still converges the receipt.
+        return Response.json(notification(revoked ? revokedItem : {}));
+      }
+      return Response.json({ items: [notification(revoked ? revokedItem : {})], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+    });
+    await act(async () => root.render(<NotificationsRoute locale={locale} search="" />));
+    await waitForText("Due soon");
+    expect(container.textContent).toContain(`${frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} 1`);
+
+    revoked = true;
+    await click(frontendText(locale, "NOTIFICATIONS_OPEN"));
+    await flush(); await flush();
+    expect(container.querySelector("[data-notification-target-revoked]")).not.toBeNull();
+    expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+    expect(container.querySelector("[data-page-state='error']")).toBeNull();
+    expect(container.textContent).toContain(frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE"));
+    // The unread total converges after the revoked open, and the private target never navigates.
+    expect(container.textContent).toContain(`${frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} 0`);
+    expect(browser.location.pathname).toBe("/notifications");
+    expect(writes).toEqual(["/api/notifications/notification-1/read"]);
+    const row = container.querySelector('[data-notification-id="notification-1"]')!;
+    expect(row.getAttribute("data-read")).toBe("true");
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === frontendText(locale, "NOTIFICATIONS_OPEN"))).toBe(false);
+    expect(container.textContent).toContain(frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE"));
+
+    // Recoverable: an explicit retry re-reads the list and clears the revoked notice.
+    await click(frontendText(locale, "NOTIFICATIONS_RETRY"));
+    await flush(); await flush();
+    expect(container.querySelector("[data-notification-target-revoked]")).toBeNull();
+    expect(container.textContent).toContain(`${frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} 0`);
+    expect(writes).toHaveLength(1);
   });
 
   it("keeps the page header and filters mounted through a first load and a read failure", async () => {

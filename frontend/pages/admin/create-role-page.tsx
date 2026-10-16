@@ -21,6 +21,7 @@ export interface AdminRoleCreatePageProps {
   saveError?: string | null;
   recordBlocked?: boolean;
   onDiscardRecord?: () => void;
+  onRetryWrite?: () => void;
   readRequired?: boolean;
   readPending?: boolean;
   onLoadRetry?: () => void;
@@ -32,7 +33,7 @@ const CREATE_DRAFT_ROLE = "new";
 const blank = { newKey: "", newName: "", newMask: "0x0" };
 
 /** Role creation gets its own route: a beUI form that navigates back to the list once the write lands. */
-export function AdminRoleCreatePage({ locale, onCreate, onCreated, onCancel, saving = false, writeBlocked = false, saveError, recordBlocked = false, onDiscardRecord, readRequired = false, readPending = false, onLoadRetry, draftMemberId, suppressDraft = false }: AdminRoleCreatePageProps) {
+export function AdminRoleCreatePage({ locale, onCreate, onCreated, onCancel, saving = false, writeBlocked = false, saveError, recordBlocked = false, onDiscardRecord, onRetryWrite, readRequired = false, readPending = false, onLoadRetry, draftMemberId, suppressDraft = false }: AdminRoleCreatePageProps) {
   const [composer] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadAdminRoleDraft(draftMemberId));
   const restored = composer.kind === "ready" && composer.draft.roleId === CREATE_DRAFT_ROLE ? composer.draft : null;
   const [draftBlocked, setDraftBlocked] = useState(composer.kind === "blocked" || (composer.kind === "ready" && !restored));
@@ -97,7 +98,7 @@ export function AdminRoleCreatePage({ locale, onCreate, onCreated, onCancel, sav
       </div>
     </CardContent></Card>
     {recordBlocked && <div role="alert" data-role-write-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_ROLES_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "ADMIN_ROLES_RECORD_DISCARD")}</Button></div>}
-    {(readRequired || saveError) && <div className="space-y-2"><p role="status">{frontendText(locale, "ADMIN_ROLES_READ_REQUIRED")}</p><Button type="button" variant="outline" disabled={readPending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></div>}
+    {(readRequired || saveError) && <div className="space-y-2"><p role="status">{frontendText(locale, "ADMIN_ROLES_READ_REQUIRED")}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={readPending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>{onRetryWrite && <Button type="button" variant="outline" data-role-write-retry disabled={readPending} onClick={onRetryWrite}>{frontendText(locale, "ADMIN_ROLES_RETRY_WRITE")}</Button>}</div></div>}
     {draft.confirmation}
   </section>;
 }

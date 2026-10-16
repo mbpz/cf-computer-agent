@@ -21,18 +21,22 @@ export async function routeNavigationApi(
   if (request.method !== "GET") return methodNotAllowed("GET", context);
   if (principal.kind !== "member") throw new AppError("FORBIDDEN", "Member access required", 403);
   const permissionMask = parsePermissionMask(permissionMaskForPrincipal(principal));
+  // The administration group is an administrator surface, not a mask grant: a
+  // contributor holding an elevated role must not receive or see it.
+  const includeAdmin = principal.role === "admin";
   const navigation = await services.menus.navigation(permissionMask);
   return jsonResponse({ tree: navigation.tree.flatMap((node) => {
-    const annotated = withAvailability(node);
+    const annotated = withAvailability(node, includeAdmin);
     return annotated ? [annotated] : [];
   }) }, 200, context.requestId);
 }
 
-function withAvailability(node: MenuNode): (MenuNode & { availability: "ready" | "coming_soon"; disabledReason?: "not_implemented" }) | null {
+function withAvailability(node: MenuNode, includeAdmin: boolean): (MenuNode & { availability: "ready" | "coming_soon"; disabledReason?: "not_implemented" }) | null {
+  if (!includeAdmin && node.groupName === "admin") return null;
   const availability = menuAvailability(node.path);
   if (!availability) return null;
   const children = node.children.flatMap((child) => {
-    const annotated = withAvailability(child);
+    const annotated = withAvailability(child, includeAdmin);
     return annotated ? [annotated] : [];
   });
   return { ...node, ...availability, children };

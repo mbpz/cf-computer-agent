@@ -60,6 +60,7 @@ export interface AuditActionMap {
   "task.linked": { resourceType: "task"; metadata: { knowledgeItemId: string } };
   "task.unlinked": { resourceType: "task"; metadata: { knowledgeItemId: string } };
   "discussion.message_sent": { resourceType: "discussion_thread"; metadata: { messageId: string } };
+  "asset.orphans_reclaimed": { resourceType: "asset"; metadata: { deletedCount: number; skippedCount: number } };
   "maintenance.drain_started": { resourceType: "maintenance"; metadata: { window: string; epoch: number } };
   "maintenance.resumed": { resourceType: "maintenance"; metadata: { window: string; epoch: number } };
 }
@@ -107,6 +108,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "task.linked",
   "task.unlinked",
   "discussion.message_sent",
+  "asset.orphans_reclaimed",
   "maintenance.drain_started",
   "maintenance.resumed",
 ]);
@@ -483,6 +485,12 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       if (!isBoundedId(metadata.messageId)) throw invalidMetadata();
       return safeMetadata({ messageId: metadata.messageId });
     }
+    case "asset.orphans_reclaimed": {
+      assertResourceType(resourceType, "asset");
+      const metadata = readPlainDataObject(input, new Set(["deletedCount", "skippedCount"]));
+      if (!isCount(metadata.deletedCount) || !isCount(metadata.skippedCount)) throw invalidMetadata();
+      return safeMetadata({ deletedCount: metadata.deletedCount, skippedCount: metadata.skippedCount });
+    }
     case "maintenance.drain_started":
     case "maintenance.resumed": {
       assertResourceType(resourceType, "maintenance");
@@ -516,6 +524,9 @@ function isTaskPriority(value: unknown): value is TaskPriority {
 }
 function isRecordStatus(value: unknown): value is RecordStatus { return value === "active" || value === "disabled"; }
 function isNonEmptyString(value: unknown): value is string { return typeof value === "string" && value.length > 0; }
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
 function isBoundedId(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 128
     && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);

@@ -105,12 +105,22 @@ describe("M2 source reparse schema", () => {
     }));
     expect(replayPromotion.status).toBe(201);
 
-    const published = await execute(new Request(`https://example.test/api/admin/reparse-jobs/${body.job.id}/publish`, {
+    // Publishing a promoted candidate creates a revision, so it is a body-carrying
+    // mutation: the caller sends its operation number as JSON, like every other
+    // administrator mutation, and a lost response is retried under that number.
+    const publish = (operationId = "reparse-publish-1") => execute(new Request(`https://example.test/api/admin/reparse-jobs/${body.job.id}/publish`, {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${adminCookie}`, origin: APP_CONFIG.canonicalOrigin, "content-type": "application/json" },
+      body: JSON.stringify({ operationId }),
+    }));
+    const refused = await execute(new Request(`https://example.test/api/admin/reparse-jobs/${body.job.id}/publish`, {
       method: "POST",
       headers: { cookie: `__Host-memory-session=${adminCookie}`, origin: APP_CONFIG.canonicalOrigin },
     }));
+    expect(refused.status).toBe(415);
+    const published = await publish();
     expect(published.status).toBe(200);
-    const publishedBody = await published.json<{ revision: { sourceVersionId: string; knowledgeItemId: string } }>();
+    const publishedBody = await published.json<{ revision: { id: string; sourceVersionId: string; knowledgeItemId: string } }>();
     expect(publishedBody.revision).toMatchObject({ sourceVersionId: `${body.job.id}:source-version`, knowledgeItemId: "m2-item" });
     await expect(env.DB.prepare(
       "SELECT status FROM submissions WHERE id = ?",
@@ -119,6 +129,13 @@ describe("M2 source reparse schema", () => {
       .resolves.toEqual({ count: 2 });
     await expect(env.DB.prepare("SELECT source_version_id FROM revisions WHERE id = 'm2-revision'").first())
       .resolves.toEqual({ source_version_id: "m2-source-version" });
+
+    // The same operation number replays the recorded revision: one publish, no second revision.
+    const replayed = await publish();
+    expect(replayed.status).toBe(200);
+    await expect(replayed.json()).resolves.toMatchObject({ revision: { id: publishedBody.revision.id } });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM revisions WHERE knowledge_item_id = 'm2-item'").first())
+      .resolves.toEqual({ count: 2 });
   });
 
   it("persists an admin candidate correction as a new parse version for review", async () => {

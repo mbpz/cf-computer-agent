@@ -85,6 +85,7 @@ describe("graph evidence authorization boundary", () => {
               rootId: null,
               depth: 1 as const,
               truncated: false,
+              nextCursor: null,
               nodes: [{ id: "knowledge:knowledge-a", kind: "knowledge" as const, label: "Authorized source", status: "published", href: "/knowledge/knowledge-a", metadata: {} }],
               edges: [],
             };

@@ -142,8 +142,10 @@ export async function routeTasksApi(
       return jsonResponse(await services.tasks.update(member.memberId, id, input), 200, context.requestId);
     }
     if (request.method === "DELETE") {
-      await services.tasks.delete(member.memberId, id);
-      return noContent(context.requestId);
+      // The recorded delete receipt is returned, so a retry after a lost response
+      // reads the same outcome instead of a second, unverifiable 204.
+      const input = await optionalJsonBody(request, ["expectedUpdatedAt"]);
+      return jsonResponse({ tombstone: await services.tasks.delete(member.memberId, id, input.expectedUpdatedAt) }, 200, context.requestId);
     }
     return methodNotAllowed("DELETE, GET, PATCH", context);
   }

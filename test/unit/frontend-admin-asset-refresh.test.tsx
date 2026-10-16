@@ -72,6 +72,41 @@ describe("asset retry refresh recovery", () => {
     await retry();
     expect(posts).toBe(1);
   });
+
+  it("clears a parsed preview once its asset is requeued for parsing", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+      if (String(input).endsWith("/preview")) return Response.json({ assetId: "asset-1", originalName: "asset-1.pdf", markdown: "# Parsed body", warnings: [], lineCount: 1, parserSchemaVersion: "v1" });
+      if (init?.method === "POST") { posts += 1; return new Response(null, { status: 200 }); }
+      return page([asset()]);
+    });
+    await render();
+    await click("Preview");
+    expect(container.querySelector('[data-asset-preview="asset-1"]')).not.toBeNull();
+    expect(container.textContent).toContain("# Parsed body");
+    await retry();
+    expect(posts).toBe(1);
+    expect(container.querySelector('[data-asset-preview="asset-1"]')).toBeNull();
+    expect(container.textContent).not.toContain("# Parsed body");
+  });
+
+  it("enqueues one parse job when the same row is retried while the first retry is unresolved", async () => {
+    const first = deferred<Response>(); let posts = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posts += 1; return first.promise; }
+      return page([asset()]);
+    });
+    await render();
+    await act(async () => retryButton()!.click()); await flush();
+    const confirm = [...container.querySelectorAll("button")].find((item) => item.textContent === "Confirm retry") as HTMLButtonElement;
+    await act(async () => confirm.click());
+    expect(posts).toBe(1);
+    expect(retryButton()?.disabled).toBe(true);
+    await act(async () => retryButton()?.click()); await flush();
+    expect(posts).toBe(1);
+    await act(async () => first.resolve(new Response(null, { status: 200 }))); await flush();
+    expect(posts).toBe(1);
+  });
 });
 
 function asset() { return { asset: { id: "asset-1", originalName: "asset-1.pdf" }, job: { status: "failed_retryable" } }; }

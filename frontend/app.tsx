@@ -28,6 +28,8 @@ import { useAdminRolesController } from "./lib/admin-roles-controller";
 import { AdminMenusPage } from "./pages/admin/menus-page";
 import { ReviewQueuePage } from "./pages/admin/review-queue-page";
 import { ReviewDetailRoute } from "./pages/admin/review-detail-route";
+import { RecycleBinRoute } from "./pages/admin/recycle-bin-route";
+import { AdminKnowledgeItemRoute } from "./pages/admin/knowledge-item-route";
 import { AssetQueuePage } from "./pages/admin/asset-queue-page";
 import { MembersPage } from "./pages/admin/members-page";
 import { SpacesPage } from "./pages/admin/spaces-page";
@@ -35,9 +37,9 @@ import { AuditPage } from "./pages/admin/audit-page";
 import { DuplicateQueuePage } from "./pages/admin/duplicate-queue-page";
 import { AgentPage, agentSourceFields } from "./pages/agent-page";
 import { HomePage, type WorkbenchHomeState } from "./pages/home-page";
-import { KnowledgePage, type KnowledgeFilters } from "./pages/knowledge-page";
+import { KnowledgePage, type KnowledgeFilters, type KnowledgeSection } from "./pages/knowledge-page";
 import { KnowledgeReaderPage } from "./pages/knowledge-reader-page";
-import { SearchPage } from "./pages/search-page";
+import { SearchPage, type SearchFilters } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { TaskEditor } from "./pages/tasks/task-editor";
@@ -66,7 +68,8 @@ import { Loader } from "./components/motion/loader";
 import { SettingsPage } from "./pages/settings-page";
 import { GraphRoute } from "./pages/graph-page";
 import { ComingSoonPage } from "./pages/coming-soon-page";
-import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type LoadKnowledgePageInput, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
+import { createKnowledgeRequestController, type FavoriteKnowledgeItem, type LoadKnowledgePageInput, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
+import { loadFavoriteKnowledgePage, loadRecentKnowledgePage, loadRecentResearchPage, type KnowledgeSectionPage } from "./lib/knowledge-panels-data";
 import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeFavoriteOperation, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type LoadSearchPageInput, type SearchPageResult } from "./lib/search-data";
@@ -76,12 +79,20 @@ import { discardBlockedSearchComposerDraft, loadSearchComposerDraft, persistSear
 import { clearAgentIntent, createAgentIntent, loadAgentIntent, saveAgentIntent, type AgentTurnIntent, type StoredAgentIntent } from "./lib/agent-turn-intent";
 import { clearAgentFeedback, discardBlockedAgentFeedback, loadAgentFeedback, type AgentFeedbackIntent } from "./lib/agent-feedback-intent";
 import { discardBlockedAgentComposerDraft, loadAgentComposerDraft, persistAgentComposerDraft } from "./lib/agent-composer-draft";
-import { agentScopeSearch, agentLocationFromSearch, loadAgentConversation, createAgentRequestController, submitAgentFeedback, type AgentConversation, type AgentAnswer, type AgentScope, type ChatStage } from "./lib/agent-data";
-import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
+import { agentScopeSearch, agentLocationFromSearch, agentUnavailableReason, loadAgentConversation, createAgentRequestController, submitAgentFeedback, type AgentConversation, type AgentScope, type AgentTurnState, type ChatStage } from "./lib/agent-data";
+import { loadPrivateKnowledgeNotesPage, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
 import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, saveSubmissionIntent, type SubmissionIntent } from "./lib/submission-intent";
-import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
-import { createMySubmissionsRequestController, parseSubmissionRange, type MySubmissionItem } from "./lib/my-submissions-data";
+import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft } from "./lib/offline-submission-draft";
+import { loadDraftRecord } from "./lib/submission-draft-data";
+import { useSubmissionDraft } from "./lib/use-submission-draft";
+import { useSubmissionTargets } from "./lib/submission-targets-data";
+import { isResubmissionOpen, loadResubmitRecord, restartResubmission, resubmitSubmission, closeResubmission, readSubmissionStatus, saveResubmitRecord, beginResubmission, withResubmitEdits, withResubmitResult, type ResubmitRecord, type ResubmitStatus } from "./lib/submission-resubmit-data";
+import { loadSubmissionComments } from "./lib/submission-comments-data";
+import type { SubmissionCommentsState } from "./components/submissions/submission-comments-panel";
+import type { SubmitResubmitView } from "./pages/submit-page";
+import type { SubmissionTarget } from "./lib/submission-data";
+import { createMySubmissionsRequestController, parseSubmissionRange, submissionResubmitSource, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createTasksRequestController, loadTaskDetail, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import { createInbox, readCreatedInbox, loadInboxItem, loadInboxNumbered, parseInboxSearch, writeInboxSearch, promoteInboxTask, updateInboxStatus, type InboxItem, type InboxStatus } from "./lib/inbox-data";
 import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
@@ -113,7 +124,7 @@ import { discardBlockedReviewPeriod, loadReviewPeriod, persistReviewPeriod } fro
 import { loadAdminAnalytics, type AdminAnalyticsOverview, type LoadAdminAnalyticsInput } from "./lib/admin-analytics-data";
 import { ApiRequestError } from "./lib/api";
 import { createNumberedRequestController, listPageSize, type SupportedPageSize } from "./lib/numbered-page";
-import { createAdminMenu, deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
+import { createAdminMenu, deleteAdminMenu, loadAdminMenus, menuDescendants, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { clearAdminMenuWrite, discardBlockedAdminMenuWrite, loadAdminMenuWrite, saveAdminMenuWrite, type AdminMenuWriteIntent } from "./lib/admin-menu-write-intent";
 import { persistAdminMenuDraft } from "./lib/admin-menu-draft";
 import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAsset, type AdminAssetsPage, type AdminAssetStatus } from "./lib/admin-assets-data";
@@ -123,7 +134,7 @@ import type { AssetPreviewModel } from "./components/assets/asset-preview-model"
 import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewOperation, type ReviewNoteInput } from "./components/review/review-detail-data";
 import { clearReviewDecision, discardBlockedCurrentReviewDecision, loadCurrentReviewDecision, saveReviewDecision } from "./lib/review-decision-intent";
 import type { ReviewDecisionState } from "./components/review/review-decision-controls";
-import type { SubmissionDraft } from "./components/submissions/submission-form-model";
+import { validateSubmissionDraft, type SubmissionDraft } from "./components/submissions/submission-form-model";
 import { logoutAccount } from "./lib/logout-account";
 import { EnvironmentsPage } from "./features/environments/environments-page";
 import { AccountNetworkBoundary } from "./features/environments/account-network-boundary";
@@ -227,11 +238,11 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
   switch (kind) {
     case "home": return <HomeRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
     case "knowledge": return <KnowledgeRoute locale={locale} search={search} memberId={session?.member.id} />;
-    case "knowledge-reader": return <KnowledgeReaderRoute memberId={session?.member.id} locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
+    case "knowledge-reader": return <KnowledgeReaderRoute memberId={session?.member.id} canCreateSubmission={session?.capabilities.includes("submission:create") ?? false} locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute memberId={session?.member.id} locale={locale} search={search} />;
     case "agent": return <AgentRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "submit": return session ? <SubmitRoute locale={locale} memberId={session.member.id} /> : <NotFoundPage locale={locale} />;
-    case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
+    case "my-submissions": return <MySubmissionsRoute key={session?.member.id} locale={locale} search={search} memberId={session?.member.id} />;
     case "graph": return <GraphRoute key={session?.member.id} memberId={session?.member.id} locale={locale} />;
     case "tasks": return <TasksRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "inbox": return <InboxRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
@@ -255,7 +266,9 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-role-new": return <AdminRoleNewRoute key={`${session?.member.id}:new`} locale={locale} memberId={session?.member.id} />;
     case "admin-role-detail": return <AdminRoleDetailRoute key={`${session?.member.id}:${pathname}`} locale={locale} memberId={session?.member.id} roleId={decodeRouteId(pathname)} />;
     case "admin-menus": return <AdminMenusRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} />;
-    case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
+    case "admin-knowledge-trash": return <RecycleBinRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
+    case "admin-knowledge-item": return <AdminKnowledgeItemRoute key={JSON.stringify([session?.member.id, pathname, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} knowledgeItemId={decodeRouteId(pathname)} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
+    case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} memberId={session?.member.id} />;
@@ -275,8 +288,14 @@ function HomeRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<WorkbenchHomeState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
   const pending = useRef(true);
+  const controllerRef = useRef<AbortController | null>(null);
+  // The recent list is cursor-paged: the raw items accumulate so each appended
+  // page maps through the same builder as the first one.
+  const recentRaw = useRef<RecentKnowledgeItem[]>([]);
+  const morePending = useRef(false);
   useEffect(() => {
     const controller = new AbortController();
+    controllerRef.current = controller;
     pending.current = true;
     // A denial invalidates the entire protected snapshot immediately, even if
     // another endpoint is stalled or ignores cancellation.
@@ -289,7 +308,7 @@ function HomeRoute({ locale }: { locale: LocaleRuntime }) {
     });
     void Promise.allSettled([
       guard(loadTaskSummary(fetch, controller.signal)),
-      guard(loadRecentKnowledge(fetch, controller.signal)),
+      guard(loadRecentKnowledgePage({ requester: fetch, signal: controller.signal })),
       guard(loadWorkspaceActivity({ signal: controller.signal })),
     ]).then(([taskResult, knowledgeResult, activityResult]) => {
       if (controller.signal.aborted) return;
@@ -302,16 +321,43 @@ function HomeRoute({ locale }: { locale: LocaleRuntime }) {
         setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
         return;
       }
+      recentRaw.current = knowledgeResult.status === "fulfilled" ? knowledgeResult.value.items : [];
       const summary = buildWorkbenchSummary({
         taskSummary: taskResult.status === "fulfilled" ? taskResult.value : undefined,
-        knowledge: knowledgeResult.status === "fulfilled" ? knowledgeResult.value : [],
+        knowledge: recentRaw.current,
         activity: activityResult.status === "fulfilled" ? activityResult.value.items : [],
       });
-      setState({ kind: "ready", summary, unavailable });
+      setState({
+        kind: "ready", summary, unavailable,
+        recentCursor: knowledgeResult.status === "fulfilled" ? knowledgeResult.value.nextCursor : null,
+        recentPending: false, recentMoreError: false,
+      });
     });
-    return () => controller.abort();
+    return () => { controller.abort(); if (controllerRef.current === controller) controllerRef.current = null; };
   }, [locale, retry]);
-  return <HomePage locale={locale} state={state} onRetry={() => {
+  const loadMoreRecent = () => {
+    const controller = controllerRef.current;
+    if (!controller || controller.signal.aborted || morePending.current) return;
+    if (state.kind !== "ready" || !state.recentCursor || state.unavailable?.includes("knowledge")) return;
+    const cursor = state.recentCursor;
+    morePending.current = true;
+    setState(previous => previous.kind === "ready" ? { ...previous, recentPending: true, recentMoreError: false } : previous);
+    void loadRecentKnowledgePage({ cursor, requester: fetch, signal: controller.signal }).then((page) => {
+      if (controller.signal.aborted) return;
+      recentRaw.current = [...recentRaw.current, ...page.items];
+      setState(previous => previous.kind === "ready" ? {
+        ...previous,
+        summary: { ...previous.summary, recentKnowledge: buildWorkbenchSummary({ knowledge: recentRaw.current }).recentKnowledge },
+        recentCursor: page.nextCursor,
+        recentPending: false,
+        recentMoreError: false,
+      } : previous);
+    }).catch((error: unknown) => {
+      if (controller.signal.aborted || isAbort(error)) return;
+      setState(previous => previous.kind === "ready" ? { ...previous, recentPending: false, recentMoreError: true } : previous);
+    }).finally(() => { morePending.current = false; });
+  };
+  return <HomePage locale={locale} state={state} onLoadMoreRecent={loadMoreRecent} onRetry={() => {
     if (pending.current) return;
     pending.current = true;
     setState({ kind: "loading" });
@@ -428,7 +474,7 @@ export function AdminRoleNewRoute({ locale, memberId }: { locale: LocaleRuntime;
   const back = () => writeWorkspaceHistory("push", "/admin/roles");
   return <AdminRoleCreatePage locale={locale} onCreate={controller.createRole} onCreated={back} onCancel={back}
     saving={controller.saving} writeBlocked={controller.writeBlocked} saveError={controller.saveError}
-    recordBlocked={controller.recordBlocked} onDiscardRecord={controller.discardRecord}
+    recordBlocked={controller.recordBlocked} onDiscardRecord={controller.discardRecord} onRetryWrite={controller.retryWrite}
     readRequired={controller.readRequired} readPending={controller.readPending} onLoadRetry={controller.retryRead}
     draftMemberId={memberId} suppressDraft={controller.readRequired} />;
 }
@@ -438,12 +484,12 @@ export function AdminRoleDetailRoute({ locale, memberId, roleId }: { locale: Loc
   return <AdminRoleDetailPage state={controller.state} roleId={roleId} locale={locale}
     onBack={() => writeWorkspaceHistory("push", "/admin/roles")}
     onLoadRetry={controller.retryRead}
-    onSave={controller.recordBlocked ? undefined : (role, allowBits) => controller.saveRole(role.id, allowBits)}
+    onSave={controller.recordBlocked ? undefined : (role, allowBits) => controller.saveRole(role.id, allowBits, role.allowBits)}
     onAssignMember={controller.recordBlocked ? undefined : (role, targetId) => controller.assignMember(role.id, targetId)}
     onUnassignMember={controller.recordBlocked ? undefined : (role, targetId) => controller.unassignMember(role.id, targetId)}
     saving={controller.saving} writeBlocked={controller.writeBlocked} readPending={controller.readPending}
     readRequired={controller.readRequired} saveError={controller.saveError} recordBlocked={controller.recordBlocked}
-    onDiscardRecord={controller.discardRecord} draftMemberId={memberId} suppressDraft={controller.readRequired} />;
+    onDiscardRecord={controller.discardRecord} onRetryWrite={controller.retryWrite} draftMemberId={memberId} suppressDraft={controller.readRequired} />;
 }
 
 export function AdminMenusRoute({ locale, memberId }: { locale: LocaleRuntime; memberId?: string }) {
@@ -565,7 +611,11 @@ export function AdminMenusRoute({ locale, memberId }: { locale: LocaleRuntime; m
   return <AdminMenusPage onLoadRetry={retryRead} locale={locale} state={state} writeBlocked={saving || reading || needsRead} readPending={reading || saving} readRequired={needsRead} error={recordNotice ?? saveError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord} draftMemberId={memberId} suppressDraft={needsRead}
     onCreate={recordBlocked ? undefined : (input) => mutate({ op: "create", input }, () => createAdminMenu(input), "ADMIN_MENUS_SAVE_ERROR")}
     onUpdate={recordBlocked ? undefined : (menu, input) => mutate({ op: "update", id: menu.id, input }, () => updateAdminMenu(menu.id, input), "ADMIN_MENUS_SAVE_ERROR")}
-    onDelete={recordBlocked ? undefined : (menu) => { void mutate({ op: "delete", id: menu.id }, () => deleteAdminMenu(menu.id), "ADMIN_MENUS_DELETE_ERROR"); }} />;
+    onDelete={recordBlocked ? undefined : (menu) => {
+      // The confirmation displayed this exact subtree, so the removal acknowledges it.
+      const acknowledged = state.kind === "ready" ? menuDescendants(state.menus, menu.id).map((item) => item.id) : [];
+      void mutate({ op: "delete", id: menu.id }, () => deleteAdminMenu(menu.id, acknowledged), "ADMIN_MENUS_DELETE_ERROR");
+    }} />;
 }
 
 
@@ -574,21 +624,21 @@ function decodeRouteId(pathname: string): string {
   try { return decodeURIComponent(value); } catch { return ""; }
 }
 
-export function KnowledgeReaderRoute({ locale, knowledgeItemId, memberId = "" }: { locale: LocaleRuntime; knowledgeItemId: string; memberId?: string }) {
+export function KnowledgeReaderRoute({ locale, knowledgeItemId, memberId = "", canCreateSubmission = false }: { locale: LocaleRuntime; knowledgeItemId: string; memberId?: string; canCreateSubmission?: boolean }) {
   const [citationHash, setCitationHash] = useState(() => readWorkspaceHash());
   useEffect(() => {
     const update = () => setCitationHash(readWorkspaceHash());
     const unsubscribe = subscribeWorkspaceLocation(update);
     return unsubscribe;
   }, []);
-  return <KnowledgeReaderSession key={`${memberId}:${knowledgeItemId}:${citationHash}`} memberId={memberId} locale={locale} knowledgeItemId={knowledgeItemId} citationHash={citationHash} />;
+  return <KnowledgeReaderSession key={`${memberId}:${knowledgeItemId}:${citationHash}`} memberId={memberId} locale={locale} knowledgeItemId={knowledgeItemId} citationHash={citationHash} canCreateSubmission={canCreateSubmission} />;
 }
 
 /** One independently retryable auxiliary read: a fresh attempt token plus its own abort. */
 type ReaderSection = { token: object; controller: AbortController; settled: boolean };
 
-function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberId }: { memberId: string; locale: LocaleRuntime; knowledgeItemId: string; citationHash: string }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; revision: KnowledgeRevision } | { kind: "error"; message: string }>({ kind: "loading" });
+function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberId, canCreateSubmission }: { memberId: string; locale: LocaleRuntime; knowledgeItemId: string; citationHash: string; canCreateSubmission: boolean }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; revision: KnowledgeRevision } | { kind: "forbidden" } | { kind: "error"; message: string }>({ kind: "loading" });
   const [diffState, setDiffState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; diff: KnowledgeRevisionDiff } | { kind: "error" }>({ kind: "idle" });
   const [relatedState, setRelatedState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly RelatedKnowledgeItem[] } | { kind: "error" }>({ kind: "idle" });
   const [backlinkState, setBacklinkState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly KnowledgeBacklinkItem[] } | { kind: "error" }>({ kind: "idle" });
@@ -641,7 +691,7 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     // One denied member/knowledge read revokes the whole rendered reader. Retire
     // before clearing UI, so even transports ignoring abort cannot restore it.
     retire(owner);
-    setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_READER_ERROR") });
+    setState({ kind: "forbidden" });
     setDiffState({ kind: "idle" }); setRelatedState({ kind: "idle" }); setBacklinkState({ kind: "idle" });
     setFavorite(null); setFavoriteError(false);
     return true;
@@ -690,7 +740,7 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     }
   };
   useEffect(() => {
-    const owner: ReadOwner = { primary: createKnowledgeReaderRequestController(), favorite: null, related: null, backlinks: null, diff: null };
+    const owner: ReadOwner = { primary: createKnowledgeReaderRequestController(memberId), favorite: null, related: null, backlinks: null, diff: null };
     readOwner.current = owner;
     favoriteAttempt.current = null;
     const stored = loadFavoriteIntent(memberId, knowledgeItemId);
@@ -775,7 +825,7 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
     }
   };
   if (state.kind !== "ready") {
-      return <KnowledgeReaderPage memberId={memberId} locale={locale} state={state.kind === "loading" ? state : { kind: "error", message: state.message }} revision={{ id: "", knowledgeItemId: "", markdown: "", isCurrent: false, previousRevisionId: null, sourceVersionId: "", sourceVersionOrdinal: null, parserSchemaVersion: null, indexStatus: "pending", chunks: [] }} renderMarkdown={renderSafeMarkdown} onRetry={() => setRetry((value) => value + 1)} />;
+      return <KnowledgeReaderPage memberId={memberId} locale={locale} canCreateSubmission={canCreateSubmission} state={state.kind === "error" ? { kind: "error", message: state.message } : state} revision={{ id: "", knowledgeItemId: "", markdown: "", isCurrent: false, previousRevisionId: null, sourceVersionId: "", sourceVersionOrdinal: null, parserSchemaVersion: null, indexStatus: "pending", chunks: [] }} renderMarkdown={renderSafeMarkdown} onRetry={() => setRetry((value) => value + 1)} />;
   }
   const toggleFavorite = async () => {
     const owner = readOwner.current;
@@ -834,7 +884,7 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberI
       section.settled = true;
     }
   };
-  return <KnowledgeReaderPage memberId={memberId} locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} onRetryRelated={retryRelated} onRetryBacklinks={retryBacklinks} favorite={favorite} favoriteError={favoriteError} favoritePhase={favoritePhase} onCheckFavorite={checkFavorite} onToggleFavorite={toggleFavorite} />;
+  return <KnowledgeReaderPage memberId={memberId} locale={locale} canCreateSubmission={canCreateSubmission} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} onRetryRelated={retryRelated} onRetryBacklinks={retryBacklinks} favorite={favorite} favoriteError={favoriteError} favoritePhase={favoritePhase} onCheckFavorite={checkFavorite} onToggleFavorite={toggleFavorite} />;
 }
 
 function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
@@ -871,6 +921,17 @@ function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRunt
   const [activityError, setActivityError] = useState(false);
   const [sectionRetry, setSectionRetry] = useState(0);
   const [activityNextCursor, setActivityNextCursor] = useState<string | null>(null);
+  // Each side panel continues its own cursor read; a failed append keeps the rows
+  // already read and only retries the same cursor.
+  const [favoritesCursor, setFavoritesCursor] = useState<string | null>(null);
+  const [researchCursor, setResearchCursor] = useState<string | null>(null);
+  const [notesCursor, setNotesCursor] = useState<string | null>(null);
+  const [favoritesMoreError, setFavoritesMoreError] = useState(false);
+  const [researchMoreError, setResearchMoreError] = useState(false);
+  const [notesMoreError, setNotesMoreError] = useState(false);
+  const [morePending, setMorePending] = useState<KnowledgeSection | null>(null);
+  const moreController = useRef<AbortController | null>(null);
+  const morePendingRef = useRef<KnowledgeSection | null>(null);
   const [storedPeriod] = useState(() => memberId ? loadReviewPeriod(memberId, "knowledge") : { kind: "empty" as const });
   const [periodBlocked, setPeriodBlocked] = useState(storedPeriod.kind === "blocked");
   const [periodNotice, setPeriodNotice] = useState<string>();
@@ -885,8 +946,11 @@ function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRunt
     controllerRef.current?.dispose(); sectionsController.current?.abort();
     reviewController.current?.abort(); activityController.current?.abort();
     activityController.current = null;
+    moreController.current?.abort(); moreController.current = null; morePendingRef.current = null;
     setRecent([]); setFavorites([]); setRecentResearch([]); setNotes([]); setActivity([]);
     setActivityNextCursor(null); setActivityMoreError(false); setReview({ kind: "error" });
+    setFavoritesCursor(null); setResearchCursor(null); setNotesCursor(null);
+    setFavoritesMoreError(false); setResearchMoreError(false); setNotesMoreError(false); setMorePending(null);
     setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") });
     setPending(false); setLocalError(undefined);
     return true;
@@ -895,15 +959,19 @@ function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRunt
     if (deniedRef.current) return;
     const controller = new AbortController(); sectionsController.current = controller;
     activityController.current?.abort(); activityController.current = null;
+    moreController.current?.abort(); moreController.current = null; morePendingRef.current = null;
     setActivityNextCursor(null); setActivityMoreError(false);
+    // A section re-read replaces every window, so its continuation cursor restarts too.
+    setFavoritesCursor(null); setResearchCursor(null); setNotesCursor(null);
+    setFavoritesMoreError(false); setResearchMoreError(false); setNotesMoreError(false); setMorePending(null);
     const live = () => !deniedRef.current && !controller.signal.aborted;
     const failed = (error: unknown, ordinary: () => void) => {
       if (live() && !isAbort(error) && !denyRead(error)) ordinary();
     };
-    void loadRecentKnowledge(fetch, controller.signal).then((items) => { if (live()) { setRecent(items); setRecentError(false); } }).catch(error => failed(error, () => { setRecent([]); setRecentError(true); }));
-    void loadFavoriteKnowledge(fetch, controller.signal).then((items) => { if (live()) { setFavorites(items); setFavoritesError(false); } }).catch(error => failed(error, () => { setFavorites([]); setFavoritesError(true); }));
-    void loadRecentResearch(fetch, controller.signal).then((items) => { if (live()) { setRecentResearch(items); setResearchError(false); } }).catch(error => failed(error, () => { setRecentResearch([]); setResearchError(true); }));
-    void loadPrivateKnowledgeNotes(fetch, controller.signal).then((items) => { if (live()) { setNotes(items); setNotesError(false); } }).catch(error => failed(error, () => { setNotes([]); setNotesError(true); }));
+    void loadRecentKnowledgePage({ requester: fetch, signal: controller.signal }).then((page) => { if (live()) { setRecent(page.items); setRecentError(false); } }).catch(error => failed(error, () => { setRecent([]); setRecentError(true); }));
+    void loadFavoriteKnowledgePage({ requester: fetch, signal: controller.signal }).then((page) => { if (live()) { setFavorites(page.items); setFavoritesCursor(page.nextCursor); setFavoritesError(false); } }).catch(error => failed(error, () => { setFavorites([]); setFavoritesCursor(null); setFavoritesError(true); }));
+    void loadRecentResearchPage({ requester: fetch, signal: controller.signal }).then((page) => { if (live()) { setRecentResearch(page.items); setResearchCursor(page.nextCursor); setResearchError(false); } }).catch(error => failed(error, () => { setRecentResearch([]); setResearchCursor(null); setResearchError(true); }));
+    void loadPrivateKnowledgeNotesPage({ requester: fetch, signal: controller.signal }).then((page) => { if (live()) { setNotes(page.items); setNotesCursor(page.nextCursor); setNotesError(false); } }).catch(error => failed(error, () => { setNotes([]); setNotesCursor(null); setNotesError(true); }));
     void loadWorkspaceActivity({ signal: controller.signal }).then((page) => { if (live()) { setActivity(page.items); setActivityNextCursor(page.nextCursor); setActivityError(false); } }).catch(error => failed(error, () => { setActivity([]); setActivityNextCursor(null); setActivityError(true); }));
     return () => {
       controller.abort(); activityController.current?.abort(); activityController.current = null;
@@ -962,6 +1030,33 @@ function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRunt
       setLocalError(frontendText(locale, "KNOWLEDGE_ERROR")); setPending(false);
     });
   };
+  const setSectionMoreError = (section: KnowledgeSection, failed: boolean) => {
+    if (section === "favorites") setFavoritesMoreError(failed);
+    else if (section === "research") setResearchMoreError(failed);
+    else setNotesMoreError(failed);
+  };
+  // A panel append continues its own cursor read. Reserve before React renders, so
+  // same-event clicks cannot issue two appends; a failure keeps the cursor for retry.
+  const loadMoreSection = <T,>({ section, cursor, loadPage, apply }: { section: KnowledgeSection; cursor: string | null; loadPage: (cursor: string, signal: AbortSignal) => Promise<KnowledgeSectionPage<T>>; apply: (items: readonly T[], nextCursor: string | null) => void }) => {
+    if (!cursor || morePendingRef.current || deniedRef.current) return;
+    const controller = new AbortController(); moreController.current = controller;
+    morePendingRef.current = section; setMorePending(section); setSectionMoreError(section, false);
+    const live = () => moreController.current === controller && !controller.signal.aborted && !deniedRef.current;
+    void loadPage(cursor, controller.signal).then((page) => {
+      if (!live()) return;
+      apply(page.items, page.nextCursor);
+    }).catch((error: unknown) => {
+      if (!live() || isAbort(error) || denyRead(error)) return;
+      setSectionMoreError(section, true);
+    }).finally(() => {
+      if (moreController.current === controller) { moreController.current = null; morePendingRef.current = null; setMorePending(null); }
+    });
+  };
+  const appendSection = (section: KnowledgeSection) => {
+    if (section === "favorites") loadMoreSection({ section, cursor: favoritesCursor, loadPage: (cursor, signal) => loadFavoriteKnowledgePage({ cursor, requester: fetch, signal }), apply: (items, nextCursor) => { setFavorites((current) => mergeById(current, items)); setFavoritesCursor(nextCursor); } });
+    else if (section === "research") loadMoreSection({ section, cursor: researchCursor, loadPage: (cursor, signal) => loadRecentResearchPage({ cursor, requester: fetch, signal }), apply: (items, nextCursor) => { setRecentResearch((current) => mergeById(current, items)); setResearchCursor(nextCursor); } });
+    else loadMoreSection({ section, cursor: notesCursor, loadPage: (cursor, signal) => loadPrivateKnowledgeNotesPage({ cursor, requester: fetch, signal }), apply: (items, nextCursor) => { setNotes((current) => mergeById(current, items)); setNotesCursor(nextCursor); } });
+  };
   // A filter change is a read-only re-query of the first page; the pager itself is not in the URL.
   useEffect(() => subscribeWorkspaceLocation(() => setFilterVersion((value) => value + 1)), []);
   useEffect(() => {
@@ -978,7 +1073,7 @@ function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRunt
   const filtersKey = JSON.stringify(filters);
   const filtersKeyRef = useRef(filtersKey);
   if (filtersKeyRef.current !== filtersKey) { filtersKeyRef.current = filtersKey; setState({ kind: "loading" }); }
-  return <KnowledgePage locale={locale} filters={filters} onFilterChange={(next) => writeWorkspaceHistory("push", `/knowledge${writeKnowledgeFilters(readWorkspaceLocation().search, next)}`)} state={state} pending={pending} localError={localError} onRetry={() => { if (deniedRef.current) { deniedRef.current = false; setState({ kind: "loading" }); } setRetryVersion((value) => value + 1); }} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1, true); }} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} activityMoreError={activityMoreError} onLoadMoreActivity={loadMoreActivity} recentError={recentError} favoritesError={favoritesError} researchError={researchError} notesError={notesError} activityError={activityError} onRetrySections={() => setSectionRetry((value) => value + 1)} review={review} onRetryReview={() => setReviewRetry(value => value + 1)} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
+  return <KnowledgePage locale={locale} filters={filters} onFilterChange={(next) => writeWorkspaceHistory("push", `/knowledge${writeKnowledgeFilters(readWorkspaceLocation().search, next)}`)} state={state} pending={pending} localError={localError} onRetry={() => { if (deniedRef.current) { deniedRef.current = false; setState({ kind: "loading" }); } setRetryVersion((value) => value + 1); }} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1, true); }} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} activityMoreError={activityMoreError} onLoadMoreActivity={loadMoreActivity} recentError={recentError} favoritesError={favoritesError} researchError={researchError} notesError={notesError} activityError={activityError} favoritesNextCursor={favoritesCursor} researchNextCursor={researchCursor} notesNextCursor={notesCursor} favoritesMoreError={favoritesMoreError} researchMoreError={researchMoreError} notesMoreError={notesMoreError} morePending={morePending} onLoadMoreFavorites={() => appendSection("favorites")} onLoadMoreResearch={() => appendSection("research")} onLoadMoreNotes={() => appendSection("notes")} onRetrySections={() => setSectionRetry((value) => value + 1)} review={review} onRetryReview={() => setReviewRetry(value => value + 1)} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
 }
 
 export function SearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
@@ -1017,7 +1112,9 @@ function MemberSearchRoute({ locale, memberId }: { locale: LocaleRuntime; search
   const saved = useSavedViews(locale, () => {
     const params = new URLSearchParams(readWorkspaceLocation().search);
     return { q: params.get("q") ?? "", spaceId: params.get("spaceId"), collectionId: params.get("collectionId"),
-      tagIds: params.getAll("tagId"), tagMode: params.get("tagMode") === "and" ? "and" : "or" };
+      tagIds: params.getAll("tagId"), tagMode: params.get("tagMode") === "and" ? "and" : "or",
+      kind: searchKind(params.get("kind")), authorId: params.get("authorId"),
+      publishedFrom: params.get("publishedFrom"), publishedTo: params.get("publishedTo") };
   }, (): boolean => queryDraft.isConfirming(), memberId, composerBlocked ? "" : restoredName);
   const queryDraft = useCreateDraft({ query: restoredQuery }, { query: initialQuery },
     saved.isBlocking, locale, (): boolean => saved.draft.isConfirming());
@@ -1108,14 +1205,26 @@ function MemberSearchRoute({ locale, memberId }: { locale: LocaleRuntime; search
     if (view.filters.spaceId) params.set("spaceId", view.filters.spaceId);
     if (view.filters.collectionId) params.set("collectionId", view.filters.collectionId);
     for (const id of view.filters.tagIds) params.append("tagId", id);
-    params.set("tagMode", view.filters.tagMode);
+    // The API rejects a tag mode without tags, so a tag-less view applies none.
+    if (view.filters.tagIds.length > 0) params.set("tagMode", view.filters.tagMode);
+    if (view.filters.kind) params.set("kind", view.filters.kind);
+    if (view.filters.authorId) params.set("authorId", view.filters.authorId);
+    if (view.filters.publishedFrom) params.set("publishedFrom", view.filters.publishedFrom);
+    if (view.filters.publishedTo) params.set("publishedTo", view.filters.publishedTo);
     const nextUrl = `/search?${params.toString()}`;
     writeWorkspaceHistory("push", nextUrl, () => {
       setActiveQuery(normalized);
     });
   };
   const discardComposer = () => { if (!memberId || !composerBlocked || !discardBlockedSearchComposerDraft(memberId)) return; setComposerBlocked(false); setComposerNotice(undefined); };
-  return <SearchPage locale={locale} query={queryDraft.fields.query} queryLocked={saved.locked || queryDraft.confirming || queryDraft.applicationPending} state={state} pending={pending} localError={localError} onQueryChange={(value) => queryDraft.edit("query", value)} onSubmit={submit} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1, true); }} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={<>{saved.confirmation}{queryDraft.confirmation}</>} savedViews={saved.items} savedViewPending={saved.locked || saved.recordBlocked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} savedViewRecordBlocked={saved.recordBlocked} onDiscardSavedViewRecord={saved.discardRecord} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} composerBlocked={composerBlocked} composerNotice={composerNotice} onDiscardComposer={discardComposer} />;
+  // The conditions live in the location. A condition change starts a fresh read and the
+  // list must not present the previous condition's rows as the new answer, while a
+  // same-condition refresh (retry/page) keeps them; so clearing happens only on a change.
+  const filters = searchFilters(readWorkspaceLocation().search);
+  const filtersKey = JSON.stringify(filters);
+  const filtersKeyRef = useRef(filtersKey);
+  if (filtersKeyRef.current !== filtersKey) { filtersKeyRef.current = filtersKey; setState({ kind: "loading" }); }
+  return <SearchPage locale={locale} filters={filters} onFilterChange={(next) => { const nextSearch = writeSearchFilters(readWorkspaceLocation().search, next); writeWorkspaceHistory("push", `/search${nextSearch}`); }} query={queryDraft.fields.query} queryLocked={saved.locked || queryDraft.confirming || queryDraft.applicationPending} state={state} pending={pending} localError={localError} onQueryChange={(value) => queryDraft.edit("query", value)} onSubmit={submit} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1, true); }} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={<>{saved.confirmation}{queryDraft.confirmation}</>} savedViews={saved.items} savedViewPending={saved.locked || saved.recordBlocked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} savedViewRecordBlocked={saved.recordBlocked} onDiscardSavedViewRecord={saved.discardRecord} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} composerBlocked={composerBlocked} composerNotice={composerNotice} onDiscardComposer={discardComposer} />;
 }
 
 export function AgentRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
@@ -1149,7 +1258,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     return () => { current = false; abort.abort(); };
   }, [restoreId, recoveryVersion]);
   const [lastQuestion, setLastQuestion] = useState("");
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "cancelled" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [], conflicts: [] });
+  const [state, setState] = useState<AgentTurnState>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [], conflicts: [] });
   const [stage, setStage] = useState<ChatStage | null>(null);
   const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
   const pendingRef = useRef(false);
@@ -1225,13 +1334,20 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
         if (intent) {scopeRef.current = intent.scope; setScope(intent.scope);}
         setRecovery("ready");
         conversationIdRef.current = answer.conversationId;
-        setState({ kind: "ready", ...answer });
+        setState(answer.insufficientEvidence
+          ? { kind: "refused", citations: answer.citations, conversationId: answer.conversationId, suggestions: answer.suggestions }
+          : { kind: "ready", answer: answer.answer, confidence: answer.confidence, citations: answer.citations, conflicts: answer.conflicts, conversationId: answer.conversationId });
       }
     }).catch((error: unknown) => {
       if (controllerRef.current?.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) {
         pendingRef.current = false;
         if (intent) setUnconfirmed(true);
-        setState({ kind: "error", message: frontendText(locale, "COMMON_ANSWER_UNAVAILABLE") });
+        // A quota deferral or a degraded AI backend is a server answer about the
+        // request, so it is never shown as a generic transport error.
+        const reason = agentUnavailableReason(error);
+        setState(reason
+          ? { kind: "unavailable", reason, code: error instanceof ApiRequestError ? error.code : "AGENT_UNAVAILABLE" }
+          : { kind: "error", message: frontendText(locale, "COMMON_ANSWER_UNAVAILABLE") });
       }
     });
   };
@@ -1285,7 +1401,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
       if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming()
         || pendingRef.current || intentRef.current !== null || storageBlocked || unconfirmed || recovery !== "ready"
         || (memberId && loadAgentIntent(memberId).kind !== "empty")
-        || conversationIdRef.current !== id || state.kind !== "ready" || state.conversationId !== id
+        || conversationIdRef.current !== id || (state.kind !== "ready" && state.kind !== "refused") || state.conversationId !== id
         || (feedbackLock.current !== null && feedbackLock.current !== id)) return false;
       feedbackLock.current = id; setFeedbackBlocked(true); return true;
     },
@@ -1296,10 +1412,10 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   };
   const content = () => {
     if (storageBlocked) return <PageState kind="error" title={frontendText(locale, "AGENT_INTENT_STORAGE_BLOCKED")} description={frontendText(locale, "AGENT_INTENT_STORAGE_DETAIL")}><Button onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
-    if (unconfirmed && intentRef.current) return <PageState kind="degraded" title={frontendText(locale, "AGENT_INTENT_UNKNOWN")} description={frontendText(locale, "AGENT_INTENT_UNKNOWN_DETAIL")}><p className="whitespace-pre-wrap">{intentRef.current.question}</p><p><code>{JSON.stringify(intentRef.current.scope)}</code></p><Button onClick={() => submit(intentRef.current!.question)}>{frontendText(locale, "AGENT_INTENT_RETRY")}</Button><Button variant="outline" onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
+    if (unconfirmed && intentRef.current) return <div data-agent-unavailable={state.kind === "unavailable" ? state.reason : undefined}><PageState kind="degraded" title={frontendText(locale, "AGENT_INTENT_UNKNOWN")} description={frontendText(locale, "AGENT_INTENT_UNKNOWN_DETAIL")}><p className="whitespace-pre-wrap">{intentRef.current.question}</p><p><code>{JSON.stringify(intentRef.current.scope)}</code></p>{state.kind === "unavailable" && <p>{frontendText(locale, state.reason === "quota" ? "AGENT_UNAVAILABLE_QUOTA" : "AGENT_UNAVAILABLE_DEGRADED")}</p>}<Button onClick={() => submit(intentRef.current!.question)}>{frontendText(locale, "AGENT_INTENT_RETRY")}</Button><Button variant="outline" onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState></div>;
     if (recovery === "loading" && state.kind !== "loading") return <PageState kind="loading" title={frontendText(locale, "AGENT_RESTORING")} />;
     if (recovery === "error") return <PageState kind="error" title={frontendText(locale, "AGENT_RESTORE_FAILED")} description={frontendText(locale, "AGENT_RESTORE_FAILED_DETAIL")}><Button onClick={() => setRecoveryVersion((value) => value + 1)}>{frontendText(locale, "AGENT_RETRY")}</Button><a className="ml-4" href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
-    const visibleConversation = state.kind === "ready" ? state.conversationId : undefined;
+    const visibleConversation = state.kind === "ready" || state.kind === "refused" ? state.conversationId : undefined;
     return <div className="flex flex-col gap-6 lg:h-full lg:min-h-0">
       {composerBlocked && <div role="alert" data-agent-composer-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "AGENT_COMPOSER_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardComposer}>{frontendText(locale, "AGENT_COMPOSER_RECORD_DISCARD")}</Button></div>}
       {composerNotice && <p role="alert">{composerNotice}</p>}
@@ -1324,7 +1440,23 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
   const intentRef = useRef(intent);
   const [storageUnavailable, setStorageUnavailable] = useState(restored.kind === "unavailable");
   const [invalidIntent, setInvalidIntent] = useState(restored.kind === "invalid");
-  const [initialDraft] = useState(() => loadOfflineSubmissionDraft(memberId) ?? { mode: "markdown" as const, title: "", content: "" });
+  // A returned item is edited through the resubmission record: it carries the
+  // prior source, the destination and the single key this attempt will use.
+  const [resubmitLoad] = useState(() => loadResubmitRecord(memberId));
+  const [resubmit, setResubmit] = useState<ResubmitRecord | null>(() => resubmitLoad.kind === "ready" && isResubmissionOpen(memberId, resubmitLoad.record.priorId) ? resubmitLoad.record : null);
+  const resubmitRef = useRef(resubmit);
+  const [resubmitOutcome, setResubmitOutcome] = useState<{ status?: ResubmitStatus; read: "none" | "found" | "missing" | "failed" }>({ read: "none" });
+  const [commentRetry, setCommentRetry] = useState(0);
+  const [comments, setComments] = useState<SubmissionCommentsState>({ kind: "loading" });
+  const [initialDraft] = useState(() => resubmitLoad.kind === "ready" && isResubmissionOpen(memberId, resubmitLoad.record.priorId)
+    ? { ...resubmitLoad.record.draft }
+    : loadOfflineSubmissionDraft(memberId) ?? { mode: "markdown" as const, title: "", content: "" });
+  const [initialTarget] = useState<SubmissionTarget | null>(() => {
+    if (resubmitLoad.kind === "ready" && resubmitLoad.record.target) return resubmitLoad.record.target;
+    const record = loadDraftRecord(memberId);
+    return record.kind === "ready" ? record.record.target : null;
+  });
+  const targets = useSubmissionTargets({ initial: initialTarget });
   const [state, setState] = useState<{ kind: "idle" } | { kind: "pending" } | { kind: "validation"; message: string } | { kind: "error"; message: string } | { kind: "success"; message: string; similarCandidates: SimilarSubmissionCandidate[] }>({ kind: "idle" });
   const requestRef = useRef<AbortController | null>(null);
   const alive = useRef(true);
@@ -1334,6 +1466,19 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
   );
   const draft = protectedDraft.fields;
   const draftRef = protectedDraft.current;
+  const activeTarget = resubmit ? targets.view.target ?? resubmit.target : targets.view.target;
+  const targetKey = JSON.stringify(activeTarget);
+  const draftWrites = useSubmissionDraft({
+    memberId,
+    // A returned item is edited as a resubmission: its text stays in this browser
+    // (in the resubmission record) until it is resubmitted, so no draft row — and
+    // no other member's draft — is written for it.
+    enabled: resubmit === null,
+    fields: draft,
+    liveFields: draftRef,
+    target: targets.view.target,
+    suspended: state.kind === "pending",
+  });
   const changeDraft = (patch: Partial<SubmissionDraft>) => {
     if (!alive.current || protectedDraft.isConfirming()) return;
     const nextDraft = { ...draftRef.current, ...patch };
@@ -1342,6 +1487,31 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
     protectedDraft.set("title", nextDraft.title);
     protectedDraft.set("content", nextDraft.content);
   };
+  // The resubmission record is the durable copy of the edits made to a returned
+  // item, so a reload restores them without a server draft.
+  useEffect(() => {
+    const current = resubmitRef.current;
+    if (!current || current.state !== "editing") return;
+    const next = withResubmitEdits(current, draftRef.current, activeTarget);
+    if (JSON.stringify(next.draft) === JSON.stringify(current.draft) && JSON.stringify(next.target) === JSON.stringify(current.target)) return;
+    if (saveResubmitRecord(memberId, next)) resubmitRef.current = next;
+    else setStorageUnavailable(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- targetKey stands in for activeTarget identity
+  }, [memberId, draft.mode, draft.title, draft.content, targetKey]);
+  // The thread on the returned item, so the request for changes is readable in
+  // the place where it is answered.
+  useEffect(() => {
+    if (!resubmit) return;
+    const controller = new AbortController();
+    let live = true;
+    setComments({ kind: "loading" });
+    void loadSubmissionComments(resubmit.priorId, { signal: controller.signal }).then((items) => {
+      if (live) setComments({ kind: "ready", comments: items });
+    }).catch((error: unknown) => {
+      if (live && !isAbort(error)) setComments({ kind: "error" });
+    });
+    return () => { live = false; controller.abort(); };
+  }, [resubmit?.priorId, resubmit === null, commentRetry]);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -1350,8 +1520,80 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
       requestRef.current = null;
     };
   }, []);
+  /** Reads the server's current status for a submission this member owns. */
+  const readResubmitStatus = async (submissionId: string) => {
+    try {
+      const read = await readSubmissionStatus(submissionId);
+      if (!alive.current) return;
+      setResubmitOutcome(read ? { status: read.status, read: "found" } : { read: "missing" });
+    } catch {
+      if (alive.current) setResubmitOutcome({ read: "failed" });
+    }
+  };
+  const submitResubmission = async (nextDraft: SubmissionDraft) => {
+    const current = resubmitRef.current;
+    if (!current || current.state !== "editing") return;
+    const candidate = withResubmitEdits(current, nextDraft, targets.view.target ?? current.target);
+    if (!validateSubmissionDraft(candidate.draft).ok) { setState({ kind: "validation", message: frontendText(locale, "SUBMIT_VALIDATION_ERROR") }); return; }
+    // The attempt is journaled with its key before the request: a retry after an
+    // unknown outcome reuses the same key, so it can never create a second record.
+    if (!saveResubmitRecord(memberId, candidate)) { setState({ kind: "error", message: frontendText(locale, "SUBMIT_RESUBMIT_STORAGE") }); return; }
+    resubmitRef.current = candidate; setResubmit(candidate);
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setState({ kind: "pending" });
+    try {
+      const result = await resubmitSubmission(candidate, { signal: controller.signal });
+      if (controller.signal.aborted || requestRef.current !== controller) return;
+      const settled = withResubmitResult(candidate, result);
+      resubmitRef.current = settled; setResubmit(settled);
+      if (!saveResubmitRecord(memberId, settled)) setStorageUnavailable(true);
+      clearOfflineSubmissionDraft(memberId);
+      protectedDraft.checkpoint({ mode: settled.draft.mode, title: "", content: "" });
+      setState({ kind: "idle" });
+      setResubmitOutcome({ status: result.status, read: "none" });
+      void readResubmitStatus(result.id);
+    } catch (error: unknown) {
+      if (controller.signal.aborted || requestRef.current !== controller) return;
+      const code = error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "";
+      const validation = error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID";
+      setState({
+        kind: validation ? "validation" : "error",
+        message: frontendText(locale, validation ? "SUBMIT_VALIDATION_ERROR"
+          : code === "SUBMISSION_NOT_FOUND" ? "SUBMIT_RESUBMIT_NOT_FOUND"
+            : code === "SUBMISSION_VISIBILITY_EXPANSION_FORBIDDEN" ? "SUBMIT_RESUBMIT_VISIBILITY_LOCKED"
+              : code === "IDEMPOTENCY_CONFLICT" ? "SUBMIT_CONFLICT" : "SUBMIT_ERROR"),
+      });
+    } finally {
+      if (requestRef.current === controller) requestRef.current = null;
+    }
+  };
+  const restartResubmit = () => {
+    const current = resubmitRef.current;
+    if (!current) return;
+    const next = restartResubmission(memberId, withResubmitEdits(current, draftRef.current, activeTarget));
+    if (!next) { setStorageUnavailable(true); return; }
+    resubmitRef.current = next; setResubmit(next); setResubmitOutcome({ read: "none" });
+    protectedDraft.checkpoint({ ...next.draft });
+    changeDraft({ ...next.draft });
+  };
+  const leaveResubmit = () => {
+    // Leaving closes the editor for this tab but keeps the record and its key, so
+    // returning to the item continues the same attempt instead of starting one.
+    closeResubmission(memberId);
+    resubmitRef.current = null;
+    setResubmit(null);
+    protectedDraft.checkpoint({ mode: "markdown", title: "", content: "" });
+    changeDraft({ mode: "markdown", title: "", content: "" });
+    writeWorkspaceHistory("push", "/my-submissions");
+  };
   const submit = async (nextDraft: SubmissionDraft) => {
     if (!alive.current || protectedDraft.isConfirming() || requestRef.current || invalidIntent) return;
+    if (resubmitRef.current) { await submitResubmission(nextDraft); return; }
+    const destination = targets.view.target;
+    // The submission endpoint requires the destination up front; a form without
+    // one is never sent, and never falls back to a target the UI did not show.
+    if (!destination) { setState({ kind: "validation", message: frontendText(locale, "SUBMIT_TARGET_REQUIRED") }); return; }
     const controller = new AbortController();
     requestRef.current = controller;
     const draftAtStart = draftRef.current;
@@ -1376,7 +1618,7 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
       }
       intentRef.current = active;
       setIntent(active);
-      const result = await createSubmission(active.draft, active.key, fetch, controller.signal);
+      const result = await createSubmission(active.draft, active.key, fetch, controller.signal, destination);
       if (controller.signal.aborted || requestRef.current !== controller) return;
       if (clearSubmissionIntent(memberId, active.key)) {
         intentRef.current = null;
@@ -1389,7 +1631,9 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
       protectedDraft.checkpoint({ mode: active.draft.mode, title: "", content: "" });
       // A successful older submission must not erase edits made while it was pending.
       if (draftRef.current === draftAtStart && draftAtStart.mode === active.draft.mode && draftAtStart.title.trim() === active.draft.title && draftAtStart.content === active.draft.content) {
-        clearOfflineSubmissionDraft(memberId);
+        // This browser forgets the draft the accepted submission consumed: the
+        // remaining draft row on the server is what My submissions lists.
+        draftWrites.release();
         changeDraft({ mode: nextDraft.mode, title: "", content: "" });
       }
       setState({ kind: "success", message: frontendText(locale, "SUBMIT_SUCCESS"), similarCandidates: result.similarCandidates });
@@ -1397,27 +1641,51 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
       if (controller.signal.aborted || requestRef.current !== controller) return;
       const validation = error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID";
       const conflict = error !== null && typeof error === "object" && "code" in error && error.code === "IDEMPOTENCY_CONFLICT";
+      const targetRejected = error !== null && typeof error === "object" && "code" in error && error.code === "SUBMISSION_TARGET_INVALID";
       const identityError = error instanceof Error && error.message === "SUBMISSION_RANDOM_UNAVAILABLE";
-      setState({ kind: validation ? "validation" : "error", message: frontendText(locale, validation ? "SUBMIT_VALIDATION_ERROR" : conflict ? "SUBMIT_CONFLICT" : identityError ? "SUBMIT_IDENTITY_ERROR" : "SUBMIT_ERROR") });
+      setState({ kind: validation ? "validation" : "error", message: frontendText(locale, validation ? "SUBMIT_VALIDATION_ERROR" : targetRejected ? "SUBMIT_TARGET_REQUIRED" : conflict ? "SUBMIT_CONFLICT" : identityError ? "SUBMIT_IDENTITY_ERROR" : "SUBMIT_ERROR") });
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
     }
   };
-  // The shared draft guard resets its ref on committed navigation. Persist that
-  // reset synchronously: the App may unmount this form before a state effect runs.
-  useEffect(() => subscribeWorkspaceLocation(() => {
-    if (alive.current && !requestRef.current && !intentRef.current) {
-      saveOfflineSubmissionDraft(memberId, draftRef.current);
-    }
-  }), [memberId, draftRef]);
-  useEffect(() => { saveOfflineSubmissionDraft(memberId, draft); }, [memberId, draft]);
-  return <>{protectedDraft.confirmation}<SubmitPage memberId={memberId} locale={locale} draft={draft} state={state} onDraftChange={changeDraft} onSubmit={() => submit(draftRef.current)} recovery={{ title: intent?.draft.title, storageUnavailable, invalid: invalidIntent, onRetry: () => { if (intentRef.current) void submit(intentRef.current.draft); } }} /></>;
+  const resubmitView: SubmitResubmitView | undefined = resubmit ? {
+    priorId: resubmit.priorId,
+    title: resubmit.draft.title,
+    state: resubmit.state,
+    statusRead: resubmitOutcome.read,
+    ...(resubmit.reviewNote ? { reviewNote: resubmit.reviewNote } : {}),
+    ...(resubmit.submissionId ? { submissionId: resubmit.submissionId } : {}),
+    ...(resubmitOutcome.status ? { status: resubmitOutcome.status } : {}),
+  } : undefined;
+  return <>{protectedDraft.confirmation}<SubmitPage
+    memberId={memberId}
+    locale={locale}
+    draft={draft}
+    state={state}
+    onDraftChange={changeDraft}
+    onSubmit={() => submit(draftRef.current)}
+    recovery={{ title: intent?.draft.title, storageUnavailable, invalid: invalidIntent || resubmitLoad.kind === "invalid", onRetry: () => { if (intentRef.current) void submit(intentRef.current.draft); } }}
+    targets={targets}
+    draftSave={resubmit ? resubmitDraftSaveState : draftWrites.state}
+    onDraftRetry={() => { if (draftWrites.state.reason === "unknown") draftWrites.recheck(); else draftWrites.saveNow(); }}
+    {...(resubmitView ? {
+      resubmit: resubmitView,
+      onResubmitRestart: restartResubmit,
+      onResubmitLeave: leaveResubmit,
+      onResubmitStatusRetry: () => { if (resubmit?.submissionId) void readResubmitStatus(resubmit.submissionId); },
+      comments: { state: comments, onRetry: () => setCommentRetry((value) => value + 1) },
+    } : {})}
+  /></>;
 }
 
-export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+/** Editing a returned item keeps its text in this browser until it is resubmitted. */
+const resubmitDraftSaveState = { kind: "unconfirmed" as const, reason: "resubmit" as const };
+
+export function MySubmissionsRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const [retryVersion, setRetryVersion] = useState(0);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: MySubmissionItem[]; pagination: { page: number; pageSize: SupportedPageSize; total: number; totalPages: number } } | { kind: "error"; message: string }>({ kind: "loading" });
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
+  const [resubmitError, setResubmitError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createMySubmissionsRequestController> | null>(null);
   const [pageSize, setPageSize] = useState<SupportedPageSize>(listPageSize);
   const range = parseSubmissionRange(search);
@@ -1451,7 +1719,24 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live location, not a render value
   }, [locale, retryVersion, search, pageSize]);
-  return <MySubmissionsPage locale={locale} state={state} range={range} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1, true); }} />;
+  const resubmitted = state.kind === "ready"
+    // A row the member resubmitted is marked superseded by the row that carries
+    // its id in `supersedesSubmissionId` — the server's own record of the link.
+    ? state.items.flatMap((item) => item.supersedes ? [{ priorId: item.supersedes, submissionId: item.id }] : [])
+    : [];
+  const startResubmit = (item: MySubmissionItem) => {
+    setResubmitError(undefined);
+    if (!memberId) return;
+    const source = submissionResubmitSource(item);
+    if (!source || !beginResubmission(memberId, source)) {
+      // The editor is only opened on the item's own readable source and a record
+      // this browser can write; otherwise the row stays exactly as it was.
+      setResubmitError(frontendText(locale, "SUBMISSIONS_RESUBMIT_UNAVAILABLE"));
+      return;
+    }
+    writeWorkspaceHistory("push", "/submit");
+  };
+  return <MySubmissionsPage locale={locale} state={state} range={range} pending={pending} localError={localError} resubmitError={resubmitError} resubmitted={resubmitted} onResubmit={memberId ? startResubmit : undefined} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1, true); }} />;
 }
 
 export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
@@ -1643,9 +1928,9 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       if (activeRef.current) { listRecoveringRef.current = false; syncLeaveGuard(); setListRecovering(false); }
     }
   };
-  const taskRowStatus = (id: string): { expectedStatus?: TaskItem["status"] } => {
+  const taskRow = (id: string): TaskItem | null => {
     const item = state.kind === "ready" ? state.data.items.find((candidate) => candidate.id === id) : undefined;
-    return item ? { expectedStatus: item.status } : {};
+    return item ?? null;
   };
   const taskLabel = (id: string) => {
     const item = state.kind === "ready" ? state.data.items.find((candidate) => candidate.id === id) : undefined;
@@ -1662,7 +1947,7 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       <Button variant="outline" disabled={listRecovering} onClick={() => void resolveListUnknown("check")}>{frontendText(locale, "TASKS_CHECK_WRITE")}</Button>
       <Button variant="outline" disabled={listRecovering} onClick={() => void resolveListUnknown("retry")}>{frontendText(locale, "TASKS_RETRY_WRITE")}</Button>
     </div>
-  </Alert>}{actionNotice && <p role="status" className="mb-4 text-sm">{actionNotice}</p>}<TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : listUnknown || listRecovering ? "unknown" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate(next)} onTextFilterChange={changeTextFilters} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) load(state.data.pagination.page + 1, true); }} onStatusChange={(id, status: TaskStatus) => void mutate({ op: "status", taskId: id, status, ...taskRowStatus(id) }, taskLabel(id))} onDelete={(id) => void mutate({ op: "delete", taskId: id }, taskLabel(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} memberId={memberId} {...(editor.restored ? { restored: editor.restored } : {})} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
+  </Alert>}{actionNotice && <p role="status" className="mb-4 text-sm">{actionNotice}</p>}<TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : listUnknown || listRecovering ? "unknown" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate(next)} onTextFilterChange={changeTextFilters} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) load(state.data.pagination.page + 1, true); }} onStatusChange={(id, status: TaskStatus) => { const row = taskRow(id); if (row === null) { setActionError(frontendText(locale, "TASKS_ACTION_FAILED")); setRetryVersion((value) => value + 1); return; } void mutate({ op: "status", taskId: id, status, expectedStatus: row.status }, taskLabel(id)); }} onDelete={(id) => { const row = taskRow(id); if (row === null) { setActionError(frontendText(locale, "TASKS_ACTION_FAILED")); setRetryVersion((value) => value + 1); return; } void mutate({ op: "delete", taskId: id, expectedUpdatedAt: row.updatedAt }, taskLabel(id)); }} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} memberId={memberId} {...(editor.restored ? { restored: editor.restored } : {})} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
 }
 
 type TaskListUnknown = { intent: TaskWriteIntent; label: string };
@@ -2644,6 +2929,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
   const [retryVersion, setRetryVersion] = useState(0);
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
+  const [revokedTarget, setRevokedTarget] = useState(false);
   const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
   const controllerRef = useRef<ReturnType<typeof createNotificationsRequestController> | null>(null);
   const actionPendingRef = useRef(false);
@@ -2691,6 +2977,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
     recordBlockedRef.current = false;
     setRecordBlocked(false);
     setActionError(undefined);
+    setRevokedTarget(false);
     invalidateSnapshot({ kind: "forbidden" });
     syncLeaveGuard();
   };
@@ -2746,6 +3033,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
       readyRef.current = false;
       const next = parseNotificationSearch(readWorkspaceLocation().search).filters;
       setActionError(undefined);
+      setRevokedTarget(false);
       setFilters(next);
     };
     return subscribeWorkspaceLocation(onPopState);
@@ -2776,7 +3064,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
 
   const navigate = (nextFilters: NotificationFilters, replace = false) => {
     writeOwned(replace ? "replace" : "push", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, { page: 1, pageSize: listPageSize, filters: nextFilters })}`, () => {
-      readyRef.current = false; setActionError(undefined);
+      readyRef.current = false; setActionError(undefined); setRevokedTarget(false);
       setFilters(nextFilters);
     });
   };
@@ -2821,10 +3109,11 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
     pending={pending}
     actionPending={actionPending}
     actionError={actionError}
-    onRetry={() => { invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) => value + 1); }}
+    onRetry={() => { setRevokedTarget(false); invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) => value + 1); }}
     onFilterChange={(next: NotificationFilters) => navigate(next)}
     onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1); }}
     recordBlocked={recordBlocked}
+    revokedTarget={revokedTarget}
     onDiscardRecord={() => {
       if (!memberId || !discardBlockedNotificationUpdate(memberId)) return;
       recordBlockedRef.current = false;
@@ -2844,7 +3133,9 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
           syncLeaveGuard();
           writeWorkspaceHistory("push", href);
         }
-        else setActionError(frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE"));
+        // The server redacted this notification's target: the member no longer has
+        // access. Show the explicit revoked state instead of a generic write error.
+        else setRevokedTarget(true);
       });
     }}
   />;
@@ -2869,7 +3160,11 @@ export function MessagesRoute({ locale, search }: { locale: LocaleRuntime; searc
       void ensureDiscussionThread(query.context).then(({ thread }) => {
         if (!active) return;
         writeWorkspaceHistory("replace", `/messages/${encodeURIComponent(thread.id)}`);
-      }).catch(() => { if (active) { setState({ kind: "error" }); setPending(false); } });
+      }).catch((error: unknown) => {
+        if (!active) return;
+        setState(isDiscussionAccessLost(error) ? { kind: "revoked", target: "thread" } : { kind: "error" });
+        setPending(false);
+      });
       return () => { active = false; };
     }
     const controller = controllerRef.current ?? createDiscussionRequestController((input: DiscussionSearch, signal) =>
@@ -2885,7 +3180,7 @@ export function MessagesRoute({ locale, search }: { locale: LocaleRuntime; searc
       setPending(false);
     }).catch((error: unknown) => {
       if (!controller.isCurrent(request.generation) || !sameDiscussionSearch(queryRef.current, snapshot) || isAbort(error)) return;
-      setState({ kind: "error" }); setPending(false);
+      setState(isDiscussionAccessLost(error) ? { kind: "revoked", target: "list" } : { kind: "error" }); setPending(false);
     });
   }, [query, retryVersion]);
 
@@ -2956,10 +3251,11 @@ function MemberDiscussionThreadRoute({ memberId, locale, threadId, search }: { m
       setPending(false);
     }).catch((error: unknown) => {
       if (!controller.isCurrent(request.generation) || !sameDiscussionSearch(queryRef.current, snapshot) || isAbort(error)) return;
-      if (error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
+      if (isDiscussionAccessLost(error)) {
         accessEpochRef.current += 1;
-      }
-      setState({ kind: "error" }); setPending(false);
+        setState({ kind: "revoked" });
+      } else setState({ kind: "error" });
+      setPending(false);
     });
     return () => {
       controller.dispose();
@@ -2987,12 +3283,12 @@ function MemberDiscussionThreadRoute({ memberId, locale, threadId, search }: { m
       result = await operation();
     } catch (error) {
       if (activeRef.current && currentThreadIdRef.current === sendingThreadId && accessEpochRef.current === sendingEpoch
-        && error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
+        && isDiscussionAccessLost(error)) {
         // Revocation also invalidates concurrent reads; a late response must not
         // restore the private transcript or the composer after access is denied.
         controllerRef.current?.dispose(); controllerRef.current = null;
         accessEpochRef.current += 1;
-        setState({ kind: "error" }); setPending(false);
+        setState({ kind: "revoked" }); setPending(false);
       }
       throw error;
     }
@@ -3018,6 +3314,12 @@ function MemberDiscussionThreadRoute({ memberId, locale, threadId, search }: { m
 function sameDiscussionSearch(left: DiscussionSearch, right: DiscussionSearch): boolean {
   return left.page === right.page && left.limit === right.limit && left.cursor === right.cursor
     && left.context?.kind === right.context?.kind && left.context?.id === right.context?.id;
+}
+
+/** The worker answers a revoked context (and a lost session) as 404/403/401 on purpose,
+ * so the reader must treat them as one explicit revocation instead of a retryable failure. */
+function isDiscussionAccessLost(error: unknown): boolean {
+  return error instanceof ApiRequestError && (error.status === 401 || error.status === 403 || error.status === 404);
 }
 
 export function BoardsRoute({ locale, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
@@ -3413,10 +3715,10 @@ function needsBoardReplacement(
     || column.kind !== "ready" || column.pending || Boolean(column.loadError);
 }
 
-export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string; memberId?: string }) {
+export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string; memberId?: string; canReview: boolean }) {
   return <ReviewDraftProvider locale={props.locale} memberId={props.memberId} preserveUnsent><ReviewQueueSession {...props} /></ReviewDraftProvider>;
 }
-function ReviewQueueSession({ locale, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
+function ReviewQueueSession({ locale, memberId, canReview }: { locale: LocaleRuntime; search: string; memberId?: string; canReview: boolean }) {
   const drafts = useReviewDrafts()!;
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -3509,11 +3811,16 @@ function ReviewQueueSession({ locale, memberId }: { locale: LocaleRuntime; searc
       try {
         let operation = retryOperation;
         if (!operation) {
-          const publish = action === "publish" ? (await loadReviewDetail(id)).publish
-            : { title: "", visibility: "shared" as const, spaceId: "default", collectionId: null, tagIds: [] };
+          const detail = action === "publish" ? await loadReviewDetail(id) : null;
           if (!ownsDecision()) return;
           if (deniedRef.current) { setDecisionState({ kind: "idle" }); return; }
-          operation = prepareReviewDecision(id, action, publish, details);
+          // The detail read is the freshest authoritative version; for the other
+          // decisions the queue row itself carries the version it was read at, so
+          // a stale row conflicts instead of overwriting a newer state.
+          const version = detail?.version ?? state.data.items.find((item) => item.id === id)?.updatedAt;
+          const publish = detail?.publish
+            ?? { title: "", visibility: "shared" as const, spaceId: "default", collectionId: null, tagIds: [] };
+          operation = prepareReviewDecision(id, action, publish, details, version);
           if (memberId && !saveReviewDecision(memberId, id, operation)) {
             setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_NOT_RECORDED"));
             setDecisionState({ kind: "idle" });
@@ -3567,6 +3874,8 @@ function ReviewQueueSession({ locale, memberId }: { locale: LocaleRuntime; searc
     blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
   }
   return <ReviewQueuePage onOpenDetail={(id) => writeWorkspaceHistory("push", `/admin/submissions/${encodeURIComponent(id)}`)} locale={locale} state={state}
+    batchEnabled={canReview}
+    memberId={memberId}
     pendingId={pendingId} completedId={completedId} decisionState={decisionState} localError={recordNotice ?? localError} pending={pending || recordBlocked}
     decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord}
     onRetry={() => retryRead()} onReloadDecision={() => retryRead()}
@@ -3929,7 +4238,7 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
     if (blockedRef.current || !controllerRef.current || readRef.current || mutationsRef.current.has(id) || needsReadRef.current.has(id)) return;
     const member = state.kind === "ready" ? state.data.items.find((item) => item.id === id) : undefined;
     if (member?.role !== "contributor" || (member.status !== "active" && member.status !== "disabled") || member.status === nextStatus) return;
-    const intent: AdminMemberStatusIntent = { id, status: nextStatus };
+    const intent: AdminMemberStatusIntent = { id, status: nextStatus, expectedStatus: member.status };
     if (memberId && !saveAdminMemberStatus(memberId, intent)) {
       setRecordNotice(frontendText(locale, "ADMIN_MEMBER_STATUS_NOT_RECORDED"));
       return;
@@ -3938,7 +4247,7 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
     const token = {}; const scope = scopeRef.current; const actionQuery = { ...queryRef.current };
     mutationsRef.current.set(id, token); needsReadRef.current.add(id); unresolvedWrites.current.add(id); syncPendingIds(); setActionError(undefined); setRecordNotice(undefined);
     try {
-      await update(id, nextStatus);
+      await update(id, nextStatus, member.status);
       if (memberId && !clearAdminMemberStatus(memberId, intent)) {
         setRecordNotice(frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_STUCK"));
         return;
@@ -4318,6 +4627,9 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
       return;
     }
     if (memberId) intentRef.current.add(id);
+    // Requeuing resets the parse job, so a parsed preview of this asset is stale
+    // until the server returns the parsed content again.
+    if (preview?.assetId === id) clearPreview();
     const token = {}; const scope = scopeRef.current; const actionQuery = { ...queryRef.current };
     mutationsRef.current.set(id, token); needsReadRef.current.add(id); syncPendingIds(); setRetryError(undefined); setRecordNotice(undefined);
     try {
@@ -4349,15 +4661,19 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
       if (previewAbort.current === abort) { previewAbort.current = null; setPreviewLoading(false); }
     }
   };
-  return <AssetQueuePage onLoadRetry={retryRead} locale={locale} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} data={state.kind === "ready" ? state.data : undefined} localError={localError} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} pending={requestPending} pendingIds={pendingIds} status={status || ""} preview={preview} previewLoading={previewLoading} previewError={previewError} retryError={recordNotice ?? retryError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord} onRetry={recordBlocked ? undefined : (id) => void retry(id)} onPreview={(id) => void showPreview(id)} onStatusChange={(next) => changeStatusFilter(next || undefined)} onPageChange={(next) => { const controller = controllerRef.current; if (controller && state.kind === "ready") void read(controller, next); }} onPageSizeChange={(size) => setPageSize(size)}
+  return <AssetQueuePage onLoadRetry={retryRead} locale={locale} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} data={state.kind === "ready" ? state.data : undefined} localError={localError} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} pending={requestPending} pendingIds={pendingIds} status={status || ""} preview={preview} previewLoading={previewLoading} previewError={previewError} retryError={recordNotice ?? retryError} recordBlocked={recordBlocked} onDiscardRecord={discardRecord} onRetry={recordBlocked ? undefined : (id) => void retry(id)} onPreview={(id) => void showPreview(id)} onStatusChange={(next) => changeStatusFilter(next || undefined)} onPageChange={(next) => { const controller = controllerRef.current; if (controller && state.kind === "ready") void read(controller, next); }} onPageSizeChange={(size) => setPageSize(size)} memberId={memberId}
     onLoadMore={() => { const controller = controllerRef.current; if (controller && state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) void read(controller, state.data.pagination.page + 1, false, true); }} />;
 }
 
 function assetStatusSearch(search: string): AdminAssetStatus | undefined { const value = new URLSearchParams(search).get("status"); return value === "queued" || value === "processing" || value === "succeeded" || value === "failed_retryable" || value === "failed_terminal" ? value : undefined; }
 function knowledgeFilters(search: string): Omit<LoadKnowledgePageInput, "page" | "pageSize" | "signal"> {
   const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined;
-  const kind = value("kind");
-  return { spaceId: value("spaceId"), collectionId: value("collectionId"), tagId: value("tagId"), ...(kind === "text" || kind === "markdown" || kind === "code" ? { kind } : {}), authorId: value("authorId"), publishedFrom: value("publishedFrom"), publishedTo: value("publishedTo") };
+  const kind = searchKind(params.get("kind"));
+  return { spaceId: value("spaceId"), collectionId: value("collectionId"), tagId: value("tagId"), ...(kind ? { kind } : {}), authorId: value("authorId"), publishedFrom: value("publishedFrom"), publishedTo: value("publishedTo") };
+}
+/** The library kind filter, narrowed from an unvalidated location value. */
+function searchKind(value: string | null | undefined): "text" | "markdown" | "code" | undefined {
+  return value === "text" || value === "markdown" || value === "code" ? value : undefined;
 }
 // The inverse of `knowledgeFilters`: a removed applied condition rewrites the list location.
 function writeKnowledgeFilters(search: string, next: KnowledgeFilters): string {
@@ -4374,9 +4690,25 @@ function writeKnowledgeFilters(search: string, next: KnowledgeFilters): string {
   const serialized = params.toString();
   return serialized ? `?${serialized}` : "";
 }
-function searchFilters(search: string): Omit<LoadSearchPageInput, "query" | "page" | "pageSize" | "signal"> {
+function searchFilters(search: string): SearchFilters {
   const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined; const { tagId: _tagId, ...base } = knowledgeFilters(search); const tagIds = params.getAll("tagId"); const tagMode = value("tagMode");
   return { ...base, tagIds, ...(tagMode === "and" || tagMode === "or" ? { tagMode } : {}) };
+}
+// The inverse of `searchFilters`. `tagMode` only exists with tags: the API rejects a
+// bare mode, so dropping the last tag drops the mode too.
+function writeSearchFilters(search: string, next: SearchFilters): string {
+  const params = new URLSearchParams(search);
+  for (const key of ["spaceId", "collectionId", "tagId", "tagMode", "kind", "authorId", "publishedFrom", "publishedTo", "page", "pageSize"]) params.delete(key);
+  if (next.spaceId) params.set("spaceId", next.spaceId);
+  if (next.collectionId) params.set("collectionId", next.collectionId);
+  for (const tagId of next.tagIds) params.append("tagId", tagId);
+  if (next.tagIds.length > 0 && next.tagMode) params.set("tagMode", next.tagMode);
+  if (next.kind) params.set("kind", next.kind);
+  if (next.authorId) params.set("authorId", next.authorId);
+  if (next.publishedFrom) params.set("publishedFrom", next.publishedFrom);
+  if (next.publishedTo) params.set("publishedTo", next.publishedTo);
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
 }
 function taskFiltersFromSearch(search: string): TaskFilterState {
   const params = new URLSearchParams(search);
@@ -4397,3 +4729,8 @@ function taskSearch(filters: TaskFilterState): string {
   return params.size ? `?${params}` : "";
 }
 function isAbort(error: unknown): boolean { return error instanceof DOMException && error.name === "AbortError"; }
+/** A continuation page appends to the window; a repeated row id must not be shown twice. */
+function mergeById<T extends { id: string }>(current: readonly T[], added: readonly T[]): T[] {
+  const seen = new Set(current.map((item) => item.id));
+  return [...current, ...added.filter((item) => !seen.has(item.id))];
+}

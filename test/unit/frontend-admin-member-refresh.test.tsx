@@ -3,6 +3,7 @@ import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminMembersRoute } from "../../frontend/app";
+import { ApiRequestError } from "../../frontend/lib/api";
 import type { AdminMember, AdminMembersPage, LoadAdminMembersInput } from "../../frontend/lib/admin-members-data";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
@@ -39,7 +40,7 @@ describe("member status refresh recovery", () => {
     loads[0]!.resolve(memberPage([member("m1", "disabled")])); await flush();
     await confirm();
     expect(patches).toBe(1);
-    expect(browser.sessionStorage.getItem("memory-garden:admin-member-status:v1:member-a")).toContain("\"active\"");
+    expect(browser.sessionStorage.getItem("memory-garden:admin-member-status:v1:member-a")).toBe('{"version":1,"memberId":"member-a","intents":[{"id":"m1","status":"active","expectedStatus":"disabled"}]}');
     await act(async () => root.unmount());
     const { createRoot } = await import("react-dom/client"); root = createRoot(container);
     await renderMember(load, update);
@@ -47,6 +48,24 @@ describe("member status refresh recovery", () => {
     loads[1]!.resolve(memberPage([member("m1", "disabled")])); await flush();
     expect(browser.sessionStorage.getItem("memory-garden:admin-member-status:v1:member-a")).toBeNull();
     expect(unloadBlocked()).toBe(false); expect(patches).toBe(1); expect(enable()?.disabled).toBe(false);
+  });
+
+  it("surfaces a member status conflict instead of silently succeeding", async () => {
+    const calls: Array<{ id: string; status: string; expectedStatus: string }> = [];
+    const load = async () => memberPage([member("m1", "disabled")]);
+    const update = async (id: string, status: "active" | "disabled", expectedStatus: "active" | "disabled") => {
+      calls.push({ id, status, expectedStatus });
+      throw new ApiRequestError("MEMBER_STATUS_CONFLICT", "Member status changed since it was read", 409, false);
+    };
+    await renderMember(load, update);
+    await confirm();
+    expect(calls).toEqual([{ id: "m1", status: "active", expectedStatus: "disabled" }]);
+    // The page reports the conflict, keeps the server row and stays locked for a re-read.
+    expect(container.textContent).toContain("Unable to update this member.");
+    // The row still shows the member as disabled: the conflict did not flip local state.
+    expect(enable()).toBeTruthy();
+    expect(enable()?.disabled).toBe(true);
+    expect(browser.sessionStorage.getItem("memory-garden:admin-member-status:v1:member-a")).toContain('"expectedStatus":"disabled"');
   });
 
   it("does not send a member status when the tab cannot record it", async () => {

@@ -21,14 +21,18 @@ const visibilitySql = "(r.visibility = 'shared' OR ? = 'admin')";
 export class RecentVisitsRepository implements RecentVisitsRepositoryPort {
   constructor(private readonly db: D1Database) {}
 
-  async record(scope: RecentVisitScope, knowledgeItemId: string, visitedAt: string): Promise<void> {
+  async record(scope: RecentVisitScope, knowledgeItemId: string, visitedAt: string, visitIdentity: string): Promise<void> {
+    // The identity guard is authoritative: a replayed reading updates the same
+    // row without advancing the counter, and leaves its recorded time untouched.
     await this.db.prepare(
-      `INSERT INTO knowledge_visits (member_id, knowledge_item_id, last_visited_at, visit_count)
-       VALUES (?, ?, ?, 1)
+      `INSERT INTO knowledge_visits (member_id, knowledge_item_id, last_visited_at, visit_count, visit_identity)
+       VALUES (?, ?, ?, 1, ?)
        ON CONFLICT(member_id, knowledge_item_id) DO UPDATE SET
          last_visited_at = excluded.last_visited_at,
-         visit_count = MIN(knowledge_visits.visit_count + 1, 2147483647)`,
-    ).bind(scope.memberId, knowledgeItemId, visitedAt).run();
+         visit_count = MIN(knowledge_visits.visit_count + 1, 2147483647),
+         visit_identity = excluded.visit_identity
+       WHERE knowledge_visits.visit_identity <> excluded.visit_identity`,
+    ).bind(scope.memberId, knowledgeItemId, visitedAt, visitIdentity).run();
     await this.db.prepare(
       `DELETE FROM knowledge_visits
        WHERE member_id = ?

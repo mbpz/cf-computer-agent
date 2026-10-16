@@ -31,6 +31,7 @@ const snapshot: GraphSnapshot = {
   rootId: null,
   depth: 1,
   truncated: false,
+  nextCursor: null,
 };
 
 let browser: InstanceType<typeof Window>;

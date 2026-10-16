@@ -5,7 +5,17 @@ import type { WorkbenchSummary } from "../lib/workbench-data";
 
 export type WorkbenchHomeState =
   | { kind: "loading" }
-  | { kind: "ready"; summary: WorkbenchSummary; unavailable?: readonly ("tasks" | "knowledge" | "activity")[] }
+  | {
+      kind: "ready";
+      summary: WorkbenchSummary;
+      unavailable?: readonly ("tasks" | "knowledge" | "activity")[];
+      /** Cursor for the next recent page; null means the server list ended. */
+      recentCursor?: string | null;
+      /** A later recent page is in flight. */
+      recentPending?: boolean;
+      /** A later recent page failed; the loaded rows stay and the control retries it. */
+      recentMoreError?: boolean;
+    }
   | { kind: "error"; message: string; retryable?: boolean };
 
 /** Compatibility boundary for older embeds; the app uses WorkbenchHomeState. */
@@ -47,26 +57,12 @@ function toDateLabel(value: string, locale: LocaleRuntime | undefined): string {
   return date.toLocaleDateString(locale?.locale ?? "en", { month: "short", day: "numeric" });
 }
 
-function legacySummary(state: LegacyHomeState): WorkbenchSummary {
-  return {
-    taskCount: state.total,
-    overdueTaskCount: state.pending,
-    recentKnowledge: (state.recent ?? []).map((item) => ({ id: item.id, title: item.title, summary: item.summary ?? "" })),
-    recentActivity: [],
-    quickActions: [
-      { id: "create-knowledge", href: "/submit", labelKey: "HOME_QUICK_SUBMIT" },
-      { id: "search-knowledge", href: "/search", labelKey: "HOME_OPEN_SEARCH" },
-      { id: "ask-ai", href: "/agent", labelKey: "HOME_OPEN_AGENT" },
-    ],
-  };
-}
-
-export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?: LocaleRuntime; onRetry?: () => void }) {
+export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: HomeState; locale?: LocaleRuntime; onRetry?: () => void; onLoadMoreRecent?: () => void }) {
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{state.retryable !== false && <button type="button" onClick={onRetry} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button>}</PageState>;
 
-  const summary = "summary" in state ? state.summary : legacySummary(state);
-  if (!("summary" in state)) return <LegacyHomePage locale={locale} summary={summary} />;
+  if (!("summary" in state)) return <LegacyHomePage locale={locale} state={state} />;
+  const summary = state.summary;
 
   const unavailable = new Set(state.unavailable);
   const failed = <div role="status"><p>{frontendText(locale, "COMMON_UNABLE_TO_LOAD")}</p><button type="button" onClick={onRetry} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button></div>;
@@ -118,16 +114,30 @@ export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?
             <a href="/knowledge" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "HOME_OPEN_KNOWLEDGE")}</a>
           </CardHeader>
           <CardContent>
-            {unavailable.has("knowledge") ? failed : summary.recentKnowledge.length ? (
-              <div className="divide-y">
-                {summary.recentKnowledge.map((item) => (
-                  <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="block py-3 first:pt-0 last:pb-0 hover:text-primary">
-                    <p className="font-medium">{item.title || frontendText(locale, "KNOWLEDGE_UNTITLED")}</p>
-                    {item.summary && <p className="mt-1 text-xs text-muted-foreground">{toDateLabel(item.summary, locale)}</p>}
-                  </a>
-                ))}
-              </div>
-            ) : <p className="text-sm text-muted-foreground">{frontendText(locale, "HOME_RECENT_EMPTY")}</p>}
+            {unavailable.has("knowledge") ? failed : (
+              <>
+                {summary.recentKnowledge.length ? (
+                  <div className="divide-y">
+                    {summary.recentKnowledge.map((item) => (
+                      <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="block py-3 first:pt-0 last:pb-0 hover:text-primary">
+                        <p className="font-medium">{item.title || frontendText(locale, "KNOWLEDGE_UNTITLED")}</p>
+                        {item.summary && <p className="mt-1 text-xs text-muted-foreground">{toDateLabel(item.summary, locale)}</p>}
+                      </a>
+                    ))}
+                  </div>
+                ) : <p className="text-sm text-muted-foreground">{frontendText(locale, "HOME_RECENT_EMPTY")}</p>}
+                {state.recentMoreError ? (
+                  <div role="alert" data-home-more-error="knowledge" className="mt-3 flex flex-wrap items-center gap-2 text-sm text-destructive">
+                    <span>{frontendText(locale, "COMMON_UNABLE_TO_LOAD")}</span>
+                    {onLoadMoreRecent && <button type="button" onClick={onLoadMoreRecent} className="rounded-md border px-3 py-1.5 font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button>}
+                  </div>
+                ) : state.recentCursor && onLoadMoreRecent ? (
+                  <button type="button" data-home-more="knowledge" disabled={state.recentPending} onClick={onLoadMoreRecent} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-60">
+                    {frontendText(locale, "KNOWLEDGE_LOAD_MORE")}
+                  </button>
+                ) : null}
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -157,6 +167,12 @@ export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?
   );
 }
 
-function LegacyHomePage({ locale, summary }: { locale?: LocaleRuntime; summary: WorkbenchSummary }) {
-  return <section className="space-y-8"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium text-primary">{frontendText(locale, "APP_BRAND_EYEBROW")}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">{frontendText(locale, "HOME_TITLE")}</h1><p className="mt-2 max-w-2xl text-muted-foreground">{frontendText(locale, "HOME_DESCRIPTION")}</p></div><a href="/submit" className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">{frontendText(locale, "HOME_QUICK_SUBMIT")}</a></div><div className="grid gap-4 md:grid-cols-3">{[[frontendText(locale, "HOME_TOTAL_SUBMISSIONS"), summary.taskCount], [frontendText(locale, "HOME_PENDING_REVIEW"), summary.overdueTaskCount], [frontendText(locale, "HOME_PUBLISHED_KNOWLEDGE"), summary.recentKnowledge.length]].map(([label, value]) => <Card key={label as string}><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-semibold tabular-nums">{value}</p></CardContent></Card>)}</div><div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]"><Card><CardHeader><CardTitle>{frontendText(locale, "HOME_RECENT_TITLE")}</CardTitle></CardHeader><CardContent>{summary.recentKnowledge.length ? <div className="divide-y">{summary.recentKnowledge.map((item) => <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="block py-3 first:pt-0 last:pb-0 hover:text-primary"><p className="font-medium">{item.title || frontendText(locale, "KNOWLEDGE_UNTITLED")}</p>{item.summary && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.summary}</p>}</a>)}</div> : <p className="text-sm text-muted-foreground">{frontendText(locale, "HOME_RECENT_EMPTY")}</p>}</CardContent></Card><Card><CardHeader><CardTitle>{frontendText(locale, "HOME_QUICK_ACTIONS")}</CardTitle></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1"><a href="/knowledge" className="rounded-md border px-3 py-2 text-sm hover:bg-accent">{frontendText(locale, "HOME_OPEN_KNOWLEDGE")}</a><a href="/search" className="rounded-md border px-3 py-2 text-sm hover:bg-accent">{frontendText(locale, "HOME_OPEN_SEARCH")}</a><a href="/agent" className="rounded-md border px-3 py-2 text-sm hover:bg-accent">{frontendText(locale, "HOME_OPEN_AGENT")}</a></CardContent></Card></div></section>;
+function LegacyHomePage({ locale, state }: { locale?: LocaleRuntime; state: LegacyHomeState }) {
+  const recent = state.recent ?? [];
+  const metrics: ReadonlyArray<readonly [string, number]> = [
+    [frontendText(locale, "HOME_TOTAL_SUBMISSIONS"), state.total],
+    [frontendText(locale, "HOME_PENDING_REVIEW"), state.pending],
+    [frontendText(locale, "HOME_PUBLISHED_KNOWLEDGE"), state.published],
+  ];
+  return <section className="space-y-8"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium text-primary">{frontendText(locale, "APP_BRAND_EYEBROW")}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">{frontendText(locale, "HOME_TITLE")}</h1><p className="mt-2 max-w-2xl text-muted-foreground">{frontendText(locale, "HOME_DESCRIPTION")}</p></div><a href="/submit" className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">{frontendText(locale, "HOME_QUICK_SUBMIT")}</a></div><div className="grid gap-4 md:grid-cols-3">{metrics.map(([label, value]) => <Card key={label}><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-semibold tabular-nums">{value}</p></CardContent></Card>)}</div><div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]"><Card><CardHeader><CardTitle>{frontendText(locale, "HOME_RECENT_TITLE")}</CardTitle></CardHeader><CardContent>{recent.length ? <div className="divide-y">{recent.map((item) => <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="block py-3 first:pt-0 last:pb-0 hover:text-primary"><p className="font-medium">{item.title || frontendText(locale, "KNOWLEDGE_UNTITLED")}</p>{item.summary && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.summary}</p>}</a>)}</div> : <p className="text-sm text-muted-foreground">{frontendText(locale, "HOME_RECENT_EMPTY")}</p>}</CardContent></Card><Card><CardHeader><CardTitle>{frontendText(locale, "HOME_QUICK_ACTIONS")}</CardTitle></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1"><a href="/knowledge" className="rounded-md border px-3 py-2 text-sm hover:bg-accent">{frontendText(locale, "HOME_OPEN_KNOWLEDGE")}</a><a href="/search" className="rounded-md border px-3 py-2 text-sm hover:bg-accent">{frontendText(locale, "HOME_OPEN_SEARCH")}</a><a href="/agent" className="rounded-md border px-3 py-2 text-sm hover:bg-accent">{frontendText(locale, "HOME_OPEN_AGENT")}</a></CardContent></Card></div></section>;
 }

@@ -41,6 +41,7 @@ const snapshot: GraphSnapshot = {
   rootId: "knowledge:k1",
   depth: 1,
   truncated: false,
+  nextCursor: null,
 };
 
 function makeCytoscapeInstance() {

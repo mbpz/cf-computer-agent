@@ -13,6 +13,7 @@ const NOW = "2026-08-26T00:00:00.000Z";
 
 describe("recent knowledge visits", () => {
   let sessionA = "";
+  let sessionB = "";
 
   beforeEach(async () => {
     await reset();
@@ -21,13 +22,26 @@ describe("recent knowledge visits", () => {
     const members = new MembersRepository(env.DB);
     const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-recent-a"))!)).token;
+    sessionB = (await sessions.create((await members.findByIdentitySubject("subject-recent-b"))!)).token;
   });
 
-  it("records successful detail reads, deduplicates counts, and paginates privately", async () => {
-    expect((await api("/api/knowledge/knowledge-recent", sessionA)).status).toBe(200);
-    expect((await api("/api/knowledge/knowledge-recent", sessionA)).status).toBe(200);
-    const recent = await api("/api/knowledge/recent?limit=1", sessionA);
-    expect(await recent.json()).toMatchObject({ items: [{ knowledgeItemId: "knowledge-recent", visitCount: 2 }] });
+  it("counts one reading per explicit visit identity, deduplicates a retry, and isolates members", async () => {
+    const read = (token: string, visitIdentity?: string) => api("/api/knowledge/knowledge-recent", token, visitIdentity === undefined ? {} : { headers: { "x-visit-id": visitIdentity } });
+    // A lost response is retried with the same reading identity: one count.
+    expect((await read(sessionA, "read-1")).status).toBe(200);
+    expect((await read(sessionA, "read-1")).status).toBe(200);
+    const first = await api("/api/knowledge/recent?limit=1", sessionA);
+    expect(await first.json()).toMatchObject({ items: [{ knowledgeItemId: "knowledge-recent", visitCount: 1 }] });
+    // A genuine second visit supplies a new identity: it counts again.
+    expect((await read(sessionA, "read-2")).status).toBe(200);
+    const second = await api("/api/knowledge/recent?limit=1", sessionA);
+    expect(await second.json()).toMatchObject({ items: [{ knowledgeItemId: "knowledge-recent", visitCount: 2 }] });
+    // An unkeyed read is a distinct reading, so it keeps the legacy meaning.
+    expect((await read(sessionA)).status).toBe(200);
+    expect(await (await api("/api/knowledge/recent?limit=1", sessionA)).json()).toMatchObject({ items: [{ visitCount: 3 }] });
+    // Another member's reads never leak into this member's private statistics.
+    expect(await (await api("/api/knowledge/recent?limit=1", sessionB)).json()).toEqual({ items: [] });
+    expect((await read(sessionB, "not an identity")).status).toBe(400);
     expect((await api("/api/knowledge/recent?limit=0", sessionA)).status).toBe(400);
   });
 
@@ -54,7 +68,7 @@ async function api(path: string, token: string, init: RequestInit = {}): Promise
 async function seedKnowledge(): Promise<void> {
   const markdown = "# Recent Guide\n\nRecent body\n";
   const hash = await sha256Hex(markdown);
-  await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('recent-a', 'subject-recent-a', 'recent-a@example.test', 'contributor', 'active', ?, ?)").bind(NOW, NOW).run();
+  await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('recent-a', 'subject-recent-a', 'recent-a@example.test', 'contributor', 'active', ?, ?), ('recent-b', 'subject-recent-b', 'recent-b@example.test', 'contributor', 'active', ?, ?)").bind(NOW, NOW, NOW, NOW).run();
   await env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, kind, status, title, content, created_at, updated_at) VALUES ('recent-submission', 'recent-a', 'default', 'markdown', 'published', 'Recent Guide', ?, ?, ?)").bind(markdown, NOW, NOW).run();
   await env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, kind, title, created_at, updated_at) VALUES ('recent-source', 'recent-a', 'default', 'markdown', 'Recent Guide', ?, ?)").bind(NOW, NOW).run();
   await env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES ('recent-source-version', 'recent-source', 'recent-submission', 1, ?, ?, 'm1-v1', ?)").bind(markdown, hash, NOW).run();

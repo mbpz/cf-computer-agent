@@ -32,6 +32,7 @@ export interface AdminRoleDetailPageProps {
   saveError?: string | null;
   recordBlocked?: boolean;
   onDiscardRecord?: () => void;
+  onRetryWrite?: () => void;
   draftMemberId?: string;
   suppressDraft?: boolean;
 }
@@ -47,11 +48,11 @@ export function AdminRoleDetailPage(props: AdminRoleDetailPageProps) {
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
       : state.kind !== "ready" ? <PageState kind={state.kind} title={state.message || frontendText(locale, "ADMIN_ROLES_UNAVAILABLE")}>{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>
       : !role ? <PageState kind="error" title={frontendText(locale, "ADMIN_ROLE_UNAVAILABLE")} description={frontendText(locale, "ADMIN_ROLES_DESCRIPTION")}>{onBack && <Button type="button" variant="outline" onClick={onBack}>{frontendText(locale, "ADMIN_ROLES_LIST")}</Button>}</PageState>
-      : <RolePermissionEditor state={state} role={role} locale={locale} onBack={onBack} onLoadRetry={onLoadRetry} onSave={props.onSave} onAssignMember={props.onAssignMember} onUnassignMember={props.onUnassignMember} saving={props.saving} writeBlocked={props.writeBlocked} readPending={props.readPending} readRequired={props.readRequired} saveError={props.saveError} recordBlocked={props.recordBlocked} onDiscardRecord={props.onDiscardRecord} draftMemberId={props.draftMemberId} suppressDraft={props.suppressDraft} />}
+      : <RolePermissionEditor state={state} role={role} locale={locale} onBack={onBack} onLoadRetry={onLoadRetry} onSave={props.onSave} onAssignMember={props.onAssignMember} onUnassignMember={props.onUnassignMember} saving={props.saving} writeBlocked={props.writeBlocked} readPending={props.readPending} readRequired={props.readRequired} saveError={props.saveError} recordBlocked={props.recordBlocked} onDiscardRecord={props.onDiscardRecord} onRetryWrite={props.onRetryWrite} draftMemberId={props.draftMemberId} suppressDraft={props.suppressDraft} />}
   </section>;
 }
 
-function RolePermissionEditor({ state, role, locale, onBack, onLoadRetry, onSave, onAssignMember, onUnassignMember, saving, writeBlocked, readPending, readRequired, saveError, recordBlocked, onDiscardRecord, draftMemberId, suppressDraft }: Omit<AdminRoleDetailPageProps, "state" | "roleId"> & { state: Extract<AdminRolesState, { kind: "ready" }>; role: AdminRole }) {
+function RolePermissionEditor({ state, role, locale, onBack, onLoadRetry, onSave, onAssignMember, onUnassignMember, saving, writeBlocked, readPending, readRequired, saveError, recordBlocked, onDiscardRecord, onRetryWrite, draftMemberId, suppressDraft }: Omit<AdminRoleDetailPageProps, "state" | "roleId"> & { state: Extract<AdminRolesState, { kind: "ready" }>; role: AdminRole }) {
   const roles = state.roles;
   const [composer] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadAdminRoleDraft(draftMemberId));
   const restored = composer.kind === "ready" && composer.draft.roleId === role.id ? composer.draft : null;
@@ -158,5 +159,5 @@ function RolePermissionEditor({ state, role, locale, onBack, onLoadRetry, onSave
     cancelLabel={frontendText(locale, "COMMON_CANCEL")}
     confirmLabel={frontendText(locale, "ADMIN_ROLES_APPLY_CONFIRM")}
     destructive={action?.kind === "unassign" || (action?.kind === "save" && removed !== 0n)}
-    onCancel={cancelConfirmation} onConfirm={() => { void confirmAction(); }} />{recordBlocked && <div role="alert" data-role-write-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_ROLES_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "ADMIN_ROLES_RECORD_DISCARD")}</Button></div>}{(readRequired || saveError) && <div className="space-y-2"><p role="status">{frontendText(locale, "ADMIN_ROLES_READ_REQUIRED")}</p><Button type="button" variant="outline" disabled={readPending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></div>}{draft.confirmation}</>;
+    onCancel={cancelConfirmation} onConfirm={() => { void confirmAction(); }} />{recordBlocked && <div role="alert" data-role-write-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_ROLES_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "ADMIN_ROLES_RECORD_DISCARD")}</Button></div>}{(readRequired || saveError) && <div className="space-y-2"><p role="status">{frontendText(locale, "ADMIN_ROLES_READ_REQUIRED")}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={readPending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>{onRetryWrite && <Button type="button" variant="outline" data-role-write-retry disabled={readPending} onClick={onRetryWrite}>{frontendText(locale, "ADMIN_ROLES_RETRY_WRITE")}</Button>}</div></div>}{draft.confirmation}</>;
 }

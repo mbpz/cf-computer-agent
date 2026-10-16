@@ -10,8 +10,8 @@ import {
   type RequestContext,
 } from "../http";
 import type { Principal } from "../identity/principal";
-import type { PublicationService } from "../publication/service";
-import type { PublishedRevision, ReviewPreview } from "../publication/types";
+import { trashRetention, type PublicationService, type ReviewDecisionOperationInput } from "../publication/service";
+import type { BatchReviewResult, GovernedKnowledgeItem, PublishedRevision, ReviewPreview } from "../publication/types";
 import type { ReviewCommentsService } from "../review-comments/service";
 import { pageRequest, strictRecord, stringValue } from "./member";
 
@@ -94,11 +94,12 @@ export async function routeAdminReviewApi(
   if (url.pathname === "/api/admin/knowledge/trash") {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     const reviewer = requireAdminMember(principal);
-    return jsonResponse(
-      await services.publication.listTrashed(reviewerDto(reviewer), pageRequest(url)),
-      200,
-      context.requestId,
-    );
+    const page = await services.publication.listTrashed(reviewerDto(reviewer), pageRequest(url));
+    const now = new Date();
+    return jsonResponse({
+      items: page.items.map((item) => trashedKnowledgeDto(item, now)),
+      ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }),
+    }, 200, context.requestId);
   }
 
   if (url.pathname === "/api/admin/submissions/batch-review") {
@@ -120,7 +121,12 @@ export async function routeAdminReviewApi(
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     const reviewer = requireAdminMember(principal);
     requireNoQuery(url);
-    const item = await services.publication.trash(reviewerDto(reviewer), decodePathId(trash[1]!));
+    const input = await lifecycleRequestBody(request, ["operationId"]);
+    const item = await services.publication.trash(
+      reviewerDto(reviewer),
+      decodePathId(trash[1]!),
+      { operationId: input.operationId },
+    );
     return jsonResponse({ knowledge: item }, 200, context.requestId);
   }
 
@@ -129,7 +135,12 @@ export async function routeAdminReviewApi(
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     const reviewer = requireAdminMember(principal);
     requireNoQuery(url);
-    const item = await services.publication.restore(reviewerDto(reviewer), decodePathId(restore[1]!));
+    const input = await lifecycleRequestBody(request, ["operationId"]);
+    const item = await services.publication.restore(
+      reviewerDto(reviewer),
+      decodePathId(restore[1]!),
+      { operationId: input.operationId },
+    );
     return jsonResponse({ knowledge: item }, 200, context.requestId);
   }
 
@@ -138,7 +149,15 @@ export async function routeAdminReviewApi(
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     const reviewer = requireAdminMember(principal);
     requireNoQuery(url);
-    const result = await services.publication.purge(reviewerDto(reviewer), decodePathId(purge[1]!));
+    const knowledgeItemId = decodePathId(purge[1]!);
+    const input = await lifecycleRequestBody(request, ["operationId", "confirm"]);
+    requirePurgeConfirmation(input, knowledgeItemId);
+    const result = await services.publication.purge(
+      reviewerDto(reviewer),
+      knowledgeItemId,
+      new Date(),
+      { operationId: input.operationId },
+    );
     return jsonResponse({ purge: result }, 200, context.requestId);
   }
 
@@ -149,15 +168,21 @@ export async function routeAdminReviewApi(
     requireNoQuery(url);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["revisionId"],
+      ["revisionId", "operationId"],
       "ROLLBACK_REQUEST_INVALID",
     );
     const revision = await services.publication.rollback(
       reviewerDto(reviewer),
       decodePathId(rollback[1]!),
       stringValue(input.revisionId),
+      { operationId: input.operationId },
     );
-    return jsonResponse({ revision: publishedRevisionDto(revision) }, 200, context.requestId);
+    // The answer states both sides of the rollback: which revision is now
+    // current, and which one it replaced.
+    return jsonResponse({
+      revision: publishedRevisionDto(revision),
+      previousRevisionId: revision.previousRevisionId,
+    }, 200, context.requestId);
   }
 
   const publish = /^\/api\/admin\/submissions\/([^/]+)\/publish$/.exec(url.pathname);
@@ -168,7 +193,7 @@ export async function routeAdminReviewApi(
     const submissionId = decodePathId(publish[1]!);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["title", "visibility", "spaceId", "collectionId", "tagIds", "knowledgeItemId", "visibilityReasonCode"],
+      ["title", "visibility", "spaceId", "collectionId", "tagIds", "knowledgeItemId", "visibilityReasonCode", "operationId", "expectedUpdatedAt"],
       "PUBLICATION_REQUEST_INVALID",
     );
     const revision = await services.publication.publish(reviewerDto(reviewer), submissionId, {
@@ -181,7 +206,7 @@ export async function routeAdminReviewApi(
       ...(input.visibilityReasonCode === undefined ? {} : {
         visibilityReasonCode: stringValue(input.visibilityReasonCode) as "admin_visibility_expansion",
       }),
-    });
+    }, decisionOperationInput(input));
     return jsonResponse({ revision: publishedRevisionDto(revision) }, 200, context.requestId);
   }
 
@@ -193,13 +218,13 @@ export async function routeAdminReviewApi(
     const submissionId = decodePathId(reject[1]!);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["reasonCode", "note"],
+      ["reasonCode", "note", "operationId", "expectedUpdatedAt"],
       "REVIEW_REQUEST_INVALID",
     );
     const decision = await services.publication.reject(reviewerDto(reviewer), submissionId, {
       reasonCode: input.reasonCode as "not_relevant" | "duplicate" | "unsafe",
       note: stringValue(input.note),
-    });
+    }, decisionOperationInput(input));
     return jsonResponse({ decision }, 200, context.requestId);
   }
 
@@ -211,13 +236,13 @@ export async function routeAdminReviewApi(
     const submissionId = decodePathId(requestRevision[1]!);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["reasonCode", "note"],
+      ["reasonCode", "note", "operationId", "expectedUpdatedAt"],
       "REVIEW_REQUEST_INVALID",
     );
     const decision = await services.publication.requestRevision(reviewerDto(reviewer), submissionId, {
       reasonCode: input.reasonCode as "needs_revision",
       note: stringValue(input.note),
-    });
+    }, decisionOperationInput(input));
     return jsonResponse({ decision }, 200, context.requestId);
   }
 
@@ -243,6 +268,36 @@ function requireAdminMember(principal: Principal): Extract<Principal, { kind: "m
   return principal;
 }
 
+/**
+ * Reads a lifecycle body that may legitimately be absent: the operation number
+ * is a client convenience, so a request without one keeps its natural-identity
+ * behaviour instead of failing as malformed JSON. Any body that is present is
+ * still exact.
+ */
+async function lifecycleRequestBody(request: Request, allowedKeys: readonly string[]): Promise<Record<string, unknown>> {
+  if (request.body === null) return {};
+  return strictRecord(
+    await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+    allowedKeys,
+    "KNOWLEDGE_LIFECYCLE_REQUEST_INVALID",
+  );
+}
+
+/**
+ * Purging destroys published content for good, so the request has to name the
+ * exact item it destroys. A typed identifier can be re-read before the write;
+ * a checkbox cannot.
+ */
+function requirePurgeConfirmation(body: Record<string, unknown>, knowledgeItemId: string): void {
+  if (body.confirm !== knowledgeItemId) {
+    throw new AppError(
+      "KNOWLEDGE_PURGE_CONFIRMATION_REQUIRED",
+      "Purging is irreversible and requires the knowledge item identifier as typed confirmation",
+      400,
+    );
+  }
+}
+
 function reviewerDto(principal: Extract<Principal, { kind: "member" }>) {
   return { id: principal.memberId, role: principal.role, status: "active" as const };
 }
@@ -251,6 +306,7 @@ function reviewPreviewDto(preview: ReviewPreview) {
   return {
     submissionId: preview.submissionId,
     submitterId: preview.submitterId,
+    updatedAt: preview.updatedAt,
     status: preview.status,
     requestedSpaceId: preview.requestedSpaceId,
     requestedCollectionId: preview.requestedCollectionId,
@@ -296,7 +352,28 @@ function publishedRevisionDto(revision: PublishedRevision) {
   return safe;
 }
 
-function batchReviewDto(result: Awaited<ReturnType<PublicationService["batchReview"]>>) {
+/**
+ * A trashed row plus the retained-window facts the purge path itself enforces
+ * (the item's lifecycle timestamp is the exact anchor it compares against), so
+ * the recycle bin states the real window instead of re-deriving the policy.
+ */
+function trashedKnowledgeDto(item: GovernedKnowledgeItem, now: Date) {
+  return {
+    id: item.id,
+    spaceId: item.spaceId,
+    collectionId: item.collectionId,
+    revisionId: item.revisionId,
+    title: item.title,
+    visibility: item.visibility,
+    status: item.status,
+    publishedAt: item.publishedAt,
+    updatedAt: item.updatedAt,
+    searchStatus: item.searchStatus,
+    retention: trashRetention(item.updatedAt, now),
+  };
+}
+
+function batchReviewDto(result: BatchReviewResult) {
   return {
     requested: result.requested,
     succeeded: result.succeeded,
@@ -316,6 +393,15 @@ function batchReviewDto(result: Awaited<ReturnType<PublicationService["batchRevi
 
 function nullableString(value: unknown): string | null {
   return value === null ? null : stringValue(value);
+}
+
+/**
+ * Reads the optional decision identity from a request body. Both fields are
+ * validated by the service, which also hashes them into the operation.
+ */
+function decisionOperationInput(input: Record<string, unknown>): ReviewDecisionOperationInput | undefined {
+  if (input.operationId === undefined && input.expectedUpdatedAt === undefined) return undefined;
+  return { operationId: input.operationId, expectedUpdatedAt: input.expectedUpdatedAt };
 }
 
 function stringArray(value: unknown): string[] {

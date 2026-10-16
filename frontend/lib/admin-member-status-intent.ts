@@ -1,4 +1,4 @@
-export type AdminMemberStatusIntent = { readonly id: string; readonly status: "active" | "disabled" };
+export type AdminMemberStatusIntent = { readonly id: string; readonly status: "active" | "disabled"; readonly expectedStatus: "active" | "disabled" };
 export type StoredAdminMemberStatus = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intents: readonly AdminMemberStatusIntent[] };
 const storageKey = (memberId: string) => `memory-garden:admin-member-status:v1:${encodeURIComponent(memberId)}`;
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -8,10 +8,12 @@ export function validAdminMemberStatus(value: unknown): value is AdminMemberStat
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
-  return keys.length === 2 && keys.every((key) => key === "id" || key === "status") && isId(record.id) && statuses.has(record.status as string);
+  return keys.length === 3 && keys.every((key) => key === "id" || key === "status" || key === "expectedStatus")
+    && isId(record.id) && statuses.has(record.status as string) && statuses.has(record.expectedStatus as string)
+    && record.status !== record.expectedStatus;
 }
-function plain(intent: AdminMemberStatusIntent): AdminMemberStatusIntent { return { id: intent.id, status: intent.status }; }
-function same(left: AdminMemberStatusIntent, right: AdminMemberStatusIntent): boolean { return left.id === right.id && left.status === right.status; }
+function plain(intent: AdminMemberStatusIntent): AdminMemberStatusIntent { return { id: intent.id, status: intent.status, expectedStatus: intent.expectedStatus }; }
+function same(left: AdminMemberStatusIntent, right: AdminMemberStatusIntent): boolean { return left.id === right.id && left.status === right.status && left.expectedStatus === right.expectedStatus; }
 function freeze(intent: AdminMemberStatusIntent): AdminMemberStatusIntent { return Object.freeze(plain(intent)); }
 function storage(): Storage {
   const value = (globalThis as { window?: { sessionStorage?: Storage } }).window?.sessionStorage;

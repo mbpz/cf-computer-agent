@@ -3,7 +3,7 @@ import { assetPreviewModel, type AssetPreviewModel } from "../components/assets/
 import { createNumberedRequestController, normalizeNumberedPage, type FrontendNumberedPage, type FrontendPageRequest } from "./numbered-page";
 
 export type AdminAssetStatus = "queued" | "processing" | "succeeded" | "failed_retryable" | "failed_terminal";
-export interface AdminAsset { id: string; name?: string; status?: string; warnings?: string[]; }
+export interface AdminAsset { id: string; name?: string; status?: string; warnings?: string[]; attempts?: number; lastErrorCode?: string; }
 export interface LoadAdminAssetsInput extends FrontendPageRequest { status?: AdminAssetStatus; signal?: AbortSignal; }
 export type AdminAssetsPage = FrontendNumberedPage<AdminAsset>;
 export async function loadAdminAssets({ page, pageSize, status, requester = fetch, signal }: LoadAdminAssetsInput & { requester?: Fetcher }): Promise<AdminAssetsPage> { const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) }); if (status) params.set("status", status); return normalizeNumberedPage(await apiFetch(`/api/admin/assets?${params}`, { requester, signal }), normalize); }
@@ -20,6 +20,11 @@ function normalize(value: unknown): AdminAsset {
   const j = job as Record<string, unknown>;
   const status = j.status;
   if (typeof a.id !== "string" || !a.id || typeof a.originalName !== "string" || a.originalName.length === 0 || typeof status !== "string" || !ASSET_STATUSES.has(status)) throw new Error("ASSET_RESPONSE_INVALID");
-  return { id: a.id, name: a.originalName, status, warnings: [] };
+  // The job row is the only progress the server reports: an attempt counter and
+  // the most recent error code. Both are optional and never defaulted, so the
+  // page cannot show progress or an error the server did not send.
+  const attempts = Number.isSafeInteger(j.attempts) && (j.attempts as number) >= 0 ? (j.attempts as number) : undefined;
+  const lastErrorCode = typeof j.lastErrorCode === "string" && j.lastErrorCode ? j.lastErrorCode : undefined;
+  return { id: a.id, name: a.originalName, status, warnings: [], ...(attempts === undefined ? {} : { attempts }), ...(lastErrorCode === undefined ? {} : { lastErrorCode }) };
 }
 export function createAdminAssetsRequestController(requester: Fetcher = fetch) { return createNumberedRequestController((input: Omit<LoadAdminAssetsInput, "signal">, signal) => loadAdminAssets({ ...input, requester, signal })); }

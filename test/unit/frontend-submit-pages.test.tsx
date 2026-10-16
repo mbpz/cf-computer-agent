@@ -53,12 +53,54 @@ describe("React submission and asset pages", () => {
     expect(recovery).toContain('aria-describedby="submission-description"');
   });
 
-  it("maps asset parser lifecycle and resubmission states", () => {
+  it("maps asset parser lifecycle states", () => {
     expect(assetStatusModel({ status: "queued" })).toMatchObject({ tone: "info", label: "Queued" });
     expect(assetStatusModel({ status: "failed_terminal", lastErrorCode: "SOURCE_UNSUPPORTED" })).toMatchObject({ tone: "destructive", retryable: false });
-    const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{ id: "s1", title: "Guide", status: "needs_revision" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} />);
-    expect(html).toContain("Needs revision");
-    expect(html).toContain("Resubmit");
+  });
+
+  it("offers resubmission only for a returned row whose own source is readable", () => {
+    const source = { kind: "markdown" as const, content: "# Body", target: { requestedSpaceId: "space-a", requestedCollectionId: null, requestedVisibility: "shared" as const } };
+    const page = (items: { id: string; title: string; status: string; source?: typeof source }[]) => ({ kind: "ready" as const, items, pagination: { page: 1, pageSize: 20, total: items.length, totalPages: 1 } });
+    const returned = renderToStaticMarkup(<MySubmissionsPage state={page([{ id: "s1", title: "Guide", status: "revision_requested", source }])} onResubmit={() => undefined} />);
+    expect(returned).toContain("revision_requested");
+    expect(returned).toContain("Resubmit");
+    expect(returned).toContain("data-my-submission-resubmit=");
+    // A row that was not returned for changes, or whose own source cannot be read, offers no action.
+    expect(renderToStaticMarkup(<MySubmissionsPage state={page([{ id: "s2", title: "Guide", status: "needs_revision" }])} onResubmit={() => undefined} />)).not.toContain("data-my-submission-resubmit=");
+    expect(renderToStaticMarkup(<MySubmissionsPage state={page([{ id: "s3", title: "Guide", status: "revision_requested" }])} onResubmit={() => undefined} />)).toContain("data-my-submission-resubmit-unavailable");
+    // A row the member already resubmitted is marked from the server's own supersede link.
+    const superseded = renderToStaticMarkup(<MySubmissionsPage state={page([{ id: "s1", title: "Guide", status: "revision_requested", source }])} onResubmit={() => undefined} resubmitted={[{ priorId: "s1", submissionId: "s9" }]} />);
+    expect(superseded).toContain("data-my-submission-resubmitted");
+    expect(superseded).not.toContain("data-my-submission-resubmit=");
+    // A storage failure while opening the editor is reported instead of silently ignored.
+    expect(renderToStaticMarkup(<MySubmissionsPage state={page([{ id: "s1", title: "Guide", status: "revision_requested", source }])} resubmitError="This browser cannot record the resubmission identity." />)).toContain("data-my-submissions-resubmit-error");
+  });
+
+  it("tells the visitor where the draft lives and shows a returned submission in context", () => {
+    const draft = { mode: "markdown" as const, title: "Guide", content: "# Body" };
+    const saved = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }} draftSave={{ kind: "saved", at: "2026-10-16T09:00:00.000Z" }} />);
+    expect(saved).toContain('data-submission-draft-status="saved"');
+    expect(saved).toContain("Draft saved to the server");
+    const unsaved = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }} draftSave={{ kind: "unconfirmed", reason: "no_target" }} />);
+    expect(unsaved).toContain('data-submission-draft-status="unconfirmed"');
+    expect(unsaved).toContain("Not saved to the server yet: choose a destination.");
+    expect(unsaved).not.toContain("Draft saved to the server");
+
+    const resubmitting = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }}
+      resubmit={{ priorId: "prior-1", title: "Returned guide", reviewNote: "Add sources.", state: "editing", statusRead: "none" }}
+      comments={{ state: { kind: "ready", comments: [{ id: "c1", authorRole: "admin", body: "Add sources.", createdAt: "2026-10-16T09:00:00.000Z" }] }, onRetry: () => undefined }} />);
+    expect(resubmitting).toContain("Resubmit for review");
+    expect(resubmitting).toContain("Returned for changes");
+    expect(resubmitting).toContain('data-submission-resubmit="editing"');
+    expect(resubmitting).toContain("Add sources.");
+    expect(resubmitting).toContain('data-submission-comments="ready"');
+    expect((resubmitting.match(/<h1/g) ?? []).length).toBe(1);
+
+    const submitted = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }}
+      resubmit={{ priorId: "prior-1", title: "Revised guide", state: "submitted", submissionId: "submission-new", status: "review_pending", statusRead: "found" }} />);
+    expect(submitted).toContain('data-submission-resubmit-status="found"');
+    expect(submitted).toContain("review_pending");
+    expect(submitted).not.toContain("Resubmit for review");
   });
 
   it("renders an owner-safe review reason and note without internal metadata", () => {

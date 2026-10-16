@@ -14,7 +14,7 @@ const { Window } = await import("happy-dom");
 
 const locale = createLocaleRuntime({ storage: {getItem: () => "en",setItem: () => {}} });
 const collection = {id:"collection-1",name:"Collection",parentId:null,description:"",status:"active" as const,position:0,updatedAt:"2026-09-28T00:00:00.000Z"};
-const space = {id:"space-1",name:"Space",slug:"space",description:"",status:"active" as const,position:0,updatedAt:"2026-09-28T00:00:00.000Z",collections:[collection]};
+const space = {id:"space-1",name:"Space",slug:"space",description:"",status:"active" as const,position:0,updatedAt:"2026-09-28T00:00:00.000Z",impact:{collections:2,knowledgeItems:3,revisions:4,links:5},collections:[collection]};
 const spaces = [space];
 describe("space and collection confirmation", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root; let onManage: ReturnType<typeof vi.fn>; let onCreate: ReturnType<typeof vi.fn>;
@@ -78,6 +78,36 @@ describe("space and collection confirmation", () => {
   it("drops dirty create-space confirmation when busy without losing the draft",async()=>{await mount();await click("Create space");await input("admin-space-name","Keep");await click("Cancel");const old=button("Discard changes");await mount({pending:true});await act(async()=>old.click());await mount();expect(dialog()).toBeNull();expect((container.querySelector("#admin-space-name") as HTMLInputElement).value).toBe("Keep");expect(onCreate).not.toHaveBeenCalled();});
   it("invalidates save confirmation if the draft changes",async()=>{await mount();await click("Edit space: Space");await submit();const old=button("Confirm changes");await input("admin-record-name","Later input");expect(dialog()).toBeNull();await act(async()=>old.click());expect(onManage).not.toHaveBeenCalled();});
   it("does not replay detached confirmation after denial",async()=>{await mount();await click("Edit space: Space");await submit();const old=button("Confirm changes");await mount({error:"Denied"});await act(async()=>old.click());expect(onManage).not.toHaveBeenCalled();});
+  it("shows the server-provided archive impact before confirming an active space archive",async()=>{
+    await mount();await click("Edit space: Space");
+    await act(async()=>{const el=container.querySelector("#admin-record-status") as HTMLSelectElement;el.value="disabled";el.dispatchEvent(new browser.Event("change",{bubbles:true}));});
+    await submit();
+    expect(onManage).not.toHaveBeenCalled();
+    expect(dialog()?.textContent).toContain("Archiving this space removes the listed content from search and reading:");
+    expect(dialog()?.textContent).toContain("2 collections");
+    expect(dialog()?.textContent).toContain("3 knowledge items");
+    expect(dialog()?.textContent).toContain("4 revisions");
+    expect(dialog()?.textContent).toContain("5 links");
+    await click("Confirm changes");
+    expect(onManage).toHaveBeenCalledTimes(1);
+    expect(onManage.mock.calls[0][0]).toMatchObject({kind:"space",spaceId:"space-1",input:{status:"disabled"}});
+  });
+  it("does not present an impact line when the status is unchanged or not an archive",async()=>{
+    await mount();await click("Edit space: Space");await input("admin-record-name","Renamed");await submit();
+    expect(dialog()?.textContent).not.toContain("Archiving this space removes the listed content from search and reading:");
+  });
+  it("still archives when the response predates the impact contract, without inventing numbers",async()=>{
+    // A row from before the archive-impact contract carries no impact: the page
+    // must keep working and must not fabricate a count for the confirmation.
+    await mount({spaces:[{...space,impact:undefined}]});await click("Edit space: Space");
+    await act(async()=>{const el=container.querySelector("#admin-record-status") as HTMLSelectElement;el.value="disabled";el.dispatchEvent(new browser.Event("change",{bubbles:true}));});
+    await submit();
+    expect(dialog()?.textContent).not.toContain("Archiving this space removes the listed content from search and reading:");
+    expect(dialog()?.textContent).toContain("Active → Disabled");
+    await click("Confirm changes");
+    expect(onManage).toHaveBeenCalledTimes(1);
+    expect(onManage.mock.calls[0][0]).toMatchObject({kind:"space",spaceId:"space-1",input:{status:"disabled"}});
+  });
   it("shows all changed space settings before sending the captured command",async()=>{
     await mount();await click("Edit space: Space");await input("admin-record-slug","new-slug");await input("admin-record-description","New description");await input("admin-record-position","8");
     await act(async()=>{const el=container.querySelector("#admin-record-status") as HTMLSelectElement;el.value="disabled";el.dispatchEvent(new browser.Event("change",{bubbles:true}));});

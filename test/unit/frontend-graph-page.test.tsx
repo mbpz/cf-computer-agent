@@ -45,6 +45,7 @@ const snapshot: GraphSnapshot = {
   rootId: null,
   depth: 2,
   truncated: false,
+  nextCursor: null,
 };
 
 function renderState(locale: ReturnType<typeof createLocaleRuntime>, state: GraphPageState) {
@@ -699,9 +700,73 @@ describe("graph empty-result recovery", () => {
     expect(load).toHaveBeenCalledTimes(3);
   });
 
+  it("drills into a selected neighbourhood and continues the truncated window with the server cursor", async () => {
+    const firstWindow: GraphSnapshot = { ...snapshot, truncated: true, nextCursor: "graph-window-2" };
+    const secondWindow: GraphSnapshot = {
+      nodes: [snapshot.nodes[1]!, { id: "goal:g1", kind: "goal", label: "Ship goal", status: null, href: null, metadata: {} }],
+      edges: [],
+      rootId: "task:t1",
+      depth: 2,
+      truncated: false,
+      nextCursor: null,
+    };
+    const queries: GraphQueryInput[] = [];
+    const load = vi.fn(async (input: GraphQueryInput) => { queries.push(input); return input.cursor ? secondWindow : firstWindow; });
+    await act(async () => root.render(<GraphRoute memberId="member-a" locale={locale} load={load} />));
+    await flush();
+    // Truncation is visible and offers the continuation, not a silent cut.
+    expect(host.querySelector("[data-graph-truncated]")).not.toBeNull();
+    expect(host.querySelector("[data-graph-more]")).not.toBeNull();
+    expect(host.querySelector("[data-graph-more-end]")).toBeNull();
+
+    await clickNode("task:t1");
+    await clickButton(frontendText(locale, "GRAPH_DRILL_DOWN_ENTER"));
+    await flush();
+    expect(queries.at(-1)).toMatchObject({ rootId: "task:t1" });
+    expect(queries.at(-1)?.cursor).toBeUndefined();
+    expect(host.querySelector("[data-graph-drill-down-exit]")).not.toBeNull();
+    expect(host.textContent).toContain(frontendText(locale, "GRAPH_DRILL_DOWN_ACTIVE"));
+
+    await act(async () => (host.querySelector("[data-graph-more]") as HTMLButtonElement).click());
+    await flush();
+    expect(queries.at(-1)).toMatchObject({ rootId: "task:t1", cursor: "graph-window-2" });
+    // The appended window keeps the nodes already read and reports the end honestly.
+    expect(host.querySelector('[data-graph-node-id="project:p1"]')).not.toBeNull();
+    expect(host.querySelector('[data-graph-node-id="goal:g1"]')).not.toBeNull();
+    // The completed window hides nothing, so the truncation banner and its controls are gone.
+    expect(host.querySelector("[data-graph-truncated]")).toBeNull();
+    expect(host.querySelector("[data-graph-more]")).toBeNull();
+    expect(host.querySelector("[data-graph-more-error]")).toBeNull();
+
+    await clickButton(frontendText(locale, "GRAPH_DRILL_DOWN_EXIT"));
+    await flush();
+    expect(queries.at(-1)?.rootId).toBeUndefined();
+    expect(host.querySelector("[data-graph-drill-down-exit]")).toBeNull();
+  });
+
+  it("keeps the loaded window and offers a retry when a continuation fails", async () => {
+    const firstWindow: GraphSnapshot = { ...snapshot, truncated: true, nextCursor: "graph-window-2" };
+    const load = vi.fn(async (input: GraphQueryInput) => {
+      if (!input.cursor) return firstWindow;
+      throw new TypeError("network down");
+    });
+    await act(async () => root.render(<GraphRoute locale={locale} load={load} />));
+    await flush();
+    await act(async () => (host.querySelector("[data-graph-more]") as HTMLButtonElement).click());
+    await flush();
+    expect(host.querySelector("[data-graph-more-error]")).not.toBeNull();
+    expect(host.querySelector('[data-graph-node-id="project:p1"]')).not.toBeNull();
+    expect(load).toHaveBeenCalledTimes(2);
+    await clickButton(frontendText(locale, "COMMON_RETRY"));
+    await flush();
+    expect(load).toHaveBeenCalledTimes(3);
+    expect(load.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: "graph-window-2" });
+    expect(host.querySelector("[data-graph-more-error]")).not.toBeNull();
+  });
+
   it("keeps restored empty filters editable after remount without resetting them silently", async () => {
     const { persistGraphView } = await import("../../frontend/lib/graph-view");
-    persistGraphView("member-a", { query: "Launch", lens: "knowledge", temporalRange: "all", changeKind: "all" });
+    persistGraphView("member-a", { query: "Launch", lens: "knowledge", temporalRange: "all", changeKind: "all", rootId: null });
     const load = vi.fn(async (input: GraphQueryInput) => input.scope === "knowledge" ? empty : snapshot);
     await act(async () => root.render(<GraphRoute memberId="member-a" locale={locale} load={load} />));
     await flush();
@@ -750,7 +815,7 @@ describe("graph empty-result recovery", () => {
 
   it.each([401, 403])("does not expose restored filters if the empty-result re-read is denied with %s", async (status) => {
     const { persistGraphView } = await import("../../frontend/lib/graph-view");
-    persistGraphView("member-a", { query: "private filter", lens: "workspace", temporalRange: "all", changeKind: "all" });
+    persistGraphView("member-a", { query: "private filter", lens: "workspace", temporalRange: "all", changeKind: "all", rootId: null });
     const load = vi.fn<(_: GraphQueryInput) => Promise<GraphSnapshot>>()
       .mockResolvedValueOnce(empty)
       .mockRejectedValueOnce(new ApiRequestError("FORBIDDEN", "denied", status, false));

@@ -7,7 +7,8 @@ export interface SubmissionTarget {
   requestedCollectionId: string | null;
   requestedVisibility: "shared" | "admin_only";
 }
-const defaultTarget: SubmissionTarget = { requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared" };
+/** The composer's target until the member-side space picker exists (§2.10). */
+export const defaultSubmissionTarget: SubmissionTarget = { requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared" };
 export function validateSubmissionTarget(value: SubmissionTarget): SubmissionTarget {
   const id = (v: unknown) => typeof v === "string" && /^[A-Za-z0-9_-]{1,200}$/u.test(v);
   if (!value || !id(value.requestedSpaceId) || (value.requestedCollectionId !== null && !id(value.requestedCollectionId))
@@ -23,7 +24,7 @@ export interface SimilarSubmissionCandidate {
   similarity: number;
 }
 
-export async function createSubmission(draft: SubmissionDraft, key: string, requester: Fetcher = fetch, signal?: AbortSignal, target: SubmissionTarget = defaultTarget): Promise<{ id: string; similarCandidates: SimilarSubmissionCandidate[] }> {
+export async function createSubmission(draft: SubmissionDraft, key: string, requester: Fetcher = fetch, signal?: AbortSignal, target: SubmissionTarget = defaultSubmissionTarget): Promise<{ id: string; similarCandidates: SimilarSubmissionCandidate[] }> {
   const destination = validateSubmissionTarget(target);
   const validation = validateSubmissionDraft(draft);
   if (!validation.ok) throw new Error("SUBMISSION_DRAFT_INVALID");

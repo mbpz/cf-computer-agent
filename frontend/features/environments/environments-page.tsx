@@ -13,6 +13,8 @@ import { frontendText, type LocaleRuntime } from '../../lib/i18n';
 import { useCreateDraft } from '../../lib/use-create-draft';
 import { routeAccessAllowed } from '../../lib/route-access';
 import { useAccountNetworkOwner } from './account-network-boundary';
+import { EnvironmentVmProvider, useEnvironmentVm } from './environment-vm-provider';
+import { EnvironmentFiles } from './environment-files-surface';
 import { EnvironmentRenameDialog } from './environment-rename-dialog';
 import { getEnvironmentManager, type EnvironmentManager } from './environment-manager';
 import { blankEnvironmentCreate, discardBlockedEnvironmentDraft, environmentCreateIsBlank, loadEnvironmentDraft, persistEnvironmentDraft, type EnvironmentCreateFields, type EnvironmentRenameFields } from './environment-draft';
@@ -27,7 +29,16 @@ function AccountEnvironments({locale}:{locale:LocaleRuntime}) {
   const owner=useAccountNetworkOwner();
   const [manager,setManager]=useState<EnvironmentManager | null>(null);
   useEffect(()=>{const next=getEnvironmentManager(owner);setManager(next);if(!owner.signal.aborted)void next.load();},[owner]);
-  return manager ? <EnvironmentView manager={manager} locale={locale} /> : <section className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0"><PageHeader title={frontendText(locale,'NAV_ENVIRONMENTS')} description={frontendText(locale,'ENV_METADATA_ONLY')} /><p aria-busy="true">{frontendText(locale,'ENV_LOADING')}</p></section>;
+  return manager ? <EnvironmentVmProvider><EnvironmentView manager={manager} locale={locale} /></EnvironmentVmProvider> : <section className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0"><PageHeader title={frontendText(locale,'NAV_ENVIRONMENTS')} description={frontendText(locale,'ENV_METADATA_ONLY')} /><p aria-busy="true">{frontendText(locale,'ENV_LOADING')}</p></section>;
+}
+/** The runtime object exists independently of any environment being started, so
+ * its state is reported once for the page instead of per row. */
+function EnvironmentRuntimeNotice({locale}:{locale:LocaleRuntime}) {
+  const vm=useEnvironmentVm();
+  const t=(key:string)=>frontendText(locale,key);
+  if(vm.status==='preparing')return <div data-environments-runtime="preparing" aria-busy="true" className="rounded-md border p-4"><p>{t('ENV_RUNTIME_PREPARING')}</p></div>;
+  if(vm.status==='unavailable')return <div data-environments-runtime="unavailable" data-environments-runtime-unavailable role="alert" className="rounded-md border p-4"><p>{t('ENV_RUNTIME_UNAVAILABLE')}</p></div>;
+  return <div data-environments-runtime="ready" className="rounded-md border p-4"><p>{t('ENV_RUNTIME_READY')}</p></div>;
 }
 function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:LocaleRuntime}) {
   const scope=useAccountNetworkOwner().scope;
@@ -49,6 +60,8 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   const draft=useCreateDraft(initialCreate,blank,()=>operationBlocked() || !!removeRef.current,locale,()=>!!editRef.current || !!removeRef.current);
   const {name:title,type,taskId}=draft.fields;
   const [edit,setEdit]=useState<EnvironmentMetadata|null>(null),[remove,setRemove]=useState<EnvironmentMetadata|null>(null);
+  // The selected environment only drives the file surface; it never starts a VM.
+  const [selected,setSelected]=useState<EnvironmentMetadata|null>(null);
   const [localError,setLocalError]=useState(false);
   // A blocked composer record cannot be discarded from a hidden surface, so its
   // dialog starts open exactly like the pending-write recovery entry point.
@@ -65,10 +78,18 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   },[state.filter]);
   useEffect(()=>{
     // A failed or blocked read rewrites `items` to [] from the same snapshot, so it
-    // is only ever appended once it has settled cleanly for its own page.
-    if(state.loading || state.closed || state.error || state.items.length===0)return;
+    // is only ever appended once it has settled cleanly for its own page. A settled
+    // empty window is instead proof of absence: the rows the cache still holds for
+    // that page and every page after it are gone from the server, so a confirmed
+    // delete evicts them rather than leaving the deleted row on screen while the
+    // pagination already reports nothing left to read.
+    if(state.loading || state.closed || state.error)return;
     const page=state.pagination.page;
     setPages(current=>{
+      if(state.items.length===0){
+        const kept=current.filter(entry=>entry.page<page);
+        return kept.length===current.length?current:kept;
+      }
       if(current.some(entry=>entry.page===page && entry.items===state.items))return current;
       return [...current.filter(entry=>entry.page<page),{page,items:state.items}].sort((a,b)=>a.page-b.page);
     });
@@ -112,6 +133,10 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   // window while the mobile feed keeps appending rows up to the same 500-page cap.
   const goToPage=(page:number)=>{if(state.writing || !Number.isSafeInteger(page) || page<1 || page>500 || page===state.pagination.page)return;setPages([]);void run(()=>manager.load(page,state.filter,state.pagination.pageSize));};
   const changePageSize=(pageSize:SupportedPageSize)=>{if(state.writing || pageSize===state.pagination.pageSize)return;setPages([]);void run(()=>manager.load(1,state.filter,pageSize));};
+  const rows=pages.flatMap(entry=>entry.items);
+  // A row that left the loaded pages keeps its last verified identity rather than
+  // silently retargeting another environment.
+  const selectedRow=selected ? rows.find(row=>row.id===selected.id) ?? selected : null;
   if(state.closed)return <section data-environments-page className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0"><PageHeader title={t('NAV_ENVIRONMENTS')} description={t('ENV_METADATA_ONLY')} /><p data-environments-closed role="alert">{t('ENV_ACCOUNT_CLOSED')}</p></section>;
   return <section data-environments-page className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0">
     {draft.confirmation}
@@ -148,7 +173,7 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
     <div aria-busy={state.loading} className="flex flex-col lg:min-h-0 lg:flex-1">
       <DataTable
         locale={locale}
-        rows={pages.flatMap(entry=>entry.items)}
+        rows={rows}
         rowId={item=>item.id}
         ariaLabel={t('NAV_ENVIRONMENTS')}
         emptyState={<p>{t('ENV_EMPTY')}</p>}
@@ -163,11 +188,13 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
         columns={[
           { key:'name', header:t('ENV_NAME'), cellClassName:'whitespace-normal', cell:item=><div data-environment-id={item.id} className="min-w-0"><h2 className="break-words font-medium">{item.name}</h2>{item.taskId && <p className="break-all text-xs">{t('ENV_TASK')}: {item.taskId}</p>}</div> },
           { key:'status', header:t('ENV_TYPE'), width:'40%', cellClassName:'whitespace-normal', cell:item=><span className="text-sm text-muted-foreground">{t(item.type==='personal'?'ENV_PERSONAL':'ENV_TEMPORARY')} · {t('ENV_NOT_RUNNING')}</span> },
-          { key:'actions', header:t('ENV_COLUMN_ACTIONS'), align:'right', width:'200px', cell:item=><div className="flex justify-end gap-2"><Button data-environment-rename variant="outline" disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){editRef.current=item;setEdit(item);}}}>{t('ENV_RENAME')}</Button><Button data-environment-delete variant="destructive" disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){removeRef.current=item;setRemove(item);}}}>{t('ENV_DELETE')}</Button></div> },
+          { key:'actions', header:t('ENV_COLUMN_ACTIONS'), align:'right', width:'300px', cell:item=><div className="flex justify-end gap-2"><Button data-environment-files-open variant="outline" onClick={()=>{if(alive.current)setSelected(item);}}>{t('ENV_FILES')}</Button><Button data-environment-rename variant="outline" disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){editRef.current=item;setEdit(item);}}}>{t('ENV_RENAME')}</Button><Button data-environment-delete variant="destructive" disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){removeRef.current=item;setRemove(item);}}}>{t('ENV_DELETE')}</Button></div> },
         ]}
       />
     </div>
+    <EnvironmentRuntimeNotice locale={locale} />
+    {selectedRow && <EnvironmentFiles environment={selectedRow} locale={locale} onClose={()=>setSelected(null)} />}
     {edit && <EnvironmentRenameDialog key={`${edit.id}:${edit.version}`} item={edit} manager={manager} locale={locale} initialName={renameSeed?.environmentId===edit.id?renameSeed.name:undefined} onName={reportRename} onClose={()=>{if(editRef.current===edit){editRef.current=null;setEdit(null);setRenameSeed(null);if(!recordBlocked)persistEnvironmentDraft(scope.origin,scope.memberId,{create:environmentCreateIsBlank(asCreate())?blank:asCreate(),rename:null});}}} />}
-    <Dialog open={!!remove} onOpenChange={open=>{if(!open)closeRemove();}}><DialogContent aria-labelledby="environment-delete-title"><DialogTitle id="environment-delete-title">{t('ENV_DELETE')}</DialogTitle><p className="mt-3 break-words">{remove?.name}</p><p className="my-3 text-sm">{t('ENV_DELETE_CONFIRM')}</p><div className="flex gap-2"><Button data-environment-confirm-delete variant="destructive" disabled={blocked} onClick={()=>{const item=removeRef.current;if(!alive.current || !item || operationBlocked() || draft.isConfirming())return;closeRemove();void run(()=>manager.remove(item));}}>{t('ENV_DELETE')}</Button><Button variant="outline" onClick={closeRemove}>{t('ENV_CANCEL')}</Button></div></DialogContent></Dialog>
+    <Dialog open={!!remove} onOpenChange={open=>{if(!open)closeRemove();}}><DialogContent aria-labelledby="environment-delete-title"><DialogTitle id="environment-delete-title">{t('ENV_DELETE')}</DialogTitle><p className="mt-3 break-words">{remove?.name}</p><p className="my-3 text-sm">{t('ENV_DELETE_CONFIRM')}</p><div className="flex gap-2"><Button data-environment-confirm-delete variant="destructive" disabled={blocked} onClick={()=>{const item=removeRef.current;if(!alive.current || !item || operationBlocked() || draft.isConfirming())return;closeRemove();void run(()=>manager.remove(item));if(selected?.id===item.id)setSelected(null);}}>{t('ENV_DELETE')}</Button><Button variant="outline" onClick={closeRemove}>{t('ENV_CANCEL')}</Button></div></DialogContent></Dialog>
   </section>;
 }

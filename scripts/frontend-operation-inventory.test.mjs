@@ -125,7 +125,7 @@ test("real repository includes exact-result controls and both secondary confirma
   assert.ok(confirmation.some(op => op.handlers.onClick === "onConfirm"));
   assert.ok(result.operations.some(op => op.path === "frontend/pages/messages/thread-page.tsx" && op.handlers.onClick === "() => void onLookup()"));
   assert.ok(result.files.includes("frontend/features/environments/environments-page.tsx"));
-  assert.equal(result.routes.length,34);
+  assert.equal(result.routes.length,39);
   assert.ok(result.routes.every(route=>route.candidateOperationIds.length > 0));
   assert.ok(result.routes.some(route=>route.pathname === "/environments"));
   assert.ok(result.operations.some(op => op.path === "frontend/components/shell/command-palette.tsx" && op.kind === "listener"));
@@ -149,7 +149,12 @@ test("manual unassigned review covers every current candidate exactly once with 
   const review = readFileSync(resolve(root, "docs/product/frontend-operation-unassigned-review.md"), "utf8");
   const rows = [...review.matchAll(/^\| `(frontend\/[^`]+:\d+:\d+)` \| ([a-z-]+) \| (.+) \| (.+) \|$/gm)];
   assert.deepEqual(rows.map(row => row[1]).sort(), [...inventory.unassignedOperationIds].sort(), "missing, duplicate, or stale reviewed candidate");
-  const categories = new Set(["app-boundary", "public-dynamic", "background", "unmounted-ui", "vm-not-mounted"]);
+  // `vm-runtime-unshipped` is a deliberate taxonomy extension: the `/environments`
+  // file surface is now mounted by the formal page, but this version deliberately
+  // ships no VM engine or guest images, so every action in it is permanently
+  // unavailable (disabled, unrendered, or gated on a start that cannot succeed).
+  // The per-row checks below are unchanged.
+  const categories = new Set(["app-boundary", "public-dynamic", "background", "unmounted-ui", "vm-not-mounted", "vm-runtime-unshipped"]);
   for (const [,id,category,trigger,effect] of rows) {
     assert.ok(categories.has(category), `unsupported disposition: ${id}`);
     assert.ok(trigger.trim().length > 5 && effect.trim().length > 5, `missing trigger/effect: ${id}`);

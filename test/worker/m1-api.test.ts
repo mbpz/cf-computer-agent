@@ -689,7 +689,7 @@ it("returns authorized, bounded related knowledge with explainable fields", asyn
       ["/api/admin/knowledge/knowledge-1/purge", "GET", "POST"],
       ["/api/admin/knowledge/trash", "POST", "GET"],
       ["/api/admin/publications/recover", "GET", "POST"],
-      ["/api/admin/tags", "GET", "POST"],
+      ["/api/admin/tags", "PUT", "GET, POST"],
       ["/api/spaces/default/tags", "POST", "GET"],
     ] as const) {
       const response = await memberApi("admin", path, { method });
@@ -742,7 +742,11 @@ it("returns authorized, bounded related knowledge with explainable fields", asyn
     }), 400, "ROLLBACK_TARGET_INVALID");
     await expectApiError(memberApi("admin", "/api/admin/knowledge/absent/trash", { method: "POST" }), 400, "KNOWLEDGE_LIFECYCLE_TARGET_INVALID");
     await expectApiError(memberApi("admin", "/api/admin/knowledge/absent/restore", { method: "POST" }), 400, "KNOWLEDGE_LIFECYCLE_TARGET_INVALID");
-    await expectApiError(memberApi("admin", "/api/admin/knowledge/absent/purge", { method: "POST" }), 400, "KNOWLEDGE_PURGE_TARGET_INVALID");
+    await expectApiError(memberApi("admin", "/api/admin/knowledge/absent/purge", { method: "POST" }), 400, "KNOWLEDGE_PURGE_CONFIRMATION_REQUIRED");
+    await expectApiError(memberApi("admin", "/api/admin/knowledge/absent/purge", {
+      method: "POST",
+      body: JSON.stringify({ confirm: "absent" }),
+    }), 400, "KNOWLEDGE_PURGE_TARGET_INVALID");
     await expectApiError(memberApi("admin", "/api/admin/knowledge/trash?cursor=bad"), 400, "PAGE_CURSOR_INVALID");
 
     await expectApiError(memberApi("contributor", "/api/knowledge?unknown=x"), 400, "LIBRARY_REQUEST_INVALID");

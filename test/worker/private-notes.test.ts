@@ -102,6 +102,20 @@ describe("private knowledge notes", () => {
     expect(revoked.status).toBe(204);
     expect(await (await api("/api/knowledge/knowledge-1/note", sessionB)).json()).toEqual({ note: null });
 
+    // A retried revoke converges: same 204, identical stable state, one row.
+    const replay = await api("/api/knowledge/knowledge-1/note/shares/member-b", sessionA, { method: "DELETE" });
+    expect(replay.status).toBe(204);
+    const stable = await (await api("/api/knowledge/knowledge-1/note/shares", sessionA)).json() as { shares: Array<{ recipientMemberId: string; revokedAt: string | null }> };
+    expect(stable.shares).toEqual([expect.objectContaining({ recipientMemberId: "member-b", revokedAt: expect.any(String) })]);
+    expect(await (await api("/api/knowledge/knowledge-1/note", sessionB)).json()).toEqual({ note: null });
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS count, count(revoked_at) AS revoked FROM private_note_shares WHERE note_id = (SELECT id FROM private_notes WHERE owner_member_id = 'member-a' AND knowledge_item_id = 'knowledge-1')",
+    ).first()).toMatchObject({ count: 1, revoked: 1 });
+    // A recipient who was never shared with this note stays rejected.
+    const unknown = await api("/api/knowledge/knowledge-1/note/shares/member-absent", sessionA, { method: "DELETE" });
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({ error: { code: "PRIVATE_NOTE_SHARE_NOT_FOUND" } });
+
     await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-b'").run();
     const disabledTarget = await api("/api/knowledge/knowledge-1/note/shares", sessionA, {
       method: "POST",
@@ -109,6 +123,32 @@ describe("private knowledge notes", () => {
     });
     expect(disabledTarget.status).toBe(404);
     expect(await disabledTarget.json()).toMatchObject({ error: { code: "PRIVATE_NOTE_SHARE_TARGET_INVALID" } });
+  });
+
+  it("conflicts on a stale version and reuses a replayed intent without overwriting", async () => {
+    const save = (body: unknown, token: string) => api("/api/knowledge/knowledge-1/note", token, { method: "PUT", body: JSON.stringify(body) });
+    const citation = [{ revisionId: "revision-1", chunkId: "chunk-1", startLine: 2, endLine: 4 }];
+    const created = await save({ id: "note-op-1", title: "First", body: "One", citations: citation }, sessionA);
+    expect(created.status).toBe(200);
+    const createdBody = await created.json() as { note: { id: string; updatedAt: string } };
+    expect(createdBody.note.id).toBe("note-op-1");
+    const version = createdBody.note.updatedAt;
+    expect(await (await save({ id: "note-op-1", expectedUpdatedAt: version, title: "Second", body: "Two", citations: citation }, sessionA)).json())
+      .toMatchObject({ note: { title: "Second", body: "Two" } });
+    const committed = await (await api("/api/knowledge/knowledge-1/note", sessionA)).json() as { note: { updatedAt: string } };
+    expect(committed.note.updatedAt).not.toBe(version);
+    // The same intent, replayed after a lost response, returns the committed
+    // version instead of appending another write.
+    const replay = await save({ id: "note-op-1", expectedUpdatedAt: version, title: "Second", body: "Two", citations: citation }, sessionA);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ note: { id: "note-op-1", title: "Second", body: "Two", updatedAt: committed.note.updatedAt } });
+    // A second tab still holding the first version conflicts instead of overwriting.
+    const stale = await save({ id: "note-op-1", expectedUpdatedAt: version, title: "Other", body: "Tab", citations: citation }, sessionA);
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: "PRIVATE_NOTE_VERSION_CONFLICT" } });
+    // A refresh shows only the last successful version, and only the owner.
+    expect(await (await api("/api/knowledge/knowledge-1/note", sessionA)).json()).toMatchObject({ note: { title: "Second", body: "Two" } });
+    expect(await (await api("/api/knowledge/knowledge-1/note", sessionB)).json()).toEqual({ note: null });
   });
 
   it("keeps the repository owner boundary when read directly", async () => {

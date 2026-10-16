@@ -2,7 +2,7 @@ import { decodePageCursor, encodePageCursor, pageOffset, type NumberedPage, type
 import { queryNumberedPage } from "../pagination-d1";
 import { assertAuditEventInput, type ActivityPage, type ActivityItem, type AuditAction, type AuditEvent, type AuditPage, type CreateAuditEvent } from "./types";
 
-type AuditRow = { id: string; actor_kind: AuditEvent["actorKind"]; actor_id: string | null; action: AuditEvent["action"]; resource_type: AuditEvent["resourceType"]; resource_id: string | null; metadata: string; created_at: string };
+export type AuditRow = { id: string; actor_kind: AuditEvent["actorKind"]; actor_id: string | null; action: AuditEvent["action"]; resource_type: AuditEvent["resourceType"]; resource_id: string | null; metadata: string; created_at: string };
 type ActivityRow = Pick<AuditRow, "id" | "action" | "resource_type" | "resource_id" | "created_at">;
 const timestampCursorBounds = { minSort: 0, maxSort: 8_640_000_000_000_000 } as const;
 
@@ -105,6 +105,12 @@ export class AuditRepository {
     );
   }
 
+  /** Bounded most-recent-first statement so a multi-query snapshot reads real audit rows. */
+  prepareRecentActivity(limit: number): D1PreparedStatement {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new TypeError("Audit activity limit is invalid");
+    return this.db.prepare(`${auditSelect} ORDER BY created_at DESC, id DESC LIMIT ?`).bind(limit);
+  }
+
   private async listAuditCursor(request: PageRequest, action?: AuditAction): Promise<AuditPage> {
     const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, timestampCursorBounds);
     const conditions = [...(action === undefined ? [] : ["action = ?"]), ...(cursor === undefined ? [] : ["(created_at < ? OR (created_at = ? AND id < ?))"])];
@@ -165,7 +171,7 @@ export class AuditRepository {
 
 const auditSelect = "SELECT id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at FROM audit_events";
 function timestamp(sort: number): string { return new Date(sort).toISOString(); }
-function mapAuditRow(row: AuditRow): AuditEvent {
+export function mapAuditRow(row: AuditRow): AuditEvent {
   const parsed = JSON.parse(row.metadata) as CreateAuditEvent["metadata"];
   return assertAuditEventInput({ id: row.id, actorKind: row.actor_kind, actorId: row.actor_id, action: row.action, resourceType: row.resource_type, resourceId: row.resource_id, metadata: parsed, createdAt: row.created_at });
 }

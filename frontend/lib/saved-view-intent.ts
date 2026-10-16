@@ -1,7 +1,7 @@
-import { canonicalSavedViewFilters, type SavedViewFilters } from "./saved-views-data";
+import { canonicalSavedViewFilters, isCanonicalTimestamp, type SavedViewFilters } from "./saved-views-data";
 
 export type SavedViewWriteIntent =
-  | { kind: "create"; name: string; filters: SavedViewFilters }
+  | { kind: "create"; clientKey: string; name: string; filters: SavedViewFilters }
   | { kind: "delete"; id: string };
 export type StoredSavedViewWrite = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intent: SavedViewWriteIntent };
 const storageKey = (memberId: string) => `memory-garden:saved-view:v1:${encodeURIComponent(memberId)}`;
@@ -11,15 +11,17 @@ const isName = (value: unknown): value is string => typeof value === "string" &&
 function validFilters(value: unknown): value is SavedViewFilters {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const filters = value as Record<string, unknown>;
-  if (Object.keys(filters).length !== 6 || filters.v !== 1 || typeof filters.q !== "string" || filters.q !== filters.q.trim() || /[\u0000-\u001f\u007f-\u009f]/u.test(filters.q)) return false;
+  if (Object.keys(filters).length !== 10 || filters.v !== 1 || typeof filters.q !== "string" || filters.q !== filters.q.trim() || /[\u0000-\u001f\u007f-\u009f]/u.test(filters.q)) return false;
   if (filters.tagMode !== "and" && filters.tagMode !== "or") return false;
   if (!Array.isArray(filters.tagIds) || filters.tagIds.length > 20 || filters.tagIds.some(id => !isId(id))) return false;
-  return [filters.spaceId, filters.collectionId].every(id => id === null || isId(id));
+  if (![filters.spaceId, filters.collectionId, filters.authorId].every(id => id === null || isId(id))) return false;
+  if (filters.kind !== null && filters.kind !== "text" && filters.kind !== "markdown" && filters.kind !== "code") return false;
+  return [filters.publishedFrom, filters.publishedTo].every(at => at === null || isCanonicalTimestamp(at));
 }
 export function validSavedViewWrite(value: unknown): value is SavedViewWriteIntent {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  if (record.kind === "create") return Object.keys(record).length === 3 && isName(record.name) && validFilters(record.filters);
+  if (record.kind === "create") return Object.keys(record).length === 4 && isId(record.clientKey) && isName(record.name) && validFilters(record.filters);
   if (record.kind === "delete") return Object.keys(record).length === 2 && isId(record.id);
   return false;
 }
@@ -37,7 +39,7 @@ function freezeIntent(intent: SavedViewWriteIntent): SavedViewWriteIntent {
     Object.freeze(next);
     return next;
   }
-  const next: SavedViewWriteIntent = { kind: "create", name: intent.name, filters: { ...intent.filters, tagIds: [...intent.filters.tagIds] } };
+  const next: SavedViewWriteIntent = { kind: "create", clientKey: intent.clientKey, name: intent.name, filters: { ...intent.filters, tagIds: [...intent.filters.tagIds] } };
   Object.freeze(next.filters.tagIds); Object.freeze(next.filters); Object.freeze(next);
   return next;
 }
@@ -57,7 +59,7 @@ export function saveSavedViewWrite(memberId: string, intent: SavedViewWriteInten
   try {
     const stored = intent.kind === "delete"
       ? { kind: "delete" as const, id: intent.id }
-      : { kind: "create" as const, name: intent.name.trim(), filters: canonicalSavedViewFilters(intent.filters) };
+      : { kind: "create" as const, clientKey: intent.clientKey, name: intent.name.trim(), filters: canonicalSavedViewFilters(intent.filters) };
     if (!validSavedViewWrite(stored) || loadSavedViewWrite(memberId).kind !== "empty") return false;
     storage().setItem(storageKey(memberId), JSON.stringify({ version: 1, memberId, intent: stored }));
     const saved = loadSavedViewWrite(memberId);
@@ -67,7 +69,7 @@ export function saveSavedViewWrite(memberId: string, intent: SavedViewWriteInten
 export function clearSavedViewWrite(memberId: string, intent: SavedViewWriteIntent): boolean {
   try {
     const previous = loadSavedViewWrite(memberId);
-    if (previous.kind === "blocked" || (previous.kind === "ready" && !same(previous.intent, freezeIntent(intent.kind === "delete" ? intent : { kind: "create", name: intent.name.trim(), filters: canonicalSavedViewFilters(intent.filters) })))) return false;
+    if (previous.kind === "blocked" || (previous.kind === "ready" && !same(previous.intent, freezeIntent(intent.kind === "delete" ? intent : { kind: "create", clientKey: intent.clientKey, name: intent.name.trim(), filters: canonicalSavedViewFilters(intent.filters) })))) return false;
     storage().removeItem(storageKey(memberId));
     return storage().getItem(storageKey(memberId)) === null;
   } catch { return false; }

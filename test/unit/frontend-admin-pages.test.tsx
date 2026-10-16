@@ -19,7 +19,7 @@ import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
 describe("React administrator pages", () => {
   it("renders dashboard metrics and a contributor 403 state", () => {
-    expect(renderToStaticMarkup(<AdminDashboardPage metrics={{ pending: { kind: "ready", total: 3 }, assets: { kind: "ready", total: 2 }, members: { kind: "ready", total: 5 } }} links={[]} onRetry={() => {}} onRefresh={() => {}} />)).toContain("Review queue");
+    expect(renderToStaticMarkup(<AdminDashboardPage metrics={{ pending: { kind: "ready", total: 3 }, assets: { kind: "ready", total: 2 }, members: { kind: "ready", total: 5 } }} links={[]} onRetry={() => {}} onRetryTrend={() => {}} onRetryActivity={() => {}} onRefresh={() => {}} trend={{ kind: "ready", items: [] }} activity={{ kind: "ready", items: [] }} />)).toContain("Review queue");
     const forbidden = renderToStaticMarkup(<AdminForbiddenPage />);
     expect(forbidden).toContain("403");
     expect(forbidden).not.toContain("undefined");
@@ -51,6 +51,17 @@ describe("React administrator pages", () => {
     expect(html).toContain("Retry");
     expect(html).toContain("Preview");
     expect(html).toContain("No title");
+  });
+
+  it("shows the server's parse attempts and latest error, and nothing when the server omits them", () => {
+    const pagination = { page: 1, pageSize: 20, total: 1, totalPages: 1 };
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const html = renderToStaticMarkup(<AssetQueuePage locale={locale} data={{ items: [{ id: "asset-1", name: "guide.pdf", status: "failed_retryable", attempts: 2, lastErrorCode: "ASSET_PARSE_FAILED" }], pagination }} />);
+    expect(html).toContain("Parse attempts: 2");
+    expect(html).toContain("Latest parse error: ASSET_PARSE_FAILED");
+    const bare = renderToStaticMarkup(<AssetQueuePage locale={locale} data={{ items: [{ id: "asset-2", name: "guide.pdf", status: "queued" }], pagination }} />);
+    expect(bare).not.toContain("Parse attempts");
+    expect(bare).not.toContain("Latest parse error");
   });
 
   it("renders explicit load failures instead of an empty success state", () => {
@@ -93,6 +104,50 @@ describe("React administrator pages", () => {
     expect(audit).not.toContain('aria-label="Page 2"');
   });
 
+  it("reaches every audit list state with the header and filter mounted", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const retry = vi.fn();
+    const common = { locale, onRetry: retry, onActionChange: () => {}, action: "" } as const;
+    const loading = renderToStaticMarkup(<AuditPage {...common} state={{ kind: "loading" }} />);
+    expect(loading).toContain("Audit log");
+    expect(loading).toContain("Audit action");
+    expect(loading).toContain('data-page-state="loading"');
+    const empty = renderToStaticMarkup(<AuditPage {...common} state={{ kind: "ready", page: { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } }} />);
+    expect(empty).toContain("Audit log");
+    expect(empty).toContain("No governance events yet.");
+    const ready = renderToStaticMarkup(<AuditPage {...common} state={{ kind: "ready", page: { items: [{ id: "e1", action: "member.login", actor: "a@example.com", createdAt: "2026-10-01T00:00:00.000Z" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } } }} />);
+    expect(ready).toContain("Audit log");
+    expect(ready).toContain("member.login");
+    expect(ready).not.toContain("No governance events yet.");
+    const error = renderToStaticMarkup(<AuditPage {...common} state={{ kind: "error", message: "Audit unavailable." }} />);
+    expect(error).toContain("Audit log");
+    expect(error).toContain("Audit action");
+    expect(error).toContain('data-page-state="error"');
+    expect(error).toContain("Try again");
+  });
+
+  it("links audit events to real destinations and leaves unmapped types as read-only text", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const created = "2026-10-01T00:00:00.000Z";
+    const items = [
+      { id: "e1", action: "submission.created", actor: "a@example.com", createdAt: created, resourceType: "submission", resourceId: "sub-1" },
+      { id: "e2", action: "knowledge.published", actor: "a@example.com", createdAt: created, resourceType: "knowledge", resourceId: "know-1" },
+      { id: "e3", action: "role.updated", actor: "a@example.com", createdAt: created, resourceType: "role", resourceId: "role-1" },
+      { id: "e4", action: "discussion.message_sent", actor: "a@example.com", createdAt: created, resourceType: "discussion_thread", resourceId: "thread-1" },
+      { id: "e5", action: "member.login", actor: "a@example.com", createdAt: created, resourceType: "member", resourceId: "member-9" },
+    ];
+    const html = renderToStaticMarkup(<AuditPage locale={locale} state={{ kind: "ready", page: { items, pagination: { page: 1, pageSize: 20, total: items.length, totalPages: 1 } } }} />);
+    expect(html).toContain('href="/admin/submissions/sub-1"');
+    expect(html).toContain('href="/knowledge/know-1"');
+    expect(html).toContain('href="/admin/roles/role-1"');
+    expect(html).toContain('href="/messages/thread-1"');
+    expect(html).toContain('<span data-audit-related="member"');
+    expect(html).toContain("member · member-9");
+    expect(html).not.toContain('href="/member/');
+    expect(html).not.toMatch(/<a[^>]*data-audit-related="member"/u);
+    expect(html).not.toMatch(/(?:button|a)[^>]*>\s*(?:Delete|Edit|Remove|Publish|Reject|Associate|Retry|Discard)/iu);
+  });
+
   it("labels each member status action with its target email", () => {
     const disabled = renderToStaticMarkup(<MembersPage members={[{ id: "m1", email: "disabled@example.com", role: "contributor", status: "disabled" }]} />);
     const active = renderToStaticMarkup(<MembersPage members={[{ id: "m2", email: "active@example.com", role: "contributor", status: "active" }]} />);
@@ -132,7 +187,7 @@ describe("React administrator pages", () => {
 
   it("localizes administrator copy through the shared locale runtime", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
-    const dashboard = renderToStaticMarkup(<AdminDashboardPage locale={locale} metrics={{ pending: { kind: "ready", total: 1 }, assets: { kind: "ready", total: 2 }, members: { kind: "ready", total: 3 } }} links={[]} onRetry={() => {}} onRefresh={() => {}} />);
+    const dashboard = renderToStaticMarkup(<AdminDashboardPage locale={locale} metrics={{ pending: { kind: "ready", total: 1 }, assets: { kind: "ready", total: 2 }, members: { kind: "ready", total: 3 } }} links={[]} onRetry={() => {}} onRetryTrend={() => {}} onRetryActivity={() => {}} onRefresh={() => {}} trend={{ kind: "ready", items: [] }} activity={{ kind: "ready", items: [] }} />);
     const queue = renderToStaticMarkup(<ReviewQueuePage locale={locale} state={{ kind: "ready", data: { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } }} />);
     expect(dashboard).toContain("管理");
     expect(dashboard).toContain("审核队列");
@@ -167,7 +222,7 @@ describe("React administrator pages", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "en" });
     const pagination = { page: 1, pageSize: 20, total: 0, totalPages: 0 };
     const pages: ReadonlyArray<readonly [string, string]> = [
-      ["Administration", renderToStaticMarkup(<AdminDashboardPage locale={locale} metrics={{ pending: { kind: "ready", total: 1 }, assets: { kind: "ready", total: 0 }, members: { kind: "ready", total: 0 } }} links={[]} onRetry={() => {}} onRefresh={() => {}} />)],
+      ["Administration", renderToStaticMarkup(<AdminDashboardPage locale={locale} metrics={{ pending: { kind: "ready", total: 1 }, assets: { kind: "ready", total: 0 }, members: { kind: "ready", total: 0 } }} links={[]} onRetry={() => {}} onRetryTrend={() => {}} onRetryActivity={() => {}} onRefresh={() => {}} trend={{ kind: "ready", items: [] }} activity={{ kind: "ready", items: [] }} />)],
       ["Site analytics", renderToStaticMarkup(<AdminAnalyticsPage locale={locale} state={{ kind: "ready", data: { range: { from: "2026-08-20", to: "2026-08-26", days: 7 }, totals: { pageViews: 0, uniqueVisitors: 0, loginUsers: 0 }, daily: [], breakdowns: { paths: [], regions: [], countries: [] }, recentVisitors: { items: [], pagination } } }} />)],
       ["Asset queue", renderToStaticMarkup(<AssetQueuePage locale={locale} data={{ items: [], pagination }} />)],
       ["Audit log", renderToStaticMarkup(<AuditPage locale={locale} state={{ kind: "ready", page: { items: [], pagination } }} />)],

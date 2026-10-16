@@ -7,17 +7,53 @@ import { PageHeader } from "../components/ui/page-header";
 import type { SearchResultItem } from "../lib/search-data";
 import { PageState } from "../components/ui/page-state";
 import { DataTable } from "../components/data-table";
+import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-filters";
+import { FilterSelect } from "../components/ui/filter-select";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { SavedViewItem } from "../lib/saved-views-data";
 import { cn } from "../lib/utils";
 import type { SupportedPageSize } from "../lib/numbered-page";
+
+/** The conditions the search location carries; the page renders them back and can change them. */
+export interface SearchFilters {
+  spaceId?: string;
+  collectionId?: string;
+  tagIds: string[];
+  tagMode?: "and" | "or";
+  kind?: "text" | "markdown" | "code";
+  authorId?: string;
+  publishedFrom?: string;
+  publishedTo?: string;
+}
+
+const SEARCH_KIND_ALL = "all";
+const KIND_VALUES = ["text", "markdown", "code"] as const;
+const FILTER_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+// A date picker states a day; the API stores canonical UTC timestamps.
+const DAY = /^\d{4}-\d{2}-\d{2}$/u;
+
+/** The editable filter fields: a day field, an author draft, and one kind choice. */
+interface SearchDraft { kind: string; authorId: string; publishedFrom: string; publishedTo: string }
+
+function searchDraftOf(filters: SearchFilters): SearchDraft {
+  return { kind: filters.kind ?? SEARCH_KIND_ALL, authorId: filters.authorId ?? "", publishedFrom: dayOf(filters.publishedFrom), publishedTo: dayOf(filters.publishedTo) };
+}
+
+/** The date input value of a canonical timestamp, or "" for anything else. */
+function dayOf(timestamp?: string): string {
+  return timestamp && DAY.test(timestamp.slice(0, 10)) ? timestamp.slice(0, 10) : "";
+}
+/** The canonical timestamp of a picked day, or undefined when the field is cleared. */
+function timestampOf(day: string): string | undefined {
+  return DAY.test(day) ? new Date(`${day}T00:00:00.000Z`).toISOString() : undefined;
+}
 
 export type SearchState =
   | { kind: "loading" }
   | { kind: "ready"; query?: string; degraded: boolean; results: readonly SearchResultItem[]; pagination: { page: number; pageSize: 20 | 50 | 100; total: number; totalPages: number } }
   | { kind: "error"; message: string };
 
-export function SearchPage({ state, locale, query, queryLocked = false, pending = false, localError, onQueryChange, onSubmit, onLoadMore, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView, savedViewRecordBlocked = false, onDiscardSavedViewRecord, composerBlocked = false, composerNotice, onDiscardComposer }: {
+export function SearchPage({ state, locale, query, queryLocked = false, pending = false, localError, onQueryChange, onSubmit, onLoadMore, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView, savedViewRecordBlocked = false, onDiscardSavedViewRecord, composerBlocked = false, composerNotice, onDiscardComposer, filters, onFilterChange }: {
   state: SearchState;
   locale: LocaleRuntime;
   query?: string; queryLocked?: boolean;
@@ -36,6 +72,7 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
   savedViewRecordBlocked?: boolean; onDiscardSavedViewRecord?: () => void;
   savedViewName?: string; onSavedViewNameChange?: (value: string) => void; savedViewConfirmation?: ReactNode;
   composerBlocked?: boolean; composerNotice?: string; onDiscardComposer?: () => void;
+  filters?: SearchFilters; onFilterChange?: (next: SearchFilters) => void;
 }) {
   const [localName, setLocalName] = useState("");
   const savedViewName = controlledName ?? localName;
@@ -54,6 +91,43 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
     setViewsExpanded(false);
     setViewsOverflowing(node.scrollHeight - node.clientHeight > 1);
   }, [viewsKey]);
+  // The condition filters apply together: one submit, one history entry, one query.
+  const applied: SearchFilters = filters ?? { tagIds: [] };
+  const appliedKey = JSON.stringify(applied);
+  const [draft, setDraft] = useState<SearchDraft>(() => searchDraftOf(applied));
+  const [filterError, setFilterError] = useState<string>();
+  const draftKeyRef = useRef(appliedKey);
+  // A location change (refresh, back, saved view) replaces the draft, so the fields
+  // never keep describing conditions the list is no longer filtered by.
+  if (draftKeyRef.current !== appliedKey) {
+    draftKeyRef.current = appliedKey;
+    setDraft(searchDraftOf(applied));
+    setFilterError(undefined);
+  }
+  const kindOptions = [{ value: SEARCH_KIND_ALL, label: frontendText(locale, "SEARCH_FILTER_KIND_ALL") }, { value: "text", label: frontendText(locale, "INBOX_KIND_TEXT") }, { value: "markdown", label: frontendText(locale, "SUBMIT_MARKDOWN_LABEL") }, { value: "code", label: frontendText(locale, "SUBMIT_CODE_LABEL") }];
+  const commitFilters = () => {
+    const authorId = draft.authorId.trim();
+    if (authorId && !FILTER_ID.test(authorId)) { setFilterError(frontendText(locale, "SEARCH_FILTER_AUTHOR_INVALID")); return; }
+    const publishedFrom = timestampOf(draft.publishedFrom);
+    const publishedTo = timestampOf(draft.publishedTo);
+    if (publishedFrom && publishedTo && publishedFrom > publishedTo) { setFilterError(frontendText(locale, "SEARCH_FILTER_RANGE_INVALID")); return; }
+    setFilterError(undefined);
+    onFilterChange?.({ ...applied, kind: KIND_VALUES.find((value) => value === draft.kind), authorId: authorId || undefined, publishedFrom, publishedTo });
+  };
+  // Every applied condition stays visible as removable text. Dropping a Space drops the
+  // conditions that require it, and dropping the last tag drops the tag mode with it.
+  const appliedChips: AppliedFilter[] = [];
+  if (applied.spaceId) appliedChips.push({ id: "spaceId", label: `${frontendText(locale, "KNOWLEDGE_FILTER_SPACE")}: ${applied.spaceId}`, onRemove: () => onFilterChange?.({ ...applied, spaceId: undefined, collectionId: undefined, tagIds: [], tagMode: undefined }) });
+  if (applied.collectionId) appliedChips.push({ id: "collectionId", label: `${frontendText(locale, "KNOWLEDGE_FILTER_COLLECTION")}: ${applied.collectionId}`, onRemove: () => onFilterChange?.({ ...applied, collectionId: undefined }) });
+  const dropTags = (tagId: string) => {
+    const tagIds = applied.tagIds.filter((id) => id !== tagId);
+    onFilterChange?.({ ...applied, tagIds, tagMode: tagIds.length > 1 ? applied.tagMode : undefined });
+  };
+  for (const tagId of applied.tagIds) appliedChips.push({ id: `tagId:${tagId}`, label: `${frontendText(locale, "KNOWLEDGE_FILTER_TAG")}: ${tagId}`, onRemove: () => dropTags(tagId) });
+  if (applied.kind) appliedChips.push({ id: "kind", label: `${frontendText(locale, "KNOWLEDGE_FILTER_KIND")}: ${kindOptions.find((option) => option.value === applied.kind)?.label ?? applied.kind}`, onRemove: () => onFilterChange?.({ ...applied, kind: undefined }) });
+  if (applied.authorId) appliedChips.push({ id: "authorId", label: `${frontendText(locale, "KNOWLEDGE_FILTER_AUTHOR")}: ${applied.authorId}`, onRemove: () => onFilterChange?.({ ...applied, authorId: undefined }) });
+  if (applied.publishedFrom) appliedChips.push({ id: "publishedFrom", label: `${frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_FROM")}: ${applied.publishedFrom}`, onRemove: () => onFilterChange?.({ ...applied, publishedFrom: undefined }) });
+  if (applied.publishedTo) appliedChips.push({ id: "publishedTo", label: `${frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_TO")}: ${applied.publishedTo}`, onRemove: () => onFilterChange?.({ ...applied, publishedTo: undefined }) });
   return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
     {composerBlocked && <div role="alert" data-search-composer-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "SEARCH_COMPOSER_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardComposer}>{frontendText(locale, "SEARCH_COMPOSER_RECORD_DISCARD")}</Button></div>}
     {composerNotice && <p role="alert">{composerNotice}</p>}
@@ -80,6 +154,15 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
         </div>
       </div>}
     </div>
+    {onFilterChange && <form data-search-filters className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-3" onSubmit={(event) => { event.preventDefault(); commitFilters(); }}>
+      <FilterSelect label={frontendText(locale, "KNOWLEDGE_FILTER_KIND")} ariaLabel={frontendText(locale, "KNOWLEDGE_FILTER_KIND")} value={draft.kind} disabled={queryLocked} options={kindOptions} onChange={(value) => setDraft((current) => ({ ...current, kind: value }))} />
+      <div className="space-y-2"><Label htmlFor="search-filter-author">{frontendText(locale, "KNOWLEDGE_FILTER_AUTHOR")}</Label><Input id="search-filter-author" data-search-filter-author className="w-48" value={draft.authorId} disabled={queryLocked} autoComplete="off" placeholder={frontendText(locale, "SEARCH_FILTER_AUTHOR_PLACEHOLDER")} onChange={(event) => setDraft((current) => ({ ...current, authorId: event.currentTarget.value }))} /></div>
+      <div className="space-y-2"><Label htmlFor="search-filter-published-from">{frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_FROM")}</Label><Input id="search-filter-published-from" data-search-filter-published-from type="date" className="w-44" value={draft.publishedFrom} disabled={queryLocked} onChange={(event) => setDraft((current) => ({ ...current, publishedFrom: event.currentTarget.value }))} /></div>
+      <div className="space-y-2"><Label htmlFor="search-filter-published-to">{frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_TO")}</Label><Input id="search-filter-published-to" data-search-filter-published-to type="date" className="w-44" value={draft.publishedTo} disabled={queryLocked} onChange={(event) => setDraft((current) => ({ ...current, publishedTo: event.currentTarget.value }))} /></div>
+      <Button type="submit" data-search-filters-apply disabled={queryLocked}>{frontendText(locale, "SEARCH_FILTERS_APPLY")}</Button>
+      {filterError && <p role="alert" className="text-sm text-destructive">{filterError}</p>}
+    </form>}
+    {onFilterChange && <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedChips} onClear={() => onFilterChange({ tagIds: [] })} />}
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
       : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_SEARCH_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>
       : <>

@@ -50,6 +50,41 @@ describe("Saved Views D1 persistence", () => {
   });
 });
 
+describe("Saved View write convergence", () => {
+  beforeEach(async () => {
+    await reset();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, 'contributor', 'active', ?, ?), (?, ?, ?, 'contributor', 'active', ?, ?)",
+    ).bind(
+      "member-a", "subject-a", "a@example.test", NOW, NOW,
+      "member-b", "subject-b", "b@example.test", NOW, NOW,
+    ).run();
+  });
+
+  it("replays a create by its client key and converges an owner-scoped delete", async () => {
+    const service = createService();
+    const first = await service.create("member-a", { clientKey: "save-key-1", name: "Docs", filters: { q: "durable" } });
+    const replay = await service.create("member-a", { clientKey: "save-key-1", name: "Docs", filters: { q: "durable" } });
+    expect(replay).toMatchObject({ id: first.id, name: "Docs", filters: { q: "durable" } });
+    expect(await env.DB.prepare("SELECT count(*) AS count FROM saved_views WHERE member_id = 'member-a'").first()).toMatchObject({ count: 1 });
+    // A refresh reads back the same single view with its complete filters.
+    await expect(service.list("member-a", { limit: 20 })).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: first.id, name: "Docs", filters: { v: 1, q: "durable", spaceId: null, collectionId: null, tagIds: [], tagMode: "or", kind: null, authorId: null, publishedFrom: null, publishedTo: null } })],
+    });
+
+    const foreign = await service.create("member-b", { name: "Private", filters: { q: "private" } });
+    await expect(service.delete("member-a", foreign.id)).rejects.toMatchObject({ code: "SAVED_VIEW_NOT_FOUND", status: 404 });
+    await expect(service.delete("member-a", first.id)).resolves.toBeUndefined();
+    // A retried delete of the same view still succeeds and removes nothing else.
+    await expect(service.delete("member-a", first.id)).resolves.toBeUndefined();
+    await expect(service.get("member-a", first.id)).rejects.toMatchObject({ code: "SAVED_VIEW_NOT_FOUND" });
+    await expect(service.list("member-b", { limit: 20 })).resolves.toMatchObject({ items: [{ id: foreign.id, name: "Private" }] });
+    expect(await env.DB.prepare("SELECT count(*) AS count FROM saved_views").first()).toMatchObject({ count: 1 });
+    expect(await env.DB.prepare("SELECT count(*) AS count FROM saved_view_delete_receipts").first()).toMatchObject({ count: 1 });
+  });
+});
+
 const NOW = "2026-08-26T00:00:00.000Z";
 
 function createService(): SavedViewsService {

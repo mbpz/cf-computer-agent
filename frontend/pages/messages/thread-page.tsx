@@ -17,6 +17,8 @@ import { createDiscussionSubmitController, discussionContextHref, mentionIdsFrom
 export type ThreadPageState =
   | { kind: "loading" }
   | { kind: "error" }
+  /** The context (or session) no longer authorizes this thread: nothing private renders. */
+  | { kind: "revoked" }
   | { kind: "ready"; thread: DiscussionThread; messages: readonly DiscussionMessage[]; nextCursor?: string };
 
 export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending, onRetry, onRefresh, onNext, onPrevious, onLimitChange, onSend, onLookup, onSent }: {
@@ -125,6 +127,16 @@ export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending,
     {draft.confirmation}
     {state.kind === "loading" && <div><span className="sr-only">{frontendText(locale, "MESSAGES_THREAD_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "MESSAGES_THREAD_LOADING")} /></div>}
     {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "MESSAGES_THREAD_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button></PageState>}
+    {/* A revoked context is an explicit, recoverable state: the transcript, the
+        context link and the composer stay unmounted, and retry re-checks access. */}
+    {state.kind === "revoked" && <div data-thread-context-revoked="">
+      <PageState kind="forbidden" title={frontendText(locale, "MESSAGES_THREAD_REVOKED")} description={frontendText(locale, "MESSAGES_THREAD_REVOKED_DESCRIPTION")}>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button>
+          <a href="/messages" className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent">{frontendText(locale, "MESSAGES_BACK")}</a>
+        </div>
+      </PageState>
+    </div>}
     {recoveryBlocked && <PageState kind="error" title={frontendText(locale, "MESSAGES_RECOVERY_BLOCKED")} />}
     {state.kind === "ready" && !recoveryBlocked && <>
     <div data-thread-scroll="true" className="min-h-48 max-h-[calc(100vh-25rem)] flex-1 space-y-3 overflow-y-auto pr-1" aria-busy={pending || undefined}>

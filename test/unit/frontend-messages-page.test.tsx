@@ -72,13 +72,13 @@ describe("messages pages", () => {
     for (const language of ["en", "zh-CN"] as const) {
       const locale = createLocaleRuntime({ navigatorLanguage: language });
       const listBase = { locale, page: 1, limit: 20 as const, pending: false, onRetry: vi.fn(), onNext: vi.fn(), onPrevious: vi.fn(), onLimitChange: vi.fn() };
-      for (const state of [{ kind: "loading" }, { kind: "error" }, { kind: "ready", items: [] }] as const) {
+      for (const state of [{ kind: "loading" }, { kind: "error" }, { kind: "revoked", target: "list" }, { kind: "revoked", target: "thread" }, { kind: "ready", items: [] }] as const) {
         const html = renderToStaticMarkup(<MessagesPage {...listBase} state={state} />);
         expect([...html.matchAll(/<h1[ >]/g)]).toHaveLength(1);
         expect(html).toContain(`>${frontendText(locale, "MESSAGES_TITLE")}</h1>`);
       }
       const threadBase = { locale, page: 1, limit: 20 as const, pending: false, onRetry: vi.fn(), onRefresh: vi.fn(), onNext: vi.fn(), onPrevious: vi.fn(), onLimitChange: vi.fn(), onSend: vi.fn(async () => undefined) };
-      for (const state of [{ kind: "loading" }, { kind: "error" }, { kind: "ready", thread: thread(), messages: [] }] as const) {
+      for (const state of [{ kind: "loading" }, { kind: "error" }, { kind: "revoked" }, { kind: "ready", thread: thread(), messages: [] }] as const) {
         const html = renderToStaticMarkup(<ThreadPage {...threadBase} state={state} />);
         expect([...html.matchAll(/<h1[ >]/g)]).toHaveLength(1);
         expect(html).toContain(`>${frontendText(locale, "MESSAGES_THREAD_TITLE")}</h1>`);
@@ -86,6 +86,33 @@ describe("messages pages", () => {
         expect(html).toContain(frontendText(locale, "MESSAGES_BACK"));
         expect(html).toContain(frontendText(locale, "MESSAGES_REFRESH"));
       }
+    }
+  });
+
+  it("renders revoked access as an explicit recoverable forbidden state instead of an error or an empty list", () => {
+    for (const language of ["en", "zh-CN"] as const) {
+      const locale = createLocaleRuntime({ navigatorLanguage: language });
+      const listBase = { locale, page: 1, limit: 20 as const, pending: false, onRetry: vi.fn(), onNext: vi.fn(), onPrevious: vi.fn(), onLimitChange: vi.fn() };
+      for (const state of [{ kind: "revoked", target: "list" }, { kind: "revoked", target: "thread" }] as const) {
+        const html = renderToStaticMarkup(<MessagesPage {...listBase} state={state} />);
+        expect(html).toContain('data-page-state="forbidden"');
+        expect(html).not.toContain('data-page-state="error"');
+        expect(html).not.toContain('data-page-state="empty"');
+        expect(html).toContain(frontendText(locale, state.target === "thread" ? "MESSAGES_THREAD_REVOKED" : "MESSAGES_REVOKED"));
+        expect(html).toContain(frontendText(locale, "MESSAGES_RETRY"));
+        expect(html).not.toContain("data-messages-scroll");
+      }
+      const threadBase = { locale, page: 1, limit: 20 as const, pending: false, onRetry: vi.fn(), onRefresh: vi.fn(), onNext: vi.fn(), onPrevious: vi.fn(), onLimitChange: vi.fn(), onSend: vi.fn(async () => undefined) };
+      const html = renderToStaticMarkup(<ThreadPage {...threadBase} state={{ kind: "revoked" }} />);
+      expect(html).toContain("data-thread-context-revoked");
+      expect(html).toContain('data-page-state="forbidden"');
+      expect(html).not.toContain('data-page-state="error"');
+      expect(html).toContain(frontendText(locale, "MESSAGES_THREAD_REVOKED"));
+      expect(html).toContain(frontendText(locale, "MESSAGES_RETRY"));
+      // The transcript, the context link and the composer never render for a revoked context.
+      expect(html).not.toContain("data-message-id");
+      expect(html).not.toContain("discussion-composer");
+      expect(html).not.toContain('href="/tasks"');
     }
   });
 
