@@ -33,9 +33,14 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
     </AlertDescription></Alert>
   </section>;
   const { detail } = state;
+  // Real, visible state as text, not colour alone (§4.2): a submission past review,
+  // and a viewer without the decision capability, both say so next to the status.
+  const terminal = detail.status !== "review_pending";
+  const stateNote = terminal ? frontendText(locale, "ADMIN_REVIEW_DECISION_CLOSED")
+    : !onDecision && !decisionRecordBlocked ? frontendText(locale, "ADMIN_REVIEW_DECISION_READ_ONLY") : undefined;
   return <section className="space-y-5">
     <PageHeader title={detail.title} description={<>{frontendText(locale, "ADMIN_REVIEW_SUBMITTER")}: {detail.submitter}</>}
-      status={<Badge variant="outline">{detail.status}</Badge>} />
+      status={<span className="inline-flex flex-wrap items-center gap-2"><Badge variant="outline">{detail.status}</Badge>{stateNote ? <span data-review-state={terminal ? "closed" : "read-only"}>{stateNote}</span> : null}</span>} />
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_REVIEW_CONTENT")}</CardTitle></CardHeader><CardContent>
       <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-4 text-sm leading-7">{detail.content || frontendText(locale, "ADMIN_REVIEW_NO_CONTENT")}</pre>
     </CardContent></Card>
@@ -45,7 +50,7 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
     {decisionRecordNotice && <p role="alert" className="text-sm text-destructive">{decisionRecordNotice}</p>}
     <ReviewDecisionFeedback allowUnknownReload state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onRetry} />
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_REVIEW_DECISION")}</CardTitle></CardHeader><CardContent>
-      <ReviewDecisionControls decisionUnresolved={reviewDecisionLocked(decisionState)} key={detail.id} targetId={detail.id} targetLabel={detail.title || detail.id} snapshot={detail} disabled={reviewDecisionLocked(decisionState)} terminal={detail.status !== "review_pending"}
+      <ReviewDecisionControls decisionUnresolved={reviewDecisionLocked(decisionState)} key={detail.id} targetId={detail.id} targetLabel={detail.title || detail.id} snapshot={detail} disabled={reviewDecisionLocked(decisionState)} terminal={terminal}
         pendingAction={decisionState.kind === "pending" ? decisionState.action : undefined} onDecision={onDecision} locale={locale} />
     </CardContent></Card>
   </section>;

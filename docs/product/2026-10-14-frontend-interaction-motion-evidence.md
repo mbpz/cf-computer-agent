@@ -358,3 +358,23 @@
 ### 14.6 验证
 
 `npm run typecheck` 0 错误；单测 **5325/5325**；worker 1203/1203；smoke 88/14/30；inventory 门禁 10/10；`npm run build` 通过（20 个资产）。
+
+## 15. 管理队列与审核详情的一致化（2026-10-16）
+
+依据 `docs/product/2026-10-15-authenticated-workspace-design-research.md` §4.3（筛选位置一致、条件可移除、列表刷新不卸载整页）与 §4.5（已知失败与未知结果分开、恢复入口精确）。
+
+### 15.1 新增共享件
+
+- `frontend/components/ui/filter-select.tsx`：基于 beUI `Select` 的统一筛选控件，可见标签在旁、可访问名放在触发器内部的 `sr-only`（beUI 触发器不转发 `aria-label`），禁用态由 `Select` 承接。
+- `frontend/components/ui/applied-filters.tsx`：已应用条件以可移除 chip + 一键清空呈现（无条件时不渲染，可无条件放入页面）。
+
+### 15.2 落地
+
+- 资产队列与审计队列的筛选由各页手写的原生 `<select>`（含复制同一串类名）换成 `FilterSelect`，保留历史可访问名（`Asset status` / `Audit action`）、选项、禁用条件与 `?status=` / `?action=` 的 URL 行为；两页新增可移除条件与清空入口。
+- 重复项队列与审核队列本身没有筛选，未改动。
+- 核查结论：asset / audit 的刷新行为**本就合规**（`DataTable loading={pending}` 保留旧行，失败时就地 `role="alert"` 且不卸载表格），无需改动；新增测试固定了"筛选刷新期间保留已加载行"。
+- 审核详情：头部状态槽以真实文字呈现关闭态（`ADMIN_REVIEW_DECISION_CLOSED`）与只读态（`ADMIN_REVIEW_DECISION_READ_ONLY`，且在写入记录阻塞提示存在时不重复显示），并复用队列已有的"未知结果 → 重试同一决定 / 重新加载"机制，重试仍重放同一 operation id 与同一请求体。
+
+### 15.3 验证
+
+`npm run typecheck` 0 错误；单测 **5338/5338**（新增 13 个）；worker 1203/1203；smoke 88/14/30；inventory 门禁 10/10（复核文档行数与指纹已对账，仅 `frontend/app.tsx` 指纹刷新）；`npm run build` 通过（20 个资产）。

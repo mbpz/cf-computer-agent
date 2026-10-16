@@ -67,7 +67,7 @@ describe("moderation numbered routes", () => {
     browser.history.replaceState({}, "", "/admin/assets?status=queued"); const gets: string[] = []; const push = vi.spyOn(browser.history, "pushState").mockClear();
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); gets.push(url); return pageResponse(url, (id) => ({ asset: { id, originalName: id }, job: { status: "failed_retryable" } })); });
     await act(async () => root.render(<AdminAssetsRoute locale={locale()} search={browser.location.search} />)); await flush(); push.mockClear();
-    await changeSelect('select[aria-label="Asset status"]', "failed_retryable");
+    await applyAssetFilter("failed_retryable");
     expect(push).toHaveBeenCalledTimes(1); expect(browser.location.search).toBe("?status=failed_retryable");
     expect(queryOf(gets.at(-1)!, "status")).toBe("failed_retryable");
     expect(queryOf(gets.at(-1)!, "page")).toBe("1"); expect(queryOf(gets.at(-1)!, "pageSize")).toBe("20");
@@ -679,7 +679,15 @@ describe("moderation numbered routes", () => {
   });
 
   async function clickButton(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes(label)) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); }
-  async function changeSelect(selector: string, value: string) { const select = container.querySelector(selector) as HTMLSelectElement; expect(select).toBeTruthy(); await act(async () => { select.value = value; select.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
+  async function applyAssetFilter(value: string) {
+    const trigger = container.querySelector('[aria-haspopup="listbox"]') as HTMLButtonElement;
+    expect(trigger).toBeTruthy();
+    await act(async () => trigger.click());
+    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === value);
+    expect(option).toBeTruthy();
+    await act(async () => option!.click());
+    await flush();
+  }
   function buttonNames(): Array<string | null> { return [...container.querySelectorAll("button[aria-label]")].map((button) => button.getAttribute("aria-label")); }
 });
 

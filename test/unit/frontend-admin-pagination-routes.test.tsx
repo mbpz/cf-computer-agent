@@ -50,7 +50,7 @@ describe("numbered admin routes", () => {
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search="" />));
     await waitFor(() => container.querySelectorAll("tbody tr[data-selected]").length === 20);
     // Filter change writes only the action param and refetches page 1 for it.
-    await changeSelect('select[aria-label="Audit action"]', "member.login");
+    await applyAuditFilter("member.login");
     await waitFor(() => urls.at(-1) === "/api/admin/audit-events?page=1&pageSize=20&action=member.login");
     expect(browser.location.search).toBe("?action=member.login");
     // Scrolling to the end appends page 2 with the action preserved.
@@ -104,7 +104,7 @@ describe("numbered admin routes", () => {
     // Scrolling to the end asks for page 2; nothing in the URL changes.
     await scrollToEnd();
     expect(requests).toHaveLength(2);
-    expect(container.querySelector('select[aria-label="Audit action"]:disabled')).not.toBeNull();
+    expect(container.querySelector('[aria-haspopup="listbox"]:disabled')).not.toBeNull();
     requests[1]!.pending.reject(new Error("offline"));
     await waitFor(() => container.querySelector('[role="alert"]') !== null);
     // The first page is retained and no numbered range text is rendered.
@@ -131,17 +131,17 @@ describe("numbered admin routes", () => {
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search={browser.location.search} />));
     await waitFor(() => (container.querySelector("tbody tr[data-selected] time")?.textContent ?? "") === "created:member.login:1");
     // A filter change refetches page 1 and only the action param is written.
-    await changeSelect('select[aria-label="Audit action"]', "task.created");
+    await applyAuditFilter("task.created");
     await waitFor(() => urls.at(-1) === "/api/admin/audit-events?page=1&pageSize=20&action=task.created");
     expect(browser.location.search).toBe("?action=task.created");
     await waitFor(() => (container.querySelector("tbody tr[data-selected] time")?.textContent ?? "") === "created:task.created:1");
     await act(async () => browser.history.back());
-    await waitFor(() => (container.querySelector('select[aria-label="Audit action"]') as HTMLSelectElement).value === "member.login");
+    await waitFor(() => auditFilterText() === "member.login");
     await waitFor(() => (container.querySelector("tbody tr[data-selected] time")?.textContent ?? "") === "created:member.login:1");
     await act(async () => browser.history.forward());
-    await waitFor(() => (container.querySelector('select[aria-label="Audit action"]') as HTMLSelectElement).value === "task.created");
+    await waitFor(() => auditFilterText() === "task.created");
     await waitFor(() => (container.querySelector("tbody tr[data-selected] time")?.textContent ?? "") === "created:task.created:1");
-    await changeSelect('select[aria-label="Audit action"]', "");
+    await applyAuditFilter("All");
     await waitFor(() => urls.at(-1) === "/api/admin/audit-events?page=1&pageSize=20");
     expect(new URLSearchParams(browser.location.search).has("action")).toBe(false);
   });
@@ -611,6 +611,23 @@ describe("numbered admin routes", () => {
   /** The DataTable body is the scroll container; near-bottom is always satisfied under happy-dom. */
   async function scrollToEnd() { const scroller = container.querySelector("div.overflow-auto") as HTMLElement; await act(async () => { scroller.dispatchEvent(new browser.Event("scroll") as unknown as Event); }); await flush(); }
   async function click(selector: string) { const element = container.querySelector(selector) as HTMLButtonElement; await act(async () => element.click()); }
+  /** The audit filter is a beUI listbox; open the trigger and pick the option by its label. */
+  async function applyAuditFilter(value: string) {
+    const trigger = container.querySelector('[aria-haspopup="listbox"]') as HTMLButtonElement | null;
+    expect(trigger).toBeTruthy();
+    await act(async () => trigger!.click());
+    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === value);
+    expect(option).toBeTruthy();
+    await act(async () => option!.click());
+    await flush();
+  }
+  /** The trigger's visible value, excluding the sr-only accessible name and the caret. */
+  function auditFilterText() {
+    const trigger = container.querySelector('[aria-haspopup="listbox"]');
+    if (!trigger) return "";
+    const value = [...trigger.querySelectorAll("span")].find((span) => !span.classList.contains("sr-only") && !span.hasAttribute("aria-hidden"));
+    return value?.textContent ?? "";
+  }
   async function changeSelect(selector: string, value: string) { const element = container.querySelector(selector) as HTMLSelectElement; await act(async () => { element.value = value; element.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
 });
 

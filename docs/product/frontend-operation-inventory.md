@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：322；操作/转发候选：1332。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：324；操作/转发候选：1331。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -96,6 +96,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/timeline-item-editor.tsx | 16 |
 | frontend/components/today-target-detail.tsx | 1 |
 | frontend/components/ui/alert.tsx | 3 |
+| frontend/components/ui/applied-filters.tsx | 3 |
 | frontend/components/ui/badge.tsx | 1 |
 | frontend/components/ui/button.tsx | 1 |
 | frontend/components/ui/card.tsx | 6 |
@@ -104,6 +105,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/ui/dialog.tsx | 3 |
 | frontend/components/ui/dropdown-menu.tsx | 7 |
 | frontend/components/ui/expandable-tabs.tsx | 2 |
+| frontend/components/ui/filter-select.tsx | 1 |
 | frontend/components/ui/focus-scope.tsx | 1 |
 | frontend/components/ui/input.tsx | 1 |
 | frontend/components/ui/label.tsx | 1 |
@@ -277,7 +279,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/admin/admin-dashboard-route.tsx | 1 |
 | frontend/pages/admin/admin-forbidden-page.tsx | 0 |
 | frontend/pages/admin/analytics-page.tsx | 11 |
-| frontend/pages/admin/asset-queue-page.tsx | 18 |
+| frontend/pages/admin/asset-queue-page.tsx | 13 |
 | frontend/pages/admin/audit-page.tsx | 5 |
 | frontend/pages/admin/create-role-page.tsx | 16 |
 | frontend/pages/admin/duplicate-queue-page.tsx | 11 |
@@ -362,12 +364,12 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /admin | frontend/pages/admin/admin-dashboard-route.tsx#AdminDashboardRoute | 16 | 无（不代表动态边界已核对） |
 | /admin/submissions | frontend/app.tsx#ReviewQueueRoute | 106 | 无（不代表动态边界已核对） |
 | /admin/duplicates | frontend/app.tsx#AdminDuplicateRoute; frontend/lib/admin-duplicates-data.ts#* | 86 | 无（不代表动态边界已核对） |
-| /admin/assets | frontend/app.tsx#AdminAssetsRoute; frontend/lib/admin-assets-data.ts#* | 93 | 无（不代表动态边界已核对） |
+| /admin/assets | frontend/app.tsx#AdminAssetsRoute; frontend/lib/admin-assets-data.ts#* | 97 | 无（不代表动态边界已核对） |
 | /admin/members | frontend/app.tsx#AdminMembersRoute; frontend/lib/admin-members-data.ts#* | 102 | 无（不代表动态边界已核对） |
 | /admin/roles | frontend/app.tsx#AdminRolesRoute; frontend/lib/admin-roles-data.ts#* | 67 | 无（不代表动态边界已核对） |
 | /admin/menus | frontend/app.tsx#AdminMenusRoute; frontend/lib/admin-menus-data.ts#* | 68 | 无（不代表动态边界已核对） |
 | /admin/spaces | frontend/app.tsx#AdminSpacesRoute; frontend/lib/admin-spaces-data.ts#* | 75 | 无（不代表动态边界已核对） |
-| /admin/audit | frontend/app.tsx#AdminAuditRoute | 68 | 无（不代表动态边界已核对） |
+| /admin/audit | frontend/app.tsx#AdminAuditRoute | 77 | 无（不代表动态边界已核对） |
 | /admin/analytics | frontend/app.tsx#AdminAnalyticsRoute | 76 | 无（不代表动态边界已核对） |
 | /notifications | frontend/app.tsx#NotificationsRoute; frontend/lib/notifications-data.ts#* | 75 | 无（不代表动态边界已核对） |
 | /messages | frontend/app.tsx#MessagesRoute | 25 | 无（不代表动态边界已核对） |
@@ -472,7 +474,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 4079:10 AdminSpacesRoute | SpacesPage  | onLoadRetry=() =&gt; void read(); onLoadMore=() =&gt; void read("spaces"); onLoadCollections=id =&gt; void read("collections", id); onDiscardRecord=discardRe… |  |
 | 4147:10 AdminAuditRoute | AuditPage  | onRetry=retry; onActionChange=changeFilter; onPageChange=(next) =&gt; load(next); onPageSizeChange=(size) =&gt; setPageSize(size); onLoadMore=() =&gt; { if (… |  |
 | 4190:7 AdminAssetsRoute | owner.addEventListener  | "beforeunload", warn | {"kind":"branch","expression":"locked && !leaveGuardRef.current","branch":"true"} |
-| 4325:10 AdminAssetsRoute | AssetQueuePage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onRetry=recordBlocked ? undefined : (id) =&gt; void retry(id); onPreview=(id) =&gt; void showPreview(id… |  |
+| 4335:10 AdminAssetsRoute | AssetQueuePage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onRetry=recordBlocked ? undefined : (id) =&gt; void retry(id); onPreview=(id) =&gt; void showPreview(id… |  |
 
 ## frontend/components/agent/agent-feedback.tsx
 
@@ -1131,6 +1133,14 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 12:98 AlertTitle | h5  |  | spread: props |
 | 13:106 AlertDescription | div  |  | spread: props |
 
+## frontend/components/ui/applied-filters.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 24:5 AppliedFilters | div  |  | earlier return: filters.length === 0 |
+| 28:11 AppliedFilters | button × | onClick=filter.onRemove; type="button" | {"kind":"repeat","expression":"filters"}; earlier return: filters.length === 0 |
+| 31:7 AppliedFilters | Button clearLabel | onClick=onClear | earlier return: filters.length === 0 |
+
 ## frontend/components/ui/badge.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
@@ -1195,6 +1205,12 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | --- | --- | --- | --- |
 | 36:5 ExpandableTabs | div  |  |  |
 | 40:11 ExpandableTabs | motion.button  | onClick=() =&gt; onValueChange(active ? null : item.id); type="button" | {"kind":"repeat","expression":"items"} |
+
+## frontend/components/ui/filter-select.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 24:7 FilterSelect | Select  | onValueChange=onChange | disabled=disabled |
 
 ## frontend/components/ui/focus-scope.tsx
 
@@ -1598,34 +1614,29 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 34:164 AssetQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"branch","expression":"error","branch":"true"}; {"kind":"logical","expression":"onLoadRetry","operator":"&&"}; earlier return: loading |
-| 36:72 AssetQueuePage | select  | onChange=(event) =&gt; onStatusChange?.(event.target.value as "" &#124; AdminAssetStatus) | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; earlier return: loading; earlier return: … |
-| 36:282 AssetQueuePage | option All |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"container","tag":"select","attributes":{"disabled"… |
-| 36:311 AssetQueuePage | option queued |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"container","tag":"select","attributes":{"disabled"… |
-| 36:349 AssetQueuePage | option processing |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"container","tag":"select","attributes":{"disabled"… |
-| 36:395 AssetQueuePage | option succeeded |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"container","tag":"select","attributes":{"disabled"… |
-| 36:439 AssetQueuePage | option failed_retryable |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"container","tag":"select","attributes":{"disabled"… |
-| 36:497 AssetQueuePage | option failed_terminal |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"container","tag":"select","attributes":{"disabled"… |
-| 36:592 AssetQueuePage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"recordBlocked","operator":"… |
-| 36:754 AssetQueuePage | Button frontendText(locale, "ADMIN_ASSET_RETRY_RECORD_DISCARD") | onClick=onDiscardRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"recordBlocked","operator":"… |
-| 36:941 AssetQueuePage | p previewError &#124;&#124; retryError &#124;&#124; localError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"(previewError &#124;&#124; … |
-| 36:1082 AssetQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"(previewE… |
-| 36:1263 AssetQueuePage | div frontendText(locale, "ADMIN_ASSET_READ_REQUIRED") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"readRequired && !localError… |
-| 36:1375 AssetQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"readRequi… |
-| 36:1519 AssetQueuePage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"data","operator":"&&"}; ear… |
-| 53:206 AssetQueuePage | Button previewLoading ? frontendText(locale, "ADMIN_ASSET_PREVIEW_LOADING") : frontendText(locale, "ADMIN_ASSET_PREVIEW") | onClick=() =&gt; onPreview?.(asset.id) | disabled=pending &#124;&#124; previewLoading; {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logi… |
-| 53:553 AssetQueuePage | Button frontendText(locale, "ADMIN_ASSET_RETRY") | onClick=() =&gt; request(asset) | disabled=!onRetry &#124;&#124; pending &#124;&#124; forbidden &#124;&#124; pendingIds.includes(asset.id); {"kind":"container","tag":"section","attributes":{"… |
-| 55:84 AssetQueuePage | ConfirmAction  | onCancel=cancel; onConfirm=confirm | open=valid; earlier return: loading; earlier return: error |
+| 36:164 AssetQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"branch","expression":"error","branch":"true"}; {"kind":"logical","expression":"onLoadRetry","operator":"&&"}; earlier return: loading |
+| 38:16 AssetQueuePage | FilterSelect  | onChange=(value) =&gt; onStatusChange?.(value as "" &#124; AdminAssetStatus) | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; earlier return: loading; earlier return: … |
+| 38:463 AssetQueuePage | AppliedFilters  | onClear=() =&gt; onStatusChange?.("") | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; earlier return: loading; earlier return: error |
+| 43:25 AssetQueuePage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"recordBlocked","operator":"… |
+| 43:187 AssetQueuePage | Button frontendText(locale, "ADMIN_ASSET_RETRY_RECORD_DISCARD") | onClick=onDiscardRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"recordBlocked","operator":"… |
+| 43:374 AssetQueuePage | p previewError &#124;&#124; retryError &#124;&#124; localError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"(previewError &#124;&#124; … |
+| 43:515 AssetQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"(previewE… |
+| 43:696 AssetQueuePage | div frontendText(locale, "ADMIN_ASSET_READ_REQUIRED") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"readRequired && !localError… |
+| 43:808 AssetQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"readRequi… |
+| 43:952 AssetQueuePage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logical","expression":"data","operator":"&&"}; ear… |
+| 60:206 AssetQueuePage | Button previewLoading ? frontendText(locale, "ADMIN_ASSET_PREVIEW_LOADING") : frontendText(locale, "ADMIN_ASSET_PREVIEW") | onClick=() =&gt; onPreview?.(asset.id) | disabled=pending &#124;&#124; previewLoading; {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"logi… |
+| 60:553 AssetQueuePage | Button frontendText(locale, "ADMIN_ASSET_RETRY") | onClick=() =&gt; request(asset) | disabled=!onRetry &#124;&#124; pending &#124;&#124; forbidden &#124;&#124; pendingIds.includes(asset.id); {"kind":"container","tag":"section","attributes":{"… |
+| 62:84 AssetQueuePage | ConfirmAction  | onCancel=cancel; onConfirm=confirm | open=valid; earlier return: loading; earlier return: error |
 
 ## frontend/pages/admin/audit-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 13:28 AuditPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | disabled=pending; {"kind":"logical","expression":"onRetry","operator":"&&"} |
-| 18:72 AuditPage | select  | onChange=(event) =&gt; onActionChange?.(event.target.value) | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"pending"}}; earlier return: state.kind === "loading"; earlier return: state.… |
-| 18:257 AuditPage | option All |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending"}}; {"kind":"container","tag":"select","attributes":{"disabled":"pending"}}; earlier r… |
-| 18:310 AuditPage | option value |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending"}}; {"kind":"container","tag":"select","attributes":{"disabled":"pending"}}; {"kind":"… |
-| 20:5 AuditPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending"}}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 15:28 AuditPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | disabled=pending; {"kind":"logical","expression":"onRetry","operator":"&&"} |
+| 20:16 AuditPage | FilterSelect  | onChange=(value) =&gt; onActionChange?.(value) | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"pending"}}; earlier return: state.kind === "loading"; earlier return: state.… |
+| 21:5 AuditPage | AppliedFilters  | onClear=() =&gt; onActionChange?.("") | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending"}}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 27:20 AuditPage | div retry |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending"}}; {"kind":"logical","expression":"localError","operator":"&&"}; earlier return: stat… |
+| 28:5 AuditPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending"}}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
 
 ## frontend/pages/admin/create-role-page.tsx
 
@@ -1740,11 +1751,11 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | --- | --- | --- | --- |
 | 27:92 ReviewDetailPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind !== \"ready\"","branch":"true"}; {"kind":"logical","expression":"(state.kind !== \"not-found\" &#124;&#124; unresol… |
 | 28:9 ReviewDetailPage | ButtonLink frontendText(locale, "ADMIN_REVIEW_BACK") | onClick=(event) =&gt; { if (!onBack &#124;&#124; event.defaultPrevented &#124;&#124; event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctrlKey… | {"kind":"branch","expression":"state.kind !== \"ready\"","branch":"true"}; earlier return: state.kind === "loading" |
-| 44:31 ReviewDetailPage | div  |  | {"kind":"logical","expression":"decisionRecordBlocked","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
-| 44:201 ReviewDetailPage | Button frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD") | onClick=onDiscardDecisionRecord; type="button" | {"kind":"logical","expression":"decisionRecordBlocked","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
-| 45:30 ReviewDetailPage | p decisionRecordNotice |  | {"kind":"logical","expression":"decisionRecordNotice","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
-| 46:5 ReviewDetailPage | ReviewDecisionFeedback  | onRetry=onRetryDecision; onReload=onRetry | earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
-| 48:7 ReviewDetailPage | ReviewDecisionControls  | onDecision=onDecision | disabled=reviewDecisionLocked(decisionState); earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
+| 49:31 ReviewDetailPage | div  |  | {"kind":"logical","expression":"decisionRecordBlocked","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
+| 49:201 ReviewDetailPage | Button frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD") | onClick=onDiscardDecisionRecord; type="button" | {"kind":"logical","expression":"decisionRecordBlocked","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
+| 50:30 ReviewDetailPage | p decisionRecordNotice |  | {"kind":"logical","expression":"decisionRecordNotice","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
+| 51:5 ReviewDetailPage | ReviewDecisionFeedback  | onRetry=onRetryDecision; onReload=onRetry | earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
+| 53:7 ReviewDetailPage | ReviewDecisionControls  | onDecision=onDecision | disabled=reviewDecisionLocked(decisionState); earlier return: state.kind === "loading"; earlier return: state.kind !== "ready" |
 
 ## frontend/pages/admin/review-detail-route.tsx
 

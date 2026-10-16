@@ -405,6 +405,31 @@ describe("review detail read recovery", () => {
     await submitDecision("Publish"); await flush();
     expect(posts).toBe(1);
   });
+
+  it("reuses the exact operation for a retry of the same unknown decision and keeps reload read-only", async () => {
+    const posts: { path: string; body: string }[] = []; let reads = 0;
+    await render(withComments(async (input, init) => {
+      if (init?.method === "POST") { posts.push({ path: String(input), body: String(init.body) }); return posts.length === 1 ? new Response(null, { status: 503 }) : json({ decision: { submissionId: "sub-1", decision: "rejected" } }); }
+      reads++; return preview("sub-1");
+    }));
+    await act(async () => button("Reject").click());
+    await typeNote("Reuse this note");
+    await submitDecision("Confirm rejection"); await flush();
+    expect(posts).toHaveLength(1);
+    expect(container.textContent).toContain("The result is unknown");
+    const reload = button("Reload current state");
+    await act(async () => { reload.click(); reload.click(); }); await flush();
+    expect(reads).toBe(2); expect(posts).toHaveLength(1);
+    await act(async () => button("Retry same decision").click()); await flush();
+    expect(posts).toHaveLength(2); expect(posts[1]).toEqual(posts[0]);
+    expect(container.textContent).toContain("Submission rejected.");
+  });
+
+  it("renders a submission already past review as closed instead of an unexplained locked control", async () => {
+    await render(withComments(async () => preview("sub-1", "rejected")));
+    expect(container.querySelector('[data-review-state="closed"]')?.textContent).toContain("no longer awaiting review");
+    expect(button("Publish").disabled).toBe(true);
+  });
 });
 
 function json(value: unknown) { return new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } }); }

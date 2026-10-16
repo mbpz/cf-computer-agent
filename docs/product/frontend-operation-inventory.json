@@ -87,6 +87,7 @@
     "frontend/components/timeline-item-editor.tsx",
     "frontend/components/today-target-detail.tsx",
     "frontend/components/ui/alert.tsx",
+    "frontend/components/ui/applied-filters.tsx",
     "frontend/components/ui/badge.tsx",
     "frontend/components/ui/button.tsx",
     "frontend/components/ui/card.tsx",
@@ -95,6 +96,7 @@
     "frontend/components/ui/dialog.tsx",
     "frontend/components/ui/dropdown-menu.tsx",
     "frontend/components/ui/expandable-tabs.tsx",
+    "frontend/components/ui/filter-select.tsx",
     "frontend/components/ui/focus-scope.tsx",
     "frontend/components/ui/input.tsx",
     "frontend/components/ui/label.tsx",
@@ -2614,7 +2616,7 @@
       ],
       "candidateOperationIds": [
         "frontend/app.tsx:4190:7",
-        "frontend/app.tsx:4325:10",
+        "frontend/app.tsx:4335:10",
         "frontend/components/data-pagination.tsx:39:10",
         "frontend/components/data-pagination.tsx:42:144",
         "frontend/components/data-pagination.tsx:43:70",
@@ -2626,6 +2628,11 @@
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/checkbox.tsx:59:7",
+        "frontend/components/motion/select.tsx:177:5",
+        "frontend/components/motion/select.tsx:178:5",
+        "frontend/components/motion/select.tsx:247:5",
+        "frontend/components/motion/select.tsx:380:5",
+        "frontend/components/motion/select.tsx:442:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -2654,6 +2661,9 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
+        "frontend/components/ui/applied-filters.tsx:24:5",
+        "frontend/components/ui/applied-filters.tsx:28:11",
+        "frontend/components/ui/applied-filters.tsx:31:7",
         "frontend/components/ui/badge.tsx:20:72",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
@@ -2667,6 +2677,7 @@
         "frontend/components/ui/dialog.tsx:34:5",
         "frontend/components/ui/dialog.tsx:35:5",
         "frontend/components/ui/dialog.tsx:39:99",
+        "frontend/components/ui/filter-select.tsx:24:7",
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/components/ui/page-state.tsx:12:10",
         "frontend/components/ui/pagination.tsx:35:145",
@@ -2688,24 +2699,19 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/admin/asset-queue-page.tsx:34:164",
-        "frontend/pages/admin/asset-queue-page.tsx:36:72",
-        "frontend/pages/admin/asset-queue-page.tsx:36:282",
-        "frontend/pages/admin/asset-queue-page.tsx:36:311",
-        "frontend/pages/admin/asset-queue-page.tsx:36:349",
-        "frontend/pages/admin/asset-queue-page.tsx:36:395",
-        "frontend/pages/admin/asset-queue-page.tsx:36:439",
-        "frontend/pages/admin/asset-queue-page.tsx:36:497",
-        "frontend/pages/admin/asset-queue-page.tsx:36:592",
-        "frontend/pages/admin/asset-queue-page.tsx:36:754",
-        "frontend/pages/admin/asset-queue-page.tsx:36:941",
-        "frontend/pages/admin/asset-queue-page.tsx:36:1082",
-        "frontend/pages/admin/asset-queue-page.tsx:36:1263",
-        "frontend/pages/admin/asset-queue-page.tsx:36:1375",
-        "frontend/pages/admin/asset-queue-page.tsx:36:1519",
-        "frontend/pages/admin/asset-queue-page.tsx:53:206",
-        "frontend/pages/admin/asset-queue-page.tsx:53:553",
-        "frontend/pages/admin/asset-queue-page.tsx:55:84"
+        "frontend/pages/admin/asset-queue-page.tsx:36:164",
+        "frontend/pages/admin/asset-queue-page.tsx:38:16",
+        "frontend/pages/admin/asset-queue-page.tsx:38:463",
+        "frontend/pages/admin/asset-queue-page.tsx:43:25",
+        "frontend/pages/admin/asset-queue-page.tsx:43:187",
+        "frontend/pages/admin/asset-queue-page.tsx:43:374",
+        "frontend/pages/admin/asset-queue-page.tsx:43:515",
+        "frontend/pages/admin/asset-queue-page.tsx:43:696",
+        "frontend/pages/admin/asset-queue-page.tsx:43:808",
+        "frontend/pages/admin/asset-queue-page.tsx:43:952",
+        "frontend/pages/admin/asset-queue-page.tsx:60:206",
+        "frontend/pages/admin/asset-queue-page.tsx:60:553",
+        "frontend/pages/admin/asset-queue-page.tsx:62:84"
       ],
       "unresolvedSymbols": []
     },
@@ -3120,6 +3126,11 @@
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/checkbox.tsx:59:7",
+        "frontend/components/motion/select.tsx:177:5",
+        "frontend/components/motion/select.tsx:178:5",
+        "frontend/components/motion/select.tsx:247:5",
+        "frontend/components/motion/select.tsx:380:5",
+        "frontend/components/motion/select.tsx:442:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -3148,9 +3159,13 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
+        "frontend/components/ui/applied-filters.tsx:24:5",
+        "frontend/components/ui/applied-filters.tsx:28:11",
+        "frontend/components/ui/applied-filters.tsx:31:7",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
         "frontend/components/ui/card.tsx:12:86",
+        "frontend/components/ui/filter-select.tsx:24:7",
         "frontend/components/ui/page-state.tsx:12:10",
         "frontend/components/ui/pagination.tsx:35:145",
         "frontend/components/ui/pagination.tsx:38:118",
@@ -3171,11 +3186,11 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/admin/audit-page.tsx:13:28",
-        "frontend/pages/admin/audit-page.tsx:18:72",
-        "frontend/pages/admin/audit-page.tsx:18:257",
-        "frontend/pages/admin/audit-page.tsx:18:310",
-        "frontend/pages/admin/audit-page.tsx:20:5"
+        "frontend/pages/admin/audit-page.tsx:15:28",
+        "frontend/pages/admin/audit-page.tsx:20:16",
+        "frontend/pages/admin/audit-page.tsx:21:5",
+        "frontend/pages/admin/audit-page.tsx:27:20",
+        "frontend/pages/admin/audit-page.tsx:28:5"
       ],
       "unresolvedSymbols": []
     },
@@ -3656,11 +3671,11 @@
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/pages/admin/review-detail-page.tsx:27:92",
         "frontend/pages/admin/review-detail-page.tsx:28:9",
-        "frontend/pages/admin/review-detail-page.tsx:44:31",
-        "frontend/pages/admin/review-detail-page.tsx:44:201",
-        "frontend/pages/admin/review-detail-page.tsx:45:30",
-        "frontend/pages/admin/review-detail-page.tsx:46:5",
-        "frontend/pages/admin/review-detail-page.tsx:48:7",
+        "frontend/pages/admin/review-detail-page.tsx:49:31",
+        "frontend/pages/admin/review-detail-page.tsx:49:201",
+        "frontend/pages/admin/review-detail-page.tsx:50:30",
+        "frontend/pages/admin/review-detail-page.tsx:51:5",
+        "frontend/pages/admin/review-detail-page.tsx:53:7",
         "frontend/pages/admin/review-detail-route.tsx:43:5",
         "frontend/pages/admin/review-detail-route.tsx:156:10"
       ],
@@ -6947,10 +6962,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/app.tsx:4325:10",
+      "id": "frontend/app.tsx:4335:10",
       "path": "frontend/app.tsx",
       "owner": "AdminAssetsRoute",
-      "line": 4325,
+      "line": 4335,
       "column": 10,
       "kind": "jsx",
       "tag": "AssetQueuePage",
@@ -19531,6 +19546,94 @@
       "earlyReturns": []
     },
     {
+      "id": "frontend/components/ui/applied-filters.tsx:24:5",
+      "path": "frontend/components/ui/applied-filters.tsx",
+      "owner": "AppliedFilters",
+      "line": 24,
+      "column": 5,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "data-applied-filters": "true",
+        "role": "\"group\"",
+        "aria-label": "ariaLabel",
+        "className": "cn(\"flex flex-wrap items-center gap-2 text-sm\", className)"
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "filters.length === 0",
+          "source": "if (filters.length === 0) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/ui/applied-filters.tsx:28:11",
+      "path": "frontend/components/ui/applied-filters.tsx",
+      "owner": "AppliedFilters",
+      "line": 28,
+      "column": 11,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "aria-label": "`${clearLabel}: ${filter.label}`",
+        "onClick": "filter.onRemove",
+        "className": "\"text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full\""
+      },
+      "handlers": {
+        "onClick": "filter.onRemove"
+      },
+      "spreads": [],
+      "labels": [
+        "×"
+      ],
+      "context": [
+        {
+          "kind": "repeat",
+          "expression": "filters"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "filters.length === 0",
+          "source": "if (filters.length === 0) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/ui/applied-filters.tsx:31:7",
+      "path": "frontend/components/ui/applied-filters.tsx",
+      "owner": "AppliedFilters",
+      "line": 31,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "variant": "\"ghost\"",
+        "size": "\"sm\"",
+        "data-filters-clear": "true",
+        "onClick": "onClear"
+      },
+      "handlers": {
+        "onClick": "onClear"
+      },
+      "spreads": [],
+      "labels": [
+        "clearLabel"
+      ],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "filters.length === 0",
+          "source": "if (filters.length === 0) return null;"
+        }
+      ]
+    },
+    {
       "id": "frontend/components/ui/badge.tsx:20:72",
       "path": "frontend/components/ui/badge.tsx",
       "owner": "Badge",
@@ -20128,6 +20231,27 @@
           "expression": "items"
         }
       ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/ui/filter-select.tsx:24:7",
+      "path": "frontend/components/ui/filter-select.tsx",
+      "owner": "FilterSelect",
+      "line": 24,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "Select",
+      "attributes": {
+        "value": "value",
+        "onValueChange": "onChange",
+        "disabled": "disabled"
+      },
+      "handlers": {
+        "onValueChange": "onChange"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
       "earlyReturns": []
     },
     {
@@ -26169,10 +26293,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:34:164",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:36:164",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 34,
+      "line": 36,
       "column": 164,
       "kind": "jsx",
       "tag": "Button",
@@ -26208,22 +26332,23 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:72",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:38:16",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 72,
+      "line": 38,
+      "column": 16,
       "kind": "jsx",
-      "tag": "select",
+      "tag": "FilterSelect",
       "attributes": {
-        "aria-label": "\"Asset status\"",
-        "className": "\"ml-2 h-9 rounded-md border bg-background px-2\"",
-        "disabled": "pending",
+        "label": "\"Status\"",
+        "ariaLabel": "\"Asset status\"",
         "value": "status",
-        "onChange": "(event) => onStatusChange?.(event.target.value as \"\" | AdminAssetStatus)"
+        "disabled": "pending",
+        "onChange": "(value) => onStatusChange?.(value as \"\" | AdminAssetStatus)",
+        "options": "[{ value: \"\", label: \"All\" }, { value: \"queued\", label: \"queued\" }, { value: \"processing\", label: \"processing\" }, { value: \"succeeded\", label: \"succeeded\" }, { value: \"failed_retryable\", label: \"failed_retryable\" }, { value: \"failed_terminal\", label: \"failed_terminal\" }]"
       },
       "handlers": {
-        "onChange": "(event) => onStatusChange?.(event.target.value as \"\" | AdminAssetStatus)"
+        "onChange": "(value) => onStatusChange?.(value as \"\" | AdminAssetStatus)"
       },
       "spreads": [],
       "labels": [],
@@ -26248,34 +26373,30 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:282",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:38:463",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 282,
+      "line": 38,
+      "column": 463,
       "kind": "jsx",
-      "tag": "option",
+      "tag": "AppliedFilters",
       "attributes": {
-        "value": "\"\""
+        "ariaLabel": "frontendText(locale, \"COMMON_APPLIED_FILTERS\")",
+        "clearLabel": "frontendText(locale, \"COMMON_CLEAR_FILTERS\")",
+        "filters": "status ? [{ id: \"status\", label: `Status: ${status}`, onRemove: () => onStatusChange?.(\"\") }] : []",
+        "onClear": "() => onStatusChange?.(\"\")"
       },
-      "handlers": {},
+      "handlers": {
+        "onClear": "() => onStatusChange?.(\"\")"
+      },
       "spreads": [],
-      "labels": [
-        "All"
-      ],
+      "labels": [],
       "context": [
         {
           "kind": "container",
           "tag": "section",
           "attributes": {
             "aria-hidden": "valid || undefined"
-          }
-        },
-        {
-          "kind": "container",
-          "tag": "select",
-          "attributes": {
-            "disabled": "pending"
           }
         }
       ],
@@ -26291,226 +26412,11 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:311",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:43:25",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 311,
-      "kind": "jsx",
-      "tag": "option",
-      "attributes": {
-        "value": "\"queued\""
-      },
-      "handlers": {},
-      "spreads": [],
-      "labels": [
-        "queued"
-      ],
-      "context": [
-        {
-          "kind": "container",
-          "tag": "section",
-          "attributes": {
-            "aria-hidden": "valid || undefined"
-          }
-        },
-        {
-          "kind": "container",
-          "tag": "select",
-          "attributes": {
-            "disabled": "pending"
-          }
-        }
-      ],
-      "earlyReturns": [
-        {
-          "condition": "loading",
-          "source": "if (loading) return <PageState kind=\"loading\" title={frontendText(locale, \"APP_LOADING_TITLE\")} />;"
-        },
-        {
-          "condition": "error",
-          "source": "if (error) return <PageState kind={forbidden ? \"forbidden\" : \"error\"} title={error} description={frontendText(locale, \"COMMON_UNABLE_TO_LOAD\")} >{onLoadRetry && <Button type=\"button\" variant=\"outline\" onClick={onLoadRetry}>{frontendText(locale, \"COMMON_RETRY\")}</Button>}</PageState>;"
-        }
-      ]
-    },
-    {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:349",
-      "path": "frontend/pages/admin/asset-queue-page.tsx",
-      "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 349,
-      "kind": "jsx",
-      "tag": "option",
-      "attributes": {
-        "value": "\"processing\""
-      },
-      "handlers": {},
-      "spreads": [],
-      "labels": [
-        "processing"
-      ],
-      "context": [
-        {
-          "kind": "container",
-          "tag": "section",
-          "attributes": {
-            "aria-hidden": "valid || undefined"
-          }
-        },
-        {
-          "kind": "container",
-          "tag": "select",
-          "attributes": {
-            "disabled": "pending"
-          }
-        }
-      ],
-      "earlyReturns": [
-        {
-          "condition": "loading",
-          "source": "if (loading) return <PageState kind=\"loading\" title={frontendText(locale, \"APP_LOADING_TITLE\")} />;"
-        },
-        {
-          "condition": "error",
-          "source": "if (error) return <PageState kind={forbidden ? \"forbidden\" : \"error\"} title={error} description={frontendText(locale, \"COMMON_UNABLE_TO_LOAD\")} >{onLoadRetry && <Button type=\"button\" variant=\"outline\" onClick={onLoadRetry}>{frontendText(locale, \"COMMON_RETRY\")}</Button>}</PageState>;"
-        }
-      ]
-    },
-    {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:395",
-      "path": "frontend/pages/admin/asset-queue-page.tsx",
-      "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 395,
-      "kind": "jsx",
-      "tag": "option",
-      "attributes": {
-        "value": "\"succeeded\""
-      },
-      "handlers": {},
-      "spreads": [],
-      "labels": [
-        "succeeded"
-      ],
-      "context": [
-        {
-          "kind": "container",
-          "tag": "section",
-          "attributes": {
-            "aria-hidden": "valid || undefined"
-          }
-        },
-        {
-          "kind": "container",
-          "tag": "select",
-          "attributes": {
-            "disabled": "pending"
-          }
-        }
-      ],
-      "earlyReturns": [
-        {
-          "condition": "loading",
-          "source": "if (loading) return <PageState kind=\"loading\" title={frontendText(locale, \"APP_LOADING_TITLE\")} />;"
-        },
-        {
-          "condition": "error",
-          "source": "if (error) return <PageState kind={forbidden ? \"forbidden\" : \"error\"} title={error} description={frontendText(locale, \"COMMON_UNABLE_TO_LOAD\")} >{onLoadRetry && <Button type=\"button\" variant=\"outline\" onClick={onLoadRetry}>{frontendText(locale, \"COMMON_RETRY\")}</Button>}</PageState>;"
-        }
-      ]
-    },
-    {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:439",
-      "path": "frontend/pages/admin/asset-queue-page.tsx",
-      "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 439,
-      "kind": "jsx",
-      "tag": "option",
-      "attributes": {
-        "value": "\"failed_retryable\""
-      },
-      "handlers": {},
-      "spreads": [],
-      "labels": [
-        "failed_retryable"
-      ],
-      "context": [
-        {
-          "kind": "container",
-          "tag": "section",
-          "attributes": {
-            "aria-hidden": "valid || undefined"
-          }
-        },
-        {
-          "kind": "container",
-          "tag": "select",
-          "attributes": {
-            "disabled": "pending"
-          }
-        }
-      ],
-      "earlyReturns": [
-        {
-          "condition": "loading",
-          "source": "if (loading) return <PageState kind=\"loading\" title={frontendText(locale, \"APP_LOADING_TITLE\")} />;"
-        },
-        {
-          "condition": "error",
-          "source": "if (error) return <PageState kind={forbidden ? \"forbidden\" : \"error\"} title={error} description={frontendText(locale, \"COMMON_UNABLE_TO_LOAD\")} >{onLoadRetry && <Button type=\"button\" variant=\"outline\" onClick={onLoadRetry}>{frontendText(locale, \"COMMON_RETRY\")}</Button>}</PageState>;"
-        }
-      ]
-    },
-    {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:497",
-      "path": "frontend/pages/admin/asset-queue-page.tsx",
-      "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 497,
-      "kind": "jsx",
-      "tag": "option",
-      "attributes": {
-        "value": "\"failed_terminal\""
-      },
-      "handlers": {},
-      "spreads": [],
-      "labels": [
-        "failed_terminal"
-      ],
-      "context": [
-        {
-          "kind": "container",
-          "tag": "section",
-          "attributes": {
-            "aria-hidden": "valid || undefined"
-          }
-        },
-        {
-          "kind": "container",
-          "tag": "select",
-          "attributes": {
-            "disabled": "pending"
-          }
-        }
-      ],
-      "earlyReturns": [
-        {
-          "condition": "loading",
-          "source": "if (loading) return <PageState kind=\"loading\" title={frontendText(locale, \"APP_LOADING_TITLE\")} />;"
-        },
-        {
-          "condition": "error",
-          "source": "if (error) return <PageState kind={forbidden ? \"forbidden\" : \"error\"} title={error} description={frontendText(locale, \"COMMON_UNABLE_TO_LOAD\")} >{onLoadRetry && <Button type=\"button\" variant=\"outline\" onClick={onLoadRetry}>{frontendText(locale, \"COMMON_RETRY\")}</Button>}</PageState>;"
-        }
-      ]
-    },
-    {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:592",
-      "path": "frontend/pages/admin/asset-queue-page.tsx",
-      "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 592,
+      "line": 43,
+      "column": 25,
       "kind": "jsx",
       "tag": "div",
       "attributes": {
@@ -26547,11 +26453,11 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:754",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:43:187",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 754,
+      "line": 43,
+      "column": 187,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -26592,11 +26498,11 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:941",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:43:374",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 941,
+      "line": 43,
+      "column": 374,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -26634,11 +26540,11 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:1082",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:43:515",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 1082,
+      "line": 43,
+      "column": 515,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -26685,11 +26591,11 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:1263",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:43:696",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 1263,
+      "line": 43,
+      "column": 696,
       "kind": "jsx",
       "tag": "div",
       "attributes": {
@@ -26727,11 +26633,11 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:1375",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:43:808",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 1375,
+      "line": 43,
+      "column": 808,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -26773,11 +26679,11 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:36:1519",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:43:952",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 36,
-      "column": 1519,
+      "line": 43,
+      "column": 952,
       "kind": "jsx",
       "tag": "DataTable",
       "attributes": {
@@ -26829,10 +26735,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:53:206",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:60:206",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 53,
+      "line": 60,
       "column": 206,
       "kind": "jsx",
       "tag": "Button",
@@ -26876,10 +26782,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:53:553",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:60:553",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 53,
+      "line": 60,
       "column": 553,
       "kind": "jsx",
       "tag": "Button",
@@ -26927,10 +26833,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/asset-queue-page.tsx:55:84",
+      "id": "frontend/pages/admin/asset-queue-page.tsx:62:84",
       "path": "frontend/pages/admin/asset-queue-page.tsx",
       "owner": "AssetQueuePage",
-      "line": 55,
+      "line": 62,
       "column": 84,
       "kind": "jsx",
       "tag": "ConfirmAction",
@@ -26962,10 +26868,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/audit-page.tsx:13:28",
+      "id": "frontend/pages/admin/audit-page.tsx:15:28",
       "path": "frontend/pages/admin/audit-page.tsx",
       "owner": "AuditPage",
-      "line": 13,
+      "line": 15,
       "column": 28,
       "kind": "jsx",
       "tag": "Button",
@@ -26994,22 +26900,23 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/audit-page.tsx:18:72",
+      "id": "frontend/pages/admin/audit-page.tsx:20:16",
       "path": "frontend/pages/admin/audit-page.tsx",
       "owner": "AuditPage",
-      "line": 18,
-      "column": 72,
+      "line": 20,
+      "column": 16,
       "kind": "jsx",
-      "tag": "select",
+      "tag": "FilterSelect",
       "attributes": {
-        "aria-label": "\"Audit action\"",
-        "className": "\"ml-2 h-9 rounded-md border bg-background px-2\"",
-        "disabled": "pending",
+        "label": "\"Action\"",
+        "ariaLabel": "\"Audit action\"",
         "value": "action",
-        "onChange": "(event) => onActionChange?.(event.target.value)"
+        "disabled": "pending",
+        "onChange": "(value) => onActionChange?.(value)",
+        "options": "[{ value: \"\", label: \"All\" }, ...actions.map((value) => ({ value, label: value }))]"
       },
       "handlers": {
-        "onChange": "(event) => onActionChange?.(event.target.value)"
+        "onChange": "(value) => onActionChange?.(value)"
       },
       "spreads": [],
       "labels": [],
@@ -27034,34 +26941,30 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/audit-page.tsx:18:257",
+      "id": "frontend/pages/admin/audit-page.tsx:21:5",
       "path": "frontend/pages/admin/audit-page.tsx",
       "owner": "AuditPage",
-      "line": 18,
-      "column": 257,
+      "line": 21,
+      "column": 5,
       "kind": "jsx",
-      "tag": "option",
+      "tag": "AppliedFilters",
       "attributes": {
-        "value": "\"\""
+        "ariaLabel": "frontendText(locale, \"COMMON_APPLIED_FILTERS\")",
+        "clearLabel": "frontendText(locale, \"COMMON_CLEAR_FILTERS\")",
+        "filters": "action ? [{ id: \"action\", label: `Action: ${action}`, onRemove: () => onActionChange?.(\"\") }] : []",
+        "onClear": "() => onActionChange?.(\"\")"
       },
-      "handlers": {},
+      "handlers": {
+        "onClear": "() => onActionChange?.(\"\")"
+      },
       "spreads": [],
-      "labels": [
-        "All"
-      ],
+      "labels": [],
       "context": [
         {
           "kind": "container",
           "tag": "section",
           "attributes": {
             "aria-busy": "pending"
-          }
-        },
-        {
-          "kind": "container",
-          "tag": "select",
-          "attributes": {
-            "disabled": "pending"
           }
         }
       ],
@@ -27077,21 +26980,21 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/audit-page.tsx:18:310",
+      "id": "frontend/pages/admin/audit-page.tsx:27:20",
       "path": "frontend/pages/admin/audit-page.tsx",
       "owner": "AuditPage",
-      "line": 18,
-      "column": 310,
+      "line": 27,
+      "column": 20,
       "kind": "jsx",
-      "tag": "option",
+      "tag": "div",
       "attributes": {
-        "key": "value",
-        "value": "value"
+        "role": "\"alert\"",
+        "className": "\"flex flex-wrap items-center gap-2 text-sm text-destructive\""
       },
       "handlers": {},
       "spreads": [],
       "labels": [
-        "value"
+        "retry"
       ],
       "context": [
         {
@@ -27102,15 +27005,9 @@
           }
         },
         {
-          "kind": "container",
-          "tag": "select",
-          "attributes": {
-            "disabled": "pending"
-          }
-        },
-        {
-          "kind": "repeat",
-          "expression": "actions"
+          "kind": "logical",
+          "expression": "localError",
+          "operator": "&&"
         }
       ],
       "earlyReturns": [
@@ -27125,10 +27022,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/audit-page.tsx:20:5",
+      "id": "frontend/pages/admin/audit-page.tsx:28:5",
       "path": "frontend/pages/admin/audit-page.tsx",
       "owner": "AuditPage",
-      "line": 20,
+      "line": 28,
       "column": 5,
       "kind": "jsx",
       "tag": "DataTable",
@@ -30157,10 +30054,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:44:31",
+      "id": "frontend/pages/admin/review-detail-page.tsx:49:31",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 44,
+      "line": 49,
       "column": 31,
       "kind": "jsx",
       "tag": "div",
@@ -30191,10 +30088,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:44:201",
+      "id": "frontend/pages/admin/review-detail-page.tsx:49:201",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 44,
+      "line": 49,
       "column": 201,
       "kind": "jsx",
       "tag": "Button",
@@ -30229,10 +30126,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:45:30",
+      "id": "frontend/pages/admin/review-detail-page.tsx:50:30",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 45,
+      "line": 50,
       "column": 30,
       "kind": "jsx",
       "tag": "p",
@@ -30264,10 +30161,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:46:5",
+      "id": "frontend/pages/admin/review-detail-page.tsx:51:5",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 46,
+      "line": 51,
       "column": 5,
       "kind": "jsx",
       "tag": "ReviewDecisionFeedback",
@@ -30297,10 +30194,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:48:7",
+      "id": "frontend/pages/admin/review-detail-page.tsx:53:7",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 48,
+      "line": 53,
       "column": 7,
       "kind": "jsx",
       "tag": "ReviewDecisionControls",
@@ -30311,7 +30208,7 @@
         "targetLabel": "detail.title || detail.id",
         "snapshot": "detail",
         "disabled": "reviewDecisionLocked(decisionState)",
-        "terminal": "detail.status !== \"review_pending\"",
+        "terminal": "terminal",
         "pendingAction": "decisionState.kind === \"pending\" ? decisionState.action : undefined",
         "onDecision": "onDecision",
         "locale": "locale"

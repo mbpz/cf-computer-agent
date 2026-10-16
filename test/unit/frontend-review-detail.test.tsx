@@ -34,6 +34,40 @@ describe("React review detail boundary", () => {
     expect(html).not.toContain("private");
   });
 
+  it("states a past-review submission as closed next to its real status text", () => {
+    const detail = reviewDetailModel({ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "rejected", content: "Body" });
+    const html = renderToStaticMarkup(<ReviewDetailPage state={{ kind: "ready", detail }} onDecision={vi.fn()} />);
+    expect(html).toContain('data-review-state="closed"');
+    expect(html).toContain("no longer awaiting review");
+    // The real status stays visible as text, not colour alone.
+    expect(html).toContain("rejected");
+    expect(html).not.toContain("data-review-state=\"read-only\"");
+  });
+
+  it("states read-only access as text when the decision capability is absent", () => {
+    const detail = reviewDetailModel({ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "review_pending", content: "Body" });
+    const html = renderToStaticMarkup(<ReviewDetailPage state={{ kind: "ready", detail }} />);
+    expect(html).toContain('data-review-state="read-only"');
+    expect(html).toContain("cannot make a review decision");
+    expect(html).toContain("review_pending");
+  });
+
+  it("adds no restricted note to a decidable pending submission", () => {
+    const detail = reviewDetailModel({ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "review_pending", content: "Body" });
+    const html = renderToStaticMarkup(<ReviewDetailPage state={{ kind: "ready", detail }} onDecision={vi.fn()} />);
+    expect(html).not.toContain("data-review-state");
+    expect(html).toContain("Publish");
+  });
+
+  it("pairs retry-same-decision with the reload route for an unknown result", () => {
+    const detail = reviewDetailModel({ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "review_pending", content: "Body" });
+    const html = renderToStaticMarkup(<ReviewDetailPage state={{ kind: "ready", detail }} onDecision={vi.fn()} onRetry={vi.fn()} onRetryDecision={vi.fn()}
+      decisionState={{ kind: "error", action: "publish", recovery: "retry" }} />);
+    expect(html).toContain("The result is unknown");
+    expect(html).toContain("Retry same decision");
+    expect(html).toContain("Reload current state");
+  });
+
   it("starts real detail routes in a bounded loading state", () => {
     const html = renderToStaticMarkup(<ReviewDetailRoute id="sub-1" />);
     expect(html).toContain("aria-busy");

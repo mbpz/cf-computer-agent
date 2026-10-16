@@ -1,5 +1,7 @@
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
+import { FilterSelect } from "../../components/ui/filter-select";
+import { AppliedFilters } from "../../components/ui/applied-filters";
 import { DataTable } from "../../components/data-table";
 import { PageState } from "../../components/ui/page-state";
 import { Skeleton } from "../../components/ui/skeleton";
@@ -15,8 +17,14 @@ export function AuditPage({ state, action = "", pending = false, localError, onR
   if (state.kind === "error") return <div aria-busy={pending}><PageState kind="error" title={state.message || frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE")}>{retry}</PageState></div>;
   return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0" aria-busy={pending}>
     <PageHeader title={frontendText(locale, "ADMIN_AUDIT_TITLE")} description={frontendText(locale, "ADMIN_AUDIT_DESCRIPTION")}
-      actions={<label className="text-sm text-muted-foreground">Action <select aria-label="Audit action" className="ml-2 h-9 rounded-md border bg-background px-2" disabled={pending} value={action} onChange={(event) => onActionChange?.(event.target.value)}><option value="">All</option>{actions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>} />
-    {localError && <PageState kind="error" title={localError}>{retry}</PageState>}
+      actions={<FilterSelect label="Action" ariaLabel="Audit action" value={action} disabled={pending} onChange={(value) => onActionChange?.(value)} options={[{ value: "", label: "All" }, ...actions.map((value) => ({ value, label: value }))]} />} />
+    <AppliedFilters
+      ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")}
+      clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")}
+      filters={action ? [{ id: "action", label: `Action: ${action}`, onRemove: () => onActionChange?.("") }] : []}
+      onClear={() => onActionChange?.("")}
+    />
+    {localError && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive"><span>{localError}</span>{retry}</div>}
     <DataTable
       locale={locale}
       rows={state.page.items}

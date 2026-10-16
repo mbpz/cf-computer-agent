@@ -4199,15 +4199,19 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
   const appendRef = useRef(false);
   const [pageSize, setPageSize] = useState<SupportedPageSize>(listPageSize);
   const queryRef = useRef({ status });
+  // The query the visible window answers. A failed read for a different query
+  // must not leave that window's rows actionable, so it falls back to the error
+  // state instead of keeping the previous rows.
+  const displayedQueryRef = useRef<{ status: AdminAssetStatus | undefined } | null>(null);
   const sameQuery = (value: typeof queryRef.current) => value.status === queryRef.current.status;
   const syncPendingIds = () => { setPendingIds([...new Set([...mutationsRef.current.keys(), ...needsReadRef.current])]); syncLeaveGuard(); };
   const clearPreview = () => {
     previewAbort.current?.abort(); previewAbort.current = null;
     setPreview(null); setPreviewError(undefined); setPreviewLoading(false);
   };
-  const invalidateQuery = () => {
+  const invalidateQuery = (keepLoaded = false) => {
     scopeRef.current = {}; controllerRef.current?.dispose(); controllerRef.current = null; readRef.current = null;
-    clearPreview(); setState({ kind: "loading" }); setRequestPending(false); setLocalError(undefined); setRetryError(undefined);
+    clearPreview(); setState((old) => keepLoaded && old.kind === "ready" ? old : { kind: "loading" }); setRequestPending(false); setLocalError(undefined); setRetryError(undefined);
   };
   const deny = (error: unknown) => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
@@ -4229,7 +4233,7 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
     const serialized = params.toString();
     ownedQueryNavigation.current = true;
     try { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
-      invalidateQuery(); queryRef.current = { status: nextStatus };
+      invalidateQuery(true); queryRef.current = { status: nextStatus };
       setStatus(nextStatus);
     }); } finally { ownedQueryNavigation.current = false; }
   };
@@ -4238,7 +4242,8 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
     const token = {}; readRef.current = token;
     requestedPageRef.current = targetPage; appendRef.current = append;
     setRequestPending(true); setLocalError(undefined); setRetryError(undefined);
-    const request = controller.request({ page: targetPage, pageSize, status: queryRef.current.status });
+    const requestStatus = queryRef.current.status;
+    const request = controller.request({ page: targetPage, pageSize, status: requestStatus });
     try {
       const data = await request.promise;
       if (!controller.isCurrent(request.generation)) return;
@@ -4254,13 +4259,16 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
         needsReadRef.current.delete(row.id);
       }
       syncPendingIds();
+      displayedQueryRef.current = { status: requestStatus };
       setState((previous) => previous.kind === "ready" && append
         ? { kind: "ready", data: { items: [...previous.data.items, ...data.items], pagination: data.pagination } }
         : { kind: "ready", data });
     } catch (error: unknown) {
       if (!controller.isCurrent(request.generation) || isAbort(error)) return;
       if (!deny(error)) {
-        setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+        // A window loaded for another query cannot stand in for this one.
+        const staleWindow = displayedQueryRef.current !== null && displayedQueryRef.current.status !== requestStatus;
+        setState((old) => old.kind === "ready" && !staleWindow ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
         setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
       }
     } finally {
@@ -4276,12 +4284,14 @@ export function AdminAssetsRoute({ locale, search, memberId }: { locale: LocaleR
   useEffect(() => subscribeWorkspaceLocation(() => {
     const next = { status: assetStatusSearch(readWorkspaceLocation().search) };
     if (sameQuery(next)) return;
-    invalidateQuery(); queryRef.current = next; setStatus(next.status);
+    invalidateQuery(true); queryRef.current = next; setStatus(next.status);
   }), []);
   useEffect(() => {
     const controller = createAdminAssetsRequestController(); controllerRef.current = controller; readRef.current = null;
     void read(controller, 1);
-    return () => { invalidateQuery(); };
+    // Swapping the controller for a new query must not empty the window: the
+    // in-flight disposal keeps whatever was loaded so the next read shows it.
+    return () => { invalidateQuery(true); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- read only needs the controller; locale pins the error text
   }, [locale, status, readVersion, pageSize]);
   const retry = async (id: string) => {
