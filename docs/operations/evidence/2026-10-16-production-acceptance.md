@@ -134,3 +134,5 @@
 **清理**：本轮与上轮的测试对象均已移除——收藏已取消（`favorites` 计数 0，控件标签回到「加入收藏」）✓；遗留草稿不存在（0 条）✓；上轮那条笔记随结案说明不再单独清理（读回为 `null`，行不存在）。
 
 **本轮仍未覆盖**：不可逆写入（审核决策、成员状态、菜单编辑、purge、回收、drain 的写入面）、视口矩阵（320/375/768/1280）与深色/中英文遍历、真实 AI 生成（避免计费与配额）。
+
+**部署与迁移确认**：`npx wrangler d1 migrations list memory-garden-control-plane --remote` → **"✅ No migrations to apply!"**，即 0064–0073 全部已应用（含本轮新增的 `0073_submission_draft_discard_receipts.sql`）。至此本轮发布与验收闭环：构建链（`build:ui` / `verify:landing` 100/100 / `build:secrets` / `build:legacy-audit` / `wrangler deploy --dry-run`）本地全绿，两个会话的真实浏览器验收与回收往返重测完成，未覆盖面已逐条记录。
