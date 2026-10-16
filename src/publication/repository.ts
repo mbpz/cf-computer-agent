@@ -791,6 +791,56 @@ export class PublicationRepository implements PublicationRepositoryPort {
                WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
              )`,
         ).bind(plan.knowledgeItemId, plan.knowledgeItemId, plan.trashedAt),
+        // Member-scoped rows attached to the item by a foreign key that carries
+        // no delete action are removed here, in the same guarded batch as the
+        // item itself. Without this the purge aborted on the first such row
+        // (a member's private note, a task link, a research run) and destroyed
+        // nothing, and with foreign keys relaxed the same delete would strand
+        // them as rows pointing at an item that no longer exists. This is the
+        // irreversible path: the member relations die with the item, while the
+        // recycle bin only ever hides them. The cascading relations
+        // (knowledge_favorites, knowledge_visits, private_note_shares) and the
+        // derived index rows follow the item delete below on their own.
+        this.db.prepare(
+          `DELETE FROM private_notes
+           WHERE knowledge_item_id = ?
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(plan.knowledgeItemId, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM task_links
+           WHERE knowledge_item_id = ?
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(plan.knowledgeItemId, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM research_queries
+           WHERE research_run_id IN (SELECT id FROM research_runs WHERE knowledge_item_id = ?)
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(plan.knowledgeItemId, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM research_reports
+           WHERE research_run_id IN (SELECT id FROM research_runs WHERE knowledge_item_id = ?)
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(plan.knowledgeItemId, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM research_runs
+           WHERE knowledge_item_id = ?
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(plan.knowledgeItemId, plan.knowledgeItemId, plan.trashedAt),
         this.db.prepare(
           `DELETE FROM knowledge_items
            WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL`,

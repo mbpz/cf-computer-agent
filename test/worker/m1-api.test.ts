@@ -866,6 +866,24 @@ it("returns authorized, bounded related knowledge with explainable fields", asyn
       .resolves.toEqual({ status: "review_pending" });
   });
 
+  it("keeps rejecting an empty draft body instead of reading it as a discard", async () => {
+    const created = await memberApi("contributor", "/api/submissions/drafts", {
+      method: "POST", body: JSON.stringify({ requestedSpaceId: "default", kind: "markdown", title: "Keep me", content: "# Body" }),
+    });
+    expect(created.status).toBe(201);
+    const draft = await created.json<{ id: string }>();
+
+    // The two shapes a discard cannot be expressed through: an empty body and the
+    // incomplete body the production probe sent. Both stay refused, and the row
+    // keeps its text, so nothing is deleted through a malformed update.
+    await expectApiError(memberApi("contributor", `/api/submissions/drafts/${draft.id}`, { method: "PATCH", body: "{}" }), 400, "SUBMISSION_REQUEST_INVALID");
+    await expectApiError(memberApi("contributor", `/api/submissions/drafts/${draft.id}`, {
+      method: "PATCH", body: JSON.stringify({ title: "", content: "" }),
+    }), 400, "SUBMISSION_REQUEST_INVALID");
+    await expect(env.DB.prepare("SELECT title, content, status FROM submissions WHERE id = ?").bind(draft.id).first())
+      .resolves.toEqual({ title: "Keep me", content: "# Body", status: "draft" });
+  });
+
   it("converts rich-text paste to sanitized Markdown before review persistence", async () => {
     const response = await memberApi("contributor", "/api/submissions", {
       method: "POST",

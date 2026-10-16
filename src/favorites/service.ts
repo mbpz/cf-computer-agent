@@ -38,6 +38,11 @@ export class FavoritesService {
   async remove(scope: FavoriteScope, knowledgeItemId: string, operationId: string): Promise<KnowledgeFavoriteOperationResult> {
     assertId(knowledgeItemId);
     assertOperationId(operationId);
+    // Authorization precedes replay on this side too. A trashed item is
+    // unreadable, so its member-scoped edges are not writable: otherwise a
+    // removal accepted while the item sits in the recycle bin would destroy an
+    // edge that a later restore has to bring back from nothing.
+    if (!await this.repository.isReadable(scope, knowledgeItemId)) throw notFound();
     const requestHash = await hashRequest({ kind: "knowledge.favorite.remove", memberId: scope.memberId, knowledgeItemId });
     return this.repository.remove(scope, knowledgeItemId, operationId, requestHash, this.now().toISOString());
   }

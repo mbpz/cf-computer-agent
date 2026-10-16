@@ -15,6 +15,24 @@ type PrivateNoteRow = {
 };
 type NoteCursor = { v: 1; updatedAt: string; id: string };
 
+/**
+ * The same readability the note's own write path already enforces for each
+ * citation (`assertCitationReadable`): a member reads their note exactly while
+ * the knowledge item it annotates is readable to them. A trashed item is not.
+ * The note row itself is never destroyed by that state — hiding it here is
+ * what makes the recycle bin a state, and `restore` brings the same row back.
+ */
+const readableItemSql = `EXISTS (
+         SELECT 1 FROM knowledge_items AS k
+         JOIN revisions AS r ON r.id = k.current_revision_id AND r.knowledge_item_id = k.id
+         JOIN spaces AS s ON s.id = k.space_id AND s.status = 'active'
+         LEFT JOIN collections AS c ON c.id = k.collection_id AND c.space_id = k.space_id AND c.status = 'active'
+         WHERE k.id = n.knowledge_item_id
+           AND k.status = 'active'
+           AND (k.collection_id IS NULL OR c.id IS NOT NULL)
+           AND (r.visibility = 'shared' OR ? = 'admin')
+       )`;
+
 export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
   constructor(private readonly db: D1Database) {}
 
@@ -31,6 +49,7 @@ export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
               CASE WHEN n.owner_member_id = ? THEN 'owner' ELSE 'shared' END AS access
        FROM private_notes AS n
        WHERE n.knowledge_item_id = ?
+         AND ${readableItemSql}
          AND (n.owner_member_id = ? OR EXISTS (
            SELECT 1 FROM private_note_shares AS sh
            INNER JOIN members AS recipient ON recipient.id = sh.recipient_member_id
@@ -38,7 +57,7 @@ export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
              AND sh.revoked_at IS NULL AND recipient.status = 'active'
          ))
        LIMIT 1`,
-    ).bind(scope.memberId, knowledgeItemId, scope.memberId, scope.memberId).first<PrivateNoteRow>());
+    ).bind(scope.memberId, knowledgeItemId, scope.role, scope.memberId, scope.memberId).first<PrivateNoteRow>());
   }
 
   async listOwned(scope: PrivateNoteScope, request: PageRequest): Promise<PrivateNotePage> {
@@ -70,7 +89,8 @@ export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
       `SELECT n.id, n.owner_member_id, n.knowledge_item_id, n.title, n.body, n.citations_json, n.created_at, n.updated_at,
               CASE WHEN n.owner_member_id = ? THEN 'owner' ELSE 'shared' END AS access
        FROM private_notes AS n
-       WHERE (n.owner_member_id = ? OR EXISTS (
+       WHERE ${readableItemSql}
+         AND (n.owner_member_id = ? OR EXISTS (
          SELECT 1 FROM private_note_shares AS sh
          INNER JOIN members AS recipient ON recipient.id = sh.recipient_member_id
          WHERE sh.note_id = n.id AND sh.recipient_member_id = ?
@@ -79,7 +99,7 @@ export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
        ORDER BY n.updated_at DESC, n.id DESC
        LIMIT ?`,
     ).bind(
-      scope.memberId, scope.memberId, scope.memberId,
+      scope.memberId, scope.role, scope.memberId, scope.memberId,
       ...(cursor ? [cursor.updatedAt, cursor.updatedAt, cursor.id] : []),
       request.limit + 1,
     ).all<PrivateNoteRow>();

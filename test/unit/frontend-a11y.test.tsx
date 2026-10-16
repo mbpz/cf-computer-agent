@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { SubmitPage } from "../../frontend/pages/submit-page";
 import { KnowledgeReaderPage } from "../../frontend/pages/knowledge-reader-page";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { renderSafeMarkdown } from "../../frontend/lib/markdown-renderer";
 
 const session = { member: { id: "m1", email: "a@example.com", role: "contributor" as const }, capabilities: ["submission:create", "knowledge:read"], logoutUrl: "/auth/logout" };
 
@@ -99,14 +100,18 @@ describe("frontend accessibility gates", () => {
     const html = renderToStaticMarkup(<KnowledgeReaderPage
       locale={createLocaleRuntime({ navigatorLanguage: "en" })}
       revision={{
-        id: "revision-1", knowledgeItemId: "knowledge-1", title: "Guide", markdown: "# Guide",
+        id: "revision-1", knowledgeItemId: "knowledge-1", title: "Guide", markdown: "# Guide\n\n## Deployment\n\nBody",
         isCurrent: false, previousRevisionId: "revision-0", sourceVersionId: "source-version-1", sourceVersionOrdinal: 2,
         parserSchemaVersion: "m2-v1", indexStatus: "indexed", chunks: [{ id: "chunk-1", ordinal: 0, text: "Body", headingPath: ["Guide"], startLine: 3, endLine: 4 }],
       }}
-      renderMarkdown={(markdown) => markdown}
+      renderMarkdown={renderSafeMarkdown}
     />);
+    // The revision's own level-1 heading is content below the title, so the page's only
+    // h1 stays the header's: the body starts at h2 and keeps its depth from there.
     expect((html.match(/<h1/g) ?? []).length).toBe(1);
     expect(html).toMatch(/<h1[^>]*>Guide<\/h1>/u);
+    expect(html).toContain('<div class="markdown-content"><h2>Guide</h2>');
+    expect(html).toContain("<h3>Deployment</h3>");
     expect(html).toContain("Historical revision");
     const outlineAside = html.match(/<aside[^>]*data-reader-outline[^>]*class="([^"]*)"/u)?.[1] ?? "";
     expect(outlineAside).toContain("lg:sticky");
