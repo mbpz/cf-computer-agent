@@ -70,6 +70,18 @@ describe("task-backed boards page", () => {
     expect(html).not.toContain("data-pagination");
   });
 
+  it("keeps one titled h1 above the columns in every column state", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const columns: BoardColumnStates = { todo: { kind: "loading" }, doing: { kind: "error" }, blocked: ready([]), done: ready([task("done", "Shipped", "done-1")]) };
+    const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} onLoadMore={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} recordBlocked unknownMove={{ task: { id: "task-1", title: "Alpha" }, source: "todo", target: "done" }} />);
+
+    expect((html.match(/<h1/g) ?? []).length).toBe(1);
+    expect(html).toMatch(/<h1[^>]*>Boards<\/h1>/u);
+    expect(html.indexOf("<h1")).toBeLessThan(html.indexOf("data-board-move-record-blocked"));
+    expect(html.indexOf("<h1")).toBeLessThan(html.indexOf("data-board-move-unknown"));
+    expect(html.indexOf("<h1")).toBeLessThan(html.indexOf("data-board-columns="));
+  });
+
   it("gives every column its own desktop pager with that column's totals", () => {
     const locale = createLocaleRuntime();
     const columns = readyColumns();

@@ -5,6 +5,7 @@ import { frontendText } from "../lib/i18n";
 import type { WorkbenchReviewSnapshot } from "../lib/workbench-review-data";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 
 export type ReviewTarget = {kind: "task" | "inbox" | "project"; id: string};
@@ -12,14 +13,15 @@ export type WorkbenchReviewPageState = { kind: "loading" } | { kind: "error"; me
 export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onRetry, onOpen, periodBlocked = false, periodNotice, onDiscardPeriod }: { locale: LocaleRuntime; period: "daily" | "weekly"; state: WorkbenchReviewPageState; onPeriodChange?: (period: "daily" | "weekly") => void; onRetry?: () => void; onOpen?: (target: ReviewTarget) => void; periodBlocked?: boolean; periodNotice?: string; onDiscardPeriod?: () => void }) {
   const s = state.kind === "ready" ? state.snapshot : null;
   return <section className="space-y-5" aria-busy={state.kind === "loading"}>
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-2xl font-semibold">{frontendText(locale, "REVIEW_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "REVIEW_DESCRIPTION")}{s ? ` · ${s.periodKey}` : ""}</p></div>
-      <div className="flex flex-wrap gap-2">
+    <PageHeader
+      title={frontendText(locale, "REVIEW_TITLE")}
+      description={`${frontendText(locale, "REVIEW_DESCRIPTION")}${s ? ` · ${s.periodKey}` : ""}`}
+      actions={<>
         {s && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "REVIEW_REFRESH")}</Button>}
         <Button aria-pressed={period === "daily"} variant={period === "daily" ? "default" : "outline"} onClick={() => onPeriodChange?.("daily")}>{frontendText(locale, "REVIEW_DAILY")}</Button>
         <Button aria-pressed={period === "weekly"} variant={period === "weekly" ? "default" : "outline"} onClick={() => onPeriodChange?.("weekly")}>{frontendText(locale, "REVIEW_WEEKLY")}</Button>
-      </div>
-    </div>
+      </>}
+    />
     {periodBlocked && <div data-review-period-blocked role="alert" className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "REVIEW_PERIOD_RECORD_BLOCKED")}</p><Button variant="outline" onClick={onDiscardPeriod}>{frontendText(locale, "REVIEW_PERIOD_RECORD_DISCARD")}</Button></div>}
     {periodNotice && <p role="alert" className="text-sm text-destructive">{periodNotice}</p>}
     {state.kind === "loading" && <PageState kind="loading" title={frontendText(locale, "REVIEW_LOADING")} />}

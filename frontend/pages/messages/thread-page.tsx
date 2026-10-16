@@ -1,10 +1,12 @@
 import { discardBlockedDiscussionDraft, loadDiscussionDraft, persistDiscussionDraft } from "../../lib/discussion-draft";
 import { createDiscussionOperationJournal } from "../../lib/discussion-intent";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ChatCircle } from "@phosphor-icons/react";
 import { Alert, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
+import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { Select, SelectOption } from "../../components/ui/select";
 import type { DiscussionMessage, DiscussionSendInput, DiscussionThread } from "../../lib/discussions-data";
@@ -108,18 +110,29 @@ export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending,
     } catch { if (alive.current) setStatus("error"); }
     finally { submitPendingRef.current = false; }
   };
-  if (state.kind === "loading") return <div>{recordBanner}{draft.confirmation}<span className="sr-only">{frontendText(locale, "MESSAGES_THREAD_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "MESSAGES_THREAD_LOADING")} /></div>;
-  if (state.kind === "error") return <>{recordBanner}{draft.confirmation}<PageState kind="error" title={frontendText(locale, "MESSAGES_THREAD_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button></PageState></>;
-  if (recoveryBlocked) return <>{recordBanner}{draft.confirmation}<PageState kind="error" title={frontendText(locale, "MESSAGES_RECOVERY_BLOCKED")} /></>;
   return <section className="flex min-h-0 flex-col gap-4">
+    <PageHeader
+      icon={<ChatCircle size={22} weight="duotone" className="text-primary" />}
+      title={frontendText(locale, "MESSAGES_THREAD_TITLE")}
+      // The context link is real, authorized thread state; it is withheld until the read settles.
+      description={state.kind === "ready" ? <a className="hover:underline" href={discussionContextHref({ kind: state.thread.contextKind, id: state.thread.contextId })}>{state.thread.contextId}</a> : undefined}
+      actions={<>
+        <a href="/messages" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "MESSAGES_BACK")}</a>
+        <Button variant="outline" disabled={pending} onClick={onRefresh}>{frontendText(locale, "MESSAGES_REFRESH")}</Button>
+      </>}
+    />
     {recordBanner}
     {draft.confirmation}
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><a href="/messages" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "MESSAGES_BACK")}</a><h1 className="mt-1 text-2xl font-semibold">{frontendText(locale, "MESSAGES_THREAD_TITLE")}</h1><a className="text-sm text-muted-foreground hover:underline" href={discussionContextHref({ kind: state.thread.contextKind, id: state.thread.contextId })}>{state.thread.contextId}</a></div><Button variant="outline" disabled={pending} onClick={onRefresh}>{frontendText(locale, "MESSAGES_REFRESH")}</Button></div>
+    {state.kind === "loading" && <div><span className="sr-only">{frontendText(locale, "MESSAGES_THREAD_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "MESSAGES_THREAD_LOADING")} /></div>}
+    {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "MESSAGES_THREAD_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button></PageState>}
+    {recoveryBlocked && <PageState kind="error" title={frontendText(locale, "MESSAGES_RECOVERY_BLOCKED")} />}
+    {state.kind === "ready" && !recoveryBlocked && <>
     <div data-thread-scroll="true" className="min-h-48 max-h-[calc(100vh-25rem)] flex-1 space-y-3 overflow-y-auto pr-1" aria-busy={pending || undefined}>
       {state.messages.length === 0 ? <PageState kind="empty" title={frontendText(locale, "MESSAGES_THREAD_EMPTY")} /> : state.messages.map((message) => <Card key={message.id} data-message-id={message.id}><CardContent className="space-y-2 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{message.authorMemberId}</p><time className="text-xs text-muted-foreground" dateTime={message.createdAt}>{message.createdAt}</time></div>{message.replyToMessageId && <p className="text-xs text-muted-foreground">{frontendText(locale, "MESSAGES_REPLYING_TO")} {message.replyToMessageId}</p>}<p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>{message.mentionMemberIds.length > 0 && <div className="flex flex-wrap gap-1">{message.mentionMemberIds.map((memberId) => <Badge key={memberId} variant="secondary">@{memberId}</Badge>)}</div>}<Button size="sm" variant="ghost" disabled={locked} onClick={() => selectReply(message)}>{frontendText(locale, "MESSAGES_REPLY")}</Button></CardContent></Card>)}
     </div>
     <DiscussionCursorPagination locale={locale} page={page} limit={limit} pending={pending} hasNext={Boolean(state.nextCursor)} onPrevious={onPrevious} onNext={() => state.nextCursor && onNext(state.nextCursor)} onLimitChange={onLimitChange} />
     <DiscussionComposer operationKey={submitControllerRef.current.operationKey()} onLookup={onLookup ? checkResult : undefined} locale={locale} body={body} status={status} locked={locked} replyTo={replyTo} onBodyChange={(value) => draft.edit("body", value)} onCancelReply={() => selectReply(null)} onSubmit={submit} />
+    </>}
   </section>;
 }
 

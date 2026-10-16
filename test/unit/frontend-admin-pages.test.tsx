@@ -10,6 +10,10 @@ import { AuditPage } from "../../frontend/pages/admin/audit-page";
 import { AdminForbiddenPage } from "../../frontend/pages/admin/admin-forbidden-page";
 import { AdminAnalyticsPage } from "../../frontend/pages/admin/analytics-page";
 import { DuplicateQueuePage } from "../../frontend/pages/admin/duplicate-queue-page";
+import { AdminRolesPage } from "../../frontend/pages/admin/roles-page";
+import { AdminRoleDetailPage } from "../../frontend/pages/admin/role-detail-page";
+import { AdminMenusPage } from "../../frontend/pages/admin/menus-page";
+import { ReviewDetailPage } from "../../frontend/pages/admin/review-detail-page";
 import { assetPreviewModel } from "../../frontend/components/assets/asset-preview-model";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -134,6 +138,29 @@ describe("React administrator pages", () => {
     expect(dashboard).toContain("审核队列");
     expect(queue).toContain("暂无待审核提交");
     expect(queue).not.toContain("Review queue");
+  });
+
+  it("keeps every migrated admin page's titled h1 through loading and read failure", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const pages: ReadonlyArray<readonly [string, string, string, string]> = [
+      ["review queue", "Review queue", renderToStaticMarkup(<ReviewQueuePage locale={locale} state={{ kind: "loading" }} />), renderToStaticMarkup(<ReviewQueuePage locale={locale} state={{ kind: "error", message: "Denied" }} />)],
+      ["audit log", "Audit log", renderToStaticMarkup(<AuditPage locale={locale} state={{ kind: "loading" }} />), renderToStaticMarkup(<AuditPage locale={locale} state={{ kind: "error", message: "Denied" }} />)],
+      ["asset queue", "Asset queue", renderToStaticMarkup(<AssetQueuePage locale={locale} loading />), renderToStaticMarkup(<AssetQueuePage locale={locale} error="Unable to load assets." />)],
+      ["duplicate queue", "Duplicate candidates", renderToStaticMarkup(<DuplicateQueuePage locale={locale} state={{ kind: "loading" }} />), renderToStaticMarkup(<DuplicateQueuePage locale={locale} state={{ kind: "forbidden", message: "Denied" }} />)],
+      ["members", "Members", renderToStaticMarkup(<MembersPage locale={locale} members={[]} loading />), renderToStaticMarkup(<MembersPage locale={locale} members={[]} error="Unable to load members." />)],
+      ["role list", "Roles &amp; permissions", renderToStaticMarkup(<AdminRolesPage locale={locale} state={{ kind: "loading" }} />), renderToStaticMarkup(<AdminRolesPage locale={locale} state={{ kind: "error", message: "Denied" }} />)],
+      ["role detail", "Roles &amp; permissions", renderToStaticMarkup(<AdminRoleDetailPage locale={locale} state={{ kind: "loading" }} roleId="role-admin" />), renderToStaticMarkup(<AdminRoleDetailPage locale={locale} state={{ kind: "forbidden", message: "Denied" }} roleId="role-admin" />)],
+      ["menu tree", "Menu tree", renderToStaticMarkup(<AdminMenusPage locale={locale} state={{ kind: "loading" }} />), renderToStaticMarkup(<AdminMenusPage locale={locale} state={{ kind: "error", message: "Denied" }} />)],
+      ["spaces", "Spaces and collections", renderToStaticMarkup(<SpacesPage locale={locale} spaces={[]} loading />), renderToStaticMarkup(<SpacesPage locale={locale} spaces={[]} error="Denied" />)],
+      ["site analytics", "Site analytics", renderToStaticMarkup(<AdminAnalyticsPage locale={locale} state={{ kind: "loading" }} />), renderToStaticMarkup(<AdminAnalyticsPage locale={locale} state={{ kind: "error" }} />)],
+      ["review detail", "Review detail", renderToStaticMarkup(<ReviewDetailPage locale={locale} state={{ kind: "loading" }} />), renderToStaticMarkup(<ReviewDetailPage locale={locale} state={{ kind: "error", message: "Unavailable" }} />)],
+    ];
+    for (const [label, title, loadingHtml, failedHtml] of pages) {
+      for (const [phase, html] of [["loading", loadingHtml], ["failure", failedHtml]] as const) {
+        expect((html.match(/<h1/g) ?? []).length, `${label}: ${phase}`).toBe(1);
+        expect(html, `${label}: ${phase}`).toContain(`>${title}</h1>`);
+      }
+    }
   });
 
   it("gives every migrated admin page exactly one titled h1 through the shared header", () => {

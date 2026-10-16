@@ -3,7 +3,7 @@ import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeRoute, WorkbenchReviewRoute } from "../../frontend/app";
-import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 
@@ -32,11 +32,19 @@ describe("review period refresh", () => {
 
   const knowledgeKey = "memory-garden:review-period:v1:knowledge:member-a";
   const workbenchKey = "memory-garden:review-period:v1:workbench:member-a";
-  const period = () => container.querySelector("[data-knowledge-review] select") as HTMLSelectElement;
+  const periodTrigger = () => container.querySelector("[data-knowledge-review] button[aria-haspopup='listbox']") as HTMLButtonElement;
+  const selectedPeriod = () => periodTrigger().textContent?.includes(frontendText(locale(), "KNOWLEDGE_REVIEW_WEEKLY")) ? "weekly" : "daily";
   async function renderKnowledge() { await act(async () => root.render(<KnowledgeRoute locale={locale()} search="" memberId="member-a" />)); await flush(); }
   async function renderReview() { browser.history.replaceState({}, "", "/review"); await act(async () => root.render(<WorkbenchReviewRoute locale={locale()} memberId="member-a" />)); await flush(); }
   async function remount(render: () => Promise<void>) { await act(async () => root.unmount()); const { createRoot } = await import("react-dom/client"); root = createRoot(container); reviews = []; await render(); }
-  async function choose(value: string) { const el = period(); await act(async () => { el.value = value; el.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
+  async function choose(value: "daily" | "weekly") {
+    await act(async () => periodTrigger().click());
+    const label = frontendText(locale(), value === "weekly" ? "KNOWLEDGE_REVIEW_WEEKLY" : "KNOWLEDGE_REVIEW_DAILY");
+    const option = [...container.querySelectorAll<HTMLButtonElement>("[role='option']")].find((node) => node.textContent === label);
+    expect(option).toBeTruthy();
+    await act(async () => option!.click());
+    await flush();
+  }
   async function click(label: string) { const target = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; await act(async () => target.click()); await flush(); }
 
   it("reads the daily knowledge review again after returning from weekly", async () => {
@@ -52,7 +60,7 @@ describe("review period refresh", () => {
     expect(browser.sessionStorage.getItem(knowledgeKey)).toContain("weekly");
     expect(writeWorkspaceHistory("push", "/home")).toBe("committed");
     await remount(renderKnowledge);
-    expect(period().value).toBe("weekly");
+    expect(selectedPeriod()).toBe("weekly");
     expect(reviews.some((url) => url.includes("period=weekly"))).toBe(true);
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
@@ -62,7 +70,7 @@ describe("review period refresh", () => {
     const storage = browser.sessionStorage; const original = storage.setItem;
     Object.defineProperty(storage, "setItem", { configurable: true, writable: true, value(key: string, value: string) { if (String(key).includes("review-period")) throw new Error("full"); return original.call(storage, key, value); } });
     await choose("weekly");
-    expect(period().value).toBe("weekly");
+    expect(selectedPeriod()).toBe("weekly");
     expect(container.textContent).toContain("could not record");
   });
 
@@ -70,7 +78,7 @@ describe("review period refresh", () => {
     browser.sessionStorage.setItem(knowledgeKey, "{");
     await renderKnowledge();
     expect(container.textContent).toContain("can't be read");
-    expect(period().value).toBe("daily");
+    expect(selectedPeriod()).toBe("daily");
     expect(writeWorkspaceHistory("push", "/home")).toBe("committed");
     await click("Discard record");
     await choose("weekly");
@@ -90,12 +98,12 @@ describe("review period refresh", () => {
       return json({ items: [], nextCursor: null, pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
     });
     await renderKnowledge();
-    expect(period().value).toBe("daily");
+    expect(selectedPeriod()).toBe("daily");
     await choose("weekly");
     expect(container.textContent).toContain("Weekly item");
     await act(async () => { releaseDaily(json(reviewBody("daily", "Daily item"))); });
     await flush();
-    expect(period().value).toBe("weekly");
+    expect(selectedPeriod()).toBe("weekly");
     expect(container.textContent).toContain("Weekly item");
     expect(container.textContent).not.toContain("Daily item");
   });
@@ -108,7 +116,7 @@ describe("review period refresh", () => {
     });
     await renderKnowledge();
     await choose("weekly");
-    expect(period().value).toBe("weekly");
+    expect(selectedPeriod()).toBe("weekly");
     expect(container.textContent).toContain("Unable to prepare the review list.");
     expect(container.textContent).not.toContain("Daily item");
   });

@@ -49,6 +49,23 @@ describe("Calendar page", () => {
     expect(renderToStaticMarkup(<CalendarPage locale={locale} state={{ kind: "error", message: "Unable" }} onRetry={vi.fn()} />)).toContain(frontendText(locale, "CALENDAR_RETRY"));
     expect(renderToStaticMarkup(<CalendarPage locale={locale} state={{ kind: "ready", items: [] }} />)).toContain(frontendText(locale, "CALENDAR_EMPTY"));
   });
+
+  it("keeps one titled header, its glyph and the toolbar mounted through first load and read failure", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    const title = frontendText(locale, "CALENDAR_TITLE");
+    const range = { from: "2026-09-01T00:00:00.000Z", to: "2026-09-08T00:00:00.000Z" };
+    for (const state of [{ kind: "loading" } as const, { kind: "error", message: "Unable" } as const]) {
+      const html = renderToStaticMarkup(<CalendarPage locale={locale} state={state} onRetry={vi.fn()} onCreate={vi.fn()} range={range} onRangeChange={vi.fn()} />);
+      expect((html.match(/<h1/g) ?? []).length, JSON.stringify(state)).toBe(1);
+      expect(html).toContain(`>${title}</h1>`);
+      // The leading glyph stays outside the heading so the page exposes one clean name.
+      expect(html.indexOf('data-icon="calendar"')).toBeLessThan(html.indexOf("<h1"));
+      // The page-level create action and the existing range filter survive the read state.
+      expect(html).toContain("data-calendar-create-open");
+      expect(html).toContain(`aria-label="${frontendText(locale, "CALENDAR_RANGE_FROM")}"`);
+      expect(html).not.toContain("<select");
+    }
+  });
 });
 
 describe("Calendar create dialog", () => {

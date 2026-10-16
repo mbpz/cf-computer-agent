@@ -68,6 +68,27 @@ describe("messages pages", () => {
     expect(html).toContain('data-messages-scroll="true"');
   });
 
+  it("keeps exactly one titled h1 on the list and thread pages in every state", () => {
+    for (const language of ["en", "zh-CN"] as const) {
+      const locale = createLocaleRuntime({ navigatorLanguage: language });
+      const listBase = { locale, page: 1, limit: 20 as const, pending: false, onRetry: vi.fn(), onNext: vi.fn(), onPrevious: vi.fn(), onLimitChange: vi.fn() };
+      for (const state of [{ kind: "loading" }, { kind: "error" }, { kind: "ready", items: [] }] as const) {
+        const html = renderToStaticMarkup(<MessagesPage {...listBase} state={state} />);
+        expect([...html.matchAll(/<h1[ >]/g)]).toHaveLength(1);
+        expect(html).toContain(`>${frontendText(locale, "MESSAGES_TITLE")}</h1>`);
+      }
+      const threadBase = { locale, page: 1, limit: 20 as const, pending: false, onRetry: vi.fn(), onRefresh: vi.fn(), onNext: vi.fn(), onPrevious: vi.fn(), onLimitChange: vi.fn(), onSend: vi.fn(async () => undefined) };
+      for (const state of [{ kind: "loading" }, { kind: "error" }, { kind: "ready", thread: thread(), messages: [] }] as const) {
+        const html = renderToStaticMarkup(<ThreadPage {...threadBase} state={state} />);
+        expect([...html.matchAll(/<h1[ >]/g)]).toHaveLength(1);
+        expect(html).toContain(`>${frontendText(locale, "MESSAGES_THREAD_TITLE")}</h1>`);
+        // The back link and refresh stay mounted in the header's action row in every state.
+        expect(html).toContain(frontendText(locale, "MESSAGES_BACK"));
+        expect(html).toContain(frontendText(locale, "MESSAGES_REFRESH"));
+      }
+    }
+  });
+
   it("shows reply and mention context with a bounded keyboard-accessible composer", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
     const html = renderToStaticMarkup(<ThreadPage

@@ -6,6 +6,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Input } from "../components/ui/input";
 import type { SubmissionDraft } from "../components/submissions/submission-form-model";
 import { AssetAvailabilityPanel } from "../components/assets/asset-availability-panel";
+import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { SimilarSubmissionCandidate } from "../lib/submission-data";
@@ -21,7 +22,12 @@ export function SubmitPage({ draft, state, locale, onSubmit, onDraftChange, reco
   const unresolved = recovery?.title !== undefined;
   const similarCandidates = state.kind === "success" ? state.similarCandidates ?? [] : [];
   return <section className="mx-auto max-w-3xl space-y-6">
-    <div><h1 className="text-2xl font-semibold">{frontendText(locale, "SUBMIT_TITLE")}</h1><p id="submission-description" className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "SUBMIT_DESCRIPTION")}</p></div>
+    <PageHeader
+      title={frontendText(locale, "SUBMIT_TITLE")}
+      // The id stays on the context text so the form keeps its historical
+      // `aria-describedby="submission-description"` after the header move.
+      description={<span id="submission-description">{frontendText(locale, "SUBMIT_DESCRIPTION")}</span>}
+    />
     {(state.kind === "validation" || state.kind === "error") && <PageState kind="error" title={state.message} />}
     {state.kind === "success" && <PageState kind="empty" title={state.message} />}
     {recovery?.storageUnavailable && <Alert data-submission-storage-warning><AlertDescription>{frontendText(locale, "SUBMIT_STORAGE_WARNING")}</AlertDescription></Alert>}

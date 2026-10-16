@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { MagnifyingGlass } from "@phosphor-icons/react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { PageHeader } from "../components/ui/page-header";
 import type { SearchResultItem } from "../lib/search-data";
 import { PageState } from "../components/ui/page-state";
 import { DataTable } from "../components/data-table";
@@ -56,7 +58,7 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
     {composerBlocked && <div role="alert" data-search-composer-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "SEARCH_COMPOSER_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardComposer}>{frontendText(locale, "SEARCH_COMPOSER_RECORD_DISCARD")}</Button></div>}
     {composerNotice && <p role="alert">{composerNotice}</p>}
     {savedViewConfirmation}
-    <div><h1 className="text-2xl font-semibold">{frontendText(locale, "SEARCH_TITLE")}</h1></div>
+    <PageHeader title={frontendText(locale, "SEARCH_TITLE")} icon={<MagnifyingGlass size={22} weight="duotone" className="text-primary" />} />
     <div className="flex flex-wrap items-center gap-3" data-search-controls-row>
       <form className="flex min-w-0 flex-1 basis-72 items-end gap-2" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
         <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="knowledge-search">{frontendText(locale, "SEARCH_QUERY_LABEL")}</Label><Input id="knowledge-search" name="q" value={inputQuery} disabled={queryLocked} onChange={(event) => onQueryChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "SEARCH_QUERY_PLACEHOLDER")} autoComplete="off" /></div>

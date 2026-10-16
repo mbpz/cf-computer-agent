@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
 import { ButtonLink } from "../../components/motion/button/base";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import { Skeleton } from "../../components/ui/skeleton";
+import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { ReviewDetailModel } from "../../components/review/review-detail-model";
 import type { ReactNode } from "react";
@@ -20,8 +20,20 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
   decisionState?: ReviewDecisionState; locale?: LocaleRuntime; comments?: ReactNode; unresolvedDecision?: boolean; retainedDraft?: boolean;
   decisionRecordBlocked?: boolean; decisionRecordNotice?: string; onDiscardDecisionRecord?: () => void;
 }) {
-  if (state.kind === "loading") return <div aria-busy="true" className="space-y-4"><Skeleton className="h-10" /><Skeleton className="h-64" /></div>;
-  if (state.kind !== "ready") return <section className="space-y-4" data-page-state={state.kind}>
+  // The page shell is constant (research §4.3): the titled header renders for every state
+  // and only the panel below switches between loading, failure and the submission.
+  const detail = state.kind === "ready" ? state.detail : null;
+  // Real, visible state as text, not colour alone (§4.2): a submission past review,
+  // and a viewer without the decision capability, both say so next to the status.
+  const terminal = detail ? detail.status !== "review_pending" : false;
+  const stateNote = !detail ? undefined : terminal ? frontendText(locale, "ADMIN_REVIEW_DECISION_CLOSED")
+    : !onDecision && !decisionRecordBlocked ? frontendText(locale, "ADMIN_REVIEW_DECISION_READ_ONLY") : undefined;
+  return <section className="space-y-5" aria-busy={state.kind === "loading" || undefined}>
+    <PageHeader title={detail ? detail.title : frontendText(locale, "ADMIN_REVIEW_DETAIL_LABEL")}
+      description={detail ? <>{frontendText(locale, "ADMIN_REVIEW_SUBMITTER")}: {detail.submitter}</> : undefined}
+      status={detail ? <span className="inline-flex flex-wrap items-center gap-2"><Badge variant="outline">{detail.status}</Badge>{stateNote ? <span data-review-state={terminal ? "closed" : "read-only"}>{stateNote}</span> : null}</span> : undefined} />
+    {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
+      : state.kind !== "ready" ? <section className="space-y-4" data-page-state={state.kind}>
     <Alert variant={state.kind === "not-found" ? "default" : "destructive"}><AlertDescription>{state.message}
       <div className="flex flex-wrap gap-2">
         {(state.kind !== "not-found" || unresolvedDecision || retainedDraft) && onRetry && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}
@@ -31,27 +43,20 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
         }}>{frontendText(locale, "ADMIN_REVIEW_BACK")}</ButtonLink>
       </div>
     </AlertDescription></Alert>
-  </section>;
-  const { detail } = state;
-  // Real, visible state as text, not colour alone (§4.2): a submission past review,
-  // and a viewer without the decision capability, both say so next to the status.
-  const terminal = detail.status !== "review_pending";
-  const stateNote = terminal ? frontendText(locale, "ADMIN_REVIEW_DECISION_CLOSED")
-    : !onDecision && !decisionRecordBlocked ? frontendText(locale, "ADMIN_REVIEW_DECISION_READ_ONLY") : undefined;
-  return <section className="space-y-5">
-    <PageHeader title={detail.title} description={<>{frontendText(locale, "ADMIN_REVIEW_SUBMITTER")}: {detail.submitter}</>}
-      status={<span className="inline-flex flex-wrap items-center gap-2"><Badge variant="outline">{detail.status}</Badge>{stateNote ? <span data-review-state={terminal ? "closed" : "read-only"}>{stateNote}</span> : null}</span>} />
+  </section>
+      : <>
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_REVIEW_CONTENT")}</CardTitle></CardHeader><CardContent>
-      <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-4 text-sm leading-7">{detail.content || frontendText(locale, "ADMIN_REVIEW_NO_CONTENT")}</pre>
+      <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-4 text-sm leading-7">{state.detail.content || frontendText(locale, "ADMIN_REVIEW_NO_CONTENT")}</pre>
     </CardContent></Card>
-    {detail.warnings.length ? <Alert><AlertDescription><strong>{frontendText(locale, "ADMIN_REVIEW_WARNINGS")}:</strong> {detail.warnings.join(" · ")}</AlertDescription></Alert> : null}
+    {state.detail.warnings.length ? <Alert><AlertDescription><strong>{frontendText(locale, "ADMIN_REVIEW_WARNINGS")}:</strong> {state.detail.warnings.join(" · ")}</AlertDescription></Alert> : null}
     {comments}
     {decisionRecordBlocked && <div role="alert" data-review-decision-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardDecisionRecord}>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD")}</Button></div>}
     {decisionRecordNotice && <p role="alert" className="text-sm text-destructive">{decisionRecordNotice}</p>}
     <ReviewDecisionFeedback allowUnknownReload state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onRetry} />
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_REVIEW_DECISION")}</CardTitle></CardHeader><CardContent>
-      <ReviewDecisionControls decisionUnresolved={reviewDecisionLocked(decisionState)} key={detail.id} targetId={detail.id} targetLabel={detail.title || detail.id} snapshot={detail} disabled={reviewDecisionLocked(decisionState)} terminal={terminal}
+      <ReviewDecisionControls decisionUnresolved={reviewDecisionLocked(decisionState)} key={state.detail.id} targetId={state.detail.id} targetLabel={state.detail.title || state.detail.id} snapshot={state.detail} disabled={reviewDecisionLocked(decisionState)} terminal={terminal}
         pendingAction={decisionState.kind === "pending" ? decisionState.action : undefined} onDecision={onDecision} locale={locale} />
     </CardContent></Card>
+      </>}
   </section>;
 }

@@ -1068,6 +1068,27 @@ describe("discussion routes", () => {
     expect(browser.sessionStorage.getItem("memory-garden:discussion-draft:v1:member-1:thread-1")).toContain("After discard");
     expect(posts).toBe(0);
   });
+  it("keeps the messages list header mounted through a first load and a read failure", async () => {
+    browser.history.replaceState({}, "", "/messages");
+    vi.stubGlobal("fetch", async () => Response.json({ error: { code: "READ_FAILED", message: "Unavailable", retryable: true } }, { status: 503 }));
+    await act(async () => root.render(<MessagesRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} search="" />));
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+    const title = container.querySelector("h1")!.textContent;
+    await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+    expect(container.querySelector("h1")!.textContent).toBe(title);
+  });
+
+  it("keeps the thread header mounted through a first load and a read failure", async () => {
+    browser.history.replaceState({}, "", "/messages/thread-1");
+    vi.stubGlobal("fetch", async () => Response.json({ error: { code: "READ_FAILED", message: "Unavailable", retryable: true } }, { status: 503 }));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+    const title = container.querySelector("h1")!.textContent;
+    await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+    expect(container.querySelector("h1")!.textContent).toBe(title);
+  });
 });
 
 function thread(overrides: Record<string, unknown> = {}) {

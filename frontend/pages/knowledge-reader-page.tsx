@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LinkSimpleIcon, ListBulletsIcon } from "@phosphor-icons/react";
 import { ExpandableTabs } from "../components/ui/expandable-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { Button } from "../components/ui/button";
 import { CodeBlock } from "../components/agents/code-block";
@@ -50,25 +51,40 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
   const sharing = useReaderNoteShares(memberId, normalizedRevision.knowledgeItemId, note, locale);
   sharingBlock.current = sharing.isBlocking;
   const selectedChunk = normalizedRevision.chunks.find((chunk) => chunk.id === selectedChunkId);
+  // The entry's own title only exists once the revision has loaded: showing the untitled
+  // fallback (or any other real-looking title) before that would both mislead the reader
+  // and make "untitled" indistinguishable from "not loaded yet".
+  const headerTitle = state.kind === "ready"
+    ? (normalizedRevision.title?.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED"))
+    : state.kind === "loading" ? frontendText(locale, "KNOWLEDGE_READER_LOADING") : frontendText(locale, "COMMON_VALUE_UNAVAILABLE");
+  const headerDescription = state.kind === "ready" ? normalizedRevision.publishedAt || (normalizedRevision.sourceVersionOrdinal === null ? undefined : `${frontendText(locale, "KNOWLEDGE_READER_SOURCE_VERSION")} #${normalizedRevision.sourceVersionOrdinal}`) : undefined;
+  const headerStatus = state.kind === "ready" && normalizedRevision.isCurrent === false ? frontendText(locale, "KNOWLEDGE_READER_HISTORICAL") : undefined;
   const saveNote = () => {
     const citationChunk = selectedChunk ?? normalizedRevision.chunks[0];
     const citations = citationChunk ? [{ revisionId: normalizedRevision.id, chunkId: citationChunk.id, startLine: citationChunk.startLine, endLine: citationChunk.endLine }] : [];
     void note.save(citations);
   };
-  if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "KNOWLEDGE_READER_LOADING")} />;
-  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "KNOWLEDGE_READER_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>;
-  return <article data-reader-layout className="space-y-5">
+  return <div className="space-y-5">
     {note.draft.confirmation}{sharing.confirmation}
+    <PageHeader
+      title={headerTitle}
+      description={headerDescription}
+      status={headerStatus}
+      actions={<>{favoritePhase === "unknown" && <p role="alert" className="text-xs text-destructive">{frontendText(locale, "KNOWLEDGE_READER_FAVORITE_UNCONFIRMED")}</p>}{favoritePhase === "blocked" && <p role="alert" className="text-xs text-destructive">{frontendText(locale, "KNOWLEDGE_READER_FAVORITE_STORAGE")}</p>}{(favoriteError || favoritePhase === "unknown" || favoritePhase === "blocked" || favoritePhase === "checking") && onCheckFavorite && <Button size="sm" variant="outline" disabled={favoritePhase === "checking" || favoritePhase === "saving"} onClick={() => void onCheckFavorite()}>{frontendText(locale, "KNOWLEDGE_READER_FAVORITE_CHECK")}</Button>}{favoriteError && <p role="alert" className="text-xs text-destructive">{frontendText(locale, "KNOWLEDGE_READER_FAVORITE_UNKNOWN")}</p>}{typeof favorite === "boolean" && !favoriteError && (favoritePhase === "idle" || favoritePhase === "saving") && onToggleFavorite && <Button disabled={favoritePhase !== "idle"} aria-busy={favoritePhase === "saving"} size="sm" variant={favorite ? "default" : "outline"} onClick={() => void onToggleFavorite()} aria-pressed={favorite}>{favorite ? frontendText(locale, "KNOWLEDGE_READER_UNFAVORITE") : frontendText(locale, "KNOWLEDGE_READER_FAVORITE")}</Button>}{normalizedRevision.previousRevisionId && onCompare && <Button size="sm" variant="outline" disabled={diffState.kind === "loading"} onClick={onCompare}>{diffState.kind === "loading" ? frontendText(locale, "KNOWLEDGE_READER_COMPARING") : frontendText(locale, "KNOWLEDGE_READER_COMPARE")}</Button>}{normalizedRevision.knowledgeItemId && <a href={contextDiscussionHref({ kind: "knowledge", id: normalizedRevision.knowledgeItemId })} className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "MESSAGES_DISCUSS")}</a>}<a href={"/agent?scope=items&knowledgeItemId=" + encodeURIComponent(normalizedRevision.knowledgeItemId)} className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_ASK")}</a></>}
+    />
+    {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "KNOWLEDGE_READER_LOADING")} />
+      : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "KNOWLEDGE_READER_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>
+        : <article data-reader-layout className="space-y-5">
     <ExpandableTabs className="lg:hidden" ariaLabel={frontendText(locale, "KNOWLEDGE_READER_MOBILE_PANELS")} value={mobilePanel} onValueChange={setMobilePanel} items={[
       { id: "outline", label: frontendText(locale, "KNOWLEDGE_READER_TAB_OUTLINE"), controls: "reader-outline-panel", icon: <ListBulletsIcon size={16} aria-hidden="true" /> },
       { id: "sources", label: frontendText(locale, "KNOWLEDGE_READER_TAB_SOURCES"), controls: "reader-sources-panel", icon: <LinkSimpleIcon size={16} aria-hidden="true" /> },
     ]} />
     <div className="grid gap-5 lg:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_minmax(17rem,22rem)] lg:items-start">
-      <aside id="reader-outline-panel" data-reader-outline className={(mobilePanel === "outline" ? "block" : "hidden") + " lg:block"}>
+      <aside id="reader-outline-panel" data-reader-outline className={(mobilePanel === "outline" ? "block" : "hidden") + " lg:sticky lg:top-6 lg:block lg:self-start"}>
         <ReaderOutlinePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} onSelectChunk={setSelectedChunkId} />
       </aside>
       <main className="min-w-0 space-y-5">
-        <Card><CardHeader><CardTitle>{normalizedRevision.title?.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</CardTitle><div className="flex flex-wrap items-center justify-between gap-3">{normalizedRevision.publishedAt && <p className="text-xs text-muted-foreground">{normalizedRevision.publishedAt}{normalizedRevision.isCurrent === false ? " · " + frontendText(locale, "KNOWLEDGE_READER_HISTORICAL") : ""}</p>}<div className="flex flex-wrap gap-2">{favoritePhase === "unknown" && <p role="alert" className="text-xs text-destructive">{frontendText(locale, "KNOWLEDGE_READER_FAVORITE_UNCONFIRMED")}</p>}{favoritePhase === "blocked" && <p role="alert" className="text-xs text-destructive">{frontendText(locale, "KNOWLEDGE_READER_FAVORITE_STORAGE")}</p>}{(favoriteError || favoritePhase === "unknown" || favoritePhase === "blocked" || favoritePhase === "checking") && onCheckFavorite && <Button size="sm" variant="outline" disabled={favoritePhase === "checking" || favoritePhase === "saving"} onClick={() => void onCheckFavorite()}>{frontendText(locale, "KNOWLEDGE_READER_FAVORITE_CHECK")}</Button>}{favoriteError && <p role="alert" className="text-xs text-destructive">{frontendText(locale, "KNOWLEDGE_READER_FAVORITE_UNKNOWN")}</p>}{typeof favorite === "boolean" && !favoriteError && (favoritePhase === "idle" || favoritePhase === "saving") && onToggleFavorite && <Button disabled={favoritePhase !== "idle"} aria-busy={favoritePhase === "saving"} size="sm" variant={favorite ? "default" : "outline"} onClick={() => void onToggleFavorite()} aria-pressed={favorite}>{favorite ? frontendText(locale, "KNOWLEDGE_READER_UNFAVORITE") : frontendText(locale, "KNOWLEDGE_READER_FAVORITE")}</Button>}{normalizedRevision.previousRevisionId && onCompare && <Button size="sm" variant="outline" disabled={diffState.kind === "loading"} onClick={onCompare}>{diffState.kind === "loading" ? frontendText(locale, "KNOWLEDGE_READER_COMPARING") : frontendText(locale, "KNOWLEDGE_READER_COMPARE")}</Button>}{normalizedRevision.knowledgeItemId && <a href={contextDiscussionHref({ kind: "knowledge", id: normalizedRevision.knowledgeItemId })} className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "MESSAGES_DISCUSS")}</a>}<a href={"/agent?scope=items&knowledgeItemId=" + encodeURIComponent(normalizedRevision.knowledgeItemId)} className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_ASK")}</a></div></div></CardHeader><CardContent><div className="prose prose-slate max-w-none text-sm leading-7">{renderMarkdown(normalizedRevision.markdown)}</div></CardContent></Card>
+        <Card><CardContent><div className="prose prose-slate max-w-none text-sm leading-7">{renderMarkdown(normalizedRevision.markdown)}</div></CardContent></Card>
         {diffState.kind !== "idle" && <RevisionDiffPanel locale={locale} state={diffState} />}
       </main>
       <aside id="reader-sources-panel" data-reader-sources className={(mobilePanel === "sources" ? "block" : "hidden") + " space-y-5 lg:block"}>
@@ -78,7 +94,8 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
         {relatedState.kind !== "idle" && <RelatedKnowledgePanel locale={locale} state={relatedState} onRetry={onRetryRelated} />}
       </aside>
     </div>
-  </article>
+  </article>}
+  </div>
 }
 
 function ReaderNotePanel({ discardError, sharing, locale, knowledgeItemId, access, title, body, status, onTitleChange, onBodyChange, onSave, locked, phase, onCheck, onRetryLoad }: { discardError: boolean; sharing: ReturnType<typeof useReaderNoteShares>; locked: boolean; phase: string; onCheck: () => void; onRetryLoad: () => void; locale?: LocaleRuntime; knowledgeItemId: string; access: "owner" | "shared"; title: string; body: string; status: "idle" | "saved" | "saving" | "unsaved" | "error"; onTitleChange: (value: string) => void; onBodyChange: (value: string) => void; onSave: () => void }) {

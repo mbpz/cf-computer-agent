@@ -82,6 +82,21 @@ describe("agent page summary row", () => {
     expect(summaryRow().className).toContain("line-clamp-1");
   });
 
+  it("keeps exactly one titled h1 and the summary line mounted through loading and a read failure", async () => {
+    await mount(<AgentPage locale={language} scope="all" question="Pending question" state={{ kind: "loading" }} />);
+    const headings = () => [...container.querySelectorAll("h1")];
+    expect(headings()).toHaveLength(1);
+    expect(headings()[0]!.textContent).toBe(frontendText(language, "AGENT_TITLE"));
+    expect(headings()[0]!.closest("header")).toBeTruthy();
+    expect(summaryRow().textContent).toContain("Pending question");
+    await act(async () => root.render(<AgentPage locale={language} scope="all" question="Pending question" state={{ kind: "error", message: "Retry later" }} />));
+    await flush();
+    expect(headings()).toHaveLength(1);
+    expect(headings()[0]!.textContent).toBe(frontendText(language, "AGENT_TITLE"));
+    expect(summaryRow().textContent).toContain("Pending question");
+    expect(container.textContent).toContain("Retry later");
+  });
+
   it("reserves desktop fill height for the page root and the history list", async () => {
     vi.stubGlobal("fetch", async () => Response.json({ items: [{ id: "conv-1", createdAt: "2026-09-09T10:00:00.000Z" }] }));
     await mount(<><AgentPage locale={language} scope="all" question="Where is the guide?" state={answer("high")} /><AgentHistoryList locale={language} /></>);

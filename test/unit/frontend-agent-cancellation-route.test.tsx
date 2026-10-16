@@ -96,9 +96,7 @@ describe("agent request cancellation route", () => {
     const bodies: unknown[] = []; const methods: string[] = [];
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => { methods.push(init?.method ?? "GET"); bodies.push(JSON.parse(String(init?.body))); return answer("Answer", "conv-existing"); });
     await render(); await question("First"); await submit();
-    const select = container.querySelector<HTMLSelectElement>("#agent-scope-kind")!;
-    expect(select).toBeTruthy();
-    await act(async () => { select.value = "items"; select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    await chooseSourceKind("Selected knowledge items");
     const ids = container.querySelector<HTMLInputElement>("#agent-scope-ids")!;
     await act(async () => {
       ids.value = "k-1, k-2";
@@ -486,18 +484,48 @@ describe("agent request cancellation route", () => {
   });
 
   function changeSource(selector: string, value: string) {
-    const input = container.querySelector<HTMLInputElement | HTMLSelectElement>(selector)!;
+    const input = container.querySelector<HTMLInputElement>(selector)!;
     input.value = value;
-    if (input.tagName === "SELECT") {input.dispatchEvent(new browser.Event("change", {bubbles: true}) as unknown as Event); return;}
     const key = Object.keys(input).find(name => name.startsWith("__reactProps$"))!;
     (input as unknown as Record<string, {onChange: (event: {currentTarget: typeof input}) => void}>)[key]!.onChange({currentTarget: input});
   }
+  /** The scope type is a beUI listbox: open its trigger and pick the option by its visible label. */
+  async function chooseSourceKind(label: string) {
+    const trigger = container.querySelector<HTMLButtonElement>("#agent-scope-kind [aria-haspopup=\"listbox\"]")!;
+    expect(trigger).toBeTruthy();
+    await act(async () => trigger.click());
+    const option = [...container.querySelectorAll<HTMLButtonElement>("#agent-scope-kind [role=\"option\"]")].find((node) => node.textContent === label);
+    expect(option, label).toBeTruthy();
+    await act(async () => option!.click());
+  }
   async function sourceDraft() {
-    await act(async () => changeSource("#agent-scope-kind", "space"));
+    await chooseSourceKind("One space");
     await act(async () => changeSource("#agent-scope-ids", "space-a"));
   }
   function button(label: string) {return [...container.querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === label)!;}
   function sourceIds() {return container.querySelector<HTMLInputElement>("#agent-scope-ids")!.value;}
+
+  it("exposes the scope type as one named listbox carrying the same four scope values", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    await render();
+    const field = container.querySelector("#agent-scope-kind")!;
+    expect(field).toBeTruthy();
+    expect(container.querySelector("select#agent-scope-kind")).toBeNull();
+    const trigger = field.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!;
+    expect(trigger).toBeTruthy();
+    expect(field.textContent).toContain("Source type");
+    await act(async () => trigger.click());
+    const options = [...field.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    expect(options.map((option) => option.textContent)).toEqual(["All accessible knowledge", "One space", "One collection", "Selected knowledge items"]);
+    expect(field.querySelector('[role="option"][aria-selected="true"]')?.textContent).toBe("All accessible knowledge");
+    await chooseSourceKind("One collection");
+    expect(trigger.textContent).toContain("One collection");
+    expect(container.querySelector<HTMLInputElement>("#agent-scope-ids")).toBeTruthy();
+    expect(browser.location.search).toBe("");
+    expect(fetcher).not.toHaveBeenCalled();
+    await act(async () => expect(leave()).toBe("deferred")); await decision(false);
+  });
+
 
   it("protects unapplied source selection and preserves it on cancel", async () => {
     await render(); await sourceDraft();
@@ -746,7 +774,7 @@ describe("agent request cancellation route", () => {
     const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
     await act(async () => root.render(<AgentRoute locale={language} memberId="composer-member" />));
     await question("Keep this question");
-    await act(async () => changeSource("#agent-scope-kind", "space"));
+    await chooseSourceKind("One space");
     await act(async () => changeSource("#agent-scope-ids", "space-a"));
     expect(browser.sessionStorage.getItem(composerKey)).toContain("Keep this question");
     expect(unloadBlocked()).toBe(true);

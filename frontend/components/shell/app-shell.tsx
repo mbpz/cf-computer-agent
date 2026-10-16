@@ -11,6 +11,8 @@ import { cn } from "../../lib/utils";
 import { resolveFrontendAccess } from "../../lib/auth-boundary";
 import { matchRoute } from "../../lib/router";
 import { routeAccessAllowed } from "../../lib/route-access";
+// The single forbidden surface, shared by the shell and the admin area.
+import { AdminForbiddenPage } from "../../pages/admin/admin-forbidden-page";
 import { applyTheme, readTheme, type ThemeMode } from "../../lib/theme";
 import { loadNavigation, mergeRequiredWorkspaceNavigation, type NavigationDataNode } from "../../lib/navigation-data";
 import { Badge } from "../ui/badge";
@@ -140,7 +142,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
         </header>
         <div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...sidebarWorkspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} memberLabel={memberLabel} session={session} theme={theme} activeMenu={activeMenu} onActiveMenuChange={setActiveMenu} onThemeChange={changeTheme} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>
         <div className="flex min-h-0 flex-1">
-          <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] scroll-p-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain min-w-0 flex-1"><div className="mx-auto w-full max-w-[1440px] p-4 lg:h-full lg:px-6 lg:py-5">{access.kind === "forbidden" ? <section data-page-state="forbidden" role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : <motion.div key={pathname} className="lg:h-full" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE_OUT }}>{children}</motion.div>}</div></main>
+          <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] scroll-p-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain min-w-0 flex-1"><div className="mx-auto w-full max-w-[1440px] p-4 lg:h-full lg:px-6 lg:py-5">{access.kind === "forbidden" ? <AdminForbiddenPage title={locale.t("PAGE_FORBIDDEN_TITLE")} description={locale.t("PAGE_FORBIDDEN_DESCRIPTION")} /> : <motion.div key={pathname} className="lg:h-full" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE_OUT }}>{children}</motion.div>}</div></main>
         </div>
       </div>
     </div>

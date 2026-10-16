@@ -13,4 +13,16 @@ describe("Today page", () => {
     expect(html).toContain(frontendText(locale, "TODAY_TASKS"));
     expect(html).not.toContain("undefined");
   });
+
+  it("keeps one titled header mounted through first load and read failure", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    const title = frontendText(locale, "TODAY_TITLE");
+    for (const state of [{ kind: "loading" } as const, { kind: "error", message: "Unable" } as const]) {
+      const html = renderToStaticMarkup(<TodayPage locale={locale} state={state} onRetry={vi.fn()} />);
+      expect((html.match(/<h1/g) ?? []).length, JSON.stringify(state)).toBe(1);
+      expect(html).toContain(`>${title}</h1>`);
+      expect(html).toContain(frontendText(locale, "TODAY_DESCRIPTION"));
+      expect(html).not.toContain("<select");
+    }
+  });
 });

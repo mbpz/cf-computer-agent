@@ -34,6 +34,23 @@ describe("Projects page", () => {
     expect(renderToStaticMarkup(<ProjectsPage locale={locale} state={{ kind: "ready", items: [], summaries: {} }} />)).toContain(frontendText(locale, "PROJECTS_EMPTY"));
   });
 
+  it("keeps one titled header with its private status through loading and a read failure", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const loading = renderToStaticMarkup(<ProjectsPage locale={locale} state={{ kind: "loading" }} />);
+    expect([...loading.matchAll(/<h1[ >]/g)]).toHaveLength(1);
+    expect(loading).toContain(frontendText(locale, "PROJECTS_TITLE"));
+    expect(loading).toContain(frontendText(locale, "PROJECTS_PRIVATE_BADGE"));
+    expect(loading).toContain('data-page-state="loading"');
+    expect(loading).toContain("data-projects-create-open");
+    expect(loading).not.toContain('aria-haspopup="listbox"');
+    const failed = renderToStaticMarkup(<ProjectsPage locale={locale} state={{ kind: "error", message: "Denied" }} onRetry={vi.fn()} />);
+    expect([...failed.matchAll(/<h1[ >]/g)]).toHaveLength(1);
+    expect(failed).toContain(frontendText(locale, "PROJECTS_TITLE"));
+    expect(failed).toContain('data-page-state="error"');
+    expect(failed).toContain("data-projects-create-open");
+    expect(failed).toContain("Denied");
+  });
+
   it("keeps a per-row summary retry and pages the window from the footer pager", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
     const html = renderToStaticMarkup(<ProjectsPage locale={locale} state={{ kind: "ready", items: [project], summaries: {}, pagination: { page: 1, pageSize: 20, total: 40, totalPages: 2 } }} onRetrySummary={vi.fn()} onLoadMore={vi.fn()} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />);

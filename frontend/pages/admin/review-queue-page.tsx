@@ -3,7 +3,6 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
 import { DataTable } from "../../components/data-table";
-import { Skeleton } from "../../components/ui/skeleton";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { ReviewQueuePageResult } from "../../lib/admin-review-data";
@@ -22,11 +21,14 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
 }) {
   const confirmationLock = useRef<object | null>(null);
   const retry = <Button type="button" variant="outline" size="sm" disabled={pending} onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>;
-  if (state.kind === "loading") return <div aria-busy="true"><Skeleton className="h-24" /></div>;
-  if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{retry}</PageState>;
   const locked = reviewDecisionLocked(decisionState);
-  return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
+  // The page shell is constant (research §4.3): the header renders for every state and
+  // only the content slot switches between loading, failure and the queue itself.
+  return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0" aria-busy={state.kind === "loading" || undefined}>
     <PageHeader title={frontendText(locale, "ADMIN_REVIEW_QUEUE_TITLE")} description={frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")} />
+    {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
+      : state.kind !== "ready" ? <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{retry}</PageState>
+      : <>
     {decisionRecordBlocked && <div role="alert" data-review-decision-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardDecisionRecord}>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD")}</Button></div>}
     <ReviewDecisionFeedback allowUnknownReload state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onReloadDecision} />
     {localError && <><p role="alert" className="text-sm text-destructive">{localError}</p>{retry}</>}
@@ -64,5 +66,6 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
         } },
       ]}
     />
+      </>}
   </section>;
 }

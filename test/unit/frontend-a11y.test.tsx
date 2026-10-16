@@ -94,4 +94,37 @@ describe("frontend accessibility gates", () => {
     expect(html).toContain("匹配字段 标题, 正文");
     expect(html).not.toMatch(/>\s*(undefined|null)\s*</u);
   });
+
+  it("gives the reader exactly one titled h1 and a sticky desktop outline", () => {
+    const html = renderToStaticMarkup(<KnowledgeReaderPage
+      locale={createLocaleRuntime({ navigatorLanguage: "en" })}
+      revision={{
+        id: "revision-1", knowledgeItemId: "knowledge-1", title: "Guide", markdown: "# Guide",
+        isCurrent: false, previousRevisionId: "revision-0", sourceVersionId: "source-version-1", sourceVersionOrdinal: 2,
+        parserSchemaVersion: "m2-v1", indexStatus: "indexed", chunks: [{ id: "chunk-1", ordinal: 0, text: "Body", headingPath: ["Guide"], startLine: 3, endLine: 4 }],
+      }}
+      renderMarkdown={(markdown) => markdown}
+    />);
+    expect((html.match(/<h1/g) ?? []).length).toBe(1);
+    expect(html).toMatch(/<h1[^>]*>Guide<\/h1>/u);
+    expect(html).toContain("Historical revision");
+    const outlineAside = html.match(/<aside[^>]*data-reader-outline[^>]*class="([^"]*)"/u)?.[1] ?? "";
+    expect(outlineAside).toContain("lg:sticky");
+    expect(outlineAside).toContain("lg:top-6");
+    expect(outlineAside).toContain("lg:self-start");
+    expect(html).toContain('data-reader-layout="true"');
+    expect(html).not.toMatch(/>\s*(undefined|null)\s*</u);
+  });
+
+  it("keeps the reader header mounted while the content area carries loading and error", () => {
+    const revision = { id: "revision-1", markdown: "" };
+    const loading = renderToStaticMarkup(<KnowledgeReaderPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} revision={revision} renderMarkdown={(markdown) => markdown} state={{ kind: "loading" }} />);
+    expect((loading.match(/<h1/g) ?? []).length).toBe(1);
+    expect(loading).toContain('data-page-state="loading"');
+    expect(loading).not.toContain("data-reader-layout");
+    const failure = renderToStaticMarkup(<KnowledgeReaderPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} revision={revision} renderMarkdown={(markdown) => markdown} state={{ kind: "error", message: "Unable to load this knowledge entry." }} />);
+    expect((failure.match(/<h1/g) ?? []).length).toBe(1);
+    expect(failure).toContain("Unable to load this knowledge entry.");
+    expect(failure).not.toContain("data-reader-layout");
+  });
 });

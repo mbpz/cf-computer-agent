@@ -204,9 +204,9 @@ describe("numbered admin routes", () => {
     const load = (input: LoadAdminMembersInput) => { const pending = deferred<AdminMembersPage>(); requests.push({ input, pending }); return pending.promise; };
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search="?status=disabled" load={load} update={async () => member("m1", "active")} />));
     requests[0]!.pending.resolve(memberPage(1, 20, 1, [member("m1", "disabled")])); await flush();
-    await confirmMemberChange('button'); await flush();
+    await confirmMemberChange('button[aria-label="Enable m1@example.test"]'); await flush();
     expect(requests).toHaveLength(2);
-    await changeSelect('select[aria-label="Member status"]', "active");
+    await applyMemberFilter("Active");
     expect(requests).toHaveLength(3);
     requests[2]!.pending.resolve(memberPage(1, 20, 1, [member("latest", "active")])); await flush();
     requests[1]!.pending.resolve(memberPage(1, 20, 1, [member("stale", "active")])); await flush();
@@ -247,7 +247,7 @@ describe("numbered admin routes", () => {
     let calls = 0;
     const load = async (input: LoadAdminMembersInput) => { calls += 1; if (calls === 1) return memberPage(input.page, input.pageSize, 1, [member("m1", "disabled")]); throw new Error("refresh failed"); };
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search="?status=disabled" load={load} update={async () => member("m1", "active")} />)); await flush();
-    await confirmMemberChange('button'); await flush();
+    await confirmMemberChange('button[aria-label="Enable m1@example.test"]'); await flush();
     expect(container.textContent).toContain("m1@example.test");
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Unable to load");
   });
@@ -359,8 +359,13 @@ describe("numbered admin routes", () => {
     requests[1]!.pending.resolve(new Response(null, { status }));
     await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
     expect(container.textContent).not.toContain("m1@example.test");
+    // The page shell — header and its shared status filter — stays mounted after the 403
+    // (research §4.3); the private rows and their actions do not. Recovery is the explicit
+    // GET behind the forbidden surface, never a filter change.
+    expect(container.querySelector('button[aria-haspopup="listbox"] .sr-only')?.textContent).toBe("Member status");
     expect(container.querySelector('select[aria-label="Member status"]')).toBeNull();
-    await click('button');
+    expect(container.querySelector('button[aria-label^="Enable "]')).toBeNull();
+    await click('[data-page-state="forbidden"] button');
     expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH", "GET"]);
     requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
     await waitFor(() => container.querySelector('button[aria-label="Disable m1@example.test"]') !== null);
@@ -418,7 +423,7 @@ describe("numbered admin routes", () => {
     await confirmMemberChange('button[aria-label="Enable m2@example.test"]');
     requests[2]!.pending.resolve(new Response(null, { status: 403 }));
     await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
-    await click('button'); expect(requests).toHaveLength(4);
+    await click('[data-page-state="forbidden"] button'); expect(requests).toHaveLength(4);
     requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") })); await flush();
     requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 2, [member("m1", "disabled"), member("m2", "disabled")])));
     await waitFor(() => container.querySelector('button[aria-label="Enable m1@example.test"]') !== null);
@@ -464,7 +469,7 @@ describe("numbered admin routes", () => {
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search="" />));
     requests[0]!.pending.resolve(new Response(null, { status }));
     await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
-    const retry = container.querySelector('button') as HTMLButtonElement;
+    const retry = container.querySelector('[data-page-state="forbidden"] button') as HTMLButtonElement;
     await act(async () => { retry.click(); retry.click(); });
     expect(requests.map((request) => request.method)).toEqual(["GET", "GET"]);
     requests[1]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "disabled")])));
@@ -514,10 +519,10 @@ describe("numbered admin routes", () => {
     await confirmMemberChange('button[aria-label="Enable m1@example.test"]'); requests[1]!.pending.reject(new Error("offline"));
     await waitFor(() => container.querySelector('[role="alert"] button') !== null);
     const remove = registerWorkspaceLeaveGuard(() => ({ kind: "block" }));
-    try { await changeSelect('select[aria-label="Member status"]', "active"); expect(requests).toHaveLength(2); expect(browser.location.search).toBe(""); }
+    try { await applyMemberFilter("Active"); expect(requests).toHaveLength(2); expect(browser.location.search).toBe(""); }
     finally { remove(); }
     await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
-    await changeSelect('select[aria-label="Member status"]', "active"); expect(requests).toHaveLength(3);
+    await applyMemberFilter("Active"); expect(requests).toHaveLength(3);
     requests[2]!.pending.reject(new Error("read offline"));
     await waitFor(() => container.querySelector('[data-page-state="error"]') !== null);
     await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
@@ -534,7 +539,7 @@ describe("numbered admin routes", () => {
     await click('button[aria-label="Enable m1@example.test"]');
     await act(async () => { (container.querySelector('[data-confirm-action]') as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
     expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
-    await changeSelect('select[aria-label="Member status"]', "active"); expect(requests).toHaveLength(2);
+    await applyMemberFilter("Active"); expect(requests).toHaveLength(2);
     requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") }));
     await waitFor(() => requests.length === 3);
     requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 0, [])));
@@ -563,7 +568,7 @@ describe("numbered admin routes", () => {
     await click('[role="alert"] button'); requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 0, [])));
     await waitFor(() => container.querySelector('[data-page-state="empty"]') !== null);
     await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
-    await changeSelect('select[aria-label="Member status"]', "active"); expect(requests).toHaveLength(4);
+    await applyMemberFilter("Active"); expect(requests).toHaveLength(4);
     expect(requests[3]!.url).toBe("/api/admin/members?page=1&pageSize=20&status=active");
     await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members");
     requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
@@ -576,7 +581,7 @@ describe("numbered admin routes", () => {
     await confirmMemberChange('button[aria-label="Enable m1@example.test"]'); await confirmMemberChange('button[aria-label="Enable m2@example.test"]');
     requests[1]!.pending.resolve(new Response(null, { status: 403 }));
     await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
-    await click('button');
+    await click('[data-page-state="forbidden"] button');
     requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 2, [member("m1", "disabled"), member("m2", "disabled")])));
     await waitFor(() => container.querySelector('button[aria-label="Enable m2@example.test"]') !== null);
     expect((container.querySelector('button[aria-label="Enable m2@example.test"]') as HTMLButtonElement).disabled).toBe(true);
@@ -597,7 +602,9 @@ describe("numbered admin routes", () => {
   async function renderMember(requests: ReturnType<typeof memberRequests>, data = memberPage(1, 20, 1, [member("m1", "disabled")])) {
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} />));
     requests[0]!.pending.resolve(Response.json(data));
-    await waitFor(() => container.querySelector('select[aria-label="Member status"]') !== null);
+    // The header and its filter render during loading too now, so the settled read — the
+    // loaded member rows — is the marker that the route is ready.
+    await waitFor(() => container.querySelectorAll("tbody tr[data-selected]").length > 0);
   }
   async function locationChange(search: string) {
     await act(async () => writeWorkspaceHistory("push", `/admin/members${search}`));
@@ -621,6 +628,17 @@ describe("numbered admin routes", () => {
     await act(async () => option!.click());
     await flush();
   }
+  /** The member status filter is the shared beUI listbox; pick its option by visible label. */
+  async function applyMemberFilter(label: string) {
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')]
+      .find((node) => node.querySelector(".sr-only")?.textContent === "Member status");
+    expect(trigger, "member status filter").toBeTruthy();
+    await act(async () => trigger!.click());
+    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === label);
+    expect(option, `option ${label}`).toBeTruthy();
+    await act(async () => option!.click());
+    await flush();
+  }
   /** The trigger's visible value, excluding the sr-only accessible name and the caret. */
   function auditFilterText() {
     const trigger = container.querySelector('[aria-haspopup="listbox"]');
@@ -628,7 +646,6 @@ describe("numbered admin routes", () => {
     const value = [...trigger.querySelectorAll("span")].find((span) => !span.classList.contains("sr-only") && !span.hasAttribute("aria-hidden"));
     return value?.textContent ?? "";
   }
-  async function changeSelect(selector: string, value: string) { const element = container.querySelector(selector) as HTMLSelectElement; await act(async () => { element.value = value; element.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
 });
 
 function response(kind: "member" | "audit", page: number, pageSize: 20 | 50 | 100, total: number): Response { const count = Math.max(0, Math.min(pageSize, total - (page - 1) * pageSize)); const items = Array.from({ length: count }, (_, index) => kind === "member" ? { id: `member-${page}-${index}`, email: "member@example.test", role: "contributor", status: "disabled" } : { id: `audit-${page}-${index}`, action: "member.login", actorKind: "system", createdAt: "2026-08-28T00:00:00.000Z" }); return new Response(JSON.stringify({ items, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } }), { headers: { "content-type": "application/json" } }); }

@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { Files } from "@phosphor-icons/react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { DataTable, type DataTablePage } from "../components/data-table";
 import { Input } from "../components/ui/input";
+import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-filters";
+import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { writeSubmissionRange, type MySubmissionItem, type SubmissionRangeQuery } from "../lib/my-submissions-data";
@@ -25,15 +28,23 @@ export function MySubmissionsPage({ state, locale, pending = false, localError, 
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (pageSize: SupportedPageSize) => void;
 }) {
-  if (!range.invalid && state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (!range.invalid && state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{onRetry && <Button type="button" variant="outline" size="sm" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button>}</PageState>;
   const ready = state.kind === "ready" ? state : undefined;
   const statusLabel = (item: MySubmissionItem) => item.status === "needs_revision" ? frontendText(locale, "SUBMISSIONS_NEEDS_REVISION") : item.status || frontendText(locale, "SUBMISSIONS_STATUS_UNAVAILABLE");
+  // The stated range stays visible as removable text; the header and the range control
+  // remain mounted on every read state, so only the content slot follows the request.
+  const appliedRange: AppliedFilter[] = range.invalid ? [] : [
+    ...(range.from ? [{ id: "from", label: `${frontendText(locale, "CALENDAR_RANGE_FROM")}: ${dateFieldValue(range.from)}`, onRemove: () => applyRange({ from: "", to: range.to }) }] : []),
+    ...(range.to ? [{ id: "to", label: `${frontendText(locale, "CALENDAR_RANGE_TO")}: ${dateFieldValue(range.to)}`, onRemove: () => applyRange({ from: range.from, to: "" }) }] : []),
+  ];
   return <section className="flex flex-col space-y-5 lg:h-full lg:min-h-0">
-    <div><h1 className="text-2xl font-semibold">{frontendText(locale, "SUBMISSIONS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "SUBMISSIONS_DESCRIPTION")}</p></div>
+    <PageHeader title={frontendText(locale, "SUBMISSIONS_TITLE")} description={frontendText(locale, "SUBMISSIONS_DESCRIPTION")} icon={<Files size={22} weight="duotone" className="text-primary" />} />
     <SubmissionRangeFilter locale={locale} range={range} pending={pending} />
-    {localError && !range.invalid && <div role="alert" className="flex items-center gap-3 text-sm text-destructive"><span>{localError}</span><Button type="button" variant="outline" size="sm" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></div>}
-    {ready && !range.invalid && <DataTable
+    {!range.invalid && <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedRange} onClear={() => applyRange({ from: "", to: "" })} />}
+    {range.invalid ? null
+      : state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
+      : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{onRetry && <Button type="button" variant="outline" size="sm" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button>}</PageState>
+      : <>{localError && <div role="alert" className="flex items-center gap-3 text-sm text-destructive"><span>{localError}</span><Button type="button" variant="outline" size="sm" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></div>}
+    {ready && <DataTable
       locale={locale}
       rows={ready.items}
       columns={[
@@ -57,8 +68,17 @@ export function MySubmissionsPage({ state, locale, pending = false, localError, 
       rowHeight={88}
       fill
       className="lg:min-h-0 lg:flex-1"
-    />}
+    />}</>}
   </section>;
+}
+
+/**
+ * Rewrites the location with the requested submission range so the range stays
+ * shareable and the route re-reads it; the status filter and page size survive.
+ */
+function applyRange(next: { from: string; to: string }): void {
+  const { pathname, search } = readWorkspaceLocation();
+  writeWorkspaceHistory("push", `${pathname}${writeSubmissionRange(search, next)}`);
 }
 
 /**
@@ -77,7 +97,7 @@ function SubmissionRangeFilter({ locale, range, pending }: { locale: LocaleRunti
     <div className="flex flex-wrap items-end gap-3">
       <label className="space-y-1 text-sm">{frontendText(locale, "CALENDAR_RANGE_FROM")}<Input aria-label={frontendText(locale, "CALENDAR_RANGE_FROM")} type="date" value={from} disabled={pending} onChange={(event) => setFrom(event.currentTarget.value)} /></label>
       <label className="space-y-1 text-sm">{frontendText(locale, "CALENDAR_RANGE_TO")}<Input aria-label={frontendText(locale, "CALENDAR_RANGE_TO")} type="date" value={to} disabled={pending} onChange={(event) => setTo(event.currentTarget.value)} /></label>
-      <Button type="button" disabled={pending || invalid} onClick={() => { if (invalid) return; const { pathname, search } = readWorkspaceLocation(); writeWorkspaceHistory("push", `${pathname}${writeSubmissionRange(search, { from, to })}`); }}>{frontendText(locale, "CALENDAR_RANGE_APPLY")}</Button>
+      <Button type="button" disabled={pending || invalid} onClick={() => { if (invalid) return; applyRange({ from, to }); }}>{frontendText(locale, "CALENDAR_RANGE_APPLY")}</Button>
     </div>
     {invalid && <p role="alert" data-submissions-range-error className="text-sm text-destructive">{frontendText(locale, "SUBMISSIONS_RANGE_INVALID")}</p>}
   </div>;

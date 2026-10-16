@@ -4,7 +4,9 @@ import type { SessionSnapshot } from '../../contracts/api';
 import { DataTable } from '../../components/data-table';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/motion/input';
-import { Select } from '../../components/ui/select';
+import { AppliedFilters } from '../../components/ui/applied-filters';
+import { FilterSelect } from '../../components/ui/filter-select';
+import { PageHeader } from '../../components/ui/page-header';
 import { Select as MotionSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/motion/select';
 import { Dialog, DialogContent, DialogTitle } from '../../components/ui/dialog';
 import { frontendText, type LocaleRuntime } from '../../lib/i18n';
@@ -25,7 +27,7 @@ function AccountEnvironments({locale}:{locale:LocaleRuntime}) {
   const owner=useAccountNetworkOwner();
   const [manager,setManager]=useState<EnvironmentManager | null>(null);
   useEffect(()=>{const next=getEnvironmentManager(owner);setManager(next);if(!owner.signal.aborted)void next.load();},[owner]);
-  return manager ? <EnvironmentView manager={manager} locale={locale} /> : <p aria-busy="true">{frontendText(locale,'ENV_LOADING')}</p>;
+  return manager ? <EnvironmentView manager={manager} locale={locale} /> : <section className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0"><PageHeader title={frontendText(locale,'NAV_ENVIRONMENTS')} description={frontendText(locale,'ENV_METADATA_ONLY')} /><p aria-busy="true">{frontendText(locale,'ENV_LOADING')}</p></section>;
 }
 function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:LocaleRuntime}) {
   const scope=useAccountNetworkOwner().scope;
@@ -110,10 +112,10 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   // window while the mobile feed keeps appending rows up to the same 500-page cap.
   const goToPage=(page:number)=>{if(state.writing || !Number.isSafeInteger(page) || page<1 || page>500 || page===state.pagination.page)return;setPages([]);void run(()=>manager.load(page,state.filter,state.pagination.pageSize));};
   const changePageSize=(pageSize:SupportedPageSize)=>{if(state.writing || pageSize===state.pagination.pageSize)return;setPages([]);void run(()=>manager.load(1,state.filter,pageSize));};
-  if(state.closed)return <section data-environments-closed role="alert">{t('ENV_ACCOUNT_CLOSED')}</section>;
+  if(state.closed)return <section data-environments-page className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0"><PageHeader title={t('NAV_ENVIRONMENTS')} description={t('ENV_METADATA_ONLY')} /><p data-environments-closed role="alert">{t('ENV_ACCOUNT_CLOSED')}</p></section>;
   return <section data-environments-page className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0">
     {draft.confirmation}
-    <header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold">{t('NAV_ENVIRONMENTS')}</h1><p className="mt-2 text-sm text-muted-foreground">{t('ENV_METADATA_ONLY')}</p></div><Button type="button" data-environment-create-open aria-haspopup="dialog" aria-expanded={createOpen} disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current)setCreateOpen(true);}}>{t('ENV_CREATE')}</Button></header>
+    <PageHeader title={t('NAV_ENVIRONMENTS')} description={t('ENV_METADATA_ONLY')} actions={<Button type="button" data-environment-create-open aria-haspopup="dialog" aria-expanded={createOpen} disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current)setCreateOpen(true);}}>{t('ENV_CREATE')}</Button>} />
     {(state.error || localError) && <div role="alert" className="rounded-md border p-4"><p>{t(localError?'ENV_INVALID_INPUT':`ENV_${state.error}`)}</p></div>}
     {state.recoveryBlocked && <div className="space-y-3 rounded-md border p-4" role="alert">
       <p>{t('ENV_RECOVERY_BLOCKED')}</p>
@@ -141,7 +143,8 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
         <div className="flex gap-2 sm:col-span-2 sm:justify-end"><Button type="button" variant="outline" data-environment-create-cancel onClick={()=>setCreateOpen(false)}>{t('ENV_CANCEL')}</Button><Button type="submit" disabled={blocked || !title.trim()}>{t('ENV_CREATE')}</Button></div>
       </form>
     </DialogContent></Dialog>
-    <div className="flex flex-wrap items-end gap-3"><label className="text-sm">{t('ENV_FILTER')}<Select aria-label={t('ENV_FILTER')} value={state.filter} disabled={state.loading || state.writing} onChange={event=>void run(()=>manager.load(1,event.target.value as ''|EnvironmentType))}><option value="">{t('ENV_ALL')}</option><option value="personal">{t('ENV_PERSONAL')}</option><option value="temporary">{t('ENV_TEMPORARY')}</option></Select></label><Button variant="outline" disabled={state.loading || state.writing} onClick={()=>void run(()=>manager.load())}>{t('ENV_REFRESH')}</Button></div>
+    <div className="flex flex-wrap items-end gap-3"><FilterSelect label={t('ENV_FILTER')} ariaLabel={t('ENV_FILTER')} value={state.filter} disabled={state.loading || state.writing} onChange={value=>void run(()=>manager.load(1,value as ''|EnvironmentType))} options={[{value:'',label:t('ENV_ALL')},{value:'personal',label:t('ENV_PERSONAL')},{value:'temporary',label:t('ENV_TEMPORARY')}]} /><Button variant="outline" disabled={state.loading || state.writing} onClick={()=>void run(()=>manager.load())}>{t('ENV_REFRESH')}</Button></div>
+    <AppliedFilters ariaLabel={t('COMMON_APPLIED_FILTERS')} clearLabel={t('COMMON_CLEAR_FILTERS')} filters={state.filter ? [{id:'type',label:`${t('ENV_FILTER')}: ${t(state.filter==='personal'?'ENV_PERSONAL':'ENV_TEMPORARY')}`,onRemove:()=>void run(()=>manager.load(1,''))}] : []} onClear={()=>void run(()=>manager.load(1,''))} />
     <div aria-busy={state.loading} className="flex flex-col lg:min-h-0 lg:flex-1">
       <DataTable
         locale={locale}

@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from "react";
+import { Checks } from "@phosphor-icons/react";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { DataTable } from "../../components/data-table";
 import { Input } from "../../components/ui/input";
+import { AppliedFilters, type AppliedFilter } from "../../components/ui/applied-filters";
+import { FilterSelect } from "../../components/ui/filter-select";
+import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { TaskItem } from "../../lib/tasks-data";
 import type { TaskFilterState, TaskPriority, TaskStatus } from "./task-types";
-import { taskPriorityKey, taskStatusKey } from "./tasks-model";
+import { taskFilterKey, taskPriorityKey, taskStatusKey } from "./tasks-model";
 import { contextDiscussionHref } from "../messages/discussion-model";
 
 type Pagination = { page: number; pageSize: 20 | 50 | 100; total: number; totalPages: number };
@@ -40,7 +44,7 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
   type DeleteConfirmation = { task: TaskItem; items: readonly TaskItem[]; filters: string; page: number; pageSize: number };
   const [confirmation, setConfirmation] = useState<DeleteConfirmation | null>(null);
   const confirmationRef = useRef<DeleteConfirmation | null>(null);
-  const filterKey = JSON.stringify([filters.q, filters.status, filters.priority, filters.tag, filters.due]);
+  const filterKey = taskFilterKey(filters);
   const deleteBlocked = pending || !!localLoadError || actionPendingId != null || !onDelete;
   const validConfirmation = !!confirmation && state.kind === "ready" && !deleteBlocked
     && confirmation.items === state.items && state.items.includes(confirmation.task)
@@ -58,18 +62,31 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
     // Consume before invoking the caller: repeated confirmation cannot replay the delete.
     cancelDelete(); onDelete?.(confirmation.task.id);
   };
-  if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "TASKS_LOADING")} />;
-  if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>;
+  // Every applied condition stays visible as removable text; removing one applies the rest at once.
+  const appliedFilters: AppliedFilter[] = [];
+  if (filters.q) appliedFilters.push({ id: "q", label: `${frontendText(locale, "TASKS_SEARCH")}: ${filters.q}`, onRemove: () => onFilterChange?.({ ...filters, q: undefined }) });
+  if (filters.status) appliedFilters.push({ id: "status", label: `${frontendText(locale, "TASKS_STATUS")}: ${filters.status}`, onRemove: () => onFilterChange?.({ ...filters, status: undefined }) });
+  if (filters.priority) appliedFilters.push({ id: "priority", label: `${frontendText(locale, "TASKS_PRIORITY")}: ${filters.priority}`, onRemove: () => onFilterChange?.({ ...filters, priority: undefined }) });
+  if (filters.tag) appliedFilters.push({ id: "tag", label: `${frontendText(locale, "TASKS_TAG")}: ${filters.tag}`, onRemove: () => onFilterChange?.({ ...filters, tag: undefined }) });
+  if (filters.due) appliedFilters.push({ id: "due", label: `${frontendText(locale, "TASKS_DUE")}: ${filters.due}`, onRemove: () => onFilterChange?.({ ...filters, due: undefined }) });
   return <><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={validConfirmation} aria-hidden={validConfirmation || undefined}>
-    <div><h1 className="text-2xl font-semibold">{frontendText(locale, "TASKS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "TASKS_DESCRIPTION")}</p></div>
-    {onCreate && <Button disabled={Boolean(actionPendingId)} onClick={onCreate}>{frontendText(locale, "TASKS_NEW")}</Button>}
-    <div className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
+    <PageHeader
+      icon={<Checks size={22} weight="duotone" className="text-primary" data-icon="tasks" aria-hidden="true" />}
+      title={frontendText(locale, "TASKS_TITLE")}
+      description={frontendText(locale, "TASKS_DESCRIPTION")}
+      actions={onCreate && <Button disabled={Boolean(actionPendingId)} onClick={onCreate}>{frontendText(locale, "TASKS_NEW")}</Button>}
+    />
+    <div className="flex flex-wrap items-center gap-2">
       <Input aria-label={frontendText(locale, "TASKS_SEARCH")} value={filters.q ?? ""} onChange={(event) => onTextFilterChange?.({ ...filters, q: event.currentTarget.value || undefined })} placeholder={frontendText(locale, "TASKS_SEARCH")} />
-      <FilterSelect label={frontendText(locale, "TASKS_STATUS")} value={filters.status ?? ""} onChange={(value) => onFilterChange?.({ ...filters, status: (value || undefined) as TaskStatus | undefined })} options={["todo", "doing", "blocked", "done", "canceled"]} />
-      <FilterSelect label={frontendText(locale, "TASKS_PRIORITY")} value={filters.priority ?? ""} onChange={(value) => onFilterChange?.({ ...filters, priority: (value || undefined) as TaskPriority | undefined })} options={["low", "medium", "high"]} />
+      <FilterSelect label={frontendText(locale, "TASKS_STATUS")} ariaLabel={frontendText(locale, "TASKS_STATUS")} value={filters.status ?? ""} onChange={(value) => onFilterChange?.({ ...filters, status: (value || undefined) as TaskStatus | undefined })} options={[{ value: "", label: "All" }, { value: "todo", label: "todo" }, { value: "doing", label: "doing" }, { value: "blocked", label: "blocked" }, { value: "done", label: "done" }, { value: "canceled", label: "canceled" }]} />
+      <FilterSelect label={frontendText(locale, "TASKS_PRIORITY")} ariaLabel={frontendText(locale, "TASKS_PRIORITY")} value={filters.priority ?? ""} onChange={(value) => onFilterChange?.({ ...filters, priority: (value || undefined) as TaskPriority | undefined })} options={[{ value: "", label: "All" }, { value: "low", label: "low" }, { value: "medium", label: "medium" }, { value: "high", label: "high" }]} />
       <Input aria-label={frontendText(locale, "TASKS_TAG")} value={filters.tag ?? ""} onChange={(event) => onTextFilterChange?.({ ...filters, tag: event.currentTarget.value || undefined })} placeholder={frontendText(locale, "TASKS_TAG")} />
-      <FilterSelect label={frontendText(locale, "TASKS_DUE")} value={filters.due ?? ""} onChange={(value) => onFilterChange?.({ ...filters, due: (value || undefined) as TaskFilterState["due"] })} options={["today", "overdue", "none"]} />
+      <FilterSelect label={frontendText(locale, "TASKS_DUE")} ariaLabel={frontendText(locale, "TASKS_DUE")} value={filters.due ?? ""} onChange={(value) => onFilterChange?.({ ...filters, due: (value || undefined) as TaskFilterState["due"] })} options={[{ value: "", label: "All" }, { value: "today", label: "today" }, { value: "overdue", label: "overdue" }, { value: "none", label: "none" }]} />
     </div>
+    <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedFilters} onClear={() => onFilterChange?.({})} />
+    {state.kind === "loading" && <PageState kind="loading" title={frontendText(locale, "TASKS_LOADING")} />}
+    {state.kind === "error" && <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>}
+    {state.kind === "ready" && <>
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
     {localLoadError && <div role="alert" className="flex items-center gap-3 text-sm text-destructive"><span>{localLoadError}</span><Button type="button" size="sm" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></div>}
     <DataTable
@@ -108,13 +125,9 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
           </div>;
         } },
       ]}
-    />
+    /></>}
   </section><ConfirmAction open={validConfirmation} title={frontendText(locale, "TASKS_DELETE_CONFIRM_TITLE")}
     description={`${confirmation?.task.title.trim() ? `${confirmation.task.title.trim()} (${confirmation.task.id})` : confirmation?.task.id || ""} — ${frontendText(locale, "TASKS_DELETE_IMPACT")}`}
     cancelLabel={frontendText(locale, "COMMON_CANCEL")} confirmLabel={frontendText(locale, "TASKS_DELETE_CONFIRM")} destructive
     onCancel={cancelDelete} onConfirm={confirmDelete} /></>;
-}
-
-function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly string[]; onChange: (value: string) => void }) {
-  return <select aria-label={label} className="h-10 rounded-md border bg-background px-3 text-sm" value={value} onChange={(event) => onChange(event.currentTarget.value)}><option value="">{label}</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select>;
 }

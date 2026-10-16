@@ -5,7 +5,9 @@ import { AnswerPanel, type AgentCitation } from "../components/agent/answer-pane
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/motion/select";
 import { SummaryRow, type SummaryRowItem } from "../components/ui/summary-row";
 import { agentLocationFromSearch, type AgentAnswer, type AgentScope, type ChatStage } from "../lib/agent-data";
 import { AgentProgress } from "../components/agents/agent-progress";
@@ -28,7 +30,7 @@ export function AgentPage({ scope, state, locale, question = "", onQuestionChang
     { label: frontendText(locale, "AGENT_SCOPE"), value: scopeLabel },
     ...(state.kind === "ready" && state.confidence === "low" ? [{ label: frontendText(locale, "AGENT_CONFIDENCE"), value: frontendText(locale, "AGENT_CONFIDENCE_LOW") }] : []),
   ];
-  return <section className="flex flex-col space-y-6 lg:h-full lg:min-h-0"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "AGENT_TITLE")}</h1><SummaryRow className="mt-1" locale={locale} items={summaryItems} /></div>
+  return <section className="flex flex-col space-y-6 lg:h-full lg:min-h-0"><div><PageHeader title={frontendText(locale, "AGENT_TITLE")} /><SummaryRow className="mt-1" locale={locale} items={summaryItems} /></div>
     <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
       <Label htmlFor="agent-question">{frontendText(locale, "AGENT_QUESTION_LABEL")}</Label>
       <div className="flex flex-col gap-2 sm:flex-row"><Input id="agent-question" name="question" disabled={state.kind === "loading" || feedbackBlocked} value={question} onChange={(event) => onQuestionChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "AGENT_QUESTION_PLACEHOLDER")} autoComplete="off" /><Button type="submit" disabled={!onSubmit || state.kind === "loading" || feedbackBlocked}>{frontendText(locale, "AGENT_SUBMIT")}</Button></div>
@@ -55,10 +57,17 @@ function AgentSourceControls({ draft, locale, disabled, onStartScope, isWriteBlo
   };
   return <fieldset disabled={disabled || draft.applicationPending} className="space-y-2 rounded-md border p-4">
     <legend>{frontendText(locale, "AGENT_SCOPE")}</legend>
-    <Label htmlFor="agent-scope-kind">{frontendText(locale, "AGENT_SCOPE_KIND")}</Label>
-    <select id="agent-scope-kind" className="block rounded-md border bg-background p-2" value={kind} onChange={(event) => { draft.edit("kind", event.currentTarget.value as AgentScope["kind"]); draft.edit("ids", ""); setInvalid(false); }}>
-      <option value="all">{frontendText(locale, "AGENT_SCOPE_ALL")}</option><option value="space">{frontendText(locale, "AGENT_SCOPE_SPACE")}</option><option value="collection">{frontendText(locale, "AGENT_SCOPE_COLLECTION")}</option><option value="items">{frontendText(locale, "AGENT_SCOPE_ITEMS")}</option>
-    </select>
+    <Label id="agent-scope-kind" className="flex w-fit flex-col gap-2">{frontendText(locale, "AGENT_SCOPE_KIND")}
+      <Select value={kind} disabled={disabled || draft.applicationPending} onValueChange={(value) => { draft.edit("kind", value as AgentScope["kind"]); draft.edit("ids", ""); setInvalid(false); }}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{frontendText(locale, "AGENT_SCOPE_ALL")}</SelectItem>
+          <SelectItem value="space">{frontendText(locale, "AGENT_SCOPE_SPACE")}</SelectItem>
+          <SelectItem value="collection">{frontendText(locale, "AGENT_SCOPE_COLLECTION")}</SelectItem>
+          <SelectItem value="items">{frontendText(locale, "AGENT_SCOPE_ITEMS")}</SelectItem>
+        </SelectContent>
+      </Select>
+    </Label>
     {kind !== "all" && <><Label htmlFor="agent-scope-ids">{frontendText(locale, "AGENT_SCOPE_IDS")}</Label><Input id="agent-scope-ids" value={ids} onChange={(event) => draft.edit("ids", event.currentTarget.value)} aria-invalid={invalid} /></>}
     <p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_SCOPE_DETAIL")}</p>
     {invalid && <p role="alert">{frontendText(locale, "AGENT_SCOPE_INVALID")}</p>}

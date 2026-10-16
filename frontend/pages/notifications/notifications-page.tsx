@@ -1,9 +1,12 @@
+import { Bell } from "@phosphor-icons/react";
 import { Alert, AlertTitle } from "../../components/ui/alert";
+import { AppliedFilters, type AppliedFilter } from "../../components/ui/applied-filters";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { DataTable } from "../../components/data-table";
+import { FilterSelect } from "../../components/ui/filter-select";
+import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
-import { Select, SelectOption } from "../../components/ui/select";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { NOTIFICATION_EVENT_TYPES, type NotificationEventType, type NotificationFilters, type NotificationItem, type NotificationSummary } from "../../lib/notifications-data";
 import type { SupportedPageSize } from "../../lib/numbered-page";
@@ -36,35 +39,49 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   onMarkVisibleRead: (ids: readonly string[]) => void;
   onOpen: (id: string) => void;
 }) {
-  if (state.kind === "loading") return <div><span className="sr-only">{frontendText(locale, "NOTIFICATIONS_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "NOTIFICATIONS_LOADING")} /></div>;
-  if (state.kind === "recovery") return <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ACTION_FAILED")} description={frontendText(locale, "NOTIFICATIONS_RECOVERY_DESCRIPTION")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
-  if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
-  if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "NOTIFICATIONS_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
-  const visibleUnreadIds = state.items.filter((item) => item.readAt === null).map((item) => item.id).slice(0, 100);
+  const ready = state.kind === "ready";
+  const visibleUnreadIds = ready ? state.items.filter((item) => item.readAt === null).map((item) => item.id).slice(0, 100) : [];
   const actionsDisabled = pending || actionPending || recordBlocked;
+  const readOptions = [
+    { value: "", label: frontendText(locale, "NOTIFICATIONS_FILTER_ALL") },
+    { value: "unread", label: frontendText(locale, "NOTIFICATIONS_FILTER_UNREAD") },
+    { value: "read", label: frontendText(locale, "NOTIFICATIONS_FILTER_READ") },
+  ];
+  const typeOptions = [
+    { value: "", label: frontendText(locale, "NOTIFICATIONS_FILTER_ALL") },
+    ...NOTIFICATION_EVENT_TYPES.map((eventType) => ({ value: eventType as string, label: frontendText(locale, notificationEventKey(eventType)) })),
+  ];
+  // Every applied condition stays visible as removable text; the same handler the control uses applies it.
+  const appliedFilters: AppliedFilter[] = [];
+  if (filters.read) appliedFilters.push({ id: "read", label: `${frontendText(locale, "NOTIFICATIONS_READ_FILTER")}: ${frontendText(locale, filters.read === "read" ? "NOTIFICATIONS_FILTER_READ" : "NOTIFICATIONS_FILTER_UNREAD")}`, onRemove: () => onFilterChange({ ...filters, read: undefined }) });
+  if (filters.eventType) appliedFilters.push({ id: "event-type", label: `${frontendText(locale, "NOTIFICATIONS_TYPE_FILTER")}: ${frontendText(locale, notificationEventKey(filters.eventType))}`, onRemove: () => onFilterChange({ ...filters, eventType: undefined }) });
+  // The page shell (header, filters and applied conditions) renders for every state; only
+  // the content slot branches, so a first load or a read failure never unmounts the toolbar.
   return <section className="flex flex-col space-y-5 lg:h-full lg:min-h-0">
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-2xl font-semibold">{frontendText(locale, "NOTIFICATIONS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_DESCRIPTION")}</p></div>
-      <p className="text-sm font-medium" aria-live="polite">{frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} {summary?.unread ?? 0}</p>
-    </div>
+    <PageHeader
+      icon={<Bell size={22} weight="duotone" className="text-primary" />}
+      title={frontendText(locale, "NOTIFICATIONS_TITLE")}
+      description={frontendText(locale, "NOTIFICATIONS_DESCRIPTION")}
+      /* The server unread total only describes a loaded window; it stays hidden while
+         loading, in read-only recovery, on a read failure or a revoked read. */
+      actions={ready && <p className="text-sm font-medium" aria-live="polite">{frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} {summary?.unread ?? 0}</p>}
+    />
     <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
-      <Select aria-label={frontendText(locale, "NOTIFICATIONS_READ_FILTER")} value={filters.read ?? ""} disabled={pending} onChange={(event) => onFilterChange({ ...filters, read: readFilter(event.currentTarget.value) })}>
-        <SelectOption value="">{frontendText(locale, "NOTIFICATIONS_FILTER_ALL")}</SelectOption>
-        <SelectOption value="unread">{frontendText(locale, "NOTIFICATIONS_FILTER_UNREAD")}</SelectOption>
-        <SelectOption value="read">{frontendText(locale, "NOTIFICATIONS_FILTER_READ")}</SelectOption>
-      </Select>
-      <Select aria-label={frontendText(locale, "NOTIFICATIONS_TYPE_FILTER")} value={filters.eventType ?? ""} disabled={pending} onChange={(event) => onFilterChange({ ...filters, eventType: eventFilter(event.currentTarget.value) })}>
-        <SelectOption value="">{frontendText(locale, "NOTIFICATIONS_FILTER_ALL")}</SelectOption>
-        {NOTIFICATION_EVENT_TYPES.map((eventType) => <SelectOption key={eventType} value={eventType}>{frontendText(locale, notificationEventKey(eventType))}</SelectOption>)}
-      </Select>
-      <Button variant="outline" disabled={pending || actionPending || recordBlocked || visibleUnreadIds.length === 0} onClick={() => onMarkVisibleRead(visibleUnreadIds)}>{frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ")}</Button>
+      <FilterSelect label={frontendText(locale, "NOTIFICATIONS_READ_FILTER")} ariaLabel={frontendText(locale, "NOTIFICATIONS_READ_FILTER")} value={filters.read ?? ""} disabled={pending} onChange={(value) => onFilterChange({ ...filters, read: readFilter(value) })} options={readOptions} />
+      <FilterSelect label={frontendText(locale, "NOTIFICATIONS_TYPE_FILTER")} ariaLabel={frontendText(locale, "NOTIFICATIONS_TYPE_FILTER")} value={filters.eventType ?? ""} disabled={pending} onChange={(value) => onFilterChange({ ...filters, eventType: eventFilter(value) })} options={typeOptions} />
+      {ready && <Button variant="outline" disabled={actionsDisabled || visibleUnreadIds.length === 0} onClick={() => onMarkVisibleRead(visibleUnreadIds)}>{frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ")}</Button>}
     </div>
+    <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedFilters} onClear={() => onFilterChange({})} />
     {recordBlocked && <Alert variant="destructive" data-notification-update-record-blocked="">
       <AlertTitle>{frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_BLOCKED")}</AlertTitle>
       <div className="mt-3"><Button variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_DISCARD")}</Button></div>
     </Alert>}
     {actionError && <Alert variant="destructive"><AlertTitle>{actionError}</AlertTitle></Alert>}
-    <DataTable
+    {state.kind === "loading" && <div><span className="sr-only">{frontendText(locale, "NOTIFICATIONS_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "NOTIFICATIONS_LOADING")} /></div>}
+    {state.kind === "recovery" && <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ACTION_FAILED")} description={frontendText(locale, "NOTIFICATIONS_RECOVERY_DESCRIPTION")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>}
+    {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>}
+    {state.kind === "forbidden" && <PageState kind="forbidden" title={frontendText(locale, "NOTIFICATIONS_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>}
+    {state.kind === "ready" && <DataTable
       locale={locale}
       rows={state.items}
       rowId={(item: NotificationItem) => item.id}
@@ -93,7 +110,7 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
           </div>;
         } },
       ]}
-    />
+    />}
   </section>;
 }
 

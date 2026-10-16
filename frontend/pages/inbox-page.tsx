@@ -10,6 +10,9 @@ import { Archive, ArrowUpRight, Link as LinkIcon, Note, Plus, Tray } from "@phos
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
+import { PageHeader } from "../components/ui/page-header";
+import { FilterSelect } from "../components/ui/filter-select";
+import { AppliedFilters } from "../components/ui/applied-filters";
 import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { InboxItem } from "../lib/inbox-data";
@@ -34,13 +37,39 @@ export function InboxPage({ locale, state, pending = false, actionError, onRetry
   const captureDescriptionId = useId();
   const controlsPending = pending || !!capturePending || confirmation.open;
   const guard = (run: () => void) => { if (!controlsPending && !confirmation.isOpen()) run(); };
-  if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "INBOX_LOADING")} />;
-  if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>;
-  return <><section className="flex flex-col gap-4 lg:h-full lg:min-h-0" inert={confirmation.open || captureOpen ? true : undefined}>
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><Tray size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{frontendText(locale, "INBOX_TITLE")}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "INBOX_DESCRIPTION")}</p></div><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{frontendText(locale, "INBOX_PRIVATE_BADGE")}</Badge><Button type="button" data-inbox-capture-open aria-haspopup="dialog" aria-expanded={captureOpen} onClick={() => setCaptureOpen(true)} {...(captureLocked ? { "data-inbox-capture-pending": "" } : {})}><Plus size={16} weight="bold" className="mr-1" aria-hidden="true" />{frontendText(locale, "INBOX_CAPTURE_TITLE")}</Button></div></div>
+  return <><section className="flex flex-col gap-4 lg:h-full lg:min-h-0" inert={state.kind === "ready" && (confirmation.open || captureOpen) ? true : undefined}>
+    <PageHeader
+      title={frontendText(locale, "INBOX_TITLE")}
+      description={frontendText(locale, "INBOX_DESCRIPTION")}
+      status={frontendText(locale, "INBOX_PRIVATE_BADGE")}
+      icon={<Tray size={22} weight="duotone" className="text-primary" />}
+      actions={<Button type="button" data-inbox-capture-open aria-haspopup="dialog" aria-expanded={captureOpen} onClick={() => setCaptureOpen(true)} {...(captureLocked ? { "data-inbox-capture-pending": "" } : {})}><Plus size={16} weight="bold" className="mr-1" aria-hidden="true" />{frontendText(locale, "INBOX_CAPTURE_TITLE")}</Button>}
+    />
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
-    <div className="flex flex-wrap items-center gap-2 text-sm"><label className="flex items-center gap-2"><span>{frontendText(locale, "INBOX_STATUS_FILTER")}</span><select aria-label={frontendText(locale, "INBOX_STATUS_FILTER")} className="h-10 rounded-md border bg-background px-3" value={status ?? ""} disabled={controlsPending} onChange={event => { const next = (event.currentTarget.value || undefined) as InboxStatus | undefined; guard(() => onFilterChange(next)); }}><option value="">{frontendText(locale, "INBOX_STATUS_ALL")}</option><option value="inbox">{frontendText(locale, "INBOX_STATUS_INBOX")}</option><option value="archived">{frontendText(locale, "INBOX_STATUS_ARCHIVED")}</option><option value="promoted">{frontendText(locale, "INBOX_STATUS_PROMOTED")}</option></select></label></div>
-    <DataTable
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <FilterSelect
+        label={frontendText(locale, "INBOX_STATUS_FILTER")}
+        ariaLabel={frontendText(locale, "INBOX_STATUS_FILTER")}
+        value={status ?? ""}
+        disabled={controlsPending}
+        onChange={value => { const next = (value || undefined) as InboxStatus | undefined; guard(() => onFilterChange(next)); }}
+        options={[
+          { value: "", label: frontendText(locale, "INBOX_STATUS_ALL") },
+          { value: "inbox", label: frontendText(locale, "INBOX_STATUS_INBOX") },
+          { value: "archived", label: frontendText(locale, "INBOX_STATUS_ARCHIVED") },
+          { value: "promoted", label: frontendText(locale, "INBOX_STATUS_PROMOTED") },
+        ]}
+      />
+    </div>
+    <AppliedFilters
+      ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")}
+      clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")}
+      filters={status ? [{ id: "status", label: `${frontendText(locale, "INBOX_STATUS_FILTER")}: ${frontendText(locale, `INBOX_STATUS_${status.toUpperCase()}`)}`, onRemove: () => guard(() => onFilterChange(undefined)) }] : []}
+      onClear={() => guard(() => onFilterChange(undefined))}
+    />
+    {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "INBOX_LOADING")} />
+      : state.kind === "error" ? <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>
+      : <DataTable
       locale={locale}
       className="lg:min-h-0 lg:flex-1"
       fill
@@ -61,9 +90,9 @@ export function InboxPage({ locale, state, pending = false, actionError, onRetry
         { key: "createdAt", header: frontendText(locale, "INBOX_COLUMN_TIME"), width: "160px", cellClassName: "whitespace-normal", cell: (item) => <time className="text-xs text-muted-foreground">{item.createdAt ? new Date(item.createdAt).toLocaleDateString(locale.locale) : ""}</time> },
         { key: "actions", header: frontendText(locale, "INBOX_COLUMN_ACTIONS"), width: "240px", cellClassName: "whitespace-normal", cell: (item) => item.status === "promoted" ? (item.promotedTaskId ? <Button type="button" size="sm" variant="outline" aria-label={frontendText(locale, "INBOX_OPEN_TASK")} disabled={controlsPending} onClick={() => guard(() => onOpenTask?.(item))}>{frontendText(locale, "INBOX_OPEN_TASK")}</Button> : null) : <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" aria-label={item.status === "archived" ? frontendText(locale, "INBOX_RESTORE") : frontendText(locale, "INBOX_ARCHIVE")} disabled={controlsPending} onClick={() => confirmation.request(item, "status")}><Archive size={14} className="mr-1" aria-hidden="true" />{item.status === "archived" ? frontendText(locale, "INBOX_RESTORE") : frontendText(locale, "INBOX_ARCHIVE")}</Button><Button type="button" size="sm" aria-label={frontendText(locale, "INBOX_PROMOTE_TASK")} disabled={controlsPending} onClick={() => confirmation.request(item, "task")}>{frontendText(locale, "INBOX_PROMOTE_TASK")}</Button></div> },
       ]}
-    />
+    />}
   </section>
-  <Dialog open={captureOpen} onOpenChange={next => { if (!next) setCaptureOpen(false); }}>
+  {state.kind === "ready" && <><Dialog open={captureOpen} onOpenChange={next => { if (!next) setCaptureOpen(false); }}>
     {captureOpen && <div className="fixed inset-0 z-50 bg-black/50" aria-hidden="true" onClick={() => setCaptureOpen(false)} />}
     <DialogContent role="dialog" data-inbox-capture-dialog aria-labelledby={captureTitleId} aria-describedby={captureDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
       <DialogTitle id={captureTitleId}>{frontendText(locale, "INBOX_CAPTURE_TITLE")}</DialogTitle>
@@ -72,5 +101,5 @@ export function InboxPage({ locale, state, pending = false, actionError, onRetry
       <div className="mt-6 flex flex-wrap justify-end gap-2"><Button type="button" data-capture-cancel variant="outline" onClick={() => setCaptureOpen(false)}>{frontendText(locale, "COMMON_CANCEL")}</Button></div>
     </DialogContent>
   </Dialog>
-  {confirmation.dialog}</>;
+  {confirmation.dialog}</>}</>;
 }

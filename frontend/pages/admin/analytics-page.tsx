@@ -2,7 +2,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
-import { Skeleton } from "../../components/ui/skeleton";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminAnalyticsOverview } from "../../lib/admin-analytics-data";
 import { NumberTicker } from "../../components/motion/number-ticker";
@@ -13,28 +12,30 @@ export type AdminAnalyticsState = { kind: "loading" } | { kind: "ready"; data: A
 
 export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, localError = false, onDaysChange, onPageChange, onPageSizeChange, onLoadMore, onRefresh }: { state: AdminAnalyticsState; locale: LocaleRuntime; days?: number; pending?: boolean; localError?: boolean; onDaysChange?: (days: number) => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void; onLoadMore?: () => void; onRefresh?: () => void }) {
   const retry = <Button data-analytics-retry type="button" variant="outline" size="sm" disabled={pending} onClick={onRefresh}>{frontendText(locale, "COMMON_RETRY")}</Button>;
-  if (state.kind === "loading") return <div data-page-state="loading" aria-busy="true" className="space-y-4"><Skeleton className="h-20" /><Skeleton className="h-56" /></div>;
-  if (state.kind === "error" || state.kind === "forbidden") return <PageState kind={state.kind} title={frontendText(locale, state.kind === "forbidden" ? "ADMIN_ANALYTICS_FORBIDDEN" : "ADMIN_ANALYTICS_UNAVAILABLE")}>{retry}</PageState>;
-  const { data } = state;
-  return <section className="space-y-4" aria-busy={pending}>
+  // The page shell is constant (research §4.3): the header and its range control render
+  // for every state; only the panel below switches between loading, failure and the report.
+  return <section className="space-y-4" aria-busy={pending || state.kind === "loading" || undefined}>
     <PageHeader title={frontendText(locale, "ADMIN_ANALYTICS_TITLE")} description={frontendText(locale, "ADMIN_ANALYTICS_DESCRIPTION")}
       actions={<><label htmlFor="admin-analytics-range" className="sr-only">{frontendText(locale, "ADMIN_ANALYTICS_RANGE")}</label><select id="admin-analytics-range" className="h-9 rounded-md border bg-background px-3 text-sm" value={days} onChange={(event) => onDaysChange?.(Number(event.target.value))}>{![7, 14, 30].includes(days) && <option value={days}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_CUSTOM").replace("{days}", String(days))}</option>}<option value={7}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_7")}</option><option value={14}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_14")}</option><option value={30}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_30")}</option></select><Button data-analytics-refresh type="button" variant="outline" size="sm" disabled={pending} onClick={onRefresh}>{frontendText(locale, "ADMIN_ANALYTICS_REFRESH")}</Button></>} />
-    <p data-analytics-range className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_RANGE_UTC").replace("{from}", data.range.from).replace("{to}", data.range.to)}</p>
+    {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
+      : state.kind === "error" || state.kind === "forbidden" ? <PageState kind={state.kind} title={frontendText(locale, state.kind === "forbidden" ? "ADMIN_ANALYTICS_FORBIDDEN" : "ADMIN_ANALYTICS_UNAVAILABLE")}>{retry}</PageState>
+      : <>
+    <p data-analytics-range className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_RANGE_UTC").replace("{from}", state.data.range.from).replace("{to}", state.data.range.to)}</p>
     {(pending || localError) && <p data-analytics-stale role="status" className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_STALE")}</p>}
-    <div className="grid gap-4 md:grid-cols-3"><Metric label={frontendText(locale, "ADMIN_ANALYTICS_PAGE_VIEWS")} value={data.totals.pageViews} /><Metric label={frontendText(locale, "ADMIN_ANALYTICS_UNIQUE_VISITORS")} value={data.totals.uniqueVisitors} /><Metric label={frontendText(locale, "ADMIN_ANALYTICS_LOGIN_USERS")} value={data.totals.loginUsers} /></div>
-    <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_ANALYTICS_TRENDS")}</CardTitle></CardHeader><CardContent><DailyChart rows={data.daily} locale={locale} /></CardContent></Card>
-    <div className="grid gap-4 lg:grid-cols-3"><BreakdownCard title={frontendText(locale, "ADMIN_ANALYTICS_PATHS")} rows={data.breakdowns.paths} empty={frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")} /><BreakdownCard title={frontendText(locale, "ADMIN_ANALYTICS_REGIONS")} rows={data.breakdowns.regions} empty={frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")} /><BreakdownCard title={frontendText(locale, "ADMIN_ANALYTICS_COUNTRIES")} rows={data.breakdowns.countries} empty={frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")} /></div>
+    <div className="grid gap-4 md:grid-cols-3"><Metric label={frontendText(locale, "ADMIN_ANALYTICS_PAGE_VIEWS")} value={state.data.totals.pageViews} /><Metric label={frontendText(locale, "ADMIN_ANALYTICS_UNIQUE_VISITORS")} value={state.data.totals.uniqueVisitors} /><Metric label={frontendText(locale, "ADMIN_ANALYTICS_LOGIN_USERS")} value={state.data.totals.loginUsers} /></div>
+    <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_ANALYTICS_TRENDS")}</CardTitle></CardHeader><CardContent><DailyChart rows={state.data.daily} locale={locale} /></CardContent></Card>
+    <div className="grid gap-4 lg:grid-cols-3"><BreakdownCard title={frontendText(locale, "ADMIN_ANALYTICS_PATHS")} rows={state.data.breakdowns.paths} empty={frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")} /><BreakdownCard title={frontendText(locale, "ADMIN_ANALYTICS_REGIONS")} rows={state.data.breakdowns.regions} empty={frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")} /><BreakdownCard title={frontendText(locale, "ADMIN_ANALYTICS_COUNTRIES")} rows={state.data.breakdowns.countries} empty={frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")} /></div>
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_ANALYTICS_VISITORS")}</CardTitle></CardHeader><CardContent className="space-y-3">{localError ? <div role="alert" className="space-y-2"><p className="text-sm text-destructive">{frontendText(locale, "ADMIN_ANALYTICS_UNAVAILABLE")}</p>{retry}</div> : null}<DataTable
       locale={locale}
-      rows={data.recentVisitors.items}
+      rows={state.data.recentVisitors.items}
       rowId={(row, index) => `${row.occurredAt}-${row.path}-${index}`}
       ariaLabel={frontendText(locale, "ADMIN_ANALYTICS_VISITORS")}
       emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_ANALYTICS_EMPTY")} />}
       loading={pending}
-      pagination={data.recentVisitors.pagination}
+      pagination={state.data.recentVisitors.pagination}
       onPageChange={onPageChange}
       onPageSizeChange={onPageSizeChange}
-      hasMore={!localError && data.recentVisitors.pagination.page < data.recentVisitors.pagination.totalPages}
+      hasMore={!localError && state.data.recentVisitors.pagination.page < state.data.recentVisitors.pagination.totalPages}
       onLoadMore={onLoadMore}
       rowHeight={48}
       columns={[
@@ -46,6 +47,7 @@ export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, l
         { key: "network", header: frontendText(locale, "ADMIN_ANALYTICS_NETWORK"), width: "110px", cell: (row) => row.colo || "—" },
       ]}
     /></CardContent></Card>
+      </>}
   </section>;
 }
 

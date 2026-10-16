@@ -35,7 +35,7 @@ import { AuditPage } from "./pages/admin/audit-page";
 import { DuplicateQueuePage } from "./pages/admin/duplicate-queue-page";
 import { AgentPage, agentSourceFields } from "./pages/agent-page";
 import { HomePage, type WorkbenchHomeState } from "./pages/home-page";
-import { KnowledgePage } from "./pages/knowledge-page";
+import { KnowledgePage, type KnowledgeFilters } from "./pages/knowledge-page";
 import { KnowledgeReaderPage } from "./pages/knowledge-reader-page";
 import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
@@ -54,7 +54,7 @@ import { BoardsPage, type BoardUnknownMove } from "./pages/boards/boards-page";
 import { clearBoardMove, discardBlockedBoardMove, loadBoardMove, saveBoardMove, type BoardMoveIntent } from "./lib/board-move-intent";
 import { clearNotificationUpdate, discardBlockedNotificationUpdate, loadNotificationUpdate, saveNotificationUpdate, type NotificationUpdateIntent } from "./lib/notification-update-intent";
 import { checkTaskWrite, clearTaskWrite, discardBlockedTaskWrite, loadTaskWrite, runTaskWrite, saveTaskWrite, type TaskWriteIntent } from "./lib/task-write-intent";
-import { taskStatusKey } from "./pages/tasks/tasks-model";
+import { taskFilterKey, taskStatusKey } from "./pages/tasks/tasks-model";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
 import { ThreadPage, type ThreadPageState } from "./pages/messages/thread-page";
@@ -845,7 +845,7 @@ export function KnowledgeRoute(props: { locale: LocaleRuntime; search: string; m
   return <MemberKnowledgeRoute key={props.memberId ?? "anonymous"} {...props} />;
 }
 
-function MemberKnowledgeRoute({ locale, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
+function MemberKnowledgeRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
   const [retryVersion, setRetryVersion] = useState(0);
   const [filterVersion, setFilterVersion] = useState(0);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: KnowledgePageResult["items"]; pagination: KnowledgePageResult["pagination"] } | { kind: "error"; message: string }>({ kind: "loading" });
@@ -971,7 +971,14 @@ function MemberKnowledgeRoute({ locale, memberId }: { locale: LocaleRuntime; sea
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live location, not a render value
   }, [locale, retryVersion, filterVersion, denyRead, pageSize]);
-  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => { if (deniedRef.current) { deniedRef.current = false; setState({ kind: "loading" }); } setRetryVersion((value) => value + 1); }} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1, true); }} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} activityMoreError={activityMoreError} onLoadMoreActivity={loadMoreActivity} recentError={recentError} favoritesError={favoritesError} researchError={researchError} notesError={notesError} activityError={activityError} onRetrySections={() => setSectionRetry((value) => value + 1)} review={review} onRetryReview={() => setReviewRetry(value => value + 1)} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
+  // The applied filters live in the location. A filter change starts a fresh read and the
+  // header must not present the previous filter's rows as the new answer, while a same-query
+  // refresh (retry/page) keeps them; so clearing happens only when the filter set changes.
+  const filters = knowledgeFilters(search);
+  const filtersKey = JSON.stringify(filters);
+  const filtersKeyRef = useRef(filtersKey);
+  if (filtersKeyRef.current !== filtersKey) { filtersKeyRef.current = filtersKey; setState({ kind: "loading" }); }
+  return <KnowledgePage locale={locale} filters={filters} onFilterChange={(next) => writeWorkspaceHistory("push", `/knowledge${writeKnowledgeFilters(readWorkspaceLocation().search, next)}`)} state={state} pending={pending} localError={localError} onRetry={() => { if (deniedRef.current) { deniedRef.current = false; setState({ kind: "loading" }); } setRetryVersion((value) => value + 1); }} onPageChange={(next) => load(next)} onPageSizeChange={(size) => setPageSize(size)} onLoadMore={() => { if (state.kind === "ready" && state.pagination.page < state.pagination.totalPages) load(state.pagination.page + 1, true); }} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} activityMoreError={activityMoreError} onLoadMoreActivity={loadMoreActivity} recentError={recentError} favoritesError={favoritesError} researchError={researchError} notesError={notesError} activityError={activityError} onRetrySections={() => setSectionRetry((value) => value + 1)} review={review} onRetryReview={() => setReviewRetry(value => value + 1)} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} periodBlocked={periodBlocked} periodNotice={periodNotice} onDiscardPeriod={discardPeriod} />;
 }
 
 export function SearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
@@ -1414,6 +1421,10 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
   const controllerRef = useRef<ReturnType<typeof createMySubmissionsRequestController> | null>(null);
   const [pageSize, setPageSize] = useState<SupportedPageSize>(listPageSize);
   const range = parseSubmissionRange(search);
+  // The range and status filters live in the location. A filter change is a new query, so the
+  // previous filter's rows are never passed off as its answer; a retry of the same query keeps them.
+  const searchRef = useRef(search);
+  if (searchRef.current !== search) { searchRef.current = search; setState({ kind: "loading" }); }
   // The desktop pager replaces the window; the mobile feed appends a later page.
   const load = (targetPage: number, append = false) => {
     const controller = controllerRef.current;
@@ -1476,6 +1487,7 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
   const appendRef = useRef(false);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+  const appliedFiltersRef = useRef(taskFilterKey(filters));
   const sameFilters = (value: TaskFilterState) => JSON.stringify(value) === JSON.stringify(filtersRef.current);
   // Registered only while a list write is pending or unknown; call at every lock transition.
   const syncLeaveGuard = useCallback(() => {
@@ -1545,6 +1557,10 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
   };
   useEffect(() => {
     const controller = createTasksRequestController(); controllerRef.current = controller;
+    // A changed condition set must not answer with the previous condition's rows if this read fails;
+    // a same-condition refresh keeps them and reports a local error instead (interaction contract §2.2).
+    const appliedFilters = taskFilterKey(filters);
+    if (appliedFiltersRef.current !== appliedFilters) { appliedFiltersRef.current = appliedFilters; setState({ kind: "loading" }); }
     load(1);
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the live filters ref, not a render value
@@ -2261,6 +2277,7 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
   const queryRef = useRef<CalendarQuery>({ page: 1, pageSize, from, to, status });
   queryRef.current = { page: 1, pageSize, from, to, status };
   const [state, setState] = useState<CalendarPageState>({ kind: "loading" });
+  const [denied, setDenied] = useState(false);
   const [pending, setPending] = useState(true);
   const [writing, setWriting] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
@@ -2269,7 +2286,7 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
   const generationRef = useRef(0), controllerRef = useRef<AbortController | null>(null);
   const invalidate = useCallback(() => {
     generationRef.current++; controllerRef.current?.abort(); pendingRef.current = true;
-    setPending(true); setState({ kind: "loading" }); setActionError(undefined);
+    setPending(true); setDenied(false); setState({ kind: "loading" }); setActionError(undefined);
   }, []);
   useEffect(() => subscribeWorkspaceLocation(() => {
     const next = parseCalendarSearch(readWorkspaceLocation().search, defaultRange);
@@ -2287,13 +2304,13 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
   const clearDenied = useCallback((error: unknown) => {
     if (!(error instanceof ApiRequestError) || ![401, 403, 404].includes(error.status)) return false;
     if (error.status !== 404) writeRecovery.deny();
-    clearReadFailure(); return true;
+    setDenied(true); clearReadFailure(); return true;
   }, [clearReadFailure, writeRecovery.deny]);
   // The desktop pager replaces the window; the mobile feed appends a later page.
   const load = useCallback(async (targetPage: number, append = false): Promise<boolean> => {
     generationRef.current += 1;
     const generation = generationRef.current;
-    pendingRef.current = true; setPending(true); setActionError(undefined);
+    pendingRef.current = true; setPending(true); setDenied(false); setActionError(undefined);
     const controller = new AbortController(); controllerRef.current?.abort(); controllerRef.current = controller;
     try {
       const result = await loadCalendarNumbered({ page: targetPage, pageSize, from, to, status }, fetch, controller.signal);
@@ -2343,7 +2360,7 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
       if (!clearDenied(error)) { clearReadFailure(); setActionError(frontendText(locale, "CALENDAR_ACTION_FAILED")); }
     } finally { writingRef.current = false; if (activeRef.current) setWriting(false); }
   };
-  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || writing || captureLocked} refresh={refresh} onDenied={clearDenied} onReadFailure={clearReadFailure} /><CalendarPage locale={locale} state={state} pending={pending || writing || captureLocked || writeRecovery.locked} createPending={pending || writing || writeRecovery.locked} actionError={actionError} range={{ from, to }}
+  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || writing || captureLocked} refresh={refresh} onDenied={clearDenied} onReadFailure={clearReadFailure} /><CalendarPage locale={locale} state={state} denied={denied} pending={pending || writing || captureLocked || writeRecovery.locked} createPending={pending || writing || writeRecovery.locked} actionError={actionError} range={{ from, to }}
     onRangeChange={changeRange}
     onPageChange={(next) => void load(next)}
     onPageSizeChange={(size) => setPageSize(size)}
@@ -4341,6 +4358,21 @@ function knowledgeFilters(search: string): Omit<LoadKnowledgePageInput, "page" |
   const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined;
   const kind = value("kind");
   return { spaceId: value("spaceId"), collectionId: value("collectionId"), tagId: value("tagId"), ...(kind === "text" || kind === "markdown" || kind === "code" ? { kind } : {}), authorId: value("authorId"), publishedFrom: value("publishedFrom"), publishedTo: value("publishedTo") };
+}
+// The inverse of `knowledgeFilters`: a removed applied condition rewrites the list location.
+function writeKnowledgeFilters(search: string, next: KnowledgeFilters): string {
+  const params = new URLSearchParams(search);
+  for (const key of ["spaceId", "collectionId", "tagId", "kind", "authorId", "publishedFrom", "publishedTo"]) params.delete(key);
+  params.delete("page");
+  if (next.spaceId) params.set("spaceId", next.spaceId);
+  if (next.collectionId) params.set("collectionId", next.collectionId);
+  if (next.tagId) params.set("tagId", next.tagId);
+  if (next.kind) params.set("kind", next.kind);
+  if (next.authorId) params.set("authorId", next.authorId);
+  if (next.publishedFrom) params.set("publishedFrom", next.publishedFrom);
+  if (next.publishedTo) params.set("publishedTo", next.publishedTo);
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
 }
 function searchFilters(search: string): Omit<LoadSearchPageInput, "query" | "page" | "pageSize" | "signal"> {
   const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined; const { tagId: _tagId, ...base } = knowledgeFilters(search); const tagIds = params.getAll("tagId"); const tagMode = value("tagMode");

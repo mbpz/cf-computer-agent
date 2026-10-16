@@ -129,3 +129,4 @@ R05 恢复分支补充：[书面规格](../superpowers/specs/2026-09-23-maintena
 - 2026-08-23 与 2026-08-27/28 的生产证据都早于 current main；因此相关发布/验收最多为 `partial`。
 - `docs/operations/evidence/2026-08-28-unified-pagination-shell-menu.md` 明确限定为本地 gate，且明确未部署、未应用远程 migration、未做 signed browser 验收。
 - scoped marker 的自动合同只检查 dated file、格式和非空具体范围；语义是否适用必须由评审者对照证据正文、部署 commit 和 capability 引入历史确认。
+- 2026-10-16 登录后工作台的头部/筛选/壳常驻统一为**本地实现与本地验证**，记录在 `docs/product/2026-10-16-authenticated-workspace-interaction-contract.md`（含共享组合接口、状态契约、逐页迁移矩阵、真实浏览器核验范围与未覆盖项）。该记录不提升任何行的发布或验收状态：未部署、未做真实登录态与生产 signed-browser 验收，也未覆盖 320/768px、深色主题与中文界面。同一批次的 `/admin/analytics` 权限声明修正（`analytics:read` → 服务端实际要求的 `audit:read`）与外壳级 403 表面合并属于同一范围。

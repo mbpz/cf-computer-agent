@@ -209,9 +209,11 @@ describe("AdminAnalyticsRoute", () => {
       return new Response(JSON.stringify(replies.shift()), { status: 200 });
     }));
     // Response.json() and the lazy page settle beyond a single microtask flush.
+    // `data-analytics-range` only exists once the report is rendered: the header's refresh
+    // button is now mounted during loading too, so it no longer proves the read landed.
     await vi.waitFor(async () => {
       await flush();
-      expect(container.querySelector('[data-analytics-refresh]')).not.toBeNull();
+      expect(container.querySelector('[data-analytics-range]')).not.toBeNull();
     });
     await act(async () => (container.querySelector('[data-analytics-refresh]') as HTMLButtonElement).click());
     await vi.waitFor(async () => {

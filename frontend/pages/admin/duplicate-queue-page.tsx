@@ -51,27 +51,29 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
     cancel(); onDecision?.(confirmation.item.submissionId, confirmation.decision);
   };
   const label = (decision: DuplicateDecision) => frontendText(locale, decision === "associate" ? "ADMIN_DUPLICATE_ASSOCIATE" : decision === "keep_separate" ? "ADMIN_DUPLICATE_KEEP_SEPARATE" : "ADMIN_DUPLICATE_REJECT");
-  if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
-  const { items, pagination } = state.data;
+  // The page shell is constant (research §4.3): the header renders for every state and
+  // only the content slot switches between loading, failure and the candidate table.
   return <>
     <section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={valid} aria-hidden={valid || undefined}>
       <PageHeader title={frontendText(locale, "ADMIN_DUPLICATE_TITLE")} description={frontendText(locale, "ADMIN_DUPLICATE_DESCRIPTION")} />
+      {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
+        : state.kind !== "ready" ? <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>
+        : <>
       {decisionRecordBlocked && <div role="alert" data-duplicate-decision-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_DUPLICATE_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardDecisionRecord}>{frontendText(locale, "ADMIN_DUPLICATE_RECORD_DISCARD")}</Button></div>}
       {localError && <p role="alert" className="text-sm text-destructive">{localError}</p>}
       {readRequired && <p role="status" className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_DUPLICATE_READ_REQUIRED")}</p>}
       {(localError || readRequired) && onLoadRetry && <Button type="button" variant="outline" disabled={pending || Boolean(pendingId)} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}
       <DataTable
         locale={locale}
-        rows={items}
+        rows={state.data.items}
         rowId={(item) => item.submissionId}
         ariaLabel={frontendText(locale, "ADMIN_DUPLICATE_TITLE")}
         emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_DUPLICATE_EMPTY")} description={frontendText(locale, "ADMIN_DUPLICATE_DESCRIPTION")} />}
         loading={pending}
-        pagination={pagination}
+        pagination={state.data.pagination}
         onPageChange={onPageChange}
         onPageSizeChange={onPageSizeChange}
-        hasMore={!localError && pagination.page < pagination.totalPages}
+        hasMore={!localError && state.data.pagination.page < state.data.pagination.totalPages}
         onLoadMore={onLoadMore}
         fill
         rowHeight={104}
@@ -98,6 +100,7 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
           } },
         ]}
       />
+      </>}
     </section>
     <ConfirmAction open={valid} title={frontendText(locale, "ADMIN_DUPLICATE_CONFIRM_TITLE")}
       description={confirmation ? `${label(confirmation.decision)}: ${confirmation.item.submissionTitle} (${confirmation.item.submissionId}) → ${confirmation.item.canonicalTitle} (${confirmation.item.canonicalSubmissionId}; ${confirmation.item.canonicalSourceId}; ${confirmation.item.canonicalSourceVersionId}). ${frontendText(locale, "ADMIN_DUPLICATE_DECISION_IMPACT")}` : ""}

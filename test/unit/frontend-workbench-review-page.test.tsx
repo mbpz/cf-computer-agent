@@ -12,4 +12,17 @@ describe("Workbench review page", () => {
     expect(html).toContain(frontendText(locale, "REVIEW_TITLE"));
     expect(html).not.toContain("undefined");
   });
+
+  it("keeps one titled header and its period controls mounted through first load and read failure", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    const title = frontendText(locale, "REVIEW_TITLE");
+    for (const state of [{ kind: "loading" } as const, { kind: "error", message: "Unable" } as const]) {
+      const html = renderToStaticMarkup(<WorkbenchReviewPage locale={locale} period="daily" state={state} onRetry={() => {}} />);
+      expect((html.match(/<h1/g) ?? []).length, JSON.stringify(state)).toBe(1);
+      expect(html).toContain(`>${title}</h1>`);
+      expect(html).toContain(frontendText(locale, "REVIEW_DAILY"));
+      expect(html).toContain(`aria-pressed="true"`);
+      expect(html).not.toContain("<select");
+    }
+  });
 });

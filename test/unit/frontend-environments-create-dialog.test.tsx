@@ -122,6 +122,38 @@ describe("environment creation dialog", () => {
     expect(trigger()!.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("keeps one titled h1, the create action and the type filter above the records region", async () => {
+    await mount();
+    const section = main().querySelector<HTMLElement>("[data-environments-page]")!;
+    const headings = section.querySelectorAll("h1");
+    expect(headings).toHaveLength(1);
+    expect(headings[0]!.textContent).toBe("Linux environments");
+    const content = section.querySelector<HTMLElement>(":scope > div[aria-busy]")!;
+    expect(content).not.toBeNull();
+    // DOCUMENT_POSITION_FOLLOWING: the shell opens the page in every state, the list follows it.
+    expect(headings[0]!.compareDocumentPosition(content) & 4).toBeTruthy();
+    expect(section.querySelector("[data-environment-create-open]")).not.toBeNull();
+    const filter = section.querySelector<HTMLElement>('button[aria-haspopup="listbox"]');
+    expect(filter).not.toBeNull();
+    expect(filter!.textContent).toContain("Filter by type");
+    expect(section.querySelector('select[aria-label="Filter by type"]')).toBeNull();
+    expect(section.querySelector("[data-applied-filters]")).toBeNull();
+  });
+
+  it("applies and clears the type filter through the shared filter surface", async () => {
+    await mount();
+    await click(main().querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]'));
+    const personal = [...main().querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === "Personal environment");
+    expect(personal).toBeTruthy();
+    await click(personal!);
+
+    await waitForApp(() => main().querySelector("[data-applied-filters]") !== null);
+    expect(main().querySelector("[data-applied-filters]")!.textContent).toContain("Filter by type: Personal environment");
+    await click(main().querySelector<HTMLButtonElement>("[data-filters-clear]"));
+    await waitForApp(() => main().querySelector("[data-applied-filters]") === null);
+    expect(main().querySelectorAll("h1")).toHaveLength(1);
+  });
+
   it("fills the desktop height chain instead of scrolling inside the page", async () => {
     await mount();
     const section = main().querySelector<HTMLElement>("[data-environments-page]")!;

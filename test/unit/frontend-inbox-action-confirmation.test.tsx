@@ -57,8 +57,11 @@ describe("inbox action confirmation", () => {
   });
   it("freezes the first same-tick action and prevents background navigation", async () => {
     const filter = vi.fn(); await mount({ onFilterChange: filter }); const archive = action("Archive"); const convert = action("Turn into task");
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Inbox status"]')!;
-    await act(async () => { archive.click(); convert.click(); select.value = "archived"; select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+    await act(async () => {
+      archive.click(); convert.click(); trigger.click();
+      [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(node => node.textContent === "Archived")!.click();
+    });
     expect(filter).not.toHaveBeenCalled(); expect(write).not.toHaveBeenCalled(); expect(promote).not.toHaveBeenCalled(); await click(confirm()); expect(write).toHaveBeenCalledExactlyOnceWith(row); expect(promote).not.toHaveBeenCalled();
   });
   it("retains drafts and prevents same-tick capture before persisting an intent", async () => {
@@ -77,8 +80,8 @@ describe("inbox action confirmation", () => {
   });
   it("allows filtering outside confirmation (event harness control)", async () => {
     const filter = vi.fn(); await mount({ onFilterChange: filter });
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Inbox status"]')!;
-    await act(async () => { select.value = "archived"; select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!.click());
+    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(node => node.textContent === "Archived")!.click());
     expect(filter).toHaveBeenCalledExactlyOnceWith("archived");
   });
   it("identifies content by ID, bounds excerpts and retains confirmation on unrelated updates", async () => {

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerWorkspaceLeaveGuard } from "../../frontend/lib/workspace-location";
 import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
 import { TasksRoute } from "../../frontend/app";
-import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { stubListViewport } from "../helpers/list-viewport";
 
 const vmContexts = new WeakSet<object>();
@@ -29,10 +29,10 @@ describe("private tasks route", () => {
     const unregister = registerWorkspaceLeaveGuard(() => ({ kind: "confirm", version: "other-draft", prompt(value) { decision = value; }, dismiss() {} }));
     try {
       const count = requests.length;
-      await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
+      await selectFilter("Priority", "high"); await flush();
       expect(browser.location.search).toBe("?status=doing");
       expect(requests).toHaveLength(count); expect(requests[0]?.signal?.aborted).toBe(false);
-      expect((container.querySelector('[aria-label="Priority"]') as HTMLSelectElement).value).not.toBe("high");
+      expect(filterTrigger("Priority").textContent).not.toContain("high");
       await act(async () => decision[outcome]()); await flush();
       if (outcome === "cancel") { expect(requests).toHaveLength(count); expect(browser.location.search).toBe("?status=doing"); }
       else { expect(requests).toHaveLength(count + 1); expect(requests.at(-1)?.url).toContain("priority=high"); expect(requests[0]?.signal?.aborted).toBe(true); }
@@ -58,7 +58,7 @@ describe("private tasks route", () => {
       return listRequests < 3 ? taskPage(String(input)) : new Promise<Response>(() => undefined);
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
+    await selectFilter("Priority", "high"); await flush();
     await clickButton("Complete: Alpha (task-alpha)"); await flush();
     expect(container.textContent).toContain("Unable to update the task.");
     await act(async () => browser.history.back()); await flush();
@@ -100,8 +100,7 @@ describe("private tasks route", () => {
   ])("synchronizes %s into the URL", async (label, value, key) => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => taskPage(String(input)));
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    const control = container.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLSelectElement;
-    await change(control, value); await flush();
+    await selectFilter(label, value); await flush();
     expect(browser.location.search).toContain(`${key}=${value}`);
     expect(browser.location.search).not.toContain("page=");
   });
@@ -193,6 +192,20 @@ describe("private tasks route", () => {
     expect(gets).toBe(3); expect(container.textContent).toContain("Beta 0"); expect(container.textContent).not.toContain("Alpha 0");
   });
 
+  it("does not answer a failed condition change with the previous condition's rows", async () => {
+    let gets = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => (++gets === 1 ? taskPage(String(input)) : errorResponse()));
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    expect(container.textContent).toContain("Alpha");
+    await selectFilter("Priority", "high"); await flush();
+    expect(container.textContent).not.toContain("Alpha");
+    expect(container.textContent).toContain("Unable to load the page.");
+    // The page shell and its filters stay mounted through the failed condition change.
+    expect([...container.querySelectorAll("h1")]).toHaveLength(1);
+    expect(container.querySelector("h1")?.textContent).toBe(frontendText(createLocaleRuntime(), "TASKS_TITLE"));
+    expect(filterTrigger("Priority")).not.toBeNull();
+  });
+
   it.each([401, 403])("clears protected tasks when a list refresh returns %s", async (status) => {
     stubListViewport(browser, "mobile");
     const items = Array.from({ length: 20 }, (_, index) => ({ ...createTask(`Alpha ${index}`), id: `task-alpha-${index}` }));
@@ -251,7 +264,7 @@ describe("private tasks route", () => {
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Complete: Alpha (task-alpha)");
-    await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
+    await selectFilter("Priority", "high"); await flush();
     expect(gets).toBe(2);
     await act(async () => resolveMutation(Response.json({ error: { code: "DENIED" } }, { status: 403 }))); await flush();
     expect(container.textContent).not.toContain("Alpha");
@@ -269,7 +282,7 @@ describe("private tasks route", () => {
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await act(async () => (container.querySelector('[aria-label="Complete: Alpha (task-alpha)"]') as HTMLButtonElement).click());
-    await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
+    await selectFilter("Priority", "high"); await flush();
     await act(async () => resolveMutation(Response.json(createTask("Alpha")))); await flush(); await flush();
     expect(gets).toBe(2); expect(container.textContent).toContain("Latest");
   });
@@ -367,10 +380,11 @@ describe("private tasks route", () => {
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Delete: Alpha (task-alpha)"); const old = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
-    await act(async () => { browser.history.pushState({}, "", "/tasks?page=1"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    // Same condition set: this is a refresh read, so the rows stay with their controls disabled.
+    await act(async () => { browser.history.pushState({}, "", "/tasks?status=doing&page=1"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect((container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(true);
     await act(async () => old.click()); expect(deletes).toBe(0);
-    await act(async () => finish(taskPage("/api/tasks?page=1"))); await flush();
+    await act(async () => finish(taskPage("/api/tasks?status=doing&page=1"))); await flush();
     expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect(deletes).toBe(0);
   });
 
@@ -422,7 +436,7 @@ describe("private tasks route", () => {
       expect((container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(true);
       expect(await leave()).toBe("blocked");
       const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(true);
-      await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
+      await selectFilter("Priority", "high"); await flush();
       expect(browser.location.search).toContain("priority=high");
       expect(banner()).not.toBeNull();
 
@@ -534,6 +548,21 @@ describe("private tasks route", () => {
     expect(button).toBeTruthy(); await act(async () => button.click());
   }
 
+  // The shared beUI listbox keeps each filter's historical accessible name in an sr-only span.
+  function filterTrigger(name: string) {
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === name);
+    expect(trigger, name).toBeTruthy();
+    return trigger!;
+  }
+
+  async function selectFilter(name: string, value: string) {
+    const trigger = filterTrigger(name);
+    await act(async () => trigger.click());
+    const option = [...trigger.parentElement!.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === value);
+    expect(option, value).toBeTruthy();
+    await act(async () => option!.click());
+  }
+
   async function scrollToEnd() {
     const scroller = container.querySelector("div.overflow-auto") as HTMLElement;
     await act(async () => {
@@ -548,13 +577,11 @@ function createTask(title: string) { return { id: `task-${title.toLowerCase()}`,
 function taskPage(url: string, title = "Alpha"): Response { const params = new URL(url, "https://app.test").searchParams; const page = Number(params.get("page") || "1"); const pageSize = Number(params.get("pageSize") || "20"); return Response.json({ items: [createTask(title)], pagination: { page, pageSize, total: 1, totalPages: 1 } }); }
 function rejectedResponse(): Response { return Response.json({ error: { code: "TASK_TRANSITION_INVALID", message: "invalid", retryable: false } }, { status: 422 }); }
 function errorResponse(): Response { return Response.json({ error: { code: "TEST_ERROR", message: "failed", retryable: true } }, { status: 500 }); }
-async function change(control: HTMLInputElement | HTMLSelectElement, value: string) { await act(async () => {
-  if (control.tagName === "INPUT") {
-    control.value = value;
-    const reactPropsKey = Object.keys(control).find((key) => key.startsWith("__reactProps$"));
-    const reactProps = reactPropsKey ? (control as unknown as Record<string, { onChange?: (event: { currentTarget: HTMLInputElement }) => void }>)[reactPropsKey] : undefined;
-    reactProps?.onChange?.({ currentTarget: control as HTMLInputElement });
-  } else { control.value = value; control.dispatchEvent(new window.Event("change", { bubbles: true })); }
+async function change(input: HTMLInputElement, value: string) { await act(async () => {
+  input.value = value;
+  const reactPropsKey = Object.keys(input).find((key) => key.startsWith("__reactProps$"));
+  const reactProps = reactPropsKey ? (input as unknown as Record<string, { onChange?: (event: { currentTarget: HTMLInputElement }) => void }>)[reactPropsKey] : undefined;
+  reactProps?.onChange?.({ currentTarget: input });
 }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
 async function settle() { await act(async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }

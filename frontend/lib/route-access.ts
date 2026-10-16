@@ -15,7 +15,6 @@ export function routeAccessAllowed(session: SessionSnapshot, route: RouteAccessT
 
 function hasSemanticCapability(session: SessionSnapshot, capability: WorkspaceCapability | null): boolean {
   if (capability === null || session.capabilities.includes(capability)) return true;
-  if (capability === "analytics:read" && session.capabilities.includes("audit:read")) return true;
   return hasPermissionKey(session, capability);
 }
 

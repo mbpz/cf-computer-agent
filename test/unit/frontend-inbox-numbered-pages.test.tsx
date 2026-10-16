@@ -47,8 +47,14 @@ describe("inbox scrolling list through App", () => {
   }
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
   async function navigate(search: string) { await act(async () => { expect(writeWorkspaceHistory("push", `/${kind}${search}`)).toBe("committed"); }); }
-  const statusFilter = () => main().querySelector('select[aria-label="Inbox status"]') as HTMLSelectElement;
-  async function changeStatus(value: string) { await act(async () => { const node = statusFilter(); node.value = value; node.dispatchEvent(new app!.browser.Event("change", { bubbles: true })); }); }
+  const statusSelected = () => main().querySelector('[role="option"][aria-selected="true"]')?.textContent;
+  async function changeStatus(label: string) {
+    await act(async () => (main().querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement).click());
+    const option = [...main().querySelectorAll<HTMLButtonElement>('[role="option"]')].find(node => node.textContent === label)!;
+    expect(option, label).toBeTruthy();
+    const { promise, resolve } = Promise.withResolvers<void>();
+    await act(async () => { option.click(); setTimeout(resolve, 0); await promise; });
+  }
   /** The inbox list appends by scrolling its table container to the bottom. */
   async function scrollToEnd() {
     const scroller = main().querySelector("div.overflow-auto") as HTMLElement;
@@ -62,7 +68,7 @@ describe("inbox scrolling list through App", () => {
     const unregister = registerWorkspaceLeaveGuard(() => ({ kind: "confirm", version: "draft", prompt(next) { decision = next; }, dismiss() {} }));
     try {
       const count = requests.length;
-      await changeStatus("archived");
+      await changeStatus("Archived");
       expect(window.location.search).toBe(""); expect(requests).toHaveLength(count);
       expect(main().textContent).toContain("Private row 0");
       // Deferral used to discard current rows even when history was not yet admitted.
@@ -114,7 +120,7 @@ describe("inbox scrolling list through App", () => {
 
   it.each([401, 403, 503])("clears old rows on a failed filter reload (%s) and retries the first page", async status => {
     await mount(); fail = status;
-    await changeStatus("archived"); await waitForApp(() => main().textContent!.includes("Unable to load"));
+    await changeStatus("Archived"); await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().querySelectorAll("time")).toHaveLength(0);
     fail = undefined; const retry = [...main().querySelectorAll("button")].find(node => node.textContent === "Try again")!;
     await click(retry); await waitForApp(() => main().textContent!.includes("Private row 0"));
@@ -150,13 +156,13 @@ describe("inbox scrolling list through App", () => {
     await mount("?page=2&status=archived");
     expect(requests[0]?.searchParams.get("page")).toBe("1");
     expect(requests[0]?.searchParams.get("status")).toBe("archived");
-    expect(statusFilter().value).toBe("archived");
-    await changeStatus("promoted");
+    expect(statusSelected()).toBe("Archived");
+    await changeStatus("Promoted");
     await waitForApp(() => requests.at(-1)?.searchParams.get("status") === "promoted" && main().textContent!.includes("Private row 0"));
     expect(new URLSearchParams(window.location.search).has("page")).toBe(false);
     expect(new URLSearchParams(window.location.search).get("status")).toBe("promoted");
     await navigate("?status=archived");
-    await waitForApp(() => statusFilter().value === "archived" && main().textContent!.includes("Private row 0"));
+    await waitForApp(() => statusSelected() === "Archived" && main().textContent!.includes("Private row 0"));
   });
 
   it.each(["?status=bogus", "?status=inbox&status=archived"])("canonicalizes invalid status: %s", async search => {
@@ -192,10 +198,10 @@ describe("inbox scrolling list through App", () => {
   it("a status change restarts the window, dropping rows appended before it", async () => {
     await mount();
     await scrollToEnd(); await waitForApp(() => main().querySelectorAll("time").length === 40);
-    await changeStatus("promoted");
+    await changeStatus("Promoted");
     await waitForApp(() => requests.at(-1)?.searchParams.get("status") === "promoted" && main().textContent!.includes("Private row 0"));
     expect(requests.at(-1)?.searchParams.get("page")).toBe("1");
-    expect(statusFilter().value).toBe("promoted");
+    expect(statusSelected()).toBe("Promoted");
     expect(main().querySelectorAll("time")).toHaveLength(20);
     expect(main().textContent).not.toContain("Private row 20");
   });

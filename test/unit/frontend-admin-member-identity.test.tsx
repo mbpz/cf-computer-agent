@@ -38,7 +38,9 @@ describe("admin member identity read", () => {
     await mount();
     expect(container.textContent).toContain("Unable to load the page.");
     expect(container.textContent).not.toContain("Email unavailable");
-    expect(container.textContent).not.toContain("contributor");
+    // The header description legitimately names the contributor role, so the rejected row is
+    // asserted by its absence from the table rather than by that word.
+    expect(container.querySelector("tbody tr[data-selected]")).toBeNull();
   });
 
   it("does not label a missing role as unavailable", async () => {

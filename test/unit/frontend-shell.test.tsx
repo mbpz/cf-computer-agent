@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AppShell } from "../../frontend/components/shell/app-shell";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { routeAccessAllowed } from "../../frontend/lib/route-access";
 
 const contributor = {
   member: { id: "member-1", email: "reader@example.com", role: "contributor" as const },
@@ -87,11 +88,27 @@ describe("frontend application shell", () => {
   });
 
   it("keeps authorized administration destinations in the single primary navigation", () => {
-    const html = renderToStaticMarkup(<AppShell session={{ ...contributor, member: { ...contributor.member, role: "admin" }, capabilities: ["submission:read-all", "analytics:read", "knowledge:read"] }} pathname="/admin/analytics" locale={createLocaleRuntime({ navigatorLanguage: "en" })}><p>Analytics</p></AppShell>);
+    // `/api/admin/analytics/overview` requires audit:read, so that is what the nav entry
+    // is gated on; analytics:read alone must not surface a destination the API refuses.
+    const html = renderToStaticMarkup(<AppShell session={{ ...contributor, member: { ...contributor.member, role: "admin" }, capabilities: ["submission:read-all", "audit:read", "knowledge:read"] }} pathname="/admin/analytics" locale={createLocaleRuntime({ navigatorLanguage: "en" })}><p>Analytics</p></AppShell>);
     expect(html).toContain("Administration");
     expect(html).toContain("Site analytics");
     expect(html).toContain('aria-current="page"');
     expect(html).not.toContain("undefined");
+    const analyticsOnly = renderToStaticMarkup(<AppShell session={{ ...contributor, member: { ...contributor.member, role: "admin" }, capabilities: ["submission:read-all", "analytics:read", "knowledge:read"] }} pathname="/admin/analytics" locale={createLocaleRuntime({ navigatorLanguage: "en" })}><p>Analytics</p></AppShell>);
+    expect(analyticsOnly).toContain("Administration");
+  });
+
+  it("gates the analytics route on the capability its API requires", () => {
+    // `/api/admin/analytics/overview` requires audit:read; analytics:read alone must not
+    // grant the route, otherwise the navigation offers a destination the API refuses.
+    const admin = { ...contributor, member: { ...contributor.member, role: "admin" as const } };
+    expect(routeAccessAllowed({ ...admin, capabilities: ["submission:read-all", "analytics:read", "knowledge:read"] }, { capability: "audit:read" })).toBe(false);
+    expect(routeAccessAllowed({ ...admin, capabilities: ["submission:read-all", "audit:read", "knowledge:read"] }, { capability: "audit:read" })).toBe(true);
+    // The permission-mask fallback keeps working for sessions that carry the bit
+    // (`audit:read` is bit 13, `analytics:read` is bit 14).
+    expect(routeAccessAllowed({ ...admin, capabilities: [], permissionMask: "0x2000" }, { capability: "audit:read" })).toBe(true);
+    expect(routeAccessAllowed({ ...admin, capabilities: [], permissionMask: "0x4000" }, { capability: "audit:read" })).toBe(false);
   });
 
   it("renders a server-capability-shaped 403 state for a direct admin path", () => {

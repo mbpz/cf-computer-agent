@@ -106,13 +106,19 @@ describe("inbox quick capture", () => {
   it("keeps the status filter and the desktop pager wired to the list query", async () => {
     const filter = vi.fn(); const pageChange = vi.fn(); const sizeChange = vi.fn();
     await mount({ onFilterChange: filter, onPageChange: pageChange, onPageSizeChange: sizeChange, status: "inbox", state: ready([item("one")], { page: 1, pageSize: 20, total: 43, totalPages: 3 }) });
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Inbox status"]')!;
-    expect(select.value).toBe("inbox");
+    // The filter is the shared beUI listbox: the native select is gone but the
+    // historical accessible name and its place above the table survive.
+    expect(container.querySelector('select[aria-label="Inbox status"]')).toBeNull();
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+    expect(trigger.querySelector(".sr-only")?.textContent).toBe("Inbox status");
+    expect(container.querySelector('[role="option"][aria-selected="true"]')?.textContent).toBe("Inbox");
     const section = container.querySelector("section")!;
     const table = section.querySelector("table")!;
     const slots = [...section.children];
-    expect(slots.findIndex(child => child.contains(select))).toBeLessThan(slots.findIndex(child => child.contains(table)));
-    await act(async () => { select.value = "archived"; select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    expect(slots.findIndex(child => child.contains(trigger))).toBeLessThan(slots.findIndex(child => child.contains(table)));
+    await act(async () => trigger.click());
+    const archived = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(node => node.textContent === "Archived")!;
+    await act(async () => archived.click());
     expect(filter).toHaveBeenCalledExactlyOnceWith("archived");
     await click(container.querySelector<HTMLButtonElement>('[data-pagination-desktop] button[aria-label="Next page"]')!);
     expect(pageChange).toHaveBeenCalledExactlyOnceWith(2);
@@ -124,11 +130,42 @@ describe("inbox quick capture", () => {
   it("keeps the filter label, row action labels and disabled conditions", async () => {
     const state = ready([item("one"), item("two", { status: "archived" }), item("three", { status: "promoted", promotedTaskId: "task-1" })], { page: 1, pageSize: 20, total: 3, totalPages: 1 });
     await mount({ state, pending: true, actionError: "Nope" });
-    expect(container.querySelector<HTMLSelectElement>('select[aria-label="Inbox status"]')!.disabled).toBe(true);
+    expect(container.textContent).toContain("Inbox status");
+    expect(container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!.disabled).toBe(true);
     expect(container.querySelector('[role="alert"]')?.textContent).toBe("Nope");
     expect(container.querySelector<HTMLButtonElement>('button[aria-label="Archive"]')!.disabled).toBe(true);
     expect(container.querySelector('button[aria-label="Restore"]')?.textContent).toBe("Restore");
     expect(container.querySelector('button[aria-label="Turn into task"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Open task"]')).not.toBeNull();
+  });
+
+  it("keeps one titled header on first load and after a read failure", async () => {
+    await act(async () => root.render(<InboxPage locale={locale} state={{ kind: "loading" }} createMemberId="alice" onFilterChange={() => {}} />));
+    const headings = () => [...container.querySelectorAll("h1")];
+    expect(headings()).toHaveLength(1);
+    expect(headings()[0]!.textContent).toBe(frontendText(locale, "INBOX_TITLE"));
+    expect(container.textContent).toContain(frontendText(locale, "INBOX_PRIVATE_BADGE"));
+    expect(container.querySelector('[data-page-state="loading"]')).not.toBeNull();
+    expect(container.querySelector("[data-inbox-capture-open]")).not.toBeNull();
+    expect(container.querySelector('button[aria-haspopup="listbox"]')).not.toBeNull();
+    await act(async () => root.render(<InboxPage locale={locale} state={{ kind: "error", message: "Denied" }} createMemberId="alice" onRetry={() => {}} onFilterChange={() => {}} />));
+    expect(headings()).toHaveLength(1);
+    expect(container.querySelector('[data-page-state="error"]')).not.toBeNull();
+    expect(container.textContent).toContain("Denied");
+    expect(container.querySelector("[data-inbox-capture-open]")).not.toBeNull();
+    expect(container.querySelector('button[aria-haspopup="listbox"]')).not.toBeNull();
+    expect(container.querySelector("[data-applied-filters]")).toBeNull();
+  });
+
+  it("shows a removable status chip and clear-all while a status filter is active", async () => {
+    const filter = vi.fn();
+    await mount({ onFilterChange: filter, status: "archived", state: ready([item("one")]) });
+    const applied = container.querySelector("[data-applied-filters]")!;
+    expect(applied.textContent).toContain("Inbox status: Archived");
+    await click(applied.querySelector<HTMLButtonElement>('[aria-label="Clear all: Inbox status: Archived"]')!);
+    expect(filter).toHaveBeenCalledExactlyOnceWith(undefined);
+    filter.mockClear();
+    await click(container.querySelector<HTMLButtonElement>("[data-filters-clear]")!);
+    expect(filter).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 });

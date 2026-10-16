@@ -10,7 +10,7 @@ import {
   parseNotificationSearch,
   writeNotificationSearch,
 } from "../../frontend/pages/notifications/notification-model";
-import { NotificationsPage } from "../../frontend/pages/notifications/notifications-page";
+import { NotificationsPage, type NotificationsPageState } from "../../frontend/pages/notifications/notifications-page";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -233,3 +233,36 @@ function notification(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe("notification inbox shell", () => {
+  const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+  const base = { locale, summary: { unread: 3 }, filters: {}, onRetry: vi.fn(), onFilterChange: vi.fn(), onLoadMore: vi.fn(), onMarkRead: vi.fn(), onMarkVisibleRead: vi.fn(), onOpen: vi.fn() };
+  const states: readonly [string, NotificationsPageState][] = [
+    ["loading", { kind: "loading" }],
+    ["recovery", { kind: "recovery" }],
+    ["error", { kind: "error" }],
+    ["forbidden", { kind: "forbidden" }],
+    ["ready", { kind: "ready", items: [notification()], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }],
+  ];
+
+  it.each(states)("renders exactly one titled h1 and the beUI filters in the %s state", (_name, state) => {
+    const html = renderToStaticMarkup(<NotificationsPage {...base} state={state} />);
+    expect([...html.matchAll(/<h1[ >]/g)]).toHaveLength(1);
+    expect(html).toContain(`>${frontendText(locale, "NOTIFICATIONS_TITLE")}</h1>`);
+    // Both filters are beUI listboxes now; the native select and its aria-label are gone.
+    expect(html).not.toContain("<select");
+    expect(html).not.toContain('aria-label="Read status"');
+    expect([...html.matchAll(/aria-haspopup="listbox"/g)]).toHaveLength(2);
+    expect(html).toContain(frontendText(locale, "NOTIFICATIONS_READ_FILTER"));
+    expect(html).toContain(frontendText(locale, "NOTIFICATIONS_TYPE_FILTER"));
+  });
+
+  it("surfaces an applied read condition as removable text whose clear-all resets every filter", () => {
+    const html = renderToStaticMarkup(<NotificationsPage {...base} filters={{ read: "unread", eventType: "task.overdue" }} state={{ kind: "ready", items: [notification()], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} />);
+    expect(html).toContain("data-applied-filters");
+    expect(html).toContain(`${frontendText(locale, "NOTIFICATIONS_READ_FILTER")}: ${frontendText(locale, "NOTIFICATIONS_FILTER_UNREAD")}`);
+    expect(html).toContain(`${frontendText(locale, "NOTIFICATIONS_TYPE_FILTER")}: ${frontendText(locale, "NOTIFICATIONS_EVENT_TASK_OVERDUE")}`);
+    expect(html).toContain("data-filters-clear");
+    expect(html).toContain(frontendText(locale, "COMMON_CLEAR_FILTERS"));
+  });
+});

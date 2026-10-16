@@ -4,7 +4,6 @@ import { FilterSelect } from "../../components/ui/filter-select";
 import { AppliedFilters } from "../../components/ui/applied-filters";
 import { DataTable } from "../../components/data-table";
 import { PageState } from "../../components/ui/page-state";
-import { Skeleton } from "../../components/ui/skeleton";
 import type { AdminAuditEvent, AdminAuditPage } from "../../lib/admin-audit-data";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -13,9 +12,9 @@ const actions = ["member.login", "member.identity_linked", "member.status_update
 
 export function AuditPage({ state, action = "", pending = false, localError, onRetry, onActionChange, onPageChange, onPageSizeChange, onLoadMore, locale }: { state: { kind: "loading" } | { kind: "ready"; page: AdminAuditPage } | { kind: "error"; message: string }; action?: string; pending?: boolean; localError?: string; onRetry?: () => void; onActionChange?: (action: string) => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void; onLoadMore?: () => void; locale: LocaleRuntime }) {
   const retry = onRetry && <Button type="button" variant="outline" size="sm" className="mt-3" disabled={pending} onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>;
-  if (state.kind === "loading") return <div aria-busy="true"><Skeleton className="h-24" /></div>;
-  if (state.kind === "error") return <div aria-busy={pending}><PageState kind="error" title={state.message || frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE")}>{retry}</PageState></div>;
-  return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0" aria-busy={pending}>
+  // The header and its filter stay mounted for every state (research §4.3); only the
+  // slot below switches between loading, failure and the read-only log.
+  return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0" aria-busy={pending || state.kind === "loading" || undefined}>
     <PageHeader title={frontendText(locale, "ADMIN_AUDIT_TITLE")} description={frontendText(locale, "ADMIN_AUDIT_DESCRIPTION")}
       actions={<FilterSelect label="Action" ariaLabel="Audit action" value={action} disabled={pending} onChange={(value) => onActionChange?.(value)} options={[{ value: "", label: "All" }, ...actions.map((value) => ({ value, label: value }))]} />} />
     <AppliedFilters
@@ -24,6 +23,9 @@ export function AuditPage({ state, action = "", pending = false, localError, onR
       filters={action ? [{ id: "action", label: `Action: ${action}`, onRemove: () => onActionChange?.("") }] : []}
       onClear={() => onActionChange?.("")}
     />
+    {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
+      : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE")}>{retry}</PageState>
+      : <>
     {localError && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive"><span>{localError}</span>{retry}</div>}
     <DataTable
       locale={locale}
@@ -45,5 +47,6 @@ export function AuditPage({ state, action = "", pending = false, localError, onR
         { key: "createdAt", header: frontendText(locale, "ADMIN_AUDIT_COLUMN_TIME"), width: "220px", cellClassName: "whitespace-normal", cell: (event) => <time className="line-clamp-1 text-muted-foreground">{event.createdAt || frontendText(locale, "ADMIN_AUDIT_DATE_UNAVAILABLE")}</time> },
       ]}
     />
+      </>}
   </section>;
 }

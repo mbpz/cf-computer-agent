@@ -31,6 +31,28 @@ describe("React submission and asset pages", () => {
     expect(renderToStaticMarkup(<SubmitPage draft={{ mode: "text", title: "", content: "" }} state={{ kind: "validation", message: "Title is required." }} />)).toContain("Title is required.");
   });
 
+  it("keeps one titled h1 above the form in every submission state", () => {
+    const draft = { mode: "text" as const, title: "", content: "" };
+    for (const state of [
+      { kind: "idle" as const },
+      { kind: "pending" as const },
+      { kind: "validation" as const, message: "Title is required." },
+      { kind: "error" as const, message: "Submission failed." },
+      { kind: "success" as const, message: "Submission received." },
+    ]) {
+      const html = renderToStaticMarkup(<SubmitPage draft={draft} state={state} />);
+      expect((html.match(/<h1/g) ?? []).length).toBe(1);
+      expect(html).toMatch(/<h1[^>]*>Submit knowledge<\/h1>/u);
+      expect(html.indexOf("<h1")).toBeLessThan(html.indexOf("<form"));
+    }
+    // The unresolved-write recovery surface is the one state that adds its own
+    // heading: the page header still opens the page above it.
+    const recovery = renderToStaticMarkup(<SubmitPage draft={draft} state={{ kind: "idle" }} recovery={{ title: "Unresolved draft", storageUnavailable: false, invalid: false, onRetry: () => undefined }} />);
+    expect((recovery.match(/<h1/g) ?? []).length).toBe(1);
+    expect(recovery.indexOf("<h1")).toBeLessThan(recovery.indexOf("Unresolved draft"));
+    expect(recovery).toContain('aria-describedby="submission-description"');
+  });
+
   it("maps asset parser lifecycle and resubmission states", () => {
     expect(assetStatusModel({ status: "queued" })).toMatchObject({ tone: "info", label: "Queued" });
     expect(assetStatusModel({ status: "failed_terminal", lastErrorCode: "SOURCE_UNSUPPORTED" })).toMatchObject({ tone: "destructive", retryable: false });

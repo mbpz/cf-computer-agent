@@ -70,7 +70,8 @@ describe("admin queue applied filters", () => {
     stubFetch(() => page([{ id: "e1", action: "member.login", actorKind: "system", createdAt: "2026-08-28" }]));
     browser.history.replaceState({}, "", "/admin/audit");
     await act(async () => root.render(<AdminAuditRoute locale={locale()} search="" />));
-    await waitFor(() => container.querySelector('button[aria-haspopup="listbox"]') !== null);
+    // The filter is mounted during loading now, so wait for the loaded log as well.
+    await waitFor(() => container.querySelector('button[aria-haspopup="listbox"]') !== null && container.querySelector("tbody tr[data-selected]") !== null);
     expect(container.querySelector('button[aria-haspopup="listbox"] .sr-only')?.textContent).toBe("Audit action");
     expect(container.querySelector('select[aria-label="Audit action"]')).toBeNull();
     await applyFilter("member.login");
@@ -106,7 +107,9 @@ describe("admin queue applied filters", () => {
   async function renderAssets() {
     browser.history.replaceState({}, "", "/admin/assets");
     await act(async () => root.render(<AdminAssetsRoute locale={locale()} search="" />));
-    await waitFor(() => container.querySelector('button[aria-haspopup="listbox"]') !== null);
+    // The header and its filter now render during loading too, so the loaded window — not
+    // the trigger — is the marker of a settled read.
+    await waitFor(() => container.querySelector('button[aria-haspopup="listbox"]') !== null && container.querySelector("tbody tr[data-selected]") !== null);
   }
   function stubFetch(handler: () => Response) {
     vi.stubGlobal("fetch", (input: RequestInfo | URL) => { urls.push(String(input)); return Promise.resolve(handler()); });

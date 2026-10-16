@@ -56,7 +56,7 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "admin-menus", path: "/admin/menus", pageKind: "admin-menus", availability: "ready", labelKey: "NAV_MENUS", group: "admin", moduleKey: "admin", capability: "menu:manage" },
   { id: "admin-spaces", path: "/admin/spaces", pageKind: "admin-spaces", availability: "ready", labelKey: "NAV_SPACES", group: "admin", moduleKey: "admin", capability: "space:manage" },
   { id: "admin-audit", path: "/admin/audit", pageKind: "admin-audit", availability: "ready", labelKey: "NAV_AUDIT", group: "admin", moduleKey: "data", capability: "audit:read" },
-  { id: "admin-analytics", path: "/admin/analytics", pageKind: "admin-analytics", availability: "ready", labelKey: "NAV_SITE_ANALYTICS", group: "admin", moduleKey: "data", capability: "analytics:read" },
+  { id: "admin-analytics", path: "/admin/analytics", pageKind: "admin-analytics", availability: "ready", labelKey: "NAV_SITE_ANALYTICS", group: "admin", moduleKey: "data", capability: "audit:read" },
   { id: "notifications", path: "/notifications", pageKind: "notifications", availability: "ready", labelKey: "NAV_NOTIFICATIONS", group: "workspace", moduleKey: "collaboration", capability: null },
   { id: "messages", path: "/messages", pageKind: "messages", availability: "ready", labelKey: "NAV_MESSAGES", group: "workspace", moduleKey: "collaboration", capability: null },
 ] as const satisfies readonly WorkspaceRouteCapability[]);

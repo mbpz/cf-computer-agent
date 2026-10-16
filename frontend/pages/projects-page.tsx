@@ -11,6 +11,7 @@ import { DataTable } from "../components/data-table";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
+import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { loadPlanningIntent } from "../lib/planning-create-intent";
 import { loadPlanningDraft } from "../lib/planning-draft";
@@ -36,24 +37,30 @@ export function ProjectsPage({ locale, state, pending = false, actionError, onRe
   const createTitleId = useId();
   const createDescriptionId = useId();
   const createBlocked = pending || createLocked || !!relationProjectId || createComposerLocked;
-  if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "PROJECTS_LOADING")} />;
-  if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "PROJECTS_RETRY")}</Button></PageState>;
   // A confirmation, an open relations editor, a create lock or an in-flight write all hold the list still.
   const listBlocked = statusConfirmation.open || !!relationProjectId || createLocked || pending;
   const changePage = (page: number) => { if (listBlocked) return; onPageChange?.(page); };
   const changePageSize = (pageSize: SupportedPageSize) => { if (listBlocked) return; onPageSizeChange?.(pageSize); };
-  return <>{statusConfirmation.dialog}<Dialog open={createOpen} onOpenChange={next => { if (!next) setCreateOpen(false); }}>
+  return <>{state.kind === "ready" && <>{statusConfirmation.dialog}<Dialog open={createOpen} onOpenChange={next => { if (!next) setCreateOpen(false); }}>
     <DialogContent role="dialog" data-projects-create-dialog aria-labelledby={createTitleId} aria-describedby={createDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
       <DialogTitle id={createTitleId}>{frontendText(locale, "PROJECTS_CREATE_TITLE")}</DialogTitle>
       <p id={createDescriptionId} className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "PROJECTS_DESCRIPTION")}</p>
       <div className="mt-4"><PlanningCreateForm isSubmitBlocked={statusConfirmation.isOpen} createMemberId={createMemberId} kind="PROJECTS" locale={locale} pending={pending || !!relationProjectId || statusConfirmation.open} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={locked => { setCreateComposerLocked(locked); onCreateLock?.(locked); }} onCreated={() => setCreateOpen(false)} /></div>
       <div className="mt-6 flex flex-wrap justify-end gap-2"><Button type="button" data-projects-create-cancel variant="outline" onClick={() => setCreateOpen(false)}>{frontendText(locale, "COMMON_CANCEL")}</Button></div>
     </DialogContent>
-  </Dialog><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={statusConfirmation.open ? true : undefined} aria-hidden={statusConfirmation.open || undefined}>
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><FolderSimple size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{frontendText(locale, "PROJECTS_TITLE")}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "PROJECTS_DESCRIPTION")}</p></div><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{frontendText(locale, "PROJECTS_PRIVATE_BADGE")}</Badge><Button type="button" data-projects-create-open aria-haspopup="dialog" aria-expanded={createOpen} disabled={createBlocked} onClick={() => setCreateOpen(true)}><Plus size={16} weight="bold" className="mr-1" aria-hidden="true" />{frontendText(locale, "PROJECTS_CREATE_TITLE")}</Button></div></div>
+  </Dialog></>}<section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={statusConfirmation.open && state.kind === "ready" ? true : undefined} aria-hidden={statusConfirmation.open && state.kind === "ready" || undefined}>
+    <PageHeader
+      title={frontendText(locale, "PROJECTS_TITLE")}
+      description={frontendText(locale, "PROJECTS_DESCRIPTION")}
+      status={frontendText(locale, "PROJECTS_PRIVATE_BADGE")}
+      icon={<FolderSimple size={22} weight="duotone" className="text-primary" />}
+      actions={<Button type="button" data-projects-create-open aria-haspopup="dialog" aria-expanded={createOpen} disabled={createBlocked} onClick={() => setCreateOpen(true)}><Plus size={16} weight="bold" className="mr-1" aria-hidden="true" />{frontendText(locale, "PROJECTS_CREATE_TITLE")}</Button>}
+    />
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
     {relationEditor}
-    <DataTable
+    {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "PROJECTS_LOADING")} />
+      : state.kind === "error" ? <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "PROJECTS_RETRY")}</Button></PageState>
+      : <DataTable
       locale={locale}
       rows={state.items}
       rowId={(project) => project.id}
@@ -90,6 +97,6 @@ export function ProjectsPage({ locale, state, pending = false, actionError, onRe
           {project.status === "archived" && <Button type="button" size="sm" variant="outline" disabled={statusConfirmation.unavailable || listBlocked} onClick={() => statusConfirmation.request(project, "active")}>{frontendText(locale, "PROJECTS_RESTORE")}</Button>}
         </div> },
       ]}
-    />
+    />}
   </section></>;
 }

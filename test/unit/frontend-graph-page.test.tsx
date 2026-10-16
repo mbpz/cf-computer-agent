@@ -99,7 +99,10 @@ describe("GraphPage", () => {
     expect(html).toContain('data-graph-canvas');
     expect(html).toContain('data-graph-node-id="project:p1"');
     expect(html).toContain('data-graph-query');
-    expect(html).toContain('data-graph-lens');
+    // The native lens select is gone; the filter keeps its historical name on the beUI trigger.
+    expect(html).not.toContain("<select data-graph-lens");
+    expect(html).toContain(frontendText(locale, "GRAPH_LENS_LABEL"));
+    expect(html).toContain('aria-haspopup="listbox"');
     expect(html).not.toContain("undefined");
 
     const truncated = renderState(locale, { kind: "truncated", snapshot: { ...snapshot, truncated: true } });
@@ -185,7 +188,7 @@ describe("GraphPage", () => {
     expect(host.querySelector("[data-graph-action-unconfirmed]")?.textContent).toContain("was not confirmed");
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
 
-    await change(host.querySelector("[data-graph-lens]") as HTMLSelectElement, "knowledge");
+    await selectFilter("Graph lens", "Knowledge");
     await flush();
     expect(host.querySelector('[data-graph-node-id="task:t1"]')).toBeNull();
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
@@ -616,7 +619,6 @@ describe("GraphPage", () => {
 describe("graph view refresh", () => {
   const viewKey = "memory-garden:graph-view:v1:member-a";
   const query = () => host.querySelector("[data-graph-query]") as HTMLInputElement;
-  const lens = () => host.querySelector("[data-graph-lens]") as HTMLSelectElement;
   async function typeQuery(value: string) {
     const el = query();
     const key = Object.keys(el).find((name) => name.startsWith("__reactProps$"));
@@ -636,13 +638,13 @@ describe("graph view refresh", () => {
   it("keeps graph filters after refresh and does not block leave", async () => {
     const load = await render();
     await typeQuery("Launch");
-    await change(lens(), "knowledge");
+    await selectFilter("Graph lens", "Knowledge");
     await flush();
     expect(window.sessionStorage.getItem(viewKey)).toContain("Launch");
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
     const again = await remount();
     expect(query().value).toBe("Launch");
-    expect(lens().value).toBe("knowledge");
+    expect(filterValue("Graph lens")).toBe(frontendText(createLocaleRuntime(), "GRAPH_LENS_KNOWLEDGE"));
     expect(again.mock.calls.some(([input]) => input.scope === "knowledge")).toBe(true);
     expect(load.mock.calls.some(([input]) => input.scope === "knowledge")).toBe(true);
     expect(writeWorkspaceHistory("push", "/home")).toBe("committed");
@@ -679,21 +681,19 @@ describe("graph empty-result recovery", () => {
   const viewKey = "memory-garden:graph-view:v1:member-a";
 
   it.each([
-    ["lens", "knowledge", "workspace", (input: GraphQueryInput) => input.scope === "knowledge"],
-    ["time-range", "7d", "all", (input: GraphQueryInput) => !!input.from],
-    ["change-kind", "archived", "all", (input: GraphQueryInput) => input.changeKind === "archived"],
-  ] as const)("can broaden %s after the server returns no matching nodes", async (control, narrow, broad, matches) => {
+    ["Graph lens", "Knowledge", "All workspace", (input: GraphQueryInput) => input.scope === "knowledge"],
+    ["Time range", "Last 7 days", "All time", (input: GraphQueryInput) => !!input.from],
+    ["Change type", "Archived", "All changes", (input: GraphQueryInput) => input.changeKind === "archived"],
+  ] as const)("can broaden the %s filter after the server returns no matching nodes", async (filterName, narrowLabel, broadLabel, matches) => {
     const load = vi.fn(async (input: GraphQueryInput) => matches(input) ? empty : snapshot);
     await act(async () => root.render(<GraphRoute memberId="member-a" locale={locale} load={load} />));
     await flush();
-    await change(host.querySelector(`[data-graph-${control}]`) as HTMLSelectElement, narrow);
+    await selectFilter(filterName, narrowLabel);
     await flush();
     expect(host.querySelector('[data-page-state="empty"]')).not.toBeNull();
     expect(host.querySelector("[data-graph-node-id]")).toBeNull();
-    const selector = host.querySelector(`[data-graph-${control}]`) as HTMLSelectElement;
-    expect(selector).not.toBeNull();
-    expect(selector.value).toBe(narrow);
-    await change(selector, broad);
+    expect(filterValue(filterName)).toBe(narrowLabel);
+    await selectFilter(filterName, broadLabel);
     await flush();
     expect(host.querySelector('[data-graph-node-id="project:p1"]')).not.toBeNull();
     expect(load).toHaveBeenCalledTimes(3);
@@ -705,11 +705,9 @@ describe("graph empty-result recovery", () => {
     const load = vi.fn(async (input: GraphQueryInput) => input.scope === "knowledge" ? empty : snapshot);
     await act(async () => root.render(<GraphRoute memberId="member-a" locale={locale} load={load} />));
     await flush();
-    const selector = host.querySelector("[data-graph-lens]") as HTMLSelectElement;
-    expect(selector).not.toBeNull();
-    expect(selector.value).toBe("knowledge");
+    expect(filterValue("Graph lens")).toBe(frontendText(locale, "GRAPH_LENS_KNOWLEDGE"));
     expect((host.querySelector("[data-graph-query]") as HTMLInputElement).value).toBe("Launch");
-    await change(selector, "workspace");
+    await selectFilter("Graph lens", "All workspace");
     await flush();
     expect(host.querySelector('[data-graph-node-id="project:p1"]')).not.toBeNull();
     expect(window.sessionStorage.getItem(viewKey)).toContain('"lens":"workspace"');
@@ -744,7 +742,7 @@ describe("graph empty-result recovery", () => {
     // The default view is intentionally represented by no record.
     expect(window.sessionStorage.getItem(viewKey)).toBeNull();
     expect(load).toHaveBeenCalledTimes(1);
-    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d");
+    await selectFilter("Time range", "Last 7 days");
     await flush();
     expect(window.sessionStorage.getItem(viewKey)).toContain('"temporalRange":"7d"');
     expect(load).toHaveBeenCalledTimes(2);
@@ -761,8 +759,12 @@ describe("graph empty-result recovery", () => {
     await clickButton(frontendText(locale, "GRAPH_RETRY"));
     await flush();
     expect(host.querySelector('[data-page-state="forbidden"]')).not.toBeNull();
-    expect(host.querySelector("[data-graph-query]")).toBeNull();
-    expect(host.querySelector("[data-graph-lens]")).toBeNull();
+    // The shell and its query row survive the revoked read…
+    expect(host.querySelector("[data-graph-query]")).not.toBeNull();
+    expect(host.querySelector('button[aria-haspopup="listbox"]')).not.toBeNull();
+    // …but the persisted private condition is never surfaced as an applied chip or content.
+    expect(host.querySelector("[data-applied-filters]")).toBeNull();
+    expect(host.querySelector("[data-graph-canvas]")).toBeNull();
     expect(host.textContent).not.toContain("private filter");
     expect(load).toHaveBeenCalledTimes(2);
   });
@@ -792,8 +794,23 @@ async function clickButton(label: string) {
   await act(async () => button!.click());
 }
 
-async function change(control: HTMLSelectElement, value: string) {
-  await act(async () => { control.value = value; control.dispatchEvent(new window.Event("change", { bubbles: true })); });
+function filterTrigger(name: string): HTMLButtonElement {
+  const target = [...host.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === name);
+  expect(target, `filter ${name}`).toBeTruthy();
+  return target!;
+}
+
+/** The graph filters are beUI listboxes now: the trigger carries the historical
+    accessible name in an sr-only span, and the value is the selected option label. */
+function filterValue(name: string): string {
+  return (filterTrigger(name).textContent ?? "").slice(name.length).trim();
+}
+
+async function selectFilter(name: string, optionLabel: string) {
+  await act(async () => filterTrigger(name).click());
+  const option = [...host.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === optionLabel);
+  expect(option, `option ${optionLabel}`).toBeTruthy();
+  await act(async () => option!.click());
 }
 
 async function flush() {
@@ -849,7 +866,7 @@ describe("revoked graph recovery", () => {
     await act(async () => root.render(<GraphRoute locale={locale} memberId="member-a" load={load} />));
     await flush();
     // An already-authorized page keeps recovery reachable during a subsequent read.
-    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d");
+    await selectFilter("Time range", "Last 7 days");
     await clickButton("Check exact result"); await flush();
     expect(host.textContent).toContain("permission");
     expect(host.querySelector("[data-graph-canvas]")).toBeNull();
@@ -975,7 +992,7 @@ describe("graph suggestion request ownership", () => {
       expect(host.textContent).toContain("Private old suggestion");
     }
     denied = true;
-    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d"); await flush();
+    await selectFilter("Time range", "Last 7 days"); await flush();
     expect(host.querySelector("[data-page-state='forbidden']")).not.toBeNull();
     denied = false;
     await clickButton("Try the work graph again"); await flush();
@@ -1011,7 +1028,7 @@ describe("graph suggestion request ownership", () => {
     const requester = vi.fn((_path: unknown, init?: RequestInit) => { signal = init?.signal ?? undefined; return pending.promise; });
     vi.stubGlobal("fetch", requester);
     await renderMemberGraph(); await generate();
-    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d"); await flush();
+    await selectFilter("Time range", "Last 7 days"); await flush();
     await act(async () => pending.resolve(outcome === "success" ? Response.json(suggestions) : Response.json({}, { status: outcome === "denied" ? 403 : 503 })));
     await flush();
     expect(host.querySelector("[data-graph-page]")).not.toBeNull();
@@ -1027,7 +1044,7 @@ describe("graph suggestion request ownership", () => {
     const requester = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
     vi.stubGlobal("fetch", requester);
     await renderMemberGraph(); await generate();
-    await change(host.querySelector("[data-graph-time-range]") as HTMLSelectElement, "7d"); await flush();
+    await selectFilter("Time range", "Last 7 days"); await flush();
     await generate();
     await act(async () => old.resolve(outcome === "success" ? Response.json(suggestions) : Response.json({}, { status: outcome === "denied" ? 403 : 503 })));
     await flush();
@@ -1109,4 +1126,48 @@ it.each([500, 401, 403])("keeps restored private recovery behind the first read 
   expect(requester).toHaveBeenCalledTimes(1);
   expect(requester.mock.calls[0]?.[0]).toBe(`/api/focus/${clientKey}`);
   expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+});
+
+describe("graph page shell", () => {
+  const locale = createLocaleRuntime({ navigatorLanguage: "en-US" });
+  const states: readonly [string, GraphPageState][] = [
+    ["loading", { kind: "loading" }],
+    ["error", { kind: "error" }],
+    ["forbidden", { kind: "forbidden" }],
+    ["empty", { kind: "empty" }],
+    ["ready", { kind: "ready", snapshot }],
+  ];
+
+  it.each(states)("renders exactly one titled h1 and the beUI query row in the %s state", (_name, state) => {
+    const html = renderState(locale, state);
+    expect([...html.matchAll(/<h1[ >]/g)]).toHaveLength(1);
+    expect(html).toContain(`>${frontendText(locale, "GRAPH_TITLE")}</h1>`);
+    // The three enum controls are beUI listboxes under their historical accessible names.
+    expect(html).not.toContain("<select");
+    expect([...html.matchAll(/aria-haspopup="listbox"/g)]).toHaveLength(3);
+    expect(html).toContain(frontendText(locale, "GRAPH_LENS_LABEL"));
+    expect(html).toContain(frontendText(locale, "GRAPH_TIME_RANGE_LABEL"));
+    expect(html).toContain(frontendText(locale, "GRAPH_CHANGE_KIND_LABEL"));
+  });
+
+  it("keeps the header and query row mounted through a first load and a read failure", async () => {
+    const pending = deferred<GraphSnapshot>();
+    const load = vi.fn()
+      .mockImplementationOnce(() => pending.promise)
+      .mockRejectedValueOnce(new ApiRequestError("READ_FAILED", "failed", 500, false));
+    await act(async () => root.render(<GraphRoute locale={locale} load={load} />));
+    expect(host.querySelectorAll("h1")).toHaveLength(1);
+    expect(host.querySelector("h1")?.textContent).toBe(frontendText(locale, "GRAPH_TITLE"));
+    expect(host.querySelector("[data-graph-page-loading]")).not.toBeNull();
+    expect(host.querySelector("[data-graph-query]")).not.toBeNull();
+    expect(host.querySelectorAll('button[aria-haspopup="listbox"]')).toHaveLength(3);
+
+    await act(async () => pending.resolve(snapshot)); await flush();
+    // A scope change re-reads and fails; the shell stays, only the content slot reports it.
+    await selectFilter("Time range", "Last 7 days"); await flush();
+    expect(host.querySelectorAll("h1")).toHaveLength(1);
+    expect(host.querySelector("[data-page-state='error']")).not.toBeNull();
+    expect(host.querySelector("[data-graph-query]")).not.toBeNull();
+    expect(host.querySelectorAll('button[aria-haspopup="listbox"]')).toHaveLength(3);
+  });
 });

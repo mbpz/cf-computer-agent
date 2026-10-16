@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GraphCanvas } from "../components/graph/graph-canvas";
 import { GraphEvidencePanel } from "../components/graph/graph-evidence-panel";
 import { GraphInspector } from "../components/graph/graph-inspector";
+import { ChartLine } from "@phosphor-icons/react";
+import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-filters";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { FilterSelect } from "../components/ui/filter-select";
 import { Input } from "../components/ui/input";
+import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { loadGraph, type GraphQueryInput, type GraphSnapshot } from "../lib/graph-data";
@@ -205,58 +209,68 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
     : action?.node.id === selectedNode.id ? (action.status !== "unconfirmed" ? "running" : "error")
       : action ? "running"
         : outcome?.status === "success" && outcome.nodeId === selectedNode.id ? "success" : "idle";
-  if (state.kind === "loading") return <>{actionRecovery}<section data-graph-page-loading><p className="mb-3 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_LOADING")}</p><PageState kind="loading" title={frontendText(locale, "GRAPH_LOADING")} /></section></>;
-  if (state.kind === "error") return <>{actionRecovery}<PageState kind="error" title={frontendText(locale, "GRAPH_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState></>;
-  if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "GRAPH_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>;
-  // Empty is an authorized read result, not a reason to hide the filters that produced it.
-  // Keep recovery controls reachable even when the persisted view returns no nodes.
-  if (!filteredSnapshot && state.kind !== "empty") return null;
+  const lensOptions = [
+    { value: "workspace", label: frontendText(locale, "GRAPH_LENS_WORKSPACE") },
+    { value: "knowledge", label: frontendText(locale, "GRAPH_LENS_KNOWLEDGE") },
+    { value: "work", label: frontendText(locale, "GRAPH_LENS_WORK") },
+  ];
+  const temporalRangeOptions = [
+    { value: "all", label: frontendText(locale, "GRAPH_TIME_RANGE_ALL") },
+    { value: "7d", label: frontendText(locale, "GRAPH_TIME_RANGE_7D") },
+    { value: "30d", label: frontendText(locale, "GRAPH_TIME_RANGE_30D") },
+    { value: "90d", label: frontendText(locale, "GRAPH_TIME_RANGE_90D") },
+  ];
+  const changeKindOptions = [
+    { value: "all", label: frontendText(locale, "GRAPH_CHANGE_KIND_ALL") },
+    { value: "added", label: frontendText(locale, "GRAPH_CHANGE_KIND_ADDED") },
+    { value: "updated", label: frontendText(locale, "GRAPH_CHANGE_KIND_UPDATED") },
+    { value: "completed", label: frontendText(locale, "GRAPH_CHANGE_KIND_COMPLETED") },
+    { value: "archived", label: frontendText(locale, "GRAPH_CHANGE_KIND_ARCHIVED") },
+  ];
+  const clearFilters = () => { onQueryChange?.(""); onLensChange?.("workspace"); onTemporalRangeChange?.("all"); onChangeKindChange?.("all"); };
+  // Every applied condition stays visible as removable text; the same handler the control uses applies it.
+  const appliedFilters: AppliedFilter[] = [];
+  if (query) appliedFilters.push({ id: "query", label: `${frontendText(locale, "GRAPH_QUERY_LABEL")}: ${query}`, onRemove: () => onQueryChange?.("") });
+  if (lens !== "workspace") appliedFilters.push({ id: "lens", label: `${frontendText(locale, "GRAPH_LENS_LABEL")}: ${lensOptions.find((option) => option.value === lens)?.label ?? lens}`, onRemove: () => onLensChange?.("workspace") });
+  if (temporalRange !== "all") appliedFilters.push({ id: "temporal-range", label: `${frontendText(locale, "GRAPH_TIME_RANGE_LABEL")}: ${temporalRangeOptions.find((option) => option.value === temporalRange)?.label ?? temporalRange}`, onRemove: () => onTemporalRangeChange?.("all") });
+  if (changeKind !== "all") appliedFilters.push({ id: "change-kind", label: `${frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")}: ${changeKindOptions.find((option) => option.value === changeKind)?.label ?? changeKind}`, onRemove: () => onChangeKindChange?.("all") });
+  // The page shell (header + query row) renders for every state; only the content slot
+  // branches, so a first load or a read failure never unmounts the toolbar (design §4.3).
   return (
     <section className="space-y-5" data-graph-page>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{frontendText(locale, "GRAPH_TITLE")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_DESCRIPTION")}</p>
-        </div>
-        <span className="rounded-full border px-3 py-1 text-xs text-muted-foreground">{frontendText(locale, "GRAPH_NODE_COUNT").replace("{count}", String(filteredSnapshot?.nodes.length ?? 0))}</span>
-      </div>
+      <PageHeader
+        icon={<ChartLine size={22} weight="duotone" className="text-primary" />}
+        title={frontendText(locale, "GRAPH_TITLE")}
+        description={frontendText(locale, "GRAPH_DESCRIPTION")}
+        actions={filteredSnapshot && <span className="rounded-full border px-3 py-1 text-xs text-muted-foreground">{frontendText(locale, "GRAPH_NODE_COUNT").replace("{count}", String(filteredSnapshot.nodes.length))}</span>}
+      />
       <Card>
         <CardHeader><CardTitle>{frontendText(locale, "GRAPH_LENS_TITLE")}</CardTitle></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_12rem_12rem]">
           <Input data-graph-query aria-label={frontendText(locale, "GRAPH_QUERY_LABEL")} placeholder={frontendText(locale, "GRAPH_QUERY_PLACEHOLDER")} value={query} onChange={(event) => onQueryChange?.(event.currentTarget.value)} />
-          <select data-graph-lens aria-label={frontendText(locale, "GRAPH_LENS_LABEL")} value={lens} onChange={(event) => onLensChange?.(event.currentTarget.value as GraphLens)} className="h-10 rounded-md border bg-background px-3 text-sm">
-            <option value="workspace">{frontendText(locale, "GRAPH_LENS_WORKSPACE")}</option>
-            <option value="knowledge">{frontendText(locale, "GRAPH_LENS_KNOWLEDGE")}</option>
-            <option value="work">{frontendText(locale, "GRAPH_LENS_WORK")}</option>
-          </select>
-          <select data-graph-time-range aria-label={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} value={temporalRange} onChange={(event) => onTemporalRangeChange?.(event.currentTarget.value as GraphTemporalRange)} className="h-10 rounded-md border bg-background px-3 text-sm">
-            <option value="all">{frontendText(locale, "GRAPH_TIME_RANGE_ALL")}</option>
-            <option value="7d">{frontendText(locale, "GRAPH_TIME_RANGE_7D")}</option>
-            <option value="30d">{frontendText(locale, "GRAPH_TIME_RANGE_30D")}</option>
-            <option value="90d">{frontendText(locale, "GRAPH_TIME_RANGE_90D")}</option>
-          </select>
-          <select data-graph-change-kind aria-label={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} value={changeKind} onChange={(event) => onChangeKindChange?.(event.currentTarget.value as NonNullable<GraphPageProps["changeKind"]>)} className="h-10 rounded-md border bg-background px-3 text-sm">
-            <option value="all">{frontendText(locale, "GRAPH_CHANGE_KIND_ALL")}</option>
-            <option value="added">{frontendText(locale, "GRAPH_CHANGE_KIND_ADDED")}</option>
-            <option value="updated">{frontendText(locale, "GRAPH_CHANGE_KIND_UPDATED")}</option>
-            <option value="completed">{frontendText(locale, "GRAPH_CHANGE_KIND_COMPLETED")}</option>
-            <option value="archived">{frontendText(locale, "GRAPH_CHANGE_KIND_ARCHIVED")}</option>
-          </select>
+          <FilterSelect label={frontendText(locale, "GRAPH_LENS_LABEL")} ariaLabel={frontendText(locale, "GRAPH_LENS_LABEL")} value={lens} onChange={(value) => onLensChange?.(value as GraphLens)} options={lensOptions} />
+          <FilterSelect label={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} ariaLabel={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} value={temporalRange} onChange={(value) => onTemporalRangeChange?.(value as GraphTemporalRange)} options={temporalRangeOptions} />
+          <FilterSelect label={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} ariaLabel={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} value={changeKind} onChange={(value) => onChangeKindChange?.(value as NonNullable<GraphPageProps["changeKind"]>)} options={changeKindOptions} />
         </CardContent>
       </Card>
+      {/* Applied conditions describe the result window; a revoked read has none to describe,
+          so the persisted filter text is never surfaced as an applied chip. */}
+      {state.kind !== "forbidden" && <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedFilters} onClear={clearFilters} />}
       {viewBlocked && <div data-graph-view-blocked role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm"><p>{frontendText(locale, "GRAPH_VIEW_RECORD_BLOCKED")}</p><Button variant="outline" onClick={onDiscardView}>{frontendText(locale, "GRAPH_VIEW_RECORD_DISCARD")}</Button></div>}
       {viewNotice && <p role="alert" className="text-sm text-destructive">{viewNotice}</p>}
       {recordBlocked && <div data-graph-action-record-blocked role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm">
         <p>{frontendText(locale, "GRAPH_ACTION_RECORD_BLOCKED")}</p>
         <Button variant="outline" onClick={() => { if (memberId && discardBlockedGraphAction(memberId)) setRecordBlocked(false); }}>{frontendText(locale, "GRAPH_ACTION_RECORD_DISCARD")}</Button>
       </div>}
-      {actionRecovery}
-      {outcome && outcome.status !== "success" && <p role="status" className="text-sm text-destructive">{frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : outcome.status === "not_recorded" ? "GRAPH_ACTION_NOT_RECORDED" : "GRAPH_ACTION_NOT_SENT")}</p>}
-      {state.kind === "empty" ? (
-        <PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")}>
-          <Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button>
-        </PageState>
-      ) : filteredSnapshot && <>
+      {state.kind !== "forbidden" && actionRecovery}
+      {state.kind !== "forbidden" && outcome && outcome.status !== "success" && <p role="status" className="text-sm text-destructive">{frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : outcome.status === "not_recorded" ? "GRAPH_ACTION_NOT_RECORDED" : "GRAPH_ACTION_NOT_SENT")}</p>}
+      {state.kind === "loading" && <section data-graph-page-loading><p className="mb-3 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_LOADING")}</p><PageState kind="loading" title={frontendText(locale, "GRAPH_LOADING")} /></section>}
+      {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "GRAPH_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>}
+      {state.kind === "forbidden" && <PageState kind="forbidden" title={frontendText(locale, "GRAPH_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>}
+      {state.kind === "empty" && <PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")}>
+        <Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button>
+      </PageState>}
+      {filteredSnapshot && state.kind !== "empty" && <>
         <GraphSuggestionsPanel locale={locale} state={suggestionsState} onGenerate={onGenerateSuggestions} />
         {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">

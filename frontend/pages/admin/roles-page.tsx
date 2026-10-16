@@ -15,12 +15,14 @@ export function adminRoleDetailPath(roleId: string): string {
 
 /** The role list: a beUI table whose rows link to each role's permission detail page. */
 export function AdminRolesPage({ onLoadRetry, state, locale }: { onLoadRetry?: () => void; state: AdminRolesState; locale: LocaleRuntime }) {
-  if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "ADMIN_ROLES_UNAVAILABLE")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
-  return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
+  // The page shell is constant (research §4.3): the header and its create action render
+  // for every state; loading and read failure only replace the role table.
+  return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0" aria-busy={state.kind === "loading" || undefined}>
     <PageHeader title={frontendText(locale, "ADMIN_ROLES_TITLE")} description={frontendText(locale, "ADMIN_ROLES_DESCRIPTION")}
       actions={<Button type="button" onClick={() => writeWorkspaceHistory("push", "/admin/roles/new")}>{frontendText(locale, "ADMIN_ROLES_CREATE")}</Button>} />
-    <DataTable
+    {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
+      : state.kind !== "ready" ? <PageState kind={state.kind} title={state.message || frontendText(locale, "ADMIN_ROLES_UNAVAILABLE")}>{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>
+      : <DataTable
       locale={locale}
       ariaLabel={frontendText(locale, "ADMIN_ROLES_TITLE")}
       rows={state.roles}
@@ -43,6 +45,6 @@ export function AdminRolesPage({ onLoadRetry, state, locale }: { onLoadRetry?: (
         { key: "members", header: frontendText(locale, "ADMIN_ROLES_MEMBERS"), width: "120px", align: "right", cell: (role) => <span>{role.memberCount}</span> },
         { key: "system", header: frontendText(locale, "ADMIN_ROLES_SYSTEM"), width: "120px", cell: (role) => role.isSystem ? <Badge variant="outline">{frontendText(locale, "ADMIN_ROLES_SYSTEM")}</Badge> : null },
       ]}
-    />
+    />}
   </section>;
 }

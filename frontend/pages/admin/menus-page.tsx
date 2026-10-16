@@ -15,19 +15,25 @@ import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
 import type { AdminMenu, AdminMenuCreate, AdminMenuUpdate } from "../../lib/admin-menus-data";
 
 export function AdminMenusPage({ onLoadRetry, state, locale, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked = false, readPending = false, readRequired = false, recordBlocked = false, onDiscardRecord, draftMemberId, suppressDraft = false }: { onLoadRetry?: () => void; state: { kind: "loading" } | { kind: "error" | "forbidden"; message?: string } | { kind: "ready"; menus: readonly AdminMenu[] }; locale?: LocaleRuntime; onUpdate?: (menu: AdminMenu, input: AdminMenuUpdate) => Promise<boolean> | void; onCreate?: (input: AdminMenuCreate) => Promise<boolean>; onDelete?: (menu: AdminMenu) => void; pendingId?: string | null; error?: string | null; writeBlocked?: boolean; readPending?: boolean; readRequired?: boolean; recordBlocked?: boolean; onDiscardRecord?: () => void; draftMemberId?: string; suppressDraft?: boolean }) {
-  if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "ADMIN_MENUS_UNAVAILABLE")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
-  return <ReadyMenus menus={state.menus} {...{ locale, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked, onDiscardRecord, draftMemberId, suppressDraft }} />;
+  // The page shell is constant (research §4.3): the header renders for every state. Its
+  // create action only exists once the tree is readable, so the ready view supplies it.
+  const header = (actions?: ReactNode) => <PageHeader title={frontendText(locale, "ADMIN_MENUS_TITLE")} description={frontendText(locale, "ADMIN_MENUS_DESCRIPTION")} actions={actions} />;
+  if (state.kind === "ready") return <ReadyMenus menus={state.menus} header={header} {...{ locale, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked, onDiscardRecord, draftMemberId, suppressDraft }} />;
+  return <section className="space-y-6" aria-busy={state.kind === "loading" || undefined}>
+    {header()}
+    {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
+      : <PageState kind={state.kind} title={state.message || frontendText(locale, "ADMIN_MENUS_UNAVAILABLE")}>{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>}
+  </section>;
 }
 
 type PositionAttempt = { menu: AdminMenu; position: number };
-type ReadyProps = Omit<Parameters<typeof AdminMenusPage>[0], "state"> & { menus: readonly AdminMenu[] };
+type ReadyProps = Omit<Parameters<typeof AdminMenusPage>[0], "state"> & { menus: readonly AdminMenu[]; header: (actions?: ReactNode) => ReactNode };
 /** Per-node props handed to every row; `menu` is added as the tree recurses. */
 type MenuNodeProps = { positionAttempts: Record<string, PositionAttempt>; locale?: LocaleRuntime; positionFor?: (id: string) => string | undefined; onPosition?: (menuId: string, position: string) => void; onUpdate?: (menu: AdminMenu, input: AdminMenuUpdate) => Promise<boolean> | void; onEdit?: (menu: AdminMenu) => void; onDelete?: (menu: AdminMenu) => void; pendingId?: string | null; writeBlocked?: boolean; recordBlocked?: boolean; editingMenuId?: string | null };
 function findMenu(menus: readonly AdminMenu[], id: string): AdminMenu | undefined {
   for (const menu of menus) { if (menu.id === id) return menu; const child = findMenu(menu.children, id); if (child) return child; }
 }
-function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked = false, onDiscardRecord, draftMemberId, suppressDraft = false }: ReadyProps) {
+function ReadyMenus({ menus, locale, header, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked = false, onDiscardRecord, draftMemberId, suppressDraft = false }: ReadyProps) {
   const [composer] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadAdminMenuDraft(draftMemberId));
   const [positionRecord] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadMenuPositionDraft(draftMemberId));
   const restored = composer.kind === "ready" ? composer.draft : null;
@@ -105,7 +111,7 @@ function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, 
   const edit = (menu: AdminMenu) => setEditor({ menu });
   const nodeProps: MenuNodeProps = { positionAttempts, locale, positionFor: (id) => positionBlocked ? undefined : positions[id], onPosition: reportPosition, onUpdate: onUpdate ? (menu, input) => requestConfirmation(menu, input) : undefined, onDelete: onDelete ? menu => requestConfirmation(menu) : undefined, onEdit: onUpdate ? edit : undefined, pendingId, writeBlocked: busy || Boolean(editor) || validConfirmation, recordBlocked, editingMenuId: editor?.menu?.id ?? null };
   return <><section className="space-y-6" inert={validConfirmation || undefined} aria-hidden={validConfirmation || undefined}>
-    <PageHeader title={frontendText(locale, "ADMIN_MENUS_TITLE")} description={frontendText(locale, "ADMIN_MENUS_DESCRIPTION")} actions={onCreate && <Button type="button" data-menu-create-open aria-haspopup="dialog" aria-expanded={Boolean(editor) && !editor?.menu} disabled={busy || Boolean(editor) || countMenus(menus) >= 200} onClick={() => setEditor({})}>{frontendText(locale, "ADMIN_MENUS_CREATE")}</Button>} />
+    {header(onCreate && <Button type="button" data-menu-create-open aria-haspopup="dialog" aria-expanded={Boolean(editor) && !editor?.menu} disabled={busy || Boolean(editor) || countMenus(menus) >= 200} onClick={() => setEditor({})}>{frontendText(locale, "ADMIN_MENUS_CREATE")}</Button>)}
     {recovery}
     {draftBlocked && <div role="alert" data-menu-draft-blocked className="mb-4 space-y-2 text-sm"><p>{frontendText(locale, "ADMIN_MENU_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardDraft}>{frontendText(locale, "ADMIN_MENU_DRAFT_RECORD_DISCARD")}</Button></div>}
     {draftNotice && <p role="alert" className="mb-4 text-sm">{draftNotice}</p>}

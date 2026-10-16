@@ -1,6 +1,14 @@
-import type { TaskPriority, TaskStatus } from "./task-types";
+import type { TaskFilterState, TaskPriority, TaskStatus } from "./task-types";
 
 export type { TaskPriority, TaskStatus };
+
+/**
+ * The condition set a task list read answers. Both the delete confirmation's validity and
+ * the route's stale-row reset compare this key, so a condition change is defined once.
+ */
+export function taskFilterKey(filters: TaskFilterState): string {
+  return JSON.stringify([filters.q, filters.status, filters.priority, filters.tag, filters.due]);
+}
 
 export function taskStatusKey(status: TaskStatus): string {
   return { todo: "TASKS_STATUS_TODO", doing: "TASKS_STATUS_DOING", blocked: "TASKS_STATUS_BLOCKED", done: "TASKS_STATUS_DONE", canceled: "TASKS_STATUS_CANCELED" }[status];

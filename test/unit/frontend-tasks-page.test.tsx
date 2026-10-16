@@ -26,7 +26,13 @@ describe("private tasks page", () => {
       { id: "task-2", title: "Beta", notes: "", status: "done", progress: 100, priority: "medium", dueAt: null, completedAt: null, createdAt: "", updatedAt: "" },
       { id: "task-3", title: "   ", notes: "", status: "todo", progress: 0, priority: "low", dueAt: null, completedAt: null, createdAt: "", updatedAt: "" },
     ], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }} onDelete={vi.fn()} onStatusChange={vi.fn()} />);
-    expect(html).toContain("Alpha"); expect(html).toContain("Beta"); expect(html).toContain('aria-label="Tasks"'); expect(html).toContain('aria-label="Status"');
+    expect(html).toContain("Alpha"); expect(html).toContain("Beta"); expect(html).toContain('aria-label="Tasks"');
+    // The filters are the shared beUI listboxes; the historical accessible names ride inside them.
+    expect(html).not.toContain('aria-label="Status"');
+    expect(html).toContain('aria-haspopup="listbox"');
+    expect(html).toContain('<span class="sr-only">Status</span>');
+    expect(html).toContain('<span class="sr-only">Priority</span>');
+    expect(html).toContain('<span class="sr-only">Due</span>');
     expect(html).not.toContain('aria-label="Page '); expect(html).not.toContain("Load more");
     expect(html).toContain('aria-label="Complete: Alpha (task-1)"');
     expect(html).toContain('aria-label="Delete: Alpha (task-1)"');
@@ -119,5 +125,62 @@ describe("tasks page paging surface", () => {
 
     await act(async () => root.render(<TasksPage locale={en} filters={{}} state={readyState(3, 12)} onPageChange={onPageChange} onPageSizeChange={vi.fn()} onLoadMore={onLoadMore} />));
     expect(container.querySelector('p[role="status"]')?.textContent).toBe(frontendText(en, "LIST_END_OF_LIST"));
+  });
+});
+
+describe("tasks page shell and filters", () => {
+  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
+  const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+  const ready = { kind: "ready" as const, items: [taskItem("task-1")], pagination: { page: 1, pageSize: 20 as const, total: 1, totalPages: 1 } };
+  beforeEach(() => {
+    browser = new Window({ url: "https://app.test/tasks" });
+    for (const [key, value] of Object.entries({ window: browser, document: browser.document, navigator: browser.navigator, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) vi.stubGlobal(key, value);
+    container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container);
+  });
+  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+  const mount = async (props: Partial<React.ComponentProps<typeof TasksPage>> = {}) => { await act(async () => root.render(<TasksPage locale={locale} filters={{}} state={ready} {...props} />)); };
+  function filterTrigger(name: string) {
+    const found = [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === name);
+    expect(found, name).toBeTruthy();
+    return found!;
+  }
+
+  it("keeps one titled header, its toolbar and its filters on first load and after a read failure", async () => {
+    await act(async () => root.render(<TasksPage locale={locale} filters={{}} state={{ kind: "loading" }} />));
+    const headings = () => [...container.querySelectorAll("h1")];
+    expect(headings()).toHaveLength(1);
+    expect(headings()[0]!.textContent).toBe(frontendText(locale, "TASKS_TITLE"));
+    expect(container.querySelector('[data-page-state="loading"]')).not.toBeNull();
+    await mount({ state: { kind: "error", message: "Denied" }, onRetry: vi.fn() });
+    expect(headings()).toHaveLength(1);
+    expect(headings()[0]!.textContent).toBe(frontendText(locale, "TASKS_TITLE"));
+    expect(container.querySelector('[data-page-state="error"]')!.textContent).toContain("Denied");
+    expect(filterTrigger("Status")).not.toBeNull();
+    expect(container.querySelector('[data-applied-filters]')).toBeNull();
+  });
+
+  it("renders the three filters as beUI listboxes under their historical names and values", async () => {
+    await mount();
+    expect(container.querySelector('select[aria-label="Status"]')).toBeNull();
+    expect([...container.querySelectorAll('button[aria-haspopup="listbox"]')].map((node) => node.querySelector(".sr-only")?.textContent))
+      .toEqual([frontendText(locale, "TASKS_STATUS"), frontendText(locale, "TASKS_PRIORITY"), frontendText(locale, "TASKS_DUE")]);
+    const optionLabels = (name: string) => [...filterTrigger(name).parentElement!.querySelectorAll('[role="option"]')].map((node) => node.textContent);
+    expect(optionLabels("Status")).toEqual(["All", "todo", "doing", "blocked", "done", "canceled"]);
+    expect(optionLabels("Priority")).toEqual(["All", "low", "medium", "high"]);
+    expect(optionLabels("Due")).toEqual(["All", "today", "overdue", "none"]);
+  });
+
+  it("shows removable applied conditions with a clear-all while filtered", async () => {
+    const onFilterChange = vi.fn();
+    await mount({ filters: { q: "alpha", status: "doing", due: "today" }, onFilterChange });
+    const applied = container.querySelector("[data-applied-filters]")!;
+    expect(applied.textContent).toContain(`${frontendText(locale, "TASKS_SEARCH")}: alpha`);
+    expect(applied.textContent).toContain("Status: doing");
+    expect(applied.textContent).toContain("Due: today");
+    await act(async () => applied.querySelector<HTMLButtonElement>('[aria-label="Clear all: Status: doing"]')!.click());
+    expect(onFilterChange).toHaveBeenCalledExactlyOnceWith({ q: "alpha", due: "today" });
+    onFilterChange.mockClear();
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-filters-clear]")!.click());
+    expect(onFilterChange).toHaveBeenCalledExactlyOnceWith({});
   });
 });

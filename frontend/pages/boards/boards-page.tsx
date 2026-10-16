@@ -2,6 +2,7 @@ import { Alert, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { DataTable } from "../../components/data-table";
+import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { Select, SelectOption } from "../../components/ui/select";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -32,7 +33,7 @@ export function BoardsPage({ locale, columns, actionError, actionNotice, actionP
 }) {
   const movesLocked = Boolean(actionPendingId) || unknownMove !== null || recovering || recordBlocked;
   return <section className="flex flex-col space-y-5 lg:h-full lg:min-h-0">
-    <div><h1 className="text-2xl font-semibold">{frontendText(locale, "BOARDS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "BOARDS_DESCRIPTION")}</p></div>
+    <PageHeader title={frontendText(locale, "BOARDS_TITLE")} description={frontendText(locale, "BOARDS_DESCRIPTION")} />
     {recordBlocked && <Alert variant="destructive" data-board-move-record-blocked="">
       <AlertTitle>{frontendText(locale, "BOARDS_MOVE_RECORD_BLOCKED")}</AlertTitle>
       <div className="mt-3"><Button variant="outline" onClick={onDiscardRecord}>{frontendText(locale, "BOARDS_MOVE_RECORD_DISCARD")}</Button></div>

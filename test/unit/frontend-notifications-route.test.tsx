@@ -60,14 +60,14 @@ describe("notification inbox route", () => {
 
     // A filter change replaces the window at page one and aborts the superseded window.
     holdAppend = false;
-    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
+    await selectFilter("Read status", "Read"); await flush();
     expect(browser.location.search).toBe("?read=read&type=task.due");
     expect(appended.signal?.aborted).toBe(true);
     expect(requests.at(-1)!.url).toBe("/api/notifications?page=1&pageSize=20&read=true&type=task.due");
     expect(container.textContent).toContain("p1-0");
     expect(container.textContent).not.toContain("p2-0");
 
-    await change(container.querySelector('[aria-label="Notification type"]') as HTMLSelectElement, "task.overdue"); await flush();
+    await selectFilter("Notification type", "Task overdue"); await flush();
     expect(browser.location.search).toBe("?read=read&type=task.overdue");
     expect(requests.at(-1)!.url).toBe("/api/notifications?page=1&pageSize=20&read=true&type=task.overdue");
 
@@ -138,7 +138,7 @@ describe("notification inbox route", () => {
     expect(container.textContent).toContain("Unread 2");
 
     await click("Mark as read");
-    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read");
+    await selectFilter("Read status", "Read");
     await flush();
     expect(container.textContent).toContain("Early read page");
     expect(container.textContent).toContain("Unread 2");
@@ -233,7 +233,7 @@ describe("notification inbox route", () => {
       return String(input).endsWith("/summary") ? Response.json({ unread: 1 }) : pageResponse(String(input), "Initial");
     });
     await renderRoute(); await click("Open");
-    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
+    await selectFilter("Read status", "Read"); await flush();
     await act(async () => resolveRead(Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z" })))); await flush();
     expect(browser.location.pathname + browser.location.search).toBe("/notifications?read=read");
   });
@@ -251,7 +251,7 @@ describe("notification inbox route", () => {
       return pageResponse(path, "Protected notification");
     });
     await renderRoute(); await click("Open");
-    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await settle();
+    await selectFilter("Read status", "Read"); await settle();
     await act(async () => resolveRead(Response.json({ error: { code: status === 401 ? "AUTH_REQUIRED" : "FORBIDDEN", message: "Denied", retryable: false } }, { status }))); await flush();
     expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
     expect(container.querySelector("[data-notification-id]")).toBeNull();
@@ -272,7 +272,7 @@ describe("notification inbox route", () => {
       listRequests += 1; return pageResponse(String(input), "Current view");
     });
     await renderRoute(); await click("Open");
-    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
+    await selectFilter("Read status", "Read"); await flush();
     const before = listRequests;
     await act(async () => resolveRead(Response.json({ error: { code: "API_ERROR", message: "Failed", retryable: true } }, { status: 500 }))); await flush();
     expect(container.textContent).toContain("Check the current notification state");
@@ -342,7 +342,7 @@ describe("notification inbox route", () => {
       return pageResponse(String(input), "Original page");
     });
     await renderRoute();
-    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
+    await selectFilter("Read status", "Read"); await flush();
     const bulk = [...container.querySelectorAll("button")].find((button) => button.textContent === "Mark visible as read") as HTMLButtonElement | undefined;
     expect(!bulk || bulk.disabled).toBe(true);
     if (bulk) await act(async () => bulk.click());
@@ -381,7 +381,7 @@ describe("notification inbox route", () => {
       return pageResponse(String(input), "Initial");
     });
     await renderRoute(); await click("Mark as read");
-    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
+    await selectFilter("Read status", "Read"); await flush();
     await act(async () => rejectWrite(new TypeError("lost response"))); await flush();
     expect(staleSignal?.aborted).toBe(true);
     await act(async () => releaseList(pageResponse("/api/notifications?page=1&read=true", "Stale writable page"))); await flush();
@@ -459,7 +459,7 @@ describe("notification inbox route", () => {
     browser.dispatchEvent(unload);
     expect(unload.defaultPrevented).toBe(true);
 
-    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read");
+    await selectFilter("Read status", "Read");
     await flush();
     expect(browser.location.search).toContain("read=read");
 
@@ -596,6 +596,22 @@ describe("notification inbox route", () => {
     }
   });
 
+  it("keeps the page header and filters mounted through a first load and a read failure", async () => {
+    browser.history.replaceState({}, "", "/notifications");
+    const first = Promise.withResolvers<Response>();
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/summary") ? Response.json({ unread: 0 }) : first.promise);
+    await act(async () => root.render(<NotificationsRoute locale={createLocaleRuntime()} search="" />));
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+    expect(container.querySelectorAll('button[aria-haspopup="listbox"]')).toHaveLength(2);
+    const title = container.querySelector("h1")!.textContent;
+    await act(async () => first.resolve(Response.json({ error: { code: "READ_FAILED", message: "Unavailable", retryable: true } }, { status: 500 })));
+    await flush();
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+    expect(container.querySelector("h1")!.textContent).toBe(title);
+    expect(container.querySelectorAll('button[aria-haspopup="listbox"]')).toHaveLength(2);
+    expect(container.querySelector("[data-page-state='error']")).not.toBeNull();
+  });
+
   async function renderRoute() {
     await act(async () => root.render(<NotificationsRoute locale={createLocaleRuntime()} search={browser.location.search} />));
     await flush();
@@ -603,6 +619,16 @@ describe("notification inbox route", () => {
   async function click(label: string) {
     const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label) as HTMLButtonElement;
     expect(button).toBeTruthy(); await act(async () => button.click());
+  }
+  /** Both inbox filters are beUI listboxes now: the trigger carries the historical
+      accessible name in an sr-only span; pick the option by its visible label. */
+  async function selectFilter(ariaLabel: string, optionLabel: string) {
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === ariaLabel);
+    expect(trigger, `filter ${ariaLabel}`).toBeTruthy();
+    await act(async () => trigger!.click());
+    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === optionLabel);
+    expect(option, `option ${optionLabel}`).toBeTruthy();
+    await act(async () => option!.click());
   }
   async function scrollToEnd() {
     const scroller = container.querySelector("div.overflow-auto") as HTMLElement;
@@ -624,7 +650,6 @@ function pageResponse(url: string, title: string): Response {
   const items = Array.from({ length: count }, (_unused, index) => notification({ id: `notification-${index + 1}`, eventType: params.get("type") ?? "task.due", readAt: params.get("read") === "true" ? "2026-08-30T01:00:00.000Z" : null, payload: { title: index === 0 ? title : `${title} ${index + 1}` } }));
   return Response.json({ items, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } });
 }
-async function change(control: HTMLSelectElement, value: string) { await act(async () => { control.value = value; control.dispatchEvent(new window.Event("change", { bubbles: true })); }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
 async function settle() { await act(async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
 async function waitForText(text: string) {

@@ -1,5 +1,7 @@
+import { ChatCircle } from "@phosphor-icons/react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
+import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { DiscussionThread } from "../../lib/discussions-data";
@@ -22,10 +24,15 @@ export function MessagesPage({ locale, state, page, limit, pending, onRetry, onN
   onPrevious: () => void;
   onLimitChange: (limit: 20 | 50) => void;
 }) {
-  if (state.kind === "loading") return <div><span className="sr-only">{frontendText(locale, "MESSAGES_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "MESSAGES_LOADING")} /></div>;
-  if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "MESSAGES_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button></PageState>;
   return <section className="flex min-h-0 flex-col gap-4">
-    <div><h1 className="text-2xl font-semibold">{frontendText(locale, "MESSAGES_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "MESSAGES_DESCRIPTION")}</p></div>
+    <PageHeader
+      icon={<ChatCircle size={22} weight="duotone" className="text-primary" />}
+      title={frontendText(locale, "MESSAGES_TITLE")}
+      description={frontendText(locale, "MESSAGES_DESCRIPTION")}
+    />
+    {state.kind === "loading" && <div><span className="sr-only">{frontendText(locale, "MESSAGES_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "MESSAGES_LOADING")} /></div>}
+    {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "MESSAGES_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button></PageState>}
+    {state.kind === "ready" && <>
     <div data-messages-scroll="true" className="min-h-0 max-h-[calc(100vh-18rem)] flex-1 space-y-3 overflow-y-auto pr-1" aria-busy={pending || undefined}>
       {state.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "MESSAGES_EMPTY")} /> : state.items.map((thread) => <Card key={thread.id}>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -35,5 +42,6 @@ export function MessagesPage({ locale, state, page, limit, pending, onRetry, onN
       </Card>)}
     </div>
     <DiscussionCursorPagination locale={locale} page={page} limit={limit} pending={pending} hasNext={Boolean(state.nextCursor)} onPrevious={onPrevious} onNext={() => state.nextCursor && onNext(state.nextCursor)} onLimitChange={onLimitChange} />
+    </>}
   </section>;
 }

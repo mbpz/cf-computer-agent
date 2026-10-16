@@ -50,6 +50,23 @@ describe("Goals page", () => {
     expect(renderToStaticMarkup(<GoalsPage locale={locale} state={{ kind: "error", message: "Unable" }} onRetry={vi.fn()} />)).toContain(frontendText(locale, "GOALS_RETRY"));
     expect(renderToStaticMarkup(<GoalsPage locale={locale} state={{ kind: "ready", items: [] }} />)).toContain(frontendText(locale, "GOALS_EMPTY"));
   });
+
+  it("keeps one titled header with its private status through loading and a read failure", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const loading = renderToStaticMarkup(<GoalsPage locale={locale} state={{ kind: "loading" }} />);
+    expect([...loading.matchAll(/<h1[ >]/g)]).toHaveLength(1);
+    expect(loading).toContain(frontendText(locale, "GOALS_TITLE"));
+    expect(loading).toContain(frontendText(locale, "GOALS_PRIVATE_BADGE"));
+    expect(loading).toContain('data-page-state="loading"');
+    expect(loading).toContain("data-goals-create-open");
+    expect(loading).not.toContain('aria-haspopup="listbox"');
+    const failed = renderToStaticMarkup(<GoalsPage locale={locale} state={{ kind: "error", message: "Denied" }} onRetry={vi.fn()} />);
+    expect([...failed.matchAll(/<h1[ >]/g)]).toHaveLength(1);
+    expect(failed).toContain(frontendText(locale, "GOALS_TITLE"));
+    expect(failed).toContain('data-page-state="error"');
+    expect(failed).toContain("data-goals-create-open");
+    expect(failed).toContain("Denied");
+  });
 });
 
 describe("Goals create dialog", () => {

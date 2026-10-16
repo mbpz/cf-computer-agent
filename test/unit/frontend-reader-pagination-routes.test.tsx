@@ -58,7 +58,7 @@ describe("reader infinite-scroll routes", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); const fallback = auxiliary(url); if (fallback) return fallback; if (!isFormal(url, kind)) return json({ items: [] }); formalAttempts += 1; if (formalAttempts === 1) throw new Error("offline"); return page(url, kind); });
     await act(async () => root.render(renderRoute(locale()))); await flush();
     expect(container.querySelector('[role="alert"] button')).toBeTruthy();
-    await click("button"); await flush();
+    await click('[role="alert"] button'); await flush();
     expect(formalAttempts).toBe(2); expect(container.textContent).toContain(kind === "knowledge" ? "Knowledge 1" : "Submission 1");
   });
 
