@@ -56,3 +56,33 @@
 - **不可逆/跨账号写入**：审核决策、成员状态、菜单编辑、purge、存储回收、维护 drain 一律未在生产触发（只读检查其入口与门禁）。
 - **AI 生成**：仅确认衍生面入口存在且挂载时不发请求；未触发真实生成（避免计费与配额消耗）。
 - 未做视口矩阵（320/375/768/1280）、深色主题与中英文切换的系统性遍历；发现的问题与结论均来自管理员会话、浅色、中文。
+
+## 8. contributor 会话验收（2026-10-16，后续追加）
+
+用户以 `app***@163.com` 登录（`role: contributor`，能力 `knowledge:read`、`submission:create`、`submission:read-own`、`tasks:use`、`legacy:read`，掩码 `0x1600c3`）。同一浏览器配置文件中该登录替换了管理员会话，故本次只能逐一侧执行。
+
+**禁止访问面与导航（本批安全修复）**
+
+- contributor 冷加载 `/admin/members` 与 `/admin/roles/new`：均渲染 `data-page-state="forbidden"` 与「403：访问被拒绝当前服务器会话没有访问此路由所需的能力。」，无崩溃、无私有内容。
+- 导航中**不出现管理组**（可见项为工作区首页/AI 知识库/提交/我的提交/收集箱/目标/项目/日历/今日/专注/复盘/工作图），与 `GET /api/admin/*` 返回 403 一致。
+
+**成员隔离**
+
+- 用管理员先前留下的一条真实任务 id 以 contributor 身份读取 `/api/tasks/bb4dcfa0-55d7-4ed2-a129-ac938656b440` → **404**。
+- `/api/admin/submissions`、`/api/admin/members`、`/api/environments` → **403**；自家 `/api/tasks`、`/api/inbox`、`/api/goals`、`/api/submissions/mine`、`/api/notifications`、`/api/spaces` → **200**。
+
+**提交闭环（B3 交付）**
+
+- `/submit` 渲染正确；**目标选择器来自服务端**（空间 `Default`、集合「不指定集合」、「该空间没有集合。」）。
+- 服务端草稿：输入标题与正文后自动保存，网络记录 `POST /api/submissions/drafts` → **201**，界面显示「草稿已保存到服务端 2026-10-16T14:33:47.308Z」；整页刷新后标题与正文**完整恢复**且仍显示同一服务端时间戳。
+- **发现（P2，未修）**：草稿**无法被放弃**——`/submit` 没有清除/丢弃入口，且用空值或最小字段体 `PATCH /api/submissions/drafts/:id` 均返回 400 `SUBMISSION_REQUEST_INVALID`（该接口要求完整字段体）。因此本次验收留下一条私有草稿 `2fb75639-9cf3-4d7d-82f9-90c18f914249`（标题 `omp-acceptance-draft-1016`），需在后续版本提供放弃草稿的入口后由用户清理。
+
+**知识阅读（B3 交付）**
+
+- `/knowledge/f64ca1f3-…` 在 contributor 侧：恰一个 `h1`（条目标题）、`data-reader-outline` 存在、正文 4778 字符；页内出现**衍生面控件**（摘要、时间线、简报、对比、研究报告、读取该条目的研究运行、开始研究运行），且**挂载时不发任何生成请求**（网络记录中相关路径计数为 0），与"生成由用户触发"的设计一致。
+
+**部署核对**
+
+- 修复提交 `db4df5d8` 已在本次会话期间部署生效：`/admin/roles/new` 与 `/admin/roles/role-1` 冷加载由裸 404 变为 **200**（外壳），并在 contributor 侧正确落到禁止访问面。
+
+**本节新增边界**：仍未覆盖管理员侧在同一会话中的再次核对（该配置文件已是 contributor 登录）、不可逆写入、视口与主题矩阵、以及真实 AI 生成（避免计费与配额）。
