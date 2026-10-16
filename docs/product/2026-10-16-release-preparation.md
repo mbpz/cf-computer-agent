@@ -2,6 +2,16 @@
 
 日期：2026-10-16。状态：**发布准备材料，未部署**。本文件由本地门禁产出，供用户在部署时逐项执行与核对；它不声称部署完成，也不替代 signed-browser 验收。
 
+## 0. 2026-10-16 第二轮（首次部署后的追加）
+
+首次部署完成并做了真实双角色验收（记录见 `docs/operations/evidence/2026-10-16-production-acceptance.md`）。验收找出并已修复三项：**purge 在条目被成员标注过时会整体中止**（现在显式删除无级联的成员关系，不可逆性归 purge）；**收藏删除缺少可读性门禁**（回收窗口内曾被接受并无法恢复）；**阅读器在正文自带一级标题时出现两个 h1**（现在仅在源文最浅标题是 h1 时整体降一级）。此外补上**草稿放弃**（`DELETE /api/submissions/drafts/:id`，迁移 0073，界面带确认与"结果未知→复查"状态）。
+
+**部署注意**：本轮带来迁移 **0073**（其余 0064–0072 已应用，`wrangler d1 migrations list --remote` 已核对）；服务端行为有三处变化——purge 现在真的会删除成员标注数据（此前是中止）、收藏删除在不可读时返回 404、已回收条目的笔记不再可读。前端方面阅读器正文标题层级会整体下移一级。
+
+**实测体积（本轮构建）**：Worker 上传 **1686.61 KiB / gzip 320.03 KiB**；前端静态资源仍约 4.8 MB（最大单文件 2.2 MB 主包，均远低于 25 MiB/文件上限）；VM 引擎与镜像仍不发布。
+
+**验收状态**：管理员与 contributor 两个会话均已完成并记录（31 个入口冷加载、写入旅程、禁止访问面与隔离、撤权往返）。**待办**：部署本轮后重测"回收→恢复"往返（验收记录 §9 的观察在构建证据上不可复现，需重测定论），并确认 0073 已应用。
+
 ## 1. 待部署内容
 
 ### 1.1 迁移（增量，全部为新增表/新增列/替换触发器，无破坏性 schema 变更）
@@ -14,8 +24,12 @@
 | `0067_menu_operation_receipts.sql` | 菜单创建/删除回执（全局命名空间，`actor_id` 无外键以便回执存活） | 新表 |
 | `0068_task_status_intent_dedup.sql` | 重建 `trg_tasks_status_notification_intent` 为 `INSERT OR IGNORE` | **替换触发器**；修复"修复流程回滚 `status_version` 后下一次状态写入因唯一约束失败"的缺陷；去重语义不变 |
 | `0069_review_decision_receipts.sql` | 审核决策回执（publish/reject/request_revision 三类，队列与详情共用同一 `operation_id`） | 新表 |
+| `0070_knowledge_lifecycle_operation_receipts.sql` | 知识生命周期回执（trash/restore/purge/rollback 四类，回执令"已提交的操作"重放而非二次执行） | 新表 |
+| `0071_admin_operation_receipts.sql` | 管理操作回执（孤儿资产回收等管理端操作；purge 重放亦依赖此日志） | 新表 |
+| `0072_knowledge_recycle_bin_menu.sql` | 回收站菜单行 seed（`menu-recycle-bin`，`required_bits` 与 `knowledge:review` 同掩码，`WHERE NOT EXISTS` 守卫） | 新增菜单行 |
+| `0073_submission_draft_discard_receipts.sql` | 草稿放弃回执（成员作用域，使"已提交的删除"不会被报为不存在） | 新表 |
 
-迁移字节已 pin 在 `scripts/verify-m1-migrations.mjs` 与 `scripts/m1-release-contract.test.mjs`；发布前请以 `npm run verify:m1:migrations -- --files` 与 `node --test scripts/m1-release-contract.test.mjs` 复核（本地均为 pass，count=69）。
+迁移字节已 pin 在 `scripts/verify-m1-migrations.mjs` 与 `scripts/m1-release-contract.test.mjs`；发布前请以 `npm run verify:m1:migrations -- --files` 与 `node --test scripts/m1-release-contract.test.mjs` 复核（本地均为 pass，`count=73`）。
 
 ### 1.2 代码面（按菜单）
 
