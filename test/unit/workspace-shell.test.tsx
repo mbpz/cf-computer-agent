@@ -347,6 +347,28 @@ describe("shadcn workspace shell", () => {
     expect(browser.document.activeElement).toBe(trigger);
   });
 
+  it("keeps the mobile drawer hierarchy so the knowledge family indents under its one top-level entry", async () => {
+    const onNavigate = vi.fn();
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Home</p></AppShell>));
+    await act(async () => (container.querySelector("[data-sheet-open] summary") as HTMLElement).click());
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    const rows = Array.from(dialog.querySelectorAll("nav [data-nav-node]")) as HTMLElement[];
+    const depthOf = (href: string) => rows.find((row) => row.getAttribute("href") === href)?.getAttribute("data-nav-depth");
+
+    // The knowledge entry keeps its own destination and the four related
+    // destinations are its children, so the mobile list shows one top-level
+    // entry instead of five siblings.
+    expect(depthOf("/knowledge")).toBe("0");
+    for (const href of ["/search", "/agent", "/submit", "/my-submissions"]) expect(depthOf(href)).toBe("1");
+
+    // Indentation is presentation only: the children are rendered as rows rather
+    // than hidden behind a disclosure, so the drawer still lists the whole family
+    // and the top level keeps every destination it had.
+    expect(rows.filter((row) => row.getAttribute("data-nav-depth") === "1").length).toBeGreaterThanOrEqual(4);
+    expect(rows.some((row) => row.getAttribute("href") === "/")).toBe(true);
+    expect(rows.filter((row) => row.getAttribute("data-nav-depth") === "0").length).toBeGreaterThan(1);
+  });
+
   it("does not restore Tasks through the navigation-load failure fallback without its permission", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
     const session = { ...admin, capabilities: ["knowledge:read"], permissionMask: "0x0" };

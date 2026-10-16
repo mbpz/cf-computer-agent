@@ -111,7 +111,9 @@
 | 分享按钮（M1） | 3 个按钮实测 **24×32**，计算样式 `min-height: 24px`、`padding-left: 4px` |
 | 移动抽屉（I2） | `<summary>`「打开导航」→ 对话框「工作区导航」出现，焦点进入面板（落在「关闭导航」），`body overflow: hidden`；Escape → 对话框消失、`details` 关闭、滚动恢复、**焦点回到摘要** |
 
-**移动抽屉未达成的部分（既有设计，非本次回归）**：`MobileNavigation` 用 `flattenNavigation`（`app-shell.tsx:296`）把工作区与管理端目的地**平铺**成一个列表，因此移动端仍是 `/knowledge`、`/search`、`/agent`、`/submit`、`/my-submissions` 五个同级行（缩进均为 16px，共 14 行）。若移动端也要体现"一个一级菜单"，需要改 `MobileNavigation` 的渲染（缩进或分组头），属独立决定；本轮未改。
+**移动抽屉已按树渲染（2026-10-17 追加，部署于版本 `5f790c53`）**：`MobileNavigation` 原先用 `flattenNavigation` 把工作区与管理端目的地平铺成一个列表，移动端因此看不到层级。现在该 helper 返回 `{ node, depth }`，深度按**可见层级**计算（没有 `path` 的纯分组，例如管理端 `governance`，自身不渲染行，其子项不会被缩进到一个看不见的父项下），行上补 `data-nav-node`/`data-nav-depth` 并用 `pl-6` 缩进（覆盖 `px-2`，不用 `ml` 以免面板内产生横向溢出）。
+
+设计取舍：移动端**不做折叠**，一个目的地一行、只是缩进——行数与改动前一致（14 行）、触控行高仍 40px，因此没有一个目的地被藏进展开交互里。生产实测（390×844）：`/knowledge` depth 0 / `padding-left: 8px`，`/search`、`/agent`、`/submit`、`/my-submissions` 均 depth 1 / `padding-left: 24px`，面板横向溢出 0。回归断言：`test/unit/workspace-shell.test.tsx`「keeps the mobile drawer hierarchy so the knowledge family indents under its one top-level entry」。
 
 ## 6. 边界
 

@@ -4430,9 +4430,9 @@
         "frontend/components/shell/app-shell.tsx:293:10",
         "frontend/components/shell/app-shell.tsx:293:52",
         "frontend/components/shell/app-shell.tsx:293:102",
-        "frontend/components/shell/app-shell.tsx:293:936",
-        "frontend/components/shell/app-shell.tsx:293:1314",
-        "frontend/components/shell/app-shell.tsx:293:2148",
+        "frontend/components/shell/app-shell.tsx:293:953",
+        "frontend/components/shell/app-shell.tsx:293:1395",
+        "frontend/components/shell/app-shell.tsx:293:2287",
         "frontend/components/shell/command-palette.tsx:48:5",
         "frontend/components/shell/command-palette.tsx:85:5",
         "frontend/components/shell/command-palette.tsx:89:5",
@@ -22120,11 +22120,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:293:936",
+      "id": "frontend/components/shell/app-shell.tsx:293:953",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "MobileNavigation",
       "line": 293,
-      "column": 936,
+      "column": 953,
       "kind": "jsx",
       "tag": "button",
       "attributes": {
@@ -22132,7 +22132,9 @@
         "type": "\"button\"",
         "disabled": "true",
         "aria-disabled": "\"true\"",
-        "className": "\"flex min-h-10 w-full cursor-not-allowed items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-muted-foreground opacity-70\""
+        "data-nav-node": "true",
+        "data-nav-depth": "depth",
+        "className": "cn(\"flex min-h-10 w-full cursor-not-allowed items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-muted-foreground opacity-70\", depth > 0 && \"pl-6\")"
       },
       "handlers": {},
       "spreads": [],
@@ -22165,22 +22167,24 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:293:1314",
+      "id": "frontend/components/shell/app-shell.tsx:293:1395",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "MobileNavigation",
       "line": 293,
-      "column": 1314,
+      "column": 1395,
       "kind": "jsx",
       "tag": "motion.a",
       "attributes": {
         "key": "path",
         "data-route-id": "routeCapability(path)?.id",
+        "data-nav-node": "true",
+        "data-nav-depth": "depth",
         "href": "path",
         "aria-current": "pathname === path ? \"page\" : undefined",
         "onClick": "(event) => { event.preventDefault(); setOpen(false); onNavigate(path); }",
         "whileTap": "reduce ? undefined : { scale: 0.985 }",
         "transition": "SPRING_PRESS",
-        "className": "cn(\"relative flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm\", pathname === path ? \"font-medium text-accent-foreground\" : \"hover:bg-accent\")"
+        "className": "cn(\"relative flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm\", depth > 0 && \"pl-6\", pathname === path ? \"font-medium text-accent-foreground\" : \"hover:bg-accent\")"
       },
       "handlers": {
         "onClick": "(event) => { event.preventDefault(); setOpen(false); onNavigate(path); }"
@@ -22215,11 +22219,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:293:2148",
+      "id": "frontend/components/shell/app-shell.tsx:293:2287",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "MobileNavigation",
       "line": 293,
-      "column": 2148,
+      "column": 2287,
       "kind": "jsx",
       "tag": "AccountMenu",
       "attributes": {
