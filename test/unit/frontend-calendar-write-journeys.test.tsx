@@ -12,7 +12,11 @@ describe("calendar creation and cancellation through App", () => {
   const main=()=>app!.container.querySelector("main")!;
   const button=(text:string)=>[...main().querySelectorAll<HTMLButtonElement>("button")].find(n=>n.textContent===text)!;
   const click=async(node:HTMLElement)=>act(async()=>node.click());
-  async function input(label:string,value:string) { await act(async()=>{const node=main().querySelector(`input[aria-label="${label}"]`)!; const props=Object.keys(node).find(k=>k.startsWith("__reactProps$"))!; (node as any)[props].onChange({currentTarget:{value}});}); }
+  async function input(label:string,value:string) { await act(async()=>{const node=main().querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; const props=Object.keys(node).find(k=>k.startsWith("__reactProps$"))!; (node as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[props]!.onChange({currentTarget:{value}});}); }
+  const composer = () => main().querySelector("[data-calendar-create-dialog]");
+  const composerTrigger = () => main().querySelector<HTMLButtonElement>("[data-calendar-create-open]")!;
+  /** The composer only mounts while its dialog is open, so every create step opens it first. */
+  async function openComposer() { if (main().querySelector('input[aria-label="Event title"]')) return; await click(composerTrigger()); }
   async function mount(recovery?: Record<string,string>) {
     app=await mountAuthenticatedApp({ url:`https://app.test/calendar?from=${from}&to=${to}`,role:"contributor",permissionMask:"0x100000",configureBrowser:browser=>{for(const [key,value] of Object.entries(recovery??{})) browser.sessionStorage.setItem(key,value);},fetch:async(input,init)=>{
       const url=new URL(String(input),"https://app.test"), method=init?.method??"GET";
@@ -40,6 +44,8 @@ describe("calendar creation and cancellation through App", () => {
       }
       throw new Error(`Unexpected ${method} ${url}`);
     }});
+    await waitForApp(()=>!!main().querySelector("[data-calendar-create-open]"));
+    await openComposer();
     await waitForApp(()=>!!button("Add event") || !!main().querySelector("[data-create-retry], [data-create-read-retry], [data-create-storage-retry], [data-planning-write-recover]"));
     await waitForApp(()=>!main().querySelector('[aria-busy="true"]'));
   }
@@ -49,12 +55,12 @@ describe("calendar creation and cancellation through App", () => {
   it("retries the same immutable intent after a lost response and double click",async()=>{
     posts=[];failPost=true;await mount();await draft();await act(async()=>{button("Add event").click();button("Add event").click();});
     await waitForApp(()=>!!main().querySelector("[data-create-retry]"));expect(posts).toHaveLength(1);
-    failPost=false;await click(main().querySelector("[data-create-retry]")!);await waitForApp(()=>posts.length===2 && !!button("Add event"));
-    expect(posts[1]).toEqual(posts[0]);expect((main().querySelector('input[aria-label="Event title"]') as HTMLInputElement).value).toBe("");
+    failPost=false;await click(main().querySelector("[data-create-retry]")!);await waitForApp(()=>posts.length===2 && !composer());
+    expect(posts[1]).toEqual(posts[0]);expect(composer()).toBeNull();
   });
   it("keeps acknowledged creation GET-only after read failure",async()=>{
     posts=[];failRead=true;await mount();await draft();await click(button("Add event"));await waitForApp(()=>!!main().querySelector("[data-create-read-retry]"));
-    expect(posts).toHaveLength(1);failRead=false;await click(main().querySelector("[data-create-read-retry]")!);await waitForApp(()=>!!button("Add event") || !!main().querySelector("[data-create-retry], [data-create-read-retry], [data-create-storage-retry], [data-planning-write-recover]"));expect(posts).toHaveLength(1);
+    expect(posts).toHaveLength(1);failRead=false;await click(main().querySelector("[data-create-read-retry]")!);await waitForApp(()=>!composer());expect(posts).toHaveLength(1);
   });
   it("requires confirmation and recovers a lost cancel response without replaying DELETE",async()=>{
     posts=[];deletes=[];await mount();await draft();await click(button("Add event"));await waitForApp(()=>!!main().querySelector('[aria-label="Cancel event"]'));
@@ -111,7 +117,7 @@ describe("calendar creation and cancellation through App", () => {
   });
   it("blocks a same-tick new event behind cancellation without persisting another create intent",async()=>{
     posts=[];deletes=[];await mount();await draft();await click(button("Add event"));await waitForApp(()=>!!main().querySelector('[aria-label="Cancel event"]'));
-    await draft();const trigger=main().querySelector<HTMLElement>('[aria-label="Cancel event"]')!;const add=button("Add event");expect(add.disabled).toBe(false);
+    await openComposer();await draft();const trigger=main().querySelector<HTMLElement>('[aria-label="Cancel event"]')!;const add=button("Add event");expect(add.disabled).toBe(false);
     await act(async()=>{trigger.click();add.click();});expect(posts).toHaveLength(1);expect(deletes).toHaveLength(0);
     expect(window.sessionStorage.getItem("memory-garden:calendar-create:v1:contributor-route-auditor")).toBeNull();expect(window.sessionStorage.getItem(cancelJournal)).toBeNull();
     await click(button("Keep event"));expect((main().querySelector('input[aria-label="Event title"]') as HTMLInputElement).value).toBe("A stable event");expect(button("Add event").disabled).toBe(false);
@@ -124,11 +130,11 @@ describe("calendar creation and cancellation through App", () => {
   it("restores the exact pending intent after remount without an automatic POST",async()=>{
     posts=[];failPost=true;await mount();await draft();await click(button("Add event"));await waitForApp(()=>!!main().querySelector("[data-create-retry]"));
     await remount();expect(posts).toHaveLength(1);expect((main().querySelector('input[aria-label="Event title"]') as HTMLInputElement).disabled).toBe(true);
-    failPost=false;await click(main().querySelector("[data-create-retry]")!);await waitForApp(()=>!!button("Add event"));expect(posts[1]).toEqual(posts[0]);
+    failPost=false;await click(main().querySelector("[data-create-retry]")!);await waitForApp(()=>!composer());expect(posts[1]).toEqual(posts[0]);
   });
   it("restores acknowledgment across remount and retries only GET after a list failure",async()=>{
     posts=[];await mount();await draft();failList=true;await click(button("Add event"));await waitForApp(()=>!!main().querySelector("[data-create-read-retry]"));
-    failList=false;await remount();expect(posts).toHaveLength(1);expect(main().querySelector("[data-create-retry]")).toBeNull();await click(main().querySelector("[data-create-read-retry]")!);await waitForApp(()=>!!button("Add event"));expect(posts).toHaveLength(1);
+    failList=false;await remount();expect(posts).toHaveLength(1);expect(main().querySelector("[data-create-retry]")).toBeNull();await click(main().querySelector("[data-create-read-retry]")!);await waitForApp(()=>!composer());expect(posts).toHaveLength(1);
   });
   it("blocks POST when the recovery journal is malformed",async()=>{
     posts=[];await mount({"memory-garden:calendar-create:v1:contributor-route-auditor":"broken"});
@@ -187,6 +193,8 @@ describe("calendar creation and cancellation through App", () => {
     await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     expect(window.sessionStorage.getItem(draftKey)).toBeNull();
     await act(async()=>expect(writeWorkspaceHistory("push",calendarUrl)).toBe("committed"));
+    await waitForApp(()=>!!composerTrigger());
+    await openComposer();
     await waitForApp(()=>!!field("Event title") && !field("Event title").disabled);
     expect(field("Event title").value).toBe("");expect(unload()).toBe(false);
   });

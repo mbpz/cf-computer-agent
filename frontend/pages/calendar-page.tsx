@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import { CalendarRangeFilter } from "../components/calendar-range-filter";
 import type { CalendarRange } from "../lib/calendar-query";
 import type { FrontendPageMetadata, SupportedPageSize } from "../lib/numbered-page";
@@ -9,9 +10,11 @@ import { frontendText } from "../lib/i18n";
 import type { CalendarEvent } from "../lib/calendar-data";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
 import { DataTable } from "../components/data-table";
 import { PageState } from "../components/ui/page-state";
+import { loadCalendarIntent } from "../lib/calendar-create-intent";
+import { loadCalendarDraft } from "../lib/calendar-draft";
 
 export type CalendarPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; items: readonly CalendarEvent[]; pagination?: FrontendPageMetadata };
 
@@ -20,14 +23,27 @@ export function CalendarPage({ locale, state, pending = false, actionError, onRe
     pagination: state.kind === "ready" ? state.pagination : undefined, memberId: createMemberId, range,
     blocked: pending || !!createPending, onCancel });
   const controlsPending = pending || !!createPending || confirmation.open;
+  // See GoalsPage: closed on a plain visit, auto-opened only for an unresolved stored record or
+  // an unreadable composer record, so the recovery controls are never hidden behind the trigger.
+  const [createOpen, setCreateOpen] = useState(() => !createMemberId || loadCalendarIntent(createMemberId).kind !== "empty" || loadCalendarDraft(createMemberId).kind === "blocked");
+  const [createComposerLocked, setCreateComposerLocked] = useState(false);
+  const createTitleId = useId();
+  const createDescriptionId = useId();
+  const createBlocked = pending || !!createPending || createComposerLocked;
   const loadMore = () => { if (controlsPending || confirmation.isOpen()) return; onLoadMore?.(); };
   const changePage = (page: number) => { if (controlsPending || confirmation.isOpen()) return; onPageChange?.(page); };
   const changePageSize = (pageSize: SupportedPageSize) => { if (controlsPending || confirmation.isOpen()) return; onPageSizeChange?.(pageSize); };
   if (state.kind === "error") return <PageState kind="error" title={state.message}><Button onClick={onRetry}>{frontendText(locale, "CALENDAR_RETRY")}</Button></PageState>;
-  return <><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={confirmation.open ? true : undefined}>
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><CalendarBlank size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{frontendText(locale, "CALENDAR_TITLE")}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "CALENDAR_DESCRIPTION")}</p></div><Badge variant="outline">{frontendText(locale, "CALENDAR_PRIVATE_BADGE")}</Badge></div>
+  return <>{confirmation.dialog}<Dialog open={createOpen} onOpenChange={next => { if (!next) setCreateOpen(false); }}>
+    <DialogContent role="dialog" data-calendar-create-dialog aria-labelledby={createTitleId} aria-describedby={createDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
+      <DialogTitle id={createTitleId}>{frontendText(locale, "CALENDAR_CREATE_TITLE")}</DialogTitle>
+      <p id={createDescriptionId} className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "CALENDAR_DESCRIPTION")}</p>
+      <div className="mt-4"><CalendarCreateForm locale={locale} createMemberId={createMemberId} pending={(createPending ?? pending) || confirmation.open} isSubmitBlocked={confirmation.isOpen} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={locked => { setCreateComposerLocked(locked); onCreateLock?.(locked); }} onCreated={() => setCreateOpen(false)} /></div>
+      <div className="mt-6 flex flex-wrap justify-end gap-2"><Button type="button" data-calendar-create-cancel variant="outline" onClick={() => setCreateOpen(false)}>{frontendText(locale, "COMMON_CANCEL")}</Button></div>
+    </DialogContent>
+  </Dialog><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={confirmation.open ? true : undefined}>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><CalendarBlank size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{frontendText(locale, "CALENDAR_TITLE")}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "CALENDAR_DESCRIPTION")}</p></div><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{frontendText(locale, "CALENDAR_PRIVATE_BADGE")}</Badge><Button type="button" data-calendar-create-open aria-haspopup="dialog" aria-expanded={createOpen} disabled={createBlocked} onClick={() => setCreateOpen(true)}><Plus size={16} weight="bold" className="mr-1" aria-hidden="true" />{frontendText(locale, "CALENDAR_CREATE_TITLE")}</Button></div></div>
     {range && onRangeChange && <CalendarRangeFilter key={`${range.from}:${range.to}`} locale={locale} range={range} pending={controlsPending} onChange={next => { if (!controlsPending && !confirmation.isOpen()) onRangeChange(next); }} />}
-    <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus size={18} />{frontendText(locale, "CALENDAR_CREATE_TITLE")}</CardTitle></CardHeader><CardContent><CalendarCreateForm locale={locale} createMemberId={createMemberId} pending={(createPending ?? pending) || confirmation.open} isSubmitBlocked={confirmation.isOpen} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={onCreateLock} /></CardContent></Card>
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "CALENDAR_LOADING")} /> : <DataTable
       locale={locale}
@@ -51,5 +67,5 @@ export function CalendarPage({ locale, state, pending = false, actionError, onRe
         { key: "actions", header: frontendText(locale, "CALENDAR_COLUMN_ACTIONS"), width: "120px", align: "right", cell: (event) => event.status === "scheduled" ? <Button type="button" variant="ghost" size="sm" onClick={() => confirmation.request(event)} disabled={controlsPending} aria-label={frontendText(locale, "CALENDAR_CANCEL")}><X size={16} /></Button> : null },
       ]}
     />}
-  </section>{confirmation.dialog}</>;
+  </section></>;
 }

@@ -89,6 +89,8 @@ test('VM permission cannot be inferred from task permission or direct route acce
 });
 
 async function fill(window,input,value){await act(async()=>{Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new window.Event('input',{bubbles:true}));input.dispatchEvent(new window.Event('change',{bubbles:true}));});}
+/** The create form only mounts inside its dialog, so every draft step opens it first. */
+async function openCreate(host){const open=host.querySelector('[data-environment-create]');if(open)return open;await act(async()=>{host.querySelector('[data-environment-create-open]').click();});return host.querySelector('[data-environment-create]');}
 test('actual App creates, renames and confirms deletion using versioned writes',async t=>{
  let rows=[],version=1;const writes=[];
  const {host,window}=await renderApp(t,async(path,init)=>{
@@ -99,11 +101,11 @@ test('actual App creates, renames and confirms deletion using versioned writes',
   if(init.method==='DELETE'){rows=[];return Response.json({tombstone:{environmentId:'env-a',version:++version,deletedAt:env.updatedAt}});}
   return Response.json({environment:rows[0]},{status:init.method==='POST'?201:200});
  });
- const form=host.querySelector('[data-environment-create]');await fill(window,form.querySelector('[name=name]'),'My Linux');
+ const form=await openCreate(host);await fill(window,form.querySelector('[name=name]'),'My Linux');
  await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
  assert.equal(writes.length,1);assert.ok(host.textContent.includes('My Linux'));
  await act(async()=>host.querySelector('[data-environment-rename]').click());
- const edit=host.querySelector('[role=dialog] form');assert.ok(edit);await fill(window,edit.querySelector('input'),'Renamed Linux');
+ const edit=host.querySelector('[aria-labelledby=environment-rename-title] form');assert.ok(edit);await fill(window,edit.querySelector('input'),'Renamed Linux');
  await act(async()=>edit.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
  assert.ok(host.textContent.includes('Renamed Linux'));assert.equal(writes[1].body.version,1);
  await act(async()=>host.querySelector('[data-environment-delete]').click());assert.equal(writes.length,2);
@@ -142,7 +144,7 @@ test('actual App blocks leaving an unknown operation and explicitly retries the 
   bodies.push(init.body);const body=JSON.parse(init.body);rows=[{...env,name:body.name}];
   if(lost){lost=false;throw Error('lost response');}return Response.json({environment:rows[0]});
  });
- const form=host.querySelector('[data-environment-create]');await fill(window,form.querySelector('[name=name]'),'Keep intent');
+ const form=await openCreate(host);await fill(window,form.querySelector('[name=name]'),'Keep intent');
  await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
  assert.ok(host.querySelector('[data-environment-retry]'));assert.equal(bodies.length,1);
  await act(async()=>navigate('push','/not-found'));
@@ -219,7 +221,7 @@ test('actual App exposes frozen operation ID and explicit read-only result looku
   if(path.startsWith('/api/environments/operations/')){queries++;return Response.json({operationId:op,kind:'environment.create',environmentId:env.id,result:{environment:env}});}
   return Response.json(page());
  });
- const form=host.querySelector('[data-environment-create]');await fill(window,form.querySelector('[name=name]'),'Linux');
+ const form=await openCreate(host);await fill(window,form.querySelector('[name=name]'),'Linux');
  await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
  assert.equal(host.querySelector('[data-environment-operation-id]')?.textContent,op);assert.equal(queries,0);
  await act(async()=>host.querySelector('[data-environment-lookup]').click());
@@ -361,16 +363,17 @@ test('late old-account response cannot clear the restored operation',async()=>{
 
 test('actual App remount restores operation ID without resend and exposes blocked recovery controls',async t=>{
  const calls=[];const app=await renderApp(t,async(path,init)=>{calls.push(init.method);if(init.method==='GET')return Response.json(page());throw Error('lost');});
- const form=app.host.querySelector('[data-environment-create]');await fill(app.window,form.querySelector('[name=name]'),'Refresh UI');
+ const form=await openCreate(app.host);await fill(app.window,form.querySelector('[name=name]'),'Refresh UI');
  await act(async()=>form.dispatchEvent(new app.window.Event('submit',{bubbles:true,cancelable:true})));
  const id=app.host.querySelector('[data-environment-operation-id]').textContent;
  await app.remount();assert.equal(app.host.querySelector('[data-environment-operation-id]').textContent,id);assert.equal(calls.filter(m=>m==='POST').length,1);
  const key=app.window.sessionStorage.key(0);assert.ok(key.startsWith('memory-garden:environment-operation:'));app.window.sessionStorage.setItem(key,'bad');
  await app.remount();assert.equal(app.host.querySelector('[data-environment-operation-id]'),null);
- assert.equal(app.host.querySelector('[data-environment-create] [name=name]').disabled,true);
+ assert.equal(app.host.querySelector('[data-environment-create-open]').disabled,true);
  const recheck=app.host.querySelector('[data-environment-recheck-recovery]');assert.ok(recheck);
  app.window.sessionStorage.removeItem(key);await act(async()=>recheck.click());
- assert.equal(app.host.querySelector('[data-environment-create] [name=name]').disabled,false);assert.equal(calls.filter(m=>m==='POST').length,1);
+ assert.equal(app.host.querySelector('[data-environment-create-open]').disabled,false);
+ const reopened=await openCreate(app.host);assert.equal(reopened.querySelector('[name=name]').disabled,false);assert.equal(calls.filter(m=>m==='POST').length,1);
 });
 
 test('verified lookup retains its pending ID on clear failure and a second explicit lookup can finish',async()=>{
@@ -407,7 +410,7 @@ for(const [label,mutate] of [
 
 test('environment create draft requires explicit discard and unload warns without sending writes',async t=>{
  let writes=0;const {host,window}=await renderApp(t,async(path,init)=>{if(init.method!=='GET')writes++;return Response.json(page());});
- await fill(window,host.querySelector('[data-environment-create] [name=name]'),'Unsent environment');
+ await fill(window,(await openCreate(host)).querySelector('[name=name]'),'Unsent environment');
  const unload=new window.Event('beforeunload',{cancelable:true});window.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
  await act(async()=>{assert.equal(navigate('push','/not-found'),'deferred');});
  assert.equal(window.location.pathname,'/environments');assert.ok(host.querySelector('[role=alertdialog]'));
@@ -442,7 +445,7 @@ test('resolved unknown create clears its submitted draft and permits clean navig
   if(path.includes('/operations/'))return Response.json({operationId:id,kind:'environment.create',environmentId:env.id,result:{environment:{...env,name:'Accepted'}}});
   if(init.method==='GET')return Response.json(page());writes++;id=JSON.parse(init.body).operationId;throw Error('lost');
  });
- const form=host.querySelector('[data-environment-create]');await fill(window,form.querySelector('[name=name]'),'Accepted');await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ const form=await openCreate(host);await fill(window,form.querySelector('[name=name]'),'Accepted');await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
  await act(async()=>host.querySelector('[data-environment-lookup]').click());assert.equal(form.querySelector('[name=name]').value,'');
  await act(async()=>{assert.equal(navigate('push','/not-found'),'committed');});assert.equal(writes,1);
 });
@@ -451,9 +454,9 @@ test('a late create list refresh cannot erase a newer local draft',async t=>{
   if(init.method==='GET'){if(created)return new Promise(resolve=>{refresh=resolve;});return Response.json(page());}
   created=true;return Response.json({environment:{...env,name:'First'}});
  });
- const form=host.querySelector('[data-environment-create]');await fill(window,form.querySelector('[name=name]'),'First');await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ const form=await openCreate(host);await fill(window,form.querySelector('[name=name]'),'First');await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
  assert.ok(refresh);await fill(window,form.querySelector('[name=name]'),'New local draft');await act(async()=>refresh(Response.json(page())));
- assert.equal(form.querySelector('[name=name]').value,'New local draft');
+ const reopened=await openCreate(host);assert.equal(reopened.querySelector('[name=name]').value,'New local draft');
 });
 
 test('rename invalid input keeps editor and dirty discard cannot submit a hidden write',async t=>{
@@ -483,18 +486,20 @@ test('rename retains its original version after a list refresh and hands unknown
 });
 
 const environmentDraftKey=`memory-garden:environment-draft:v1:${encodeURIComponent('https://workbench.example')}:${encodeURIComponent('member-a')}`;
-async function choose(window,select,value){await act(async()=>{select.value=value;select.dispatchEvent(new window.Event('change',{bubbles:true}));});}
 test('unsent environment create survives remount without a write',async t=>{
  let writes=0;const app=await renderApp(t,async(path,init)=>{if(init.method!=='GET')writes++;return Response.json(page());});
  const form=()=>app.host.querySelector('[data-environment-create]');
+ await openCreate(app.host);
  await fill(app.window,form().querySelector('[name=name]'),'Keep this environment');
- await choose(app.window,form().querySelector('[name=type]'),'temporary');
+ await act(async()=>form().querySelector('[aria-haspopup=listbox]').click());
+ await act(async()=>[...form().querySelectorAll('[role=option]')].find(node=>node.textContent==='Temporary task environment').click());
  await fill(app.window,form().querySelector('[name=taskId]'),'task-1');
  const unload=new app.window.Event('beforeunload',{cancelable:true});app.window.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
  assert.equal(writes,0);assert.ok(app.window.sessionStorage.getItem(environmentDraftKey).includes('Keep this environment'));
  await app.remount();
+ await openCreate(app.host);
  assert.equal(form().querySelector('[name=name]').value,'Keep this environment');
- assert.equal(form().querySelector('[name=type]').value,'temporary');
+ assert.equal(form().querySelector('[aria-haspopup=listbox]').textContent,'Temporary task environment');
  assert.equal(form().querySelector('[name=taskId]').value,'task-1');
  assert.equal(writes,0);
  const again=new app.window.Event('beforeunload',{cancelable:true});app.window.dispatchEvent(again);assert.equal(again.defaultPrevented,true);
@@ -503,7 +508,7 @@ test('unsent environment stays on screen when the tab cannot record it',async t=
  let writes=0;const {host,window}=await renderApp(t,async(path,init)=>{if(init.method!=='GET')writes++;return Response.json(page());});
  const storage=window.sessionStorage,original=storage.setItem;
  Object.defineProperty(storage,'setItem',{configurable:true,writable:true,value(key,value){if(String(key).includes('environment-draft'))throw Error('full');return original.call(storage,key,value);}});
- await fill(window,host.querySelector('[data-environment-create] [name=name]'),'Unrecorded environment');
+ await fill(window,(await openCreate(host)).querySelector('[name=name]'),'Unrecorded environment');
  assert.equal(host.querySelector('[data-environment-create] [name=name]').value,'Unrecorded environment');
  assert.ok(host.textContent.includes('could not record'));assert.equal(writes,0);
 });
@@ -522,13 +527,13 @@ test('a blocked environment draft allows leave and records only after discard',a
 });
 test('confirmed leave drops the stored environment draft',async t=>{
  const {host,window}=await renderApp(t,async()=>Response.json(page()));
- await fill(window,host.querySelector('[data-environment-create] [name=name]'),'Keep this environment');
+ await fill(window,(await openCreate(host)).querySelector('[name=name]'),'Keep this environment');
  assert.ok(window.sessionStorage.getItem(environmentDraftKey).includes('Keep this environment'));
  await act(async()=>{assert.equal(navigate('push','/not-found'),'deferred');});
  await act(async()=>host.querySelector('[data-confirm-action]').click());
  assert.equal(window.sessionStorage.getItem(environmentDraftKey),null);
  await act(async()=>{assert.equal(navigate('push','/environments'),'committed');});
- assert.equal(host.querySelector('[data-environment-create] [name=name]').value,'');
+ const reopened=await openCreate(host);assert.equal(reopened.querySelector('[name=name]').value,'');
 });
 test('unsent environment rename survives remount without a write',async t=>{
  let writes=0;const app=await renderApp(t,async(path,init)=>{if(init.method!=='GET')writes++;return Response.json(page());});

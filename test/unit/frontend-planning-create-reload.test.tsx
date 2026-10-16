@@ -11,8 +11,12 @@ for (const module of ["goals", "projects"] as const) describe(`${module} creatio
   const envelope = (acknowledged = false) => JSON.stringify({ version: 1, memberId: "alice", module: module.toUpperCase(), intent: original, acknowledged });
   let writes: unknown[] = [], listDenied = false;
   const main = () => app!.container.querySelector("main")!;
-  const title = () => main().querySelector("input") as HTMLInputElement;
+  const titleSelector = `input[aria-label="${module === "goals" ? "Goal title" : "Project title"}"]`;
+  const title = () => main().querySelector<HTMLInputElement>(titleSelector)!;
   const button = (selector: string) => main().querySelector(selector) as HTMLButtonElement;
+  const composer = () => main().querySelector(`[data-${module}-create-dialog]`);
+  /** The composer only mounts while its dialog is open, so every create step opens it first. */
+  async function openComposer() { if (main().querySelector(titleSelector)) return; await act(async () => main().querySelector<HTMLButtonElement>(`[data-${module}-create-open]`)!.click()); }
   const entity = (body: object) => ({ ...body, status: "active", progress: 0, targetAt: null, createdAt: "2026-09-27T00:00:00.000Z", updatedAt: "2026-09-27T00:00:00.000Z" });
   async function mount(raw: string | null, memberId = "alice") {
     app = await mountApp({ url: `https://app.test/${module}`, configureBrowser(browser) { if (raw !== null) browser.sessionStorage.setItem(key, raw); }, fetch: async (input, init) => {
@@ -28,6 +32,8 @@ for (const module of ["goals", "projects"] as const) describe(`${module} creatio
       if (path.endsWith("/summary")) return Response.json({ goalCount: 0, taskCount: 0, completedTaskCount: 0, goals: [] });
       return Response.json({ items: [entity({ id: "existing", clientKey: "existing", title: "Existing", description: null })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
     } });
+    await waitForApp(() => !!main().querySelector(`[data-${module}-create-open]`));
+    await openComposer();
     await waitForApp(() => !!title());
   }
   afterEach(async () => { await app?.unmount(); app = undefined; writes = []; listDenied = false; });
@@ -36,12 +42,12 @@ for (const module of ["goals", "projects"] as const) describe(`${module} creatio
     const raw = app!.browser.sessionStorage.getItem(key); await app!.unmount(); app = undefined;
     await mount(raw); expect(writes).toEqual([]); expect(button("[data-create-retry]")).toBeTruthy();
     await act(async () => button("[data-create-retry]").click());
-    await waitForApp(() => title().value === ""); expect(writes).toEqual([original]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    await waitForApp(() => !composer()); expect(writes).toEqual([original]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
   });
   it("restores an acknowledged intent only as readback and clears it without any POST", async () => {
     await mount(envelope(true)); expect(button("[data-create-retry]")).toBeNull();
     await act(async () => button("[data-create-read-retry]").click());
-    await waitForApp(() => title().value === ""); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    await waitForApp(() => !composer()); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
   });
   it("does not render, replay or clear another member's stored intent", async () => {
     await mount(envelope(), "bob"); expect(title().value).toBe(""); expect(main().textContent).not.toContain(original.title); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBe(envelope());
@@ -56,6 +62,6 @@ for (const module of ["goals", "projects"] as const) describe(`${module} creatio
     await act(async () => button("[data-create-read-retry]").click()); await waitForApp(() => !!button("[data-create-storage-retry]"));
     expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBe(envelope(true));
     remove.mockRestore(); await act(async () => button("[data-create-storage-retry]").click());
-    expect(button("[data-create-retry]")).toBeNull(); await act(async () => button("[data-create-read-retry]").click()); await waitForApp(() => title().value === ""); expect(writes).toEqual([]);
+    expect(button("[data-create-retry]")).toBeNull(); await act(async () => button("[data-create-read-retry]").click()); await waitForApp(() => !composer()); expect(writes).toEqual([]);
   });
 });

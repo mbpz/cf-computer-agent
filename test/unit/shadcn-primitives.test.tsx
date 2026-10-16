@@ -24,7 +24,11 @@ describe("owned shadcn primitives", () => {
     expect(html).toContain('for="title"');
     expect(html).toContain('id="title"');
     expect(html).toContain("disabled");
-    expect(html).toContain("bg-secondary");
+    // The Button is beUI's surface now: secondary renders the card/border pair, and
+    // the adapter adds the app's focus ring beUI's button does not ship.
+    expect(html).toContain("bg-card");
+    expect(html).toContain("border-border");
+    expect(html).toContain("focus-visible:ring-2");
   });
 
   it("supports composed cards, status badges, alerts, and loading semantics", () => {

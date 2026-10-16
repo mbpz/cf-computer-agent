@@ -66,7 +66,9 @@ describe("calendar cancellation confirmation", () => {
     await act(async () => { cancel.click(); apply.click(); }); expect(change).not.toHaveBeenCalled(); await click(action("Keep event")); await click(apply); expect(change).toHaveBeenCalledTimes(1);
   });
   it("retains a draft and blocks same-tick creation before storing an intent", async () => {
-    const create = vi.fn(); await mount({ onCreate: create }); await input("Event title", "Unsubmitted event"); await input("Starts", "2026-10-01T10:00"); await input("Ends", "2026-10-01T11:00");
+    const create = vi.fn(); await mount({ onCreate: create });
+    await click(container.querySelector<HTMLButtonElement>("[data-calendar-create-open]")!);
+    await input("Event title", "Unsubmitted event"); await input("Starts", "2026-10-01T10:00"); await input("Ends", "2026-10-01T11:00");
     const expectedDraft = { kind: "ready", draft: { title: "Unsubmitted event", startsAt: "2026-10-01T10:00", endsAt: "2026-10-01T11:00" } };
     expect(loadCalendarDraft("alice")).toEqual(expectedDraft); expect(loadCalendarIntent("alice")).toEqual({ kind: "empty" });
     const cancel = trigger(); const add = action("Add event"); expect(add.disabled).toBe(false);

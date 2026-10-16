@@ -1,0 +1,11 @@
+/* The landing's display face. It lives outside the JS/CSS bundle graph on purpose:
+   carrying the @font-face inside frontend/app's stylesheet makes bundlers resolve a
+   binary url() (scripts/browser-vm-*.test.mjs bundle frontend/app with plain
+   esbuild), so the rule is linked once from index.html against the stable path. */
+@font-face {
+  font-family: "Geist Landing";
+  src: url("/fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}

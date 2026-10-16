@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AdminRolesPage } from "../../frontend/pages/admin/roles-page";
+import { AdminRoleDetailPage } from "../../frontend/pages/admin/role-detail-page";
 import { normalizeAdminRole, type AdminRole } from "../../frontend/lib/admin-roles-data";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -17,10 +18,28 @@ const role: AdminRole = {
   assignedMemberIds: ["member-1"],
 };
 
-describe("admin role permission matrix", () => {
-  it("renders role selection, grouped permissions and a hexadecimal mask", () => {
+const locale = () => createLocaleRuntime({ navigatorLanguage: "en" });
+
+describe("admin role list", () => {
+  it("renders the role list as a table with a link to each role's detail page", () => {
+    const html = renderToStaticMarkup(<AdminRolesPage locale={locale()} state={{ kind: "ready", roles: [role] }} />);
+    expect(html).toContain("Roles &amp; permissions");
+    expect(html).toContain("Administrator");
+    expect(html).toContain('href="/admin/roles/role-admin"');
+    expect(html).toContain("0x7ffff");
+    expect(html).not.toContain("undefined");
+  });
+
+  it("surfaces the permission detail page from the list action", () => {
+    const html = renderToStaticMarkup(<AdminRolesPage locale={locale()} state={{ kind: "ready", roles: [role] }} />);
+    expect(html).toContain("Create role");
+  });
+});
+
+describe("admin role permission detail", () => {
+  it("renders the selected role, grouped permissions and a hexadecimal mask", () => {
     const html = renderToStaticMarkup(
-      <AdminRolesPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} state={{ kind: "ready", roles: [role] }} onSelect={vi.fn()} onSave={vi.fn()} />,
+      <AdminRoleDetailPage locale={locale()} state={{ kind: "ready", roles: [role] }} roleId="role-admin" onSave={vi.fn()} />,
     );
     expect(html).toContain("Roles &amp; permissions");
     expect(html).toContain("Knowledge");
@@ -40,11 +59,16 @@ describe("admin role permission matrix", () => {
   it("renders member assignment controls for a custom role", () => {
     const customRole: AdminRole = { ...role, id: "role-editor", key: "editor", name: "Editor", isSystem: false, assignedMemberIds: ["member-1"] };
     const html = renderToStaticMarkup(
-      <AdminRolesPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} state={{ kind: "ready", roles: [customRole] }} onAssignMember={vi.fn()} onUnassignMember={vi.fn()} />,
+      <AdminRoleDetailPage locale={locale()} state={{ kind: "ready", roles: [customRole] }} roleId="role-editor" onAssignMember={vi.fn()} onUnassignMember={vi.fn()} />,
     );
     expect(html).toContain("Assigned members");
     expect(html).toContain("member-1");
     expect(html).toContain("Assign member");
     expect(html).not.toContain("undefined");
+  });
+
+  it("falls back to an unavailable state for an unknown role id", () => {
+    const html = renderToStaticMarkup(<AdminRoleDetailPage locale={locale()} state={{ kind: "ready", roles: [role] }} roleId="missing" />);
+    expect(html).toContain("Role unavailable");
   });
 });

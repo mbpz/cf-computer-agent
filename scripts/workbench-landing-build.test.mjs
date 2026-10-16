@@ -20,6 +20,9 @@ test('vendors the landing display font within budget and keeps its licence', asy
   assert.equal(font.subarray(0, 4).toString('latin1'), 'wOF2', 'FONT_FORMAT: not a woff2 file');
   const licence = await readFile(resolve(root, 'frontend/public/fonts/OFL.txt'), 'utf8');
   assert.match(licence, /Copyright \(c\) 2023 Vercel/u, 'FONT_LICENCE: expected the SIL OFL notice');
+  // The face must stay outside the bundled stylesheet graph, see landing-font.css.
+  const sheet = await readFile(resolve(root, 'frontend/public/fonts/landing-font.css'), 'utf8');
+  assert.match(sheet, /@font-face[\s\S]*Geist-Variable\.woff2/u, 'FONT_SHEET: expected the linked @font-face');
 });
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const isRuntime = id => /(^|\/)workbench-scene-runtime\.[^/]+$/.test(id.replaceAll('\\', '/').split('?')[0]);

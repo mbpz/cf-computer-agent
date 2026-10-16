@@ -29,14 +29,16 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 110 项，但 A01 
 
 下表“条件”与组内共同守卫叠加。状态提示、role、option、props 转发和监听器均保留；不是每一行都对应一次用户操作。未挂载项的条件均是假设调用者接线之后的源码条件，不能误读为当前正式页面已可用。
 
-## `frontend/app.tsx`（2）
+## `frontend/app.tsx`（4）
 
-入口为 [source:frontend/main.tsx] 的 App。App 先处理 sessionError、匿名首页/登录、会话加载，再挂载 AccountNetworkBoundary、AppShell、HistoryNavigationNotice。属于全局外层，不在以业务 root symbol 为起点的图中。SettingsPage 行是 props/spread 边界，不是新的保存动作。
+入口为 [source:frontend/main.tsx] 的 App。App 先处理 sessionError、匿名首页/登录、会话加载，再挂载 AccountNetworkBoundary、AppShell、HistoryNavigationNotice。属于全局外层，不在以业务 root symbol 为起点的图中。SettingsPage 行是 props/spread 边界，不是新的保存动作。新增的两行是 AdminRoleCreatePage/AdminRoleDetailPage 的 JSX 边界：两个包装器在 renderPage 的 admin-role-new/admin-role-detail 分支渲染，但这两个 kind 未登记为能力 root，因此同样不进入任何路由图。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
 | `frontend/app.tsx:223:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
 | `frontend/app.tsx:250:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:429:10` | app-boundary | AdminRoleNewRoute 由 renderPage 的 admin-role-new 分支挂载 | 把 locale、onCreate/onCreated/onCancel、saving/writeBlocked/saveError、readRequired/onLoadRetry 与草稿恢复 props 传给 AdminRoleCreatePage；onCreated/onCancel 写 workspace history push /admin/roles。没有新增网络写入。 |
+| `frontend/app.tsx:438:10` | app-boundary | AdminRoleDetailRoute 由 renderPage 的 admin-role-detail 分支挂载 | 把 state、roleId、onBack 与 save/assign/unassign 回调传给 AdminRoleDetailPage；recordBlocked 时后三个写回调为 undefined，onBack 写 push /admin/roles。没有新增网络写入。 |
 
 ## `frontend/components/agents/citations.tsx`（1）
 
@@ -66,6 +68,17 @@ beUI 通知栈的落地副本，由 `frontend/lib/use-toast.tsx` 的 `ToastProvi
 | `frontend/components/motion/animated-toast-stack.tsx:480:17` | app-boundary | 通知带 action 且用户点击该按钮 | 调用调用方传入的 `action.onClick(toast)`；组件自身不执行写入。 |
 | `frontend/components/motion/animated-toast-stack.tsx:494:15` | app-boundary | canDismiss 为真且用户点击关闭 | 调用 `onDismiss(toast.id)`；`aria-label` 由调用方以本地化文案传入（`COMMON_DISMISS`）。 |
 
+## `frontend/components/motion/center-morph-modal.tsx`（4）
+
+beUI center-morph 模态的落地副本，`frontend/` 第一方源码当前没有 import 或渲染点；与 tabs/card 同类，下列条件均为假设调用者接线之后，不是当前可见界面。面板用 clip-path 从中心展开，全程没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/center-morph-modal.tsx:242:5` | unmounted-ui | 若内容层挂载且 context.open 为真 | window keydown：Escape 且 dismissible 时 setOpen(false)；Tab 在面板首尾可聚焦元素间循环，没有可聚焦元素时聚焦面板。 |
+| `frontend/components/motion/center-morph-modal.tsx:259:15` | unmounted-ui | 若挂载且 context.open 为真 | 全屏 backdrop 按钮，tabIndex 为 -1，dismissible 为假时 disabled；点击 setOpen(false)，不发起请求。 |
+| `frontend/components/motion/center-morph-modal.tsx:289:19` | unmounted-ui | 若挂载且 context.open 为真 | role=dialog 面板，id 取 context.contentId，渲染 children；展开/收起只改 clip-path，不改业务状态。 |
+| `frontend/components/motion/center-morph-modal.tsx:331:23` | unmounted-ui | 若挂载、open 且 showCloseButton 为真 | 面板右上角关闭按钮，点击 setOpen(false)；文案由 closeButtonLabel 传入。 |
+
 ## `frontend/components/motion/loader.tsx`（0，2026-10-15 归属落地页）
 
 落地页 3D 加载态现在直接挂载该组件的 `dots` variant（`workbench-scene.tsx`），因此本文件的三个候选全部归属落地页，不再计入未归属项。历史分类见文末变更说明。
@@ -78,6 +91,14 @@ beUI 通知栈的落地副本，由 `frontend/lib/use-toast.tsx` 的 `ToastProvi
 | --- | --- | --- | --- |
 | `frontend/components/motion/not-found/shared.tsx:55:7` | app-boundary | 路由 fallback 渲染 404；homeHref 默认 `/` | motion.a 指向 homeHref；whileTap/whileHover 受 reduced-motion 与 hover 能力门控。 |
 | `frontend/components/motion/not-found/shared.tsx:65:9` | unmounted-ui | 仅当调用方传入 browseHref 时渲染 | 第二 CTA 当前没有调用点传 browseHref，因此不出现在工作台界面中。 |
+
+## `frontend/components/motion/switch.tsx`（1）
+
+beUI switch 的落地副本，`frontend/` 第一方源码当前没有 import 或渲染点，属无消费者原语；候选是无消费者的开关控件本身，不是已接线的设置项。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/switch.tsx:51:9` | unmounted-ui | 若调用者以受控 checked/onCheckedChange 渲染该 switch | role=switch 按钮：未 disabled 时点击调用 onCheckedChange(!checked)；pointerdown/up/leave 只切换按压态与 thumb 压缩。没有网络写入。 |
 
 ## `frontend/components/shell/context-rail.tsx`（6）
 
@@ -99,6 +120,14 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
 | `frontend/components/ui/card.tsx:13:85` | unmounted-ui | 若未来挂载 CardFooter 并传入 div props | 通用容器转发 props/children；不能因为 spread 就计为独立用户动作。 |
+
+## `frontend/components/ui/checkbox.tsx`（1）
+
+`frontend/` 里 `components/ui/checkbox.tsx` 只被未归属的 `frontend/pages/admin/role-detail-page.tsx` 消费；`components/motion/checkbox.tsx` 另有已归属消费者，两者不是同一实现，不重复计算。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/ui/checkbox.tsx:8:10` | app-boundary | 由 AdminRoleDetailPage 的权限矩阵逐 key 渲染，该页由 App 外层 renderPage 分派 | 原生 input type=checkbox，转发 ref 与其余 props（checked/onChange/disabled/aria-label）；自身不改写状态，也没有网络写入。 |
 
 ## `frontend/components/ui/tabs.tsx`（4）
 
@@ -289,6 +318,56 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 | --- | --- | --- | --- |
 | `frontend/lib/workspace-location.ts:63:3` | app-boundary | HistoryNavigationNotice 订阅，owner 发出 WORKSPACE_HISTORY_FAULT_EVENT | listener 更新 fault snapshot；取消订阅移除监听器。 |
 
+## `frontend/pages/admin/create-role-page.tsx`（16）
+
+角色新建页，由 `frontend/app.tsx` 的 `AdminRoleNewRoute`（renderPage 的 admin-role-new 分支）渲染，可由 `frontend/pages/admin/roles-page.tsx` 的创建按钮（写 `/admin/roles/new`）到达；但该 kind 未登记为 WORKSPACE_ROUTE_CAPABILITIES 能力，因此不落入任何以业务 root symbol 为起点的图，整页候选计入未归属。写入与读取都由共享控制器回调承担，页面自身不发请求。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/pages/admin/create-role-page.tsx:54:5` | app-boundary | 已挂载且存在 draftMemberId、未 blocked、未 suppressDraft | 监听 WORKSPACE_LOCATION_CHANGE_EVENT，离开时清除该成员的本地草稿记录。 |
+| `frontend/pages/admin/create-role-page.tsx:82:7` | app-boundary | 页面已挂载且可见 | 左上返回按钮；onCancel 存在时调用它，否则写 workspace history push /admin/roles。 |
+| `frontend/pages/admin/create-role-page.tsx:87:22` | app-boundary | draftBlocked 为真 | role=alert 提示草稿记录被阻止，并给出丢弃入口；不代表服务端状态。 |
+| `frontend/pages/admin/create-role-page.tsx:87:158` | app-boundary | draftBlocked 为真，用户点击丢弃 | discardDraft 丢弃被阻止的本地草稿并清空提示。 |
+| `frontend/pages/admin/create-role-page.tsx:88:21` | app-boundary | draftNotice 非空 | role=alert 显示草稿未记录的提示。 |
+| `frontend/pages/admin/create-role-page.tsx:90:7` | app-boundary | 未 locked | 更新本地 newKey 草稿字段。 |
+| `frontend/pages/admin/create-role-page.tsx:91:7` | app-boundary | 未 locked | 更新本地 newName 草稿字段。 |
+| `frontend/pages/admin/create-role-page.tsx:92:7` | app-boundary | 未 locked | 更新本地 newMask 草稿字段。 |
+| `frontend/pages/admin/create-role-page.tsx:93:250` | app-boundary | 按 permissionGroups 逐 key 渲染，未 locked | 勾选/取消该 key 位，只翻转本地 mask 字符串。 |
+| `frontend/pages/admin/create-role-page.tsx:94:21` | app-boundary | saveError 非空 | role=alert 显示保存错误。 |
+| `frontend/pages/admin/create-role-page.tsx:96:9` | app-boundary | 未 locked、onCreate 存在且 key/name 非空 | 提交创建，成功后 reset 草稿并调用 onCreated 返回列表；提交前快照输入，迟到成功不覆盖更新的输入。 |
+| `frontend/pages/admin/create-role-page.tsx:97:9` | app-boundary | 未 locked | 取消并返回列表，与返回按钮同一路径。 |
+| `frontend/pages/admin/create-role-page.tsx:100:23` | app-boundary | recordBlocked 为真 | role=alert 提示写入记录被阻止，并给出丢弃入口。 |
+| `frontend/pages/admin/create-role-page.tsx:100:178` | app-boundary | recordBlocked 为真，用户点击丢弃 | 调用 onDiscardRecord 丢弃被阻止的写入记录意图。 |
+| `frontend/pages/admin/create-role-page.tsx:101:64` | app-boundary | readRequired 或 saveError 为真 | role=status 提示需要先重新读取。 |
+| `frontend/pages/admin/create-role-page.tsx:101:136` | app-boundary | 同上，readPending 为假时点击 | 调用 onLoadRetry 重新读取。 |
+
+## `frontend/pages/admin/role-detail-page.tsx`（20）
+
+角色权限详情页，由 `frontend/app.tsx` 的 `AdminRoleDetailRoute`（renderPage 的 admin-role-detail 分支）渲染，可由角色列表行（写 `/admin/roles/<id>`）到达；该 kind 同样未登记为能力 root，因此整页候选计入未归属。保存、指派与取消指派都先进入确认框，再由共享控制器回调落盘，页面自身不发请求。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/pages/admin/role-detail-page.tsx:41:157` | app-boundary | 非 loading 且 state 非 ready，onLoadRetry 存在 | 错误/空态的重试按钮，调用 onLoadRetry 重新读取。 |
+| `frontend/pages/admin/role-detail-page.tsx:43:174` | app-boundary | 状态就绪但找不到该 roleId，onBack 存在 | 返回角色列表按钮。 |
+| `frontend/pages/admin/role-detail-page.tsx:44:10` | app-boundary | 状态就绪且找到该角色 | 把 state/role 与全部回调、只读与草稿 props 转交给 RolePermissionEditor；是 props 边界，不是新动作。 |
+| `frontend/pages/admin/role-detail-page.tsx:72:5` | app-boundary | 编辑器已挂载且存在 draftMemberId、未 blocked、未 suppressDraft | 监听 WORKSPACE_LOCATION_CHANGE_EVENT，离开时清除本地草稿记录。 |
+| `frontend/pages/admin/role-detail-page.tsx:139:22` | app-boundary | draftBlocked 为真 | role=alert 提示草稿记录被阻止，与丢弃入口同组。 |
+| `frontend/pages/admin/role-detail-page.tsx:139:158` | app-boundary | draftBlocked 为真，用户点击丢弃 | discardDraft 丢弃被阻止的本地草稿并清空提示。 |
+| `frontend/pages/admin/role-detail-page.tsx:140:21` | app-boundary | draftNotice 非空 | role=alert 显示草稿未记录的提示。 |
+| `frontend/pages/admin/role-detail-page.tsx:142:7` | app-boundary | 编辑器已挂载且可见 | 左上返回按钮；onBack 存在时调用它，否则写 push /admin/roles。 |
+| `frontend/pages/admin/role-detail-page.tsx:148:713` | app-boundary | 逐 key 渲染权限矩阵 | 勾选/取消该 key，但系统角色的非 workbench 位禁用；只翻转本地 mask。 |
+| `frontend/pages/admin/role-detail-page.tsx:149:179` | app-boundary | dirtyPermissions 为真 | role=status 提示权限有改动，成员指派暂不可用。 |
+| `frontend/pages/admin/role-detail-page.tsx:149:535` | app-boundary | 非系统角色、未 locked、无权限改动，onUnassignMember 存在 | 打开取消指派确认，不做即时写入。 |
+| `frontend/pages/admin/role-detail-page.tsx:149:1000` | app-boundary | role.isSystem 为假 | 更新本地待指派成员 ID 输入。 |
+| `frontend/pages/admin/role-detail-page.tsx:149:1236` | app-boundary | 非系统角色、未 locked、无权限改动、成员 ID 非空且未在已指派列表 | 打开指派确认，不做即时写入。 |
+| `frontend/pages/admin/role-detail-page.tsx:150:21` | app-boundary | saveError 非空 | role=alert 显示保存错误。 |
+| `frontend/pages/admin/role-detail-page.tsx:151:7` | app-boundary | 可保存（系统角色需仅新增 workbench 位）且未 locked | 打开保存确认，不做即时写入。 |
+| `frontend/pages/admin/role-detail-page.tsx:153:13` | app-boundary | validConfirmation 为真 | 确认框显示受影响成员与权限摘要；确认时先同步消费确认，再调用 onSave/onAssignMember/onUnassignMember。 |
+| `frontend/pages/admin/role-detail-page.tsx:157:99` | app-boundary | recordBlocked 为真 | role=alert 提示写入记录被阻止，并给出丢弃入口。 |
+| `frontend/pages/admin/role-detail-page.tsx:157:254` | app-boundary | recordBlocked 为真，用户点击丢弃 | 调用 onDiscardRecord 丢弃被阻止的写入记录意图。 |
+| `frontend/pages/admin/role-detail-page.tsx:157:447` | app-boundary | readRequired 或 saveError 为真 | role=status 提示需要先重新读取。 |
+| `frontend/pages/admin/role-detail-page.tsx:157:519` | app-boundary | 同上，readPending 为假时点击 | 调用 onLoadRetry 重新读取。 |
+
 ## `frontend/pages/workbench-landing/workbench-scene-runtime.ts`（5）
 
 [source:frontend/pages/workbench-landing/workbench-scene.tsx] 在可见且自动策略允许或显式手动请求时动态 import，再调用 createWorkbenchScene；预算到期、卸载和失败均取消。外层消费者链为 [source:frontend/pages/workbench-landing/public-workbench-page.tsx]。AST 静态 import 图遗漏不意味着未接线；WebGL canvas 是 aria-hidden 且 pointerEvents=none，不是四个可点击业务功能。
@@ -342,7 +421,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `b7a43f52e14f18d922da67519457ad02fcc573fe6a072c03b7d2cda24a9740af`
+- `frontend/app.tsx`: `ae06aceb76d271578e40cabc2f81010f2999fc186ff50163e146724903335565`
 - `frontend/components/agent/answer-panel.tsx`: `aacef68e378bab0307b095b1afa160fb2151de7ec7f06d53a7928b3f6c4aef70`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
@@ -359,7 +438,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/features/environments/account-vm-runtime.mjs`: `5cfd8db87089437abd4e0c2edcc667b973ee4e57f9a0806886e7dcf326ff3c8d`
 - `frontend/features/environments/authenticated-vm-runtime.ts`: `f81bc382e47709dd818a3209b5974c53f87487821bebea8ab3112c2f687c4bf2`
 - `frontend/features/environments/connector-session.mjs`: `4bea623fd47128568d112e9cfa26ecdc90f114a6572e536b08d49f4537cc5269`
-- `frontend/features/environments/environments-page.tsx`: `4a7ba1d3e92887673e7f54735b2dbf97a9322cf3693a58787ba35ca96a63299b`
+- `frontend/features/environments/environments-page.tsx`: `604f0851c7b9225e9101a5872305c9f7240720ecf498b5a380949aed3af23255`
 - `frontend/features/environments/files/asset-import-panel.tsx`: `b0f3b4bd5e1c31d8e19d3a38162029551812e7e53bb69268a6fc4ee6e612000f`
 - `frontend/features/environments/files/asset-import.ts`: `9f8dcf9fef963647f1bbc5af57e3f0716af2d39064b9212fcbeec3adb2dee6a8`
 - `frontend/features/environments/files/file-manager.mjs`: `2721e8e7abecd3dda95765eecb055f7bf3272942f1933807a07bba83a7df5ea6`
@@ -379,6 +458,11 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/public/sw.js`: `703801312e5cccba0cf162837b97878185fe03e18cdc2182c2fc4c5215923bad`
 - `tools/browser-vm/checkpoint-recovery-browser.mjs`: `06a498590a0c6e00c9cf5c91dff81de7a6aa3b01c4c9768aa718ebc0de3d9efe`
 - `tools/browser-vm/runtime-owner-browser.mjs`: `e5973069f711204d6ad79f011be6772e9243d403b6bb1ebd515ff361537c4c90`
+- `frontend/components/motion/center-morph-modal.tsx`: `d988640275b067c94db3d2196930398078efc2b6fb23ee850d9364f467227346`
+- `frontend/components/motion/switch.tsx`: `4f5c190f81d382942e91ecbaa8a21345e1fa8074f2f9557602ea34598600b633`
+- `frontend/components/ui/checkbox.tsx`: `fef87a6c4e79957e3ce8de94872beceafb0b6cc5f01b3f045b3e0bf62fa911f9`
+- `frontend/pages/admin/create-role-page.tsx`: `216c4ac2c58182d459ed66c031eca695efec7804892185e5f18516283a8f9fe3`
+- `frontend/pages/admin/role-detail-page.tsx`: `ae15378921ee6303e3e8d9b7386091e61bfdfb8f21836c34071e1cc847998a01`
 
 
 ### 2026-10-10 知识页读取生命周期后重新审查
@@ -426,3 +510,11 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - 阅读器版本对比面板由自绘逐行 `<span>` 改为 `CodeBlock`（`language="diff"`），diff 文本按 hunk 头 + `±/空格` 前缀生成统一 diff。
 - 未归属集合不变，仍为 **120**：新文件的候选经阅读器路由 root 追踪为已归属，无新增未归属坐标、无坐标移除、无既有指纹漂移。当前索引 288 文件 / 1218 候选 / 120 未归属。
 - 无新增未归属指纹需求；`pages/knowledge-reader-page.tsx` 与 `lib/i18n.ts` 的候选均归属各自路由，且不在本记录指纹范围内。
+
+### 2026-10-16 索引重生成后重新审查
+
+- 生成索引重跑后为 321 文件 / 1324 候选 / **162** 未归属（本文档此前 118 行）。逐项比对后新增 44 条，全部补行并补指纹；既有行的坐标与措辞不变，无坐标移除。
+- 新增 44 条按机制分两类：`app-boundary` 39 条（`frontend/app.tsx:429:10` 与 `frontend/app.tsx:438:10` 两个 renderPage 路由包装器边界，`frontend/pages/admin/create-role-page.tsx` 16 条，`frontend/pages/admin/role-detail-page.tsx` 20 条，`frontend/components/ui/checkbox.tsx:8:10` 1 条）；`unmounted-ui` 5 条（`frontend/components/motion/center-morph-modal.tsx` 4 条，`frontend/components/motion/switch.tsx` 1 条）。
+- 角色新建页与权限详情页是真实可达路由：`frontend/app-routes.ts` 把 `/admin/roles/new` 与 `/admin/roles/<id>` 分别判为 admin-role-new / admin-role-detail，`renderPage` 对应分支渲染两个包装器，`frontend/pages/admin/roles-page.tsx` 的创建按钮与行链接也写入这两个路径。它们未归属只是因为这两个 kind 未登记为 WORKSPACE_ROUTE_CAPABILITIES 能力/未进入以 root symbol 为起点的图，不是界面缺失；`components/ui/checkbox.tsx` 只被该详情页消费。两个 motion 副本（center-morph-modal、switch）在第一方源码中零 import，属无消费者原语。
+- 新增 `center-morph-modal.tsx`、`switch.tsx`、`ui/checkbox.tsx`、`pages/admin/create-role-page.tsx`、`pages/admin/role-detail-page.tsx` 五个来源指纹；`frontend/app.tsx` 指纹未变（字节与上次审查一致）。
+- 无产品运行行为修改、无 push/部署/迁移、未读取密钥；本段只做源码对账与文档契约补齐，不代替运行验收。

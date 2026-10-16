@@ -10,7 +10,6 @@ export function ConfirmAction({ open, title, description, cancelLabel, confirmLa
   const titleId = useId();
   const descriptionId = useId();
   return <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
-    {open && <div className="fixed inset-0 z-50 bg-black/50" aria-hidden="true" onClick={onCancel} />}
     <DialogContent role="alertdialog" aria-labelledby={titleId} aria-describedby={descriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
       <DialogTitle id={titleId}>{title}</DialogTitle>
       <p id={descriptionId} className="mt-3 break-words text-sm text-muted-foreground">{description}</p>

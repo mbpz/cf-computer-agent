@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useCreateDraft } from "../../lib/use-create-draft";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { DataTable } from "../../components/data-table";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
+import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
+import { Input } from "../../components/motion/input";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminMemberInvitation, AdminMemberInvitationStatus } from "../../lib/admin-member-invitations-data";
@@ -35,13 +35,20 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
   const [email, setEmail] = useState("");
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const addTitleId = useId();
+  const addDescriptionId = useId();
   // The action confirmation must be explicitly resolved, never discarded by navigation.
   useCreateDraft({}, {}, () => confirmationRef.current !== null, locale, () => false);
   useEffect(() => () => { confirmationRef.current = null; }, []);
   useEffect(() => {
     setCopied(false); setCopyFailed(false);
-    // A freshly issued code clears the input only when it matches what was typed.
-    if (issuedInvitation) setEmail((current) => current.trim() === issuedInvitation.email ? "" : current);
+    // A freshly issued code clears the input only when it matches what was typed
+    // and dismisses the add dialog: the one-time code now lives in the list view.
+    if (issuedInvitation) {
+      setEmail((current) => current.trim() === issuedInvitation.email ? "" : current);
+      setAddOpen(false);
+    }
   }, [issuedInvitation]);
   const validConfirmation = (() => {
     if (!confirmation) return false;
@@ -109,7 +116,7 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
   })();
   if (loading) return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
   if (error) return <PageState kind={forbidden ? "forbidden" : "error"} title={error} description={frontendText(locale, "COMMON_UNABLE_TO_LOAD")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
-  return <><section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={validConfirmation} aria-hidden={validConfirmation || undefined}>
+  return <><section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={validConfirmation || addOpen} aria-hidden={validConfirmation || addOpen || undefined}>
     <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_MEMBERS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_MEMBERS_DESCRIPTION")}</p></div><label className="text-sm text-muted-foreground">Status <select aria-label="Member status" className="ml-2 h-9 rounded-md border bg-background px-2" disabled={pending} value={status} onChange={(event) => onStatusFilterChange?.(event.target.value as "" | "active" | "disabled")}><option value="">All</option><option value="active">Active</option><option value="disabled">Disabled</option></select></label></div>
     {statusRecordBlocked && <div role="alert" data-member-status-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardStatusRecord}>{frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD")}</Button></div>}
     {(actionError || pageError || readRequired) && <div role="alert" className="space-y-2 text-sm text-destructive">{(actionError || pageError) && <p>{actionError || pageError}</p>}{readRequired && <p>{frontendText(locale, "ADMIN_MEMBER_READ_REQUIRED")}</p>}{onLoadRetry && <Button type="button" variant="outline" disabled={pending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</div>}
@@ -126,6 +133,7 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
       hasMore={!!pagination && !pageError && pagination.page < pagination.totalPages}
       onLoadMore={onLoadMore}
       fill
+      className="lg:min-h-0 lg:flex-1"
       rowHeight={64}
       columns={[
         { key: "email", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_EMAIL"), cellClassName: "whitespace-normal", cell: (member) => <p className="line-clamp-1 font-medium">{member.email || frontendText(locale, "ADMIN_EMAIL_UNAVAILABLE")}</p> },
@@ -135,8 +143,7 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
       ]}
     />
     <section data-admin-invitations aria-busy={(invitationWritePending || invitationsPending) || undefined} className="space-y-3 border-t pt-5">
-      <div><h2 className="text-lg font-semibold">{frontendText(locale, "ADMIN_INVITATION_SECTION_TITLE")}</h2><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_SECTION_DESCRIPTION")}</p></div>
-      <div className="flex flex-wrap items-end gap-3"><div className="min-w-64 flex-1 space-y-1"><Label htmlFor="invitation-email">{frontendText(locale, "ADMIN_INVITATION_EMAIL_LABEL")}</Label><Input id="invitation-email" type="email" autoComplete="off" value={email} disabled={pending || invitationWritePending || forbidden || !onIssueInvitation} placeholder={frontendText(locale, "ADMIN_INVITATION_EMAIL_PLACEHOLDER")} onChange={(event) => setEmail(event.target.value)} /></div><Button type="button" disabled={!email.trim() || pending || invitationWritePending || forbidden || !onIssueInvitation} onClick={requestInviteConfirmation}>{frontendText(locale, "ADMIN_INVITATION_GENERATE")}</Button></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{frontendText(locale, "ADMIN_INVITATION_SECTION_TITLE")}</h2><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_SECTION_DESCRIPTION")}</p></div><Button type="button" data-member-add-open aria-haspopup="dialog" aria-expanded={addOpen} disabled={pending || invitationWritePending || forbidden || !onIssueInvitation} onClick={() => setAddOpen(true)}>{frontendText(locale, "ADMIN_INVITATION_ADD")}</Button></div>
       {invitationError && <p role="alert" className="text-sm text-destructive">{invitationError}</p>}
       {issuedInvitation && <Card data-invitation-code className="border-primary/40"><CardContent className="space-y-2 p-4">
         <p className="text-sm font-medium">{withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_TITLE"), "email", issuedInvitation.email)}</p>
@@ -153,6 +160,19 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
         </div>}
     </section>
   </section>
+    <Dialog open={addOpen} onOpenChange={(next) => { if (!next) setAddOpen(false); }}>
+      <DialogContent role="dialog" data-member-add-dialog aria-labelledby={addTitleId} aria-describedby={addDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
+        <DialogTitle id={addTitleId}>{frontendText(locale, "ADMIN_INVITATION_SECTION_TITLE")}</DialogTitle>
+        <p id={addDescriptionId} className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_SECTION_DESCRIPTION")}</p>
+        <div className="mt-4">
+          <Input id="invitation-email" type="email" autoComplete="off" label={frontendText(locale, "ADMIN_INVITATION_EMAIL_LABEL")} value={email} disabled={pending || invitationWritePending || forbidden || !onIssueInvitation} placeholder={frontendText(locale, "ADMIN_INVITATION_EMAIL_PLACEHOLDER")} onChange={(value) => setEmail(value)} />
+        </div>
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <Button type="button" data-member-add-cancel variant="outline" onClick={() => setAddOpen(false)}>{frontendText(locale, "COMMON_CANCEL")}</Button>
+          <Button type="button" disabled={!email.trim() || pending || invitationWritePending || forbidden || !onIssueInvitation} onClick={requestInviteConfirmation}>{frontendText(locale, "ADMIN_INVITATION_GENERATE")}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     <ConfirmAction open={validConfirmation}
       title={dialog?.title ?? ""}
       description={dialog?.description ?? ""}

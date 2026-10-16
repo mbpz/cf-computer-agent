@@ -1,16 +1,6 @@
 /* The signed-in shell locks desktop scrolling; this public page uses document scroll. */
 html:has(.workbench-landing), body:has(.workbench-landing), #root:has(.workbench-landing) { height: auto; min-height: 100%; overflow: visible; }
 html:has(.workbench-landing-overlay) { overflow: hidden; }
-/* Display face for headings and the brand mark. Self-hosted because the CSP allows
-   no external origin; latin subset only, so CJK keeps the system stack. */
-@font-face {
-  font-family: "Geist Landing";
-  src: url("/fonts/Geist-Variable.woff2") format("woff2");
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
 /* Page design locks and palette, in one block because scripts/wcag-contract.mjs
    reads the first .workbench-landing block: keep those colour tokens here.
    The palette keeps the warm neutrals and single green accent this page shipped
@@ -18,7 +8,10 @@ html:has(.workbench-landing-overlay) { overflow: hidden; }
    --muted stays though this file does not read it: shared components resolve
    bg-muted through it, and dropping it would hand them the shell's cooler grey.
    Locks: three radii, one spacing rhythm, two body sizes, one display stack.
-   See docs/product/2026-10-15-landing-design-plan.md. */
+   The display face is declared in /fonts/landing-font.css, linked from index.html:
+   keeping the @font-face out of this bundled stylesheet stops bundlers from
+   resolving a binary url() when they build frontend/app directly. See
+   docs/product/2026-10-15-landing-design-plan.md. */
 .workbench-landing {
   --landing-radius-control: 999px;
   --landing-radius-group: .5rem;

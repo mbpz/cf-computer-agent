@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
-import { Button, buttonVariants } from "../../components/ui/button";
+import { Button } from "../../components/ui/button";
+import { ButtonLink } from "../../components/motion/button/base";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Skeleton } from "../../components/ui/skeleton";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -23,10 +24,10 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
     <Alert variant={state.kind === "not-found" ? "default" : "destructive"}><AlertDescription>{state.message}
       <div className="flex flex-wrap gap-2">
         {(state.kind !== "not-found" || unresolvedDecision || retainedDraft) && onRetry && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}
-        <a className={buttonVariants({ variant: "outline" })} href="/admin/submissions" onClick={(event) => {
+        <ButtonLink variant="outline" size="md" href="/admin/submissions" onClick={(event) => {
           if (!onBack || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); onBack();
-        }}>{frontendText(locale, "ADMIN_REVIEW_BACK")}</a>
+        }}>{frontendText(locale, "ADMIN_REVIEW_BACK")}</ButtonLink>
       </div>
     </AlertDescription></Alert>
   </section>;

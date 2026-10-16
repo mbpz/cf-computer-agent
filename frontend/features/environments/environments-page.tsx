@@ -3,9 +3,9 @@ import type { EnvironmentMetadata, EnvironmentType } from '../../../shared/envir
 import type { SessionSnapshot } from '../../contracts/api';
 import { DataTable } from '../../components/data-table';
 import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Input } from '../../components/motion/input';
 import { Select } from '../../components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Select as MotionSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/motion/select';
 import { Dialog, DialogContent, DialogTitle } from '../../components/ui/dialog';
 import { frontendText, type LocaleRuntime } from '../../lib/i18n';
 import { useCreateDraft } from '../../lib/use-create-draft';
@@ -48,6 +48,9 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   const {name:title,type,taskId}=draft.fields;
   const [edit,setEdit]=useState<EnvironmentMetadata|null>(null),[remove,setRemove]=useState<EnvironmentMetadata|null>(null);
   const [localError,setLocalError]=useState(false);
+  // A blocked composer record cannot be discarded from a hidden surface, so its
+  // dialog starts open exactly like the pending-write recovery entry point.
+  const [createOpen,setCreateOpen]=useState(()=>composer.kind==='blocked');
   const blocked=operationBlocked() || draft.confirming;
   // The manager still replaces one server page per `load(page)`; the surface keeps
   // every page it has read so `onLoadMore` appends instead of swapping the list.
@@ -110,7 +113,7 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   if(state.closed)return <section data-environments-closed role="alert">{t('ENV_ACCOUNT_CLOSED')}</section>;
   return <section data-environments-page className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0">
     {draft.confirmation}
-    <header><h1 className="text-2xl font-semibold">{t('NAV_ENVIRONMENTS')}</h1><p className="mt-2 text-sm text-muted-foreground">{t('ENV_METADATA_ONLY')}</p></header>
+    <header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold">{t('NAV_ENVIRONMENTS')}</h1><p className="mt-2 text-sm text-muted-foreground">{t('ENV_METADATA_ONLY')}</p></div><Button type="button" data-environment-create-open aria-haspopup="dialog" aria-expanded={createOpen} disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current)setCreateOpen(true);}}>{t('ENV_CREATE')}</Button></header>
     {(state.error || localError) && <div role="alert" className="rounded-md border p-4"><p>{t(localError?'ENV_INVALID_INPUT':`ENV_${state.error}`)}</p></div>}
     {state.recoveryBlocked && <div className="space-y-3 rounded-md border p-4" role="alert">
       <p>{t('ENV_RECOVERY_BLOCKED')}</p>
@@ -127,18 +130,19 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
       {state.confirmed.name && <p>{t('ENV_NAME')}: {state.confirmed.name}</p>}
       {state.confirmed.deletedAt && <p>{t('ENV_DELETED_AT')}: {state.confirmed.deletedAt}</p>}
     </div>}
-    <Card><CardHeader><CardTitle>{t('ENV_CREATE')}</CardTitle></CardHeader><CardContent>
-      {recordBlocked && <div role="alert" data-environment-draft-blocked className="mb-3 space-y-2 text-sm"><p>{t('ENV_DRAFT_RECORD_BLOCKED')}</p><Button type="button" variant="outline" onClick={discardRecord}>{t('ENV_DRAFT_RECORD_DISCARD')}</Button></div>}
-      {recordNotice && <p role="alert" className="mb-3 text-sm">{recordNotice}</p>}
-      <form data-environment-create className="grid gap-3 sm:grid-cols-2" onSubmit={event=>{event.preventDefault();if(!alive.current || operationBlocked() || draft.isConfirming() || editRef.current || removeRef.current)return;const input={...draft.current.current};void run(async()=>{const request=manager.create({...input,type:input.type as EnvironmentType});const pending=manager.getSnapshot().pending;if(pending?.kind==='create'){submitted.current={operationId:pending.operationId,fields:{name:input.name,type:input.type as EnvironmentType,taskId:input.taskId}};if(!recordBlocked)persistEnvironmentDraft(scope.origin,scope.memberId,{create:blank,rename:null});}await request;});}}>
-        <label className="space-y-1 text-sm">{t('ENV_NAME')}<Input name="name" required maxLength={120} value={title} disabled={blocked} onChange={event=>draft.edit('name',event.target.value)} /></label>
-        <label className="space-y-1 text-sm">{t('ENV_TYPE')}<Select name="type" value={type} disabled={blocked} onChange={event=>draft.edit('type',event.target.value==='temporary'?'temporary':'personal')}><option value="personal">{t('ENV_PERSONAL')}</option><option value="temporary">{t('ENV_TEMPORARY')}</option></Select></label>
-        <label className="space-y-1 text-sm">{t('ENV_TASK')}<Input name="taskId" maxLength={128} value={taskId} disabled={blocked} onChange={event=>draft.edit('taskId',event.target.value)} /></label>
-        <Button type="submit" className="self-end" disabled={blocked || !title.trim()}>{t('ENV_CREATE')}</Button>
+    <Dialog open={createOpen} onOpenChange={open=>{if(!open)setCreateOpen(false);}}><DialogContent aria-labelledby="environment-create-title" data-environment-create-dialog className="max-h-[90dvh] overflow-y-auto">
+      <DialogTitle id="environment-create-title">{t('ENV_CREATE')}</DialogTitle>
+      {recordBlocked && <div role="alert" data-environment-draft-blocked className="mt-3 space-y-2 text-sm"><p>{t('ENV_DRAFT_RECORD_BLOCKED')}</p><Button type="button" variant="outline" onClick={discardRecord}>{t('ENV_DRAFT_RECORD_DISCARD')}</Button></div>}
+      {recordNotice && <p role="alert" className="mt-3 text-sm">{recordNotice}</p>}
+      <form data-environment-create className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={event=>{event.preventDefault();if(!alive.current || operationBlocked() || draft.isConfirming() || editRef.current || removeRef.current)return;const input={...draft.current.current};void run(async()=>{const request=manager.create({...input,type:input.type as EnvironmentType});const pending=manager.getSnapshot().pending;if(pending?.kind==='create'){submitted.current={operationId:pending.operationId,fields:{name:input.name,type:input.type as EnvironmentType,taskId:input.taskId}};if(!recordBlocked)persistEnvironmentDraft(scope.origin,scope.memberId,{create:blank,rename:null});}await request;if(alive.current)setCreateOpen(false);});}}>
+        <Input label={t('ENV_NAME')} name="name" required maxLength={120} value={title} disabled={blocked} onChange={value=>draft.edit('name',value)} />
+        <div className="flex flex-col gap-1.5"><span className="px-1 text-sm font-medium">{t('ENV_TYPE')}</span><MotionSelect value={type} disabled={blocked} onValueChange={value=>draft.edit('type',value==='temporary'?'temporary':'personal')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="personal">{t('ENV_PERSONAL')}</SelectItem><SelectItem value="temporary">{t('ENV_TEMPORARY')}</SelectItem></SelectContent></MotionSelect></div>
+        <Input label={t('ENV_TASK')} name="taskId" maxLength={128} value={taskId} disabled={blocked} onChange={value=>draft.edit('taskId',value)} />
+        <div className="flex gap-2 sm:col-span-2 sm:justify-end"><Button type="button" variant="outline" data-environment-create-cancel onClick={()=>setCreateOpen(false)}>{t('ENV_CANCEL')}</Button><Button type="submit" disabled={blocked || !title.trim()}>{t('ENV_CREATE')}</Button></div>
       </form>
-    </CardContent></Card>
+    </DialogContent></Dialog>
     <div className="flex flex-wrap items-end gap-3"><label className="text-sm">{t('ENV_FILTER')}<Select aria-label={t('ENV_FILTER')} value={state.filter} disabled={state.loading || state.writing} onChange={event=>void run(()=>manager.load(1,event.target.value as ''|EnvironmentType))}><option value="">{t('ENV_ALL')}</option><option value="personal">{t('ENV_PERSONAL')}</option><option value="temporary">{t('ENV_TEMPORARY')}</option></Select></label><Button variant="outline" disabled={state.loading || state.writing} onClick={()=>void run(()=>manager.load())}>{t('ENV_REFRESH')}</Button></div>
-    <div aria-busy={state.loading} className="space-y-3 lg:min-h-0 lg:flex-1">
+    <div aria-busy={state.loading} className="flex flex-col lg:min-h-0 lg:flex-1">
       <DataTable
         locale={locale}
         rows={pages.flatMap(entry=>entry.items)}

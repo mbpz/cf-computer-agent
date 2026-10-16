@@ -72,10 +72,13 @@ describe("Focus owned task selection through App", () => {
       }
       throw new Error(`Unexpected ${method} ${url}`);
     }});
-    if (wait) await waitForApp(() => !!button("Start focus"));
+    if (wait) await waitForApp(() => !!button("Choose task"));
   }
   async function open() { await click(button("Choose task")); await waitForApp(() => !!button("Owned task 1") || !!main().querySelector('[role="alert"]') || main().textContent!.includes("No matching tasks")); }
   async function select() { await open(); await click(button("Owned task 1")); }
+  /** Task picker, title and confirm all live in the start dialog now, so every start-related
+   *  claim opens the composer first. Selecting a task keeps it open for the title and confirm. */
+  async function openComposer() { await click(button("Choose task")); await waitForApp(() => !!button("Start focus")); }
   /** The picker appends by scrolling its table container to the bottom. */
   async function scrollPicker() {
     const scroller = main().querySelector("div.overflow-auto") as HTMLElement;
@@ -134,7 +137,7 @@ describe("Focus owned task selection through App", () => {
     (node as any)[key].onChange({currentTarget: {value}});
   }
   it("protects a same-event focus title edit and keeps it on cancel", async () => {
-    await mount();
+    await mount(); await openComposer();
     await act(async () => {changeTitle("Private focus draft"); expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred");});
     expect(document.activeElement?.textContent).toBe("Keep editing"); expect(unload()).toBe(true);
     await click(main().querySelector<HTMLButtonElement>('[data-cancel-action]')!);
@@ -147,7 +150,7 @@ describe("Focus owned task selection through App", () => {
     const approve = main().querySelector<HTMLButtonElement>('[data-confirm-action]')!;
     await act(async () => {approve.click(); approve.click();});
     expect(app!.browser.location.pathname).toBe("/settings"); expect(unload()).toBe(false);
-    await navigate("/focus"); await waitForApp(() => !!button("Start focus"));
+    await navigate("/focus"); await waitForApp(() => !!button("Choose task")); await openComposer();
     expect(main().querySelector('[data-focus-selected]')).toBeNull(); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
   });
   it("reserves draft confirmation before same-event start or edits", async () => {
@@ -190,12 +193,13 @@ describe("Focus owned task selection through App", () => {
     expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Submitted title");
     await act(async () => resolve(Response.json({task: task(1), tags: [], links: []}))); await waitForApp(() => !!button("Pause"));
     expect(calls.find(c => c.path === "/api/focus")!.body.title).toBe("Submitted title");
-    await finish("Complete"); await waitForApp(() => !!button("Start focus"));
+    await finish("Complete"); await waitForApp(() => !!button("Choose task")); await openComposer();
     expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe(""); expect(unload()).toBe(false);
   });
   it("preserves the editable title after a rejected task preflight", async () => {
     await mount(); await select(); await act(async () => changeTitle("Retry title")); detailStatus = 404;
     await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]'));
+    await openComposer();
     expect(main().querySelector('[data-focus-selected]')).toBeNull();
     expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Retry title");
     await navigate("/settings"); expect(main().querySelector('[role="alertdialog"]')).not.toBeNull();
@@ -422,7 +426,7 @@ describe("Focus owned task selection through App", () => {
     expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
   });
   it("replaces pasted IDs with owned selection and reauthorizes the exact task before starting", async () => {
-    await mount(); expect(main().querySelector('input[aria-label="Task ID"]')).toBeNull(); expect(button("Start focus").disabled).toBe(true);
+    await mount(); await openComposer(); expect(main().querySelector('input[aria-label="Task ID"]')).toBeNull(); expect(button("Start focus").disabled).toBe(true);
     await select(); expect(button("Start focus").disabled).toBe(false); await click(button("Start focus")); await waitForApp(() => main().textContent!.includes("Current session"));
     const actions = calls.filter(c => c.path === "/api/tasks/task-1" || c.path === "/api/focus");
     expect(actions.map(c => c.method)).toEqual(["GET", "POST"]); expect(actions[1].body.taskId).toBe("task-1");
@@ -439,9 +443,9 @@ describe("Focus owned task selection through App", () => {
   it("rejects mismatched page metadata", async () => {wrongPage = true; await mount(); await open(); expect(button("Owned task 21")).toBeUndefined(); expect(main().textContent).toContain("Unable to load");});
   it("retries a failed list with GET only", async () => {listStatus = 500; await mount(); await open(); listStatus = 0; await click(button("Retry tasks")); await waitForApp(() => !!button("Owned task 1")); expect(calls.filter(c => c.path.startsWith("/api/tasks?")).map(c => c.method)).toEqual(["GET", "GET"]);});
   it.each([401,403])("clears private selection UI when task list access returns %i", async status => {listStatus = status; await mount(); await open(); expect(main().textContent).toContain("Unable to load"); expect(button("Start focus")).toBeUndefined(); expect(main().textContent).not.toContain("Owned task");});
-  it.each([401,403,404])("does not POST when the selected task preflight returns %i", async status => {await mount(); await select(); detailStatus = status; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]') || main().textContent!.includes("Unable to load")); expect(calls.filter(c => c.path === "/api/tasks/task-1")).toHaveLength(1); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0); expect(main().querySelector('[data-focus-selected]')).toBeNull(); if(status === 404) expect(button("Start focus").disabled).toBe(true);});
-  it("rejects a wrong-target preflight without writing", async () => {await mount(); await select(); wrongTarget = true; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]')); expect(calls.filter(c => c.path === "/api/tasks/task-1")).toHaveLength(1); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0); expect(button("Start focus").disabled).toBe(true);});
-  it("invalidates selection if the task disappears between preflight and POST", async () => {await mount(); await select(); postStatus = 404; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]')); expect(button("Start focus").disabled).toBe(true); expect(main().textContent).toContain("Task is unavailable");});
+  it.each([401,403,404])("does not POST when the selected task preflight returns %i", async status => {await mount(); await select(); detailStatus = status; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]') || main().textContent!.includes("Unable to load")); expect(calls.filter(c => c.path === "/api/tasks/task-1")).toHaveLength(1); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0); expect(main().querySelector('[data-focus-selected]')).toBeNull(); if(status === 404) {await openComposer(); expect(button("Start focus").disabled).toBe(true);}});
+  it("rejects a wrong-target preflight without writing", async () => {await mount(); await select(); wrongTarget = true; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]')); expect(calls.filter(c => c.path === "/api/tasks/task-1")).toHaveLength(1); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0); await openComposer(); expect(button("Start focus").disabled).toBe(true);});
+  it("invalidates selection if the task disappears between preflight and POST", async () => {await mount(); await select(); postStatus = 404; await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]')); await openComposer(); expect(button("Start focus").disabled).toBe(true); expect(main().textContent).toContain("Task is unavailable");});
   it("keeps the narrow feed without a pager and appends the next task page on scroll", async () => {
     await mount(); await open();
     expect(main().querySelector('select[aria-label="Rows per page"]')).toBeNull();
@@ -478,9 +482,9 @@ describe("Focus owned task selection through App", () => {
     let resolve!: (response: Response) => void; delayedCurrent = () => new Promise(done => {resolve = done;});
     await mount(false); await waitForApp(() => !!resolve); const request = calls.find(c => c.path === "/api/focus/current")!;
     await navigate("/settings"); expect(request.signal?.aborted).toBe(true);
-    delayedCurrent = undefined; await navigate("/focus"); await waitForApp(() => !!button("Start focus"));
+    delayedCurrent = undefined; await navigate("/focus"); await waitForApp(() => !!button("Choose task"));
     await act(async () => resolve(Response.json({session: {...task(1), taskId: "late-private-task", clientKey: "late", status: "active", startedAt: stamp, updatedAt: stamp, elapsedMs: 0}})));
-    expect(main().textContent).not.toContain("late-private-task"); expect(button("Start focus")).toBeDefined();
+    expect(main().textContent).not.toContain("late-private-task"); await openComposer(); expect(button("Start focus")).toBeDefined();
   });
   it("never starts after leaving while the target preflight is pending", async () => {
     let resolve!: (response: Response) => void; delayedDetail = () => new Promise(done => {resolve = done;});
@@ -520,7 +524,7 @@ describe("Focus owned task selection through App", () => {
     await click(button("Pause")); await waitForApp(() => !!button("Resume"));
     expect(main().textContent).toContain("Paused");
     await click(button("Resume")); await waitForApp(() => !!button("Pause"));
-    await finish(action); await waitForApp(() => !!button("Start focus"));
+    await finish(action); await waitForApp(() => !!button("Choose task"));
     expect(main().querySelector('[role="status"]')?.textContent).toContain(status);
     const actions = calls.filter(c => /^\/api\/focus\/[^/]+\//.test(c.path));
     expect(actions.map(c => c.path.split("/").pop())).toEqual(["pause", "resume", action.toLowerCase()]);
@@ -559,25 +563,25 @@ describe("Focus owned task selection through App", () => {
   it("aborts a closed picker and ignores a late private list", async () => {
     let resolve!: (response: Response) => void; delayed = () => new Promise(done => {resolve = done;}); await mount(); await click(button("Choose task")); await waitForApp(() => !!resolve);
     const request = calls.find(c => c.path.startsWith("/api/tasks?"))!; await click(button("Close task picker")); expect(request.signal?.aborted).toBe(true);
-    await act(async () => resolve(Response.json(page()))); expect(button("Owned task 1")).toBeUndefined(); expect(button("Start focus").disabled).toBe(true);
+    await act(async () => resolve(Response.json(page()))); expect(button("Owned task 1")).toBeUndefined(); await openComposer(); expect(button("Start focus").disabled).toBe(true);
   });
   async function remount() {
     await act(async () => app!.root.render(null));
     await act(async () => app!.root.render(<App />));
-    await waitForApp(() => !!button("Start focus"));
+    await waitForApp(() => !!button("Choose task"));
   }
   it("restores an unsent focus title and task after the page is recreated", async () => {
     await mount(); await select(); await act(async () => changeTitle("Keep this focus"));
     expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this focus");
     expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("task-1");
-    await remount();
+    await remount(); await openComposer();
     expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Keep this focus");
     expect(main().querySelector("[data-focus-selected]")?.textContent).toContain("Owned task 1");
     expect(calls.filter(c => c.path === "/api/focus" && c.method === "POST")).toHaveLength(0);
     expect(unload()).toBe(true);
   });
   it("keeps a typed focus title on screen when the tab cannot record it", async () => {
-    await mount();
+    await mount(); await openComposer();
     vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
     await act(async () => changeTitle("Unrecorded focus"));
     expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Unrecorded focus");
@@ -593,6 +597,7 @@ describe("Focus owned task selection through App", () => {
     await navigate("/focus");
     await waitForApp(() => main().textContent?.includes("can't be read") ?? false);
     await click(button("Discard record"));
+    await openComposer();
     await act(async () => changeTitle("After discard"));
     expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("After discard");
     expect(calls.filter(c => c.path === "/api/focus" && c.method === "POST")).toHaveLength(0);

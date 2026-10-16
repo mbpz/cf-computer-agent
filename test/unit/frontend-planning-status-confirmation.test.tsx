@@ -66,7 +66,9 @@ describe.each(["goals", "projects"] as const)("%s status confirmation", kind => 
     await mount(extra); expect(action("Complete").disabled).toBe(true); await click(action("Complete")); expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect(write).not.toHaveBeenCalled();
   });
   it("preserves the create draft and unrelated rerenders, but clears on unmount", async () => {
-    await mount(); const input = container.querySelector<HTMLInputElement>('input[name="title"]') ?? container.querySelector<HTMLInputElement>('input'); expect(input).not.toBeNull();
+    await mount();
+    await click(container.querySelector<HTMLButtonElement>(`[data-${kind}-create-open]`)!);
+    const input = container.querySelector<HTMLInputElement>('input[name="title"]') ?? container.querySelector<HTMLInputElement>('input'); expect(input).not.toBeNull();
     // This node environment does not install React's browser input event plugin.
     const prop = Object.keys(input!).find(key => key.startsWith("__reactProps$"))!;
     await act(async () => { (input as unknown as Record<string, { onChange: (event: unknown) => void }>)[prop].onChange({ currentTarget: { value: "Unsubmitted draft" } }); });

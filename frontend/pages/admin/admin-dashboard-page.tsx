@@ -1,4 +1,5 @@
-import { Button, buttonVariants } from "../../components/ui/button";
+import { Button } from "../../components/ui/button";
+import { ButtonLink } from "../../components/motion/button/base";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { NumberTicker } from "../../components/motion/number-ticker";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -43,12 +44,12 @@ export function AdminDashboardPage({ metrics, locale, links, onRetry, onRefresh 
               <Button variant="outline" size="sm" onClick={() => onRetry(key)}>{frontendText(locale, "COMMON_RETRY")}</Button></div>}
             {metric.kind === "forbidden" && <p data-page-state="forbidden" className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_METRIC_FORBIDDEN")}</p>}
           </div>
-          {metric.kind !== "forbidden" && <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={href}>{frontendText(locale, "ADMIN_METRIC_OPEN")}</a>}
+          {metric.kind !== "forbidden" && <ButtonLink variant="ghost" size="sm" href={href}>{frontendText(locale, "ADMIN_METRIC_OPEN")}</ButtonLink>}
         </CardContent>
       </Card>;
     })}</div>
     {links.length > 0 && <Card><CardHeader className="pb-2"><CardTitle className="text-base">{frontendText(locale, "ADMIN_QUICK_LINKS")}</CardTitle></CardHeader>
-      <CardContent className="flex flex-wrap gap-2">{links.map(({ href, labelKey }) => <a key={href} className={buttonVariants({ variant: "outline", size: "sm" })} href={href}>{frontendText(locale, labelKey)}</a>)}</CardContent>
+      <CardContent className="flex flex-wrap gap-2">{links.map(({ href, labelKey }) => <ButtonLink key={href} variant="outline" size="sm" href={href}>{frontendText(locale, labelKey)}</ButtonLink>)}</CardContent>
     </Card>}
   </section>;
 }

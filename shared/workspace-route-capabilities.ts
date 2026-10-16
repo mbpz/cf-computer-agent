@@ -6,7 +6,7 @@ export type MenuAvailability = "ready" | "coming_soon";
 export type WorkspacePageKind =
   | "home" | "knowledge" | "search" | "agent" | "submit" | "my-submissions" | "graph"
   | "environments" | "tasks" | "goals" | "projects" | "calendar" | "today" | "focus" | "review" | "inbox" | "boards" | "notifications" | "messages" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
-  | "admin-assets" | "admin-members" | "admin-roles" | "admin-menus"
+  | "admin-assets" | "admin-members" | "admin-roles" | "admin-role-new" | "admin-role-detail" | "admin-menus"
   | "admin-spaces" | "admin-audit" | "admin-analytics" | "coming-soon";
 
 export type WorkspaceRouteGroup = "workspace" | "admin";

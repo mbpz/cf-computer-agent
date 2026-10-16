@@ -20,9 +20,13 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
   const entity = (body: Record<string, unknown>) => ({ ...body, status: "active", progress: 0, targetAt: null, createdAt: "2026-09-26T00:00:00.000Z", updatedAt: "2026-09-26T00:00:00.000Z" });
   const receipt = (body: Record<string, unknown>) => Response.json({ [singular]: entity(body), created: true });
   const main = () => app!.container.querySelector("main")!;
-  const title = () => main().querySelector("input") as HTMLInputElement;
+  const titleSelector = `input[aria-label="${kind === "goals" ? "Goal title" : "Project title"}"]`;
+  const title = () => main().querySelector<HTMLInputElement>(titleSelector)!;
   const button = (selector: string) => main().querySelector(selector) as HTMLButtonElement;
+  const composer = () => main().querySelector(`[data-${kind}-create-dialog]`);
   const create = () => [...main().querySelectorAll("button")].find((node) => node.textContent === (kind === "goals" ? "Add goal" : "Add project"))!;
+  /** The composer only mounts while its dialog is open, so every create step opens it first. */
+  async function openComposer() { if (main().querySelector(titleSelector)) return; await click(main().querySelector<HTMLButtonElement>(`[data-${kind}-create-open]`)!); }
   async function change(value: string) {
     await act(async () => {
       const node = title(); node.value = value;
@@ -43,6 +47,8 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
       if (readFailure) return apiError(readStatus, "UNAVAILABLE", true);
       return Response.json({ items: [entity({ id: "existing", clientKey: "existing", title: "Existing private row", description: null })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
     } });
+    await waitForApp(() => !!main().querySelector(`[data-${kind}-create-open]`));
+    await openComposer();
     await waitForApp(() => !!title() && !title().disabled);
   }
   afterEach(async () => { await app?.unmount(); app = undefined; seedDraft = undefined; });
@@ -51,6 +57,8 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
   async function forceLeaveAndReturn() {
     await forceRemountAppAt(app!, "/not-a-route");
     await forceRemountAppAt(app!, `/${kind}`);
+    await waitForApp(() => !!main().querySelector(`[data-${kind}-create-open]`));
+    await openComposer();
     await waitForApp(() => !!title());
   }
 
@@ -61,7 +69,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     expect(title().value).toBe("Durable original"); expect(title().disabled).toBe(true);
     expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
     respond = receipt; await click(button("[data-create-retry]"));
-    await waitForApp(() => title().value === ""); expect(bodies).toEqual([original, original]);
+    await waitForApp(() => !composer()); expect(bodies).toEqual([original, original]);
   });
   it("restores acknowledged creation as read-only after failed readback", async () => {
     await mount(); readFailure = true;
@@ -70,7 +78,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     readFailure = false; await forceLeaveAndReturn();
     expect(button("[data-create-read-retry]")).toBeTruthy(); expect(button("[data-create-retry]")).toBeNull();
     await click(button("[data-create-read-retry]"));
-    await waitForApp(() => title().value === ""); expect(bodies).toHaveLength(1);
+    await waitForApp(() => !composer()); expect(bodies).toHaveLength(1);
   });
   it("blocks writes when durable storage rejects the intent", async () => {
     await mount(); vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
@@ -86,14 +94,14 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await act(async () => release(receipt(original)));
     expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
     respond = receipt; await click(button("[data-create-retry]"));
-    await waitForApp(() => title().value === ""); expect(bodies).toEqual([original, original]);
+    await waitForApp(() => !composer()); expect(bodies).toEqual([original, original]);
   });
   it("can recover temporary storage failure without sending a request until explicit submission", async () => {
     await mount(); const save = vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
     await change("Preserve fields"); await click(create()); expect(bodies).toHaveLength(0);
     save.mockRestore(); await click(button("[data-create-storage-retry]"));
     expect(title().value).toBe("Preserve fields"); expect(title().disabled).toBe(false); expect(bodies).toHaveLength(0);
-    await click(create()); await waitForApp(() => title().value === ""); expect(bodies).toHaveLength(1);
+    await click(create()); await waitForApp(() => !composer()); expect(bodies).toHaveLength(1);
   });
   it("blocks after acknowledgement persistence failure and keeps the same original key for recovery", async () => {
     await mount(); const storage = app!.browser.sessionStorage;
@@ -106,7 +114,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     expect(button("[data-create-storage-retry]")).toBeTruthy(); expect(reads).toBe(1);
     save.mockRestore(); await click(button("[data-create-storage-retry]"));
     expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
-    await click(button("[data-create-retry]")); await waitForApp(() => title().value === ""); expect(bodies).toEqual([original, original]);
+    await click(button("[data-create-retry]")); await waitForApp(() => !composer()); expect(bodies).toEqual([original, original]);
   });
 
   it("keeps fields and retries exactly the original payload after an unknown result", async () => {
@@ -116,9 +124,9 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     expect(bodies).toHaveLength(1); expect(reads).toBe(1);
     expect(button("[data-create-retry]")).toBeTruthy();
     respond = receipt; await click(button("[data-create-retry]"));
-    await waitForApp(() => title().value === "" && !title().disabled);
+    await waitForApp(() => !composer());
     expect(bodies).toHaveLength(2); expect(bodies[1]).toEqual(bodies[0]); expect(reads).toBe(2);
-    await change("Next title"); await click(create());
+    await openComposer(); await change("Next title"); await click(create());
     expect(bodies[2]!.clientKey).not.toBe(bodies[0]!.clientKey);
   });
   it("deduplicates same-tick submit and locks the original draft while pending", async () => {
@@ -128,15 +136,15 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await act(async () => { submit.click(); submit.click(); });
     expect(bodies).toHaveLength(1); expect(title().disabled).toBe(true); expect(title().value).toBe("Double click");
     await act(async () => resolve(receipt(bodies[0]!)));
-    await waitForApp(() => title().value === "");
+    await waitForApp(() => !composer());
   });
   it("only reads after a confirmed write when list readback fails", async () => {
     await mount(); readFailure = true; await change("Saved"); await click(create());
     await waitForApp(() => reads === 2);
     expect(button("[data-create-read-retry]")).toBeTruthy(); expect(title().disabled).toBe(true);
     readFailure = false; await click(button("[data-create-read-retry]"));
-    await waitForApp(() => !title().disabled);
-    expect(reads).toBe(3); expect(bodies).toHaveLength(1); expect(title().value).toBe("");
+    await waitForApp(() => !composer());
+    expect(reads).toBe(3); expect(bodies).toHaveLength(1);
   });
   it.each([400, 409, 429])("preserves an editable draft after a first known rejection %s", async (status) => {
     await mount(); respond = () => apiError(status, "REJECTED", false);
@@ -178,7 +186,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await act(async () => { retry.click(); retry.click(); });
     expect(bodies).toHaveLength(2); expect(bodies[1]).toEqual(bodies[0]);
     await act(async () => resolve(receipt(bodies[1]!)));
-    await waitForApp(() => title().value === "");
+    await waitForApp(() => !composer());
   });
   it("warns on browser unload while a write is unresolved", async () => {
     await mount(); respond = () => apiError(503, "UNAVAILABLE", true);
@@ -278,6 +286,8 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     expect(app!.browser.sessionStorage.getItem(draftKey)).toBeNull();
     await act(async () => expect(writeWorkspaceHistory("push", `/${kind}`)).toBe("committed"));
+    await waitForApp(() => !!main().querySelector(`[data-${kind}-create-open]`));
+    await openComposer();
     await waitForApp(() => !!title() && !title().disabled);
     expect(title().value).toBe(""); expect(unload()).toBe(false);
   });

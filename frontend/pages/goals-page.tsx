@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import { usePlanningStatusConfirmation } from "../components/planning-status-confirmation";
 import type { FrontendPageMetadata, SupportedPageSize } from "../lib/numbered-page";
 import { DataTable } from "../components/data-table";
@@ -8,8 +9,10 @@ import { frontendText } from "../lib/i18n";
 import type { Goal, GoalStatus } from "../lib/goals-data";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
 import { PageState } from "../components/ui/page-state";
+import { loadPlanningIntent } from "../lib/planning-create-intent";
+import { loadPlanningDraft } from "../lib/planning-draft";
 
 export type GoalsPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; items: readonly Goal[]; pagination?: FrontendPageMetadata };
 
@@ -25,13 +28,27 @@ export function GoalsPage({ locale, state, pending = false, actionError, onRetry
     blocked: pending || createLocked, onStatusChange,
   });
   const controlsBlocked = pending || createLocked || statusConfirmation.open;
+  // Closed on a plain visit. A record that is not a clean empty draft may be an unresolved write
+  // or an unreadable composer record: reopen the composer so its recovery controls are in reach
+  // instead of silently hidden behind the trigger (mirrors InboxPage).
+  const [createOpen, setCreateOpen] = useState(() => !createMemberId || loadPlanningIntent(createMemberId, "GOALS").kind !== "empty" || loadPlanningDraft(createMemberId, "GOALS").kind === "blocked");
+  const [createComposerLocked, setCreateComposerLocked] = useState(false);
+  const createTitleId = useId();
+  const createDescriptionId = useId();
+  const createBlocked = pending || createLocked || createComposerLocked;
   const changePage = (page: number) => { if (controlsBlocked) return; onPageChange?.(page); };
   const changePageSize = (pageSize: SupportedPageSize) => { if (controlsBlocked) return; onPageSizeChange?.(pageSize); };
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "GOALS_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GOALS_RETRY")}</Button></PageState>;
-  return <><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={statusConfirmation.open} aria-hidden={statusConfirmation.open || undefined}>
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><Target size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{frontendText(locale, "GOALS_TITLE")}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "GOALS_DESCRIPTION")}</p></div><Badge variant="outline">{frontendText(locale, "GOALS_PRIVATE_BADGE")}</Badge></div>
-    <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus size={18} />{frontendText(locale, "GOALS_CREATE_TITLE")}</CardTitle></CardHeader><CardContent><PlanningCreateForm isSubmitBlocked={statusConfirmation.isOpen} createMemberId={createMemberId} kind="GOALS" locale={locale} pending={pending || statusConfirmation.open} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={onCreateLock} /></CardContent></Card>
+  return <>{statusConfirmation.dialog}<Dialog open={createOpen} onOpenChange={next => { if (!next) setCreateOpen(false); }}>
+    <DialogContent role="dialog" data-goals-create-dialog aria-labelledby={createTitleId} aria-describedby={createDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
+      <DialogTitle id={createTitleId}>{frontendText(locale, "GOALS_CREATE_TITLE")}</DialogTitle>
+      <p id={createDescriptionId} className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "GOALS_DESCRIPTION")}</p>
+      <div className="mt-4"><PlanningCreateForm isSubmitBlocked={statusConfirmation.isOpen} createMemberId={createMemberId} kind="GOALS" locale={locale} pending={pending || statusConfirmation.open} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={locked => { setCreateComposerLocked(locked); onCreateLock?.(locked); }} onCreated={() => setCreateOpen(false)} /></div>
+      <div className="mt-6 flex flex-wrap justify-end gap-2"><Button type="button" data-goals-create-cancel variant="outline" onClick={() => setCreateOpen(false)}>{frontendText(locale, "COMMON_CANCEL")}</Button></div>
+    </DialogContent>
+  </Dialog><section className="flex flex-col space-y-5 lg:h-full lg:min-h-0" inert={statusConfirmation.open ? true : undefined} aria-hidden={statusConfirmation.open || undefined}>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><Target size={22} weight="duotone" className="text-primary" /><h1 className="text-2xl font-semibold">{frontendText(locale, "GOALS_TITLE")}</h1></div><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "GOALS_DESCRIPTION")}</p></div><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{frontendText(locale, "GOALS_PRIVATE_BADGE")}</Badge><Button type="button" data-goals-create-open aria-haspopup="dialog" aria-expanded={createOpen} disabled={createBlocked} onClick={() => setCreateOpen(true)}><Plus size={16} weight="bold" className="mr-1" aria-hidden="true" />{frontendText(locale, "GOALS_CREATE_TITLE")}</Button></div></div>
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
     <DataTable
       locale={locale}
@@ -55,5 +72,5 @@ export function GoalsPage({ locale, state, pending = false, actionError, onRetry
         { key: "actions", header: frontendText(locale, "GOALS_COLUMN_ACTIONS"), width: "300px", cellClassName: "whitespace-normal", cell: (goal) => <div className="flex flex-wrap gap-2">{onManageTasks && <Button id={`manage-goal-tasks-${goal.id}`} type="button" size="sm" variant="outline" disabled={statusConfirmation.open || createLocked || pending} onClick={event => onManageTasks(goal, event.currentTarget)}>{frontendText(locale, "GOALS_TASK_LINKS")}</Button>}{goal.status !== "completed" && goal.status !== "archived" && <Button type="button" size="sm" disabled={statusConfirmation.unavailable || statusConfirmation.open || createLocked || pending} onClick={() => statusConfirmation.request(goal, "completed")}><CheckCircle size={14} className="mr-1" />{frontendText(locale, "GOALS_COMPLETE")}</Button>}{goal.status !== "archived" && <Button type="button" size="sm" variant="outline" disabled={statusConfirmation.unavailable || statusConfirmation.open || createLocked || pending} onClick={() => statusConfirmation.request(goal, "archived")}><Archive size={14} className="mr-1" />{frontendText(locale, "GOALS_ARCHIVE")}</Button>}{goal.status === "archived" && <Button type="button" size="sm" variant="outline" disabled={statusConfirmation.unavailable || statusConfirmation.open || createLocked || pending} onClick={() => statusConfirmation.request(goal, "active")}>{frontendText(locale, "GOALS_RESTORE")}</Button>}</div> },
       ]}
     />
-  </section>{statusConfirmation.dialog}</>;
+  </section></>;
 }

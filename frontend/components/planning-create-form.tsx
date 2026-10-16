@@ -15,11 +15,13 @@ export interface PlanningCreateCallbacks {
   onCreateReadback?: () => Promise<boolean>;
   onCreateDenied?: (error: unknown) => void;
   onCreateLock?: (locked: boolean) => void;
+  /** Fired once a create is written, read back and cleared: the record holds nothing to resolve. */
+  onCreated?: () => void;
 }
 type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed" | "storage-blocked";
 
 // Persist before POST; restored intents require explicit retry, never a new key.
-export function PlanningCreateForm({ locale, kind, createMemberId, pending = false, isSubmitBlocked, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: PlanningCreateCallbacks & {
+export function PlanningCreateForm({ locale, kind, createMemberId, pending = false, isSubmitBlocked, onCreate, onCreateReadback, onCreateDenied, onCreateLock, onCreated }: PlanningCreateCallbacks & {
   locale: LocaleRuntime; kind: "GOALS" | "PROJECTS"; pending?: boolean; isSubmitBlocked?: () => boolean;
 }) {
   const [stored] = useState<StoredPlanningIntent>(() => createMemberId ? loadPlanningIntent(createMemberId, kind) : { kind: "empty" });
@@ -78,7 +80,7 @@ export function PlanningCreateForm({ locale, kind, createMemberId, pending = fal
       if (!active.current || generation.current !== current) return;
       if (!confirmed) { transition("read-failed"); return; }
       if (!clearStored()) { transition("storage-blocked"); return; }
-      intentRef.current = null; draft.reset(); setError(false); transition("editing");
+      intentRef.current = null; draft.reset(); setError(false); transition("editing"); onCreated?.();
     } catch (cause) {
       if (!active.current || generation.current !== current || denied(cause)) return;
       transition("read-failed");

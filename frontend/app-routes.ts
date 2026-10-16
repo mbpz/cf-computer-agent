@@ -7,5 +7,7 @@ export function pageKindForPath(pathname: string): PageKind {
   if (/^\/messages\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)) return "message-thread";
   if (/^\/projects\/[A-Za-z0-9_-]{1,128}\/timeline$/u.test(pathname)) return "project-timeline";
   if (/^\/admin\/submissions\/[A-Za-z0-9_-]+$/u.test(pathname)) return "admin-submission-detail";
+  if (pathname === "/admin/roles/new") return "admin-role-new";
+  if (/^\/admin\/roles\/[A-Za-z0-9_-]+$/u.test(pathname)) return "admin-role-detail";
   return routeCapability(pathname)?.pageKind ?? "not-found";
 }

@@ -15,11 +15,13 @@ export interface CalendarCreateCallbacks {
   onCreateReadback?: (intent: CalendarCreateIntent) => Promise<boolean>;
   onCreateDenied?: (error: unknown) => void;
   onCreateLock?: (locked: boolean) => void;
+  /** Fired once a create is written, read back and cleared: the journal holds nothing to resolve. */
+  onCreated?: () => void;
 }
 type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed" | "storage-blocked";
 
 // Persist before POST; restored intents require explicit retry, never a new key.
-export function CalendarCreateForm({ locale, createMemberId, pending = false, isSubmitBlocked, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: CalendarCreateCallbacks & {
+export function CalendarCreateForm({ locale, createMemberId, pending = false, isSubmitBlocked, onCreate, onCreateReadback, onCreateDenied, onCreateLock, onCreated }: CalendarCreateCallbacks & {
   locale: LocaleRuntime; pending?: boolean; isSubmitBlocked?: () => boolean;
 }) {
   const [stored] = useState<StoredCalendarIntent>(() => createMemberId ? loadCalendarIntent(createMemberId) : { kind: "blocked" });
@@ -86,7 +88,7 @@ export function CalendarCreateForm({ locale, createMemberId, pending = false, is
       if (!active.current || generation.current !== current) return;
       if (!confirmed) { transition("read-failed"); return; }
       if (!clearStored()) { transition("storage-blocked"); return; }
-      intentRef.current = null; acknowledged.current = false; draft.reset(); setError(false); transition("editing");
+      intentRef.current = null; acknowledged.current = false; draft.reset(); setError(false); transition("editing"); onCreated?.();
     } catch (cause) {
       if (!active.current || generation.current !== current || denied(cause)) return;
       transition("read-failed");

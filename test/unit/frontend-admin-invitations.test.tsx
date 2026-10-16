@@ -38,10 +38,12 @@ describe("admin member invitations", () => {
   }
   function buttonByText(text: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === text) as HTMLButtonElement | undefined; }
   async function click(element: HTMLElement | undefined) { expect(element, "button").toBeTruthy(); await act(async () => element!.click()); }
+  async function openAddDialog() { await click(container.querySelector("[data-member-add-open]") as HTMLButtonElement); }
 
   it("issues an invitation only after confirmation", async () => {
     const issue = vi.fn();
     await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={issue} />));
+    await openAddDialog();
     await act(async () => setEmail("new@example.test"));
     await click(buttonByText("Generate code"));
     expect(issue).not.toHaveBeenCalled();
@@ -49,6 +51,49 @@ describe("admin member invitations", () => {
     await click(container.querySelector("[data-confirm-action]") as HTMLButtonElement);
     expect(issue).toHaveBeenCalledWith("new@example.test");
     expect(issue).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the add-member dialog from the add control and closes it on cancel", async () => {
+    await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} />));
+    expect(container.querySelector("[data-member-add-dialog]")).toBeNull();
+    const trigger = container.querySelector("[data-member-add-open]") as HTMLButtonElement;
+    expect(trigger.textContent).toBe("Invite member");
+    expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
+    await click(trigger);
+    expect(container.querySelectorAll("[data-member-add-dialog]")).toHaveLength(1);
+    expect(container.querySelector("#invitation-email")).toBeTruthy();
+    await click(container.querySelector("[data-member-add-cancel]") as HTMLButtonElement);
+    expect(container.querySelector("[data-member-add-dialog]")).toBeNull();
+  });
+
+  it("submits the dialog email through the same issue call as the inline flow", async () => {
+    const issue = vi.fn();
+    await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={issue} />));
+    await openAddDialog();
+    await act(async () => setEmail("dialog@example.test"));
+    await click(buttonByText("Generate code"));
+    expect(issue).not.toHaveBeenCalled();
+    await click(container.querySelector("[data-confirm-action]") as HTMLButtonElement);
+    expect(issue).toHaveBeenCalledWith("dialog@example.test");
+    expect(issue).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismisses the dialog after a code is issued", async () => {
+    await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} />));
+    await openAddDialog();
+    expect(container.querySelectorAll("[data-member-add-dialog]")).toHaveLength(1);
+    await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} issuedInvitation={{ email: "new@example.test", code: "CODE-ABCD-1234", expiresAt: pending.expiresAt }} />));
+    expect(container.querySelector("[data-member-add-dialog]")).toBeNull();
+  });
+
+  it("fills the available height for the member list", async () => {
+    await act(async () => root.render(<MembersPage locale={locale} members={[]} />));
+    const pageRoot = container.querySelector("section") as HTMLElement;
+    expect(pageRoot.className).toContain("lg:h-full");
+    expect(pageRoot.className).toContain("lg:min-h-0");
+    const table = container.querySelector("[data-list-mode]") as HTMLElement;
+    expect(table.className).toContain("lg:min-h-0");
+    expect(table.className).toContain("lg:flex-1");
   });
 
   it("shows the code once with copy, expiry, and the one-time notice", async () => {
@@ -79,6 +124,7 @@ describe("admin member invitations", () => {
     browser.history.replaceState({}, "", "/admin/members");
     await act(async () => root.render(<AdminMembersRoute locale={locale} search="" load={load} loadInvitations={loadInvitations} issueInvitation={issue} />));
     await flush();
+    await openAddDialog();
     await act(async () => setEmail("new@example.test"));
     await click(buttonByText("Generate code"));
     await click(container.querySelector("[data-confirm-action]") as HTMLButtonElement);
@@ -96,6 +142,7 @@ describe("admin member invitations", () => {
     browser.history.replaceState({}, "", "/admin/members");
     await act(async () => root.render(<AdminMembersRoute locale={locale} search="" load={load} loadInvitations={loadInvitations} issueInvitation={issue} />));
     await flush();
+    await openAddDialog();
     await act(async () => setEmail("new@example.test"));
     await click(buttonByText("Generate code"));
     await click(container.querySelector("[data-confirm-action]") as HTMLButtonElement);

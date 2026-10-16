@@ -29,6 +29,8 @@ function routeFetch(route: Route, requests: URL[], respond: (url: URL) => Respon
     if (url.pathname === "/api/notifications/summary") return Response.json({ unread: 0 });
     requests.push(url);
     if (url.pathname === endpoint[route]) return respond(url);
+    // The focus route's start composer is a dialog; opening it reads the owned task list.
+    if (route === "focus" && url.pathname === "/api/tasks") return Response.json({ items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
     if (route === "projects" && /^\/api\/projects\/projects-(first|second)\/summary$/.test(url.pathname)) return Response.json({ goalCount: 0, taskCount: 0, completedTaskCount: 0, goals: [] });
     throw new Error(`Unexpected extended route request: ${url.pathname}`);
   };
@@ -77,8 +79,14 @@ describe("seven extended workbench routes: M01 runtime evidence", () => {
       if (route === "today") expect(main().textContent).toContain("No tasks due today");
       else if (route === "review") expect(main().textContent).toContain("No completed work in this snapshot");
       else if (route === "focus") {
-        expect([...main().querySelectorAll("button")].find((button) => button.textContent === "Choose task")).toBeDefined();
+        const opener = [...main().querySelectorAll("button")].find((button) => button.textContent === "Choose task") as HTMLButtonElement | undefined;
+        expect(opener).toBeDefined();
         expect(main().querySelector('input[aria-label="Task ID"]')).toBeNull();
+        // The start composer (title + confirm) lives in the dialog, so the closed route shows no confirm at all.
+        expect(main().querySelector('[data-focus-start-dialog]')).toBeNull();
+        expect([...main().querySelectorAll("button")].find((button) => button.textContent === "Start focus")).toBeUndefined();
+        await act(async () => opener!.click());
+        await waitForApp(() => main().querySelector('[data-focus-start-dialog]') !== null);
         expect([...main().querySelectorAll("button")].find((button) => button.textContent === "Start focus")?.disabled).toBe(true);
       } else expect(main().querySelector('[data-page-state="empty"]')).not.toBeNull();
     });

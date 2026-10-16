@@ -290,3 +290,38 @@
 ### 12.3 验证
 
 `npm run typecheck` 0 错误；落地页单测 174/174（含恢复后的强断言）；`verify:landing` 100/100（含字体预算与场景 JS 懒加载门禁）；真实浏览器（构建产物）：刻度条选择受控生效（正面 → 右侧）、语言选择真正切换文档语言（`lang=zh-CN`）、抽屉开合与两种关闭路径正确且解锁、`Geist Landing` 已加载、暗色首帧由 `theme-boot.js` 决定、减少动态下滚动揭示无位移无模糊。
+
+## 13. 工作台与管理端的 beUI 统一（2026-10-16）
+
+指令：项目内尽可能直接使用 beUI 成熟组件，整体风格按 beUI；所有「添加」弹窗风格统一。
+
+### 13.1 共享底座（一次到位，全仓生效）
+
+| 原语 | 改动 | 影响面 |
+| --- | --- | --- |
+| `components/ui/button.tsx` | 改为 beUI `motion/button/base` 的适配层，保留历史 variant/size 名称；**补上 beUI 按钮缺失的 `focus-visible:ring-2` 焦点环**；`buttonVariants` 的 4 处链接式用法改为 beUI `ButtonLink` | 42 个引用方零改动 |
+| `components/ui/dialog.tsx` | 自带 beUI 风格遮罩（`bg-background/10 + backdrop-blur-sm`）替代各调用方内联的 `bg-black/50`；表面改 `rounded-2xl`；保留 `role=dialog`/`aria-modal`/`useFocusScope` 与全部 `data-*` 契约 | 30 个使用方零改动 |
+| `components/ui/confirm-action.tsx` | 去掉重复的内联 scrim | 24 处确认框一次性统一 |
+| `components/ui/{input,textarea,select}.tsx` | 对齐 beUI 字段语言（44px、胶囊或 `rounded-2xl`、`ring-ring/40` 焦点、`ring-destructive/25` 错误态），保留事件式 API | 33 个引用方零改动 |
+| 新装 beUI | `center-morph-modal`、`input`、`switch`（配合既有 beUI `checkbox`/`table`），图标统一 Phosphor | 供新弹窗使用 |
+
+### 13.2 逐项落地
+
+| 项 | 结果 |
+| --- | --- |
+| 1 收集箱弹窗 | 遮罩/表面/按钮/字段全部走统一底座 |
+| 2/3/4 目标、项目、日历 | 内联 `Card` 表单改为弹窗；默认关闭、仅存在未决或不可读记录时自动打开、成功后关闭；`data-create-*` 重试与读回逻辑不变 |
+| 5 专注 | 选任务、标题、开始专注全部进入同一弹窗；关闭态不再渲染编辑区 |
+| 6 Linux 环境 | 创建进弹窗（beUI 字段），列表 `fill` 撑满，页脚分页固定 |
+| 7 成员管理 | 列表撑满 + 新成员添加在弹窗内完成 |
+| 8 角色与权限 | 列表用 `DataTable`；`/admin/roles/new` 独立创建页；`/admin/roles/:id` 独立权限详情页；三者共用一份写入/读取控制器（无重复 POST/版本逻辑） |
+| 9 弹窗风格统一 | 由 13.1 的单一弹窗原语 + beUI 按钮/字段承载；确认框与添加框外观一致 |
+
+### 13.3 过程中发现并修掉的两个真实问题
+
+1. **beUI 的 Button 没有可见焦点环**（仓库旧按钮有）：`frontend-a11y` 门禁捕获。按不 fork 组件内部的规矩，在适配层补 `focus-visible:ring-2 focus-visible:ring-ring`（并断言保留）。
+2. **落地页的 `@font-face` 打断了独立打包**：字体 URL 落在被 esbuild 打包的样式表里，使 `scripts/browser-vm-*.test.mjs` 整族无法打包 `frontend/app`。现把 `@font-face` 移到 `public/fonts/landing-font.css`，由 `index.html` 链接（字体仍在 `public/`、preload 保留），并在字体门禁中断言它不得回到打包图内；`frontend/app` 现可独立打包。
+
+### 13.4 验证
+
+`npm run typecheck` 0 错误；单测 **5317/5317**；worker 1203/1203；smoke 88/14/30；`npm run build` 通过（20 个资产）；`verify:landing` 100/100；`frontend/app` 经 esbuild 独立打包成功（6.9MB）。各页面切片的弹窗行为由新增的专项用例覆盖（新增约 29 个用例），既有用例按新结构迁移且未删减任何行为断言。

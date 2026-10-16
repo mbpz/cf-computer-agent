@@ -350,6 +350,12 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
       expect(journey.container.querySelector('main [role="alert"]')).toBeNull();
     } else if (routeId === "focus") {
       await waitForApp(() => [...journey.container.querySelectorAll("main button")].some(button => button.textContent === "Choose task"));
+      // The start composer is a dialog now: the confirm only exists once it is opened, and
+      // it stays disabled until a task is chosen.
+      expect(journey.container.querySelector('main [data-focus-start-dialog]')).toBeNull();
+      const opener = [...journey.container.querySelectorAll<HTMLButtonElement>("main button")].find(button => button.textContent === "Choose task")!;
+      await act(async () => opener.click());
+      await waitForApp(() => journey.container.querySelector('main [data-focus-start-dialog]') !== null);
       expect([...journey.container.querySelectorAll("main button")].find((button) => button.textContent === "Start focus")?.hasAttribute("disabled")).toBe(true);
       expect(journey.container.querySelector('main [data-page-state="empty"]')).toBeNull();
     } else if (routeId === "today" || routeId === "review") {
