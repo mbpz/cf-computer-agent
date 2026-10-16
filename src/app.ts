@@ -263,6 +263,11 @@ function knownWorkspaceRoute(pathname: string): boolean {
     || /^\/messages\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
     || /^\/projects\/[A-Za-z0-9_-]{1,128}\/timeline$/u.test(pathname)
     || /^\/admin\/submissions\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
+    // The role editor and role detail pages are dispatched by app-routes.ts and gated by
+    // role:manage on the client; their direct paths must be served the shell like the
+    // sibling admin parameter routes, otherwise a refresh or a deep link is a bare 404.
+    || pathname === "/admin/roles/new"
+    || /^\/admin\/roles\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
     // The recycle bin's fixed path is a registry route above; this pattern carries
     // its item-administration page (`/admin/knowledge/:id`), which app-routes.ts
     // resolves to the same page kind family.

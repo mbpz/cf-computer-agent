@@ -106,11 +106,19 @@ describe("React workspace assets", () => {
     expect(response.headers.get("x-request-id")).toBeTruthy();
   });
 
-  it.each(["/knowledge/knowledge-1", "/messages/thread-1", "/admin/submissions/submission-1", "/admin/knowledge/knowledge-1"]) ("serves React for bounded parameter route %s", async (path) => {
+  it.each(["/knowledge/knowledge-1", "/messages/thread-1", "/admin/submissions/submission-1", "/admin/knowledge/knowledge-1", "/admin/roles/new", "/admin/roles/role-1"]) ("serves React for bounded parameter route %s", async (path) => {
     const response = await SELF.fetch(`https://example.test${path}`);
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('id="root"');
     expect(response.headers.get("x-frame-options")).toBe("DENY");
+  });
+
+  it("bounds the role detail shell path at 128 characters", async () => {
+    // `/admin/roles/new` is a fixed path; the detail pattern keeps the same bound as the
+    // other parameter paths, so something longer stays a 404 page rather than being served
+    // the shell with an unrenderable id.
+    const oversize = await SELF.fetch(`https://example.test/admin/roles/${"x".repeat(129)}`);
+    expect(oversize.status).toBe(404);
   });
 
   it("bounds the knowledge item shell path at 128 characters", async () => {
