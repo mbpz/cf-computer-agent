@@ -1,12 +1,20 @@
 # 发布前材料（2026-10-16 批）——由用户执行部署
 
-日期：2026-10-16。状态：**发布准备材料，未部署**。本文件由本地门禁产出，供用户在部署时逐项执行与核对；它不声称部署完成，也不替代 signed-browser 验收。
+日期：2026-10-16。状态：**发布准备材料**。本文件由本地门禁产出，供用户在部署时逐项执行与核对；它不声称部署完成，也不替代 signed-browser 验收。
+
+## 0.1 2026-10-17 部署记录（本批）
+
+- 本地门禁：`npm test` 全绿（78 文件 / 1304 测试），`npm run build` 通过（dry-run 上传 1687.03 KiB / gzip 320.20 KiB）。
+- 迁移：`wrangler d1 migrations apply DB --remote` 应用 **`0074_knowledge_family_menu_nesting.sql`**（执行前 `migrations list --remote` 显示待应用仅此一条；执行 3 条命令）。
+- Worker：`wrangler deploy` 上线，版本 **`9a4da2ea-a179-43ee-bb9e-345517ef4632`**，自定义域 `memory.crgmhrc.asia`。
+- 生产核验（contributor 会话，真实冷加载与真实点击）：`/api/navigation` 已是 `workspace → knowledge → [search, agent, submit, my-submissions]`；桌面侧栏展开「AI 知识库」得四个二级项；首页指向 `/submit` 的入口收敛为 1 个；`/knowledge` 分享按钮 24×32；移动抽屉「打开导航」→「工作区导航」焦点进入面板、Escape 关闭并把焦点归还触发器。逐项证据见 `docs/product/2026-10-16-beui-interaction-acceptance.md` §5。
+- 仍未覆盖（见同文档 §6）：移动抽屉为**既有平铺**设计（未体现知识族嵌套）；320/768/1280 视口与英文；不可逆管理写入。
 
 ## 0. 2026-10-16 第二轮（首次部署后的追加）
 
 首次部署完成并做了真实双角色验收（记录见 `docs/operations/evidence/2026-10-16-production-acceptance.md`）。验收找出并已修复三项：**purge 在条目被成员标注过时会整体中止**（现在显式删除无级联的成员关系，不可逆性归 purge）；**收藏删除缺少可读性门禁**（回收窗口内曾被接受并无法恢复）；**阅读器在正文自带一级标题时出现两个 h1**（现在仅在源文最浅标题是 h1 时整体降一级）。此外补上**草稿放弃**（`DELETE /api/submissions/drafts/:id`，迁移 0073，界面带确认与"结果未知→复查"状态）。
 
-**部署注意**：本轮带来迁移 **0073**（其余 0064–0072 已应用，`wrangler d1 migrations list --remote` 已核对）；服务端行为有三处变化——purge 现在真的会删除成员标注数据（此前是中止）、收藏删除在不可读时返回 404、已回收条目的笔记不再可读。前端方面阅读器正文标题层级会整体下移一级。
+**部署注意**：本轮带来迁移 **0073**（其余 0064–0072 已应用，`wrangler d1 migrations list --remote` 已核对）；此外 **0074** 为纯导航结构调整（知识族归入一个一级菜单，见 §1.1）；服务端行为有三处变化——purge 现在真的会删除成员标注数据（此前是中止）、收藏删除在不可读时返回 404、已回收条目的笔记不再可读。前端方面阅读器正文标题层级会整体下移一级。
 
 **实测体积（本轮构建）**：Worker 上传 **1686.61 KiB / gzip 320.03 KiB**；前端静态资源仍约 4.8 MB（最大单文件 2.2 MB 主包，均远低于 25 MiB/文件上限）；VM 引擎与镜像仍不发布。
 
@@ -28,8 +36,9 @@
 | `0071_admin_operation_receipts.sql` | 管理操作回执（孤儿资产回收等管理端操作；purge 重放亦依赖此日志） | 新表 |
 | `0072_knowledge_recycle_bin_menu.sql` | 回收站菜单行 seed（`menu-recycle-bin`，`required_bits` 与 `knowledge:review` 同掩码，`WHERE NOT EXISTS` 守卫） | 新增菜单行 |
 | `0073_submission_draft_discard_receipts.sql` | 草稿放弃回执（成员作用域，使"已提交的删除"不会被报为不存在） | 新表 |
+| `0074_knowledge_family_menu_nesting.sql` | 把 `menu-submit`/`menu-my-submissions` 归入 `menu-knowledge`（与 0031 已归入的 `/search`、`/agent` 合成一个一级菜单"AI 知识库"） | 纯导航结构；URL、标签、掩码、可见性均不变；仅移动系统行并保留管理员自建行的归属 |
 
-迁移字节已 pin 在 `scripts/verify-m1-migrations.mjs` 与 `scripts/m1-release-contract.test.mjs`；发布前请以 `npm run verify:m1:migrations -- --files` 与 `node --test scripts/m1-release-contract.test.mjs` 复核（本地均为 pass，`count=73`）。
+迁移字节已 pin 在 `scripts/verify-m1-migrations.mjs` 与 `scripts/m1-release-contract.test.mjs`；发布前请以 `npm run verify:m1:migrations -- --files` 与 `node --test scripts/m1-release-contract.test.mjs` 复核（本地均为 pass，`count=74`）。
 
 ### 1.2 代码面（按菜单）
 

@@ -109,9 +109,12 @@ export function currentNavigationFixture(role: "contributor" | "admin", permissi
     navLeaf("knowledge", "NAV_KNOWLEDGE_BASE", "/knowledge", "workspace", [
       navLeaf("search", "NAV_KNOWLEDGE_SEARCH", "/search", "workspace"),
       navLeaf("agent", "NAV_KNOWLEDGE_AGENT", "/agent", "workspace"),
+      // The knowledge family is one top-level entry: the seeded rows put submit
+      // and my-submissions under menu-knowledge (migrations/0074), so the fixture
+      // mirrors that nesting for both roles.
+      navLeaf("submit", "NAV_SUBMIT", "/submit", "workspace"),
+      navLeaf("my-submissions", "NAV_MY_SUBMISSIONS", "/my-submissions", "workspace"),
     ]),
-    navLeaf("submit", "NAV_SUBMIT", "/submit", "workspace"),
-    navLeaf("my-submissions", "NAV_MY_SUBMISSIONS", "/my-submissions", "workspace"),
     ...(permissionMask === "0x100000" ? [
       navLeaf("graph", "NAV_GRAPH", "/graph", "workspace"),
       navLeaf("inbox", "NAV_INBOX", "/inbox", "workspace"),

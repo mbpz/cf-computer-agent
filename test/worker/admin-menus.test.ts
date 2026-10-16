@@ -3,6 +3,8 @@
 import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
+import { MenusRepository } from "../../src/authorization/menus-repository";
+import { parsePermissionMask } from "../../src/authorization/permission-bitmap";
 import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
 import { createAdminMenu, updateAdminMenu, loadAdminMenus } from "../../frontend/lib/admin-menus-data";
@@ -66,7 +68,7 @@ describe("admin menus API", () => {
     const payload = await allowed.json() as { tree: MenuPayloadNode[] };
     expect(payload.tree.some((item) => item.key === "workspace" && item.children.some((child) => child.key === "custom"))).toBe(true);
     const workspace = payload.tree.find((item) => item.key === "workspace");
-    expect(workspace?.children.find((child) => child.key === "knowledge")?.children.map((child) => child.key)).toEqual(["search", "agent"]);
+    expect(workspace?.children.find((child) => child.key === "knowledge")?.children.map((child) => child.key)).toEqual(["search", "agent", "submit", "my-submissions"]);
     const adminRoot = payload.tree.find((item) => item.key === "admin");
     expect(adminRoot?.children.find((child) => child.key === "governance")?.children.map((child) => child.key)).toEqual(["members", "roles", "menus", "spaces", "audit", "site-analytics"]);
     expect((await api("/api/admin/menus", contributor)).status).toBe(403);
@@ -78,10 +80,12 @@ describe("admin menus API", () => {
     const contributorPayload = await contributorResponse.json() as { tree: MenuPayloadNode[] };
     expect(contributorPayload.tree.map((node) => node.key)).toEqual(["workspace"]);
     expect(contributorPayload.tree[0]?.children.map((node) => node.key)).toEqual([
-      "home", "knowledge", "submit", "my-submissions", "tasks", "boards", "notifications", "messages", "inbox", "goals", "projects",
+      "home", "knowledge", "tasks", "boards", "notifications", "messages", "inbox", "goals", "projects",
       "graph", "calendar", "today", "focus", "workbench-review",
     ]);
-    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key)).toEqual(["search", "agent"]);
+    // The knowledge family is one top-level entry: the four related rows hang
+    // beneath `/knowledge` instead of sitting flat beside it.
+    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key)).toEqual(["search", "agent", "submit", "my-submissions"]);
 
     const adminResponse = await api("/api/navigation", admin);
     expect(adminResponse.status).toBe(200);
@@ -105,6 +109,57 @@ describe("admin menus API", () => {
       availability: "ready",
     });
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "messages")?.disabledReason).toBeUndefined();
+  });
+
+  it("projects the knowledge family as one entry and withholds what a partial mask cannot reach", async () => {
+    const menus = new MenusRepository(env.DB);
+    const family = async (mask: string): Promise<string[]> => (await menus.navigation(parsePermissionMask(mask))).tree
+      .find((node) => node.key === "workspace")?.children
+      .find((node) => node.key === "knowledge")?.children.map((node) => node.key) ?? [];
+
+    // The whole family is nested under the one top-level entry for a full mask.
+    expect(await family("0x7ffff")).toEqual(["search", "agent", "submit", "my-submissions"]);
+    // knowledge:read + submission:create reaches the family entry and the single
+    // child that capability opens; the other three stay hidden under it.
+    expect(await family("0x41")).toEqual(["submit"]);
+    // knowledge:read + submission:read-own reaches only the tracking entry.
+    expect(await family("0x81")).toEqual(["my-submissions"]);
+    // knowledge:read alone reaches the entry (`/knowledge` is its own page) and
+    // none of the children, so nesting hands out no extra gate.
+    expect(await family("0x1")).toEqual([]);
+    // Without knowledge:read the family entry itself is withheld, so a nested
+    // child can never leak through its parent.
+    const withoutRead = (await menus.navigation(parsePermissionMask("0x40"))).tree
+      .find((node) => node.key === "workspace")?.children.map((node) => node.key) ?? [];
+    expect(withoutRead).not.toContain("knowledge");
+    // A contributor session, which holds knowledge:read plus the submission and
+    // search/agent bits, reaches every seeded child through the same nesting.
+    const contributorPayload = await (await api("/api/navigation", contributor)).json() as { tree: MenuPayloadNode[] };
+    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key))
+      .toEqual(["search", "agent", "submit", "my-submissions"]);
+    // The nested rows are no longer flat siblings of the family entry.
+    expect(contributorPayload.tree[0]?.children.map((node) => node.key)).not.toContain("submit");
+    expect(contributorPayload.tree[0]?.children.map((node) => node.key)).not.toContain("my-submissions");
+  });
+
+  it("round-trips a custom child of the knowledge family through the whole-tree snapshot CAS", async () => {
+    const created = await api("/api/admin/menus", admin, { method: "POST", body: JSON.stringify({ key: "kb-shortcut", labelKey: "NAV_HOME", path: "/settings", parentId: "menu-knowledge", groupName: "workspace", position: 4, requiredBits: "0x0" }) });
+    expect(created.status).toBe(201);
+    const menu = (await created.json() as { menu: { id: string } }).menu;
+    // The editor reads the re-parented rows back with the custom child appended to
+    // the knowledge entry, which is the tree the same rows are edited in.
+    const tree = await loadAdminMenus(async () => api("/api/admin/menus", admin));
+    expect(tree.find((item) => item.id === "menu-workspace")?.children.find((item) => item.id === "menu-knowledge")?.children.map((item) => item.id))
+      .toEqual(["menu-search", "menu-agent", "menu-submit", "menu-my-submissions", menu.id]);
+    // The member projection keeps that nesting rather than promoting the child.
+    expect(await navigationKeysFor(contributor)).toContain("kb-shortcut");
+    // The whole-tree snapshot compare-and-set still serializes concurrent editors,
+    // and the row keeps its re-parented place when it wins.
+    const expected = { parentId: "menu-knowledge", labelKey: "NAV_HOME", path: "/settings", position: 4, requiredBits: "0x0", status: "active" as const, visible: true };
+    const write = (position: number) => api(`/api/admin/menus/${menu.id}`, admin, { method: "PATCH", body: JSON.stringify({ expected, position }) });
+    expect((await write(5)).status).toBe(200);
+    expect((await write(6)).status).toBe(409);
+    expect(await env.DB.prepare("SELECT parent_id, position FROM menus WHERE id = ?").bind(menu.id).first()).toEqual({ parent_id: "menu-knowledge", position: 5 });
   });
 
   it("keeps seeded coming-soon visibility under database control", async () => {

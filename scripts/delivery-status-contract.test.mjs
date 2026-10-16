@@ -313,10 +313,10 @@ test("actual workspace route registry extraction includes every ready and coming
     workspaceRouteCapabilities(),
     [
       { path: "/", availability: "ready" },
-      { path: "/submit", availability: "ready" },
       { path: "/knowledge", availability: "ready" },
       { path: "/search", availability: "ready" },
       { path: "/agent", availability: "ready" },
+      { path: "/submit", availability: "ready" },
       { path: "/my-submissions", availability: "ready" },
       { path: "/graph", availability: "ready" },
       { path: "/tasks", availability: "ready" },

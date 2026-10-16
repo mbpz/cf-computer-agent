@@ -86,6 +86,39 @@ describe("AdminMenusPage", () => {
       expect(onDelete).toHaveBeenCalledExactlyOnceWith(parent);
     });
 
+    it("round-trips the re-parented knowledge family through the editor tree", async () => {
+      const child = (id: string, key: string, labelKey: string, path: string, position: number) => menu({ id, key, labelKey, path, parentId: "menu-knowledge", position, isSystem: true });
+      const knowledge = {
+        ...menu({ id: "menu-knowledge", key: "knowledge", labelKey: "NAV_KNOWLEDGE_BASE", path: "/knowledge", position: 1, isSystem: true }),
+        children: [
+          child("menu-search", "search", "NAV_KNOWLEDGE_SEARCH", "/search", 0),
+          child("menu-agent", "agent", "NAV_KNOWLEDGE_AGENT", "/agent", 1),
+          child("menu-submit", "submit", "NAV_SUBMIT", "/submit", 2),
+          child("menu-my-submissions", "my-submissions", "NAV_MY_SUBMISSIONS", "/my-submissions", 3),
+          menu({ id: "menu-kb-extra", key: "kb-extra", labelKey: "NAV_HOME", path: "/settings", parentId: "menu-knowledge", position: 4 }),
+        ],
+      };
+      await mount([{ ...menu({ id: "menu-workspace", key: "workspace", path: null, isSystem: true }), children: [knowledge] }]);
+
+      // One parent row owns `/knowledge` and the four seeded rows nest beneath it,
+      // so the same tree the member navigation projects is the tree edited here.
+      const rows = [...container.querySelectorAll('[role="treeitem"]')].map((item) => item.textContent ?? "");
+      expect(rows.some((text) => text.includes("NAV_KNOWLEDGE_BASE") && text.includes("/knowledge"))).toBe(true);
+      for (const path of ["/search", "/agent", "/submit", "/my-submissions"]) {
+        expect(rows.some((text) => text.includes(path)), path).toBe(true);
+      }
+      // Every seeded family row is a system row, so only the administrator-created
+      // child is removable: the re-parented rows cannot be deleted out of the tree.
+      expect(deleteButtons()).toHaveLength(1);
+
+      // The custom child sits under the family parent and deletes with no nested
+      // impact, so the whole-tree snapshot held by the editor stays consistent.
+      await act(async () => rowButton("/settings", "Delete").click());
+      expect(dialog()?.textContent).not.toContain("nested entries");
+      await act(async () => (dialog()!.querySelector("[data-confirm-action]") as HTMLButtonElement).click());
+      expect(onDelete).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: "menu-kb-extra", parentId: "menu-knowledge" }));
+    });
+
     it("keeps the delete action away from system subtrees and shows no impact", async () => {
       await mount([menu({ id: "governance", key: "governance", path: null, isSystem: true, children: [menu({ id: "mixed", key: "mixed", parentId: "governance", children: [menu({ id: "system-child", key: "system-child", parentId: "mixed", isSystem: true })] })] })]);
       expect(deleteButtons()).toHaveLength(0);

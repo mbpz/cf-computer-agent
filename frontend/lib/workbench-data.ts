@@ -42,8 +42,9 @@ export function buildWorkbenchSummary(input: WorkbenchSummaryInput): WorkbenchSu
     overdueTaskCount,
     recentKnowledge,
     recentActivity,
+    // The capture card owns the single `/submit` action on the home page: a
+    // quick-action tile pointing at the same route would repeat it.
     quickActions: [
-      { id: "create-knowledge", href: "/submit", labelKey: "WORKBENCH_QUICK_SUBMIT" },
       { id: "open-tasks", href: "/tasks", labelKey: "WORKBENCH_QUICK_TASKS" },
       { id: "ask-ai", href: "/agent", labelKey: "WORKBENCH_QUICK_AI" },
       { id: "search-knowledge", href: "/search", labelKey: "WORKBENCH_QUICK_SEARCH" },

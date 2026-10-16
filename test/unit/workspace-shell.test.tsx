@@ -320,6 +320,33 @@ describe("shadcn workspace shell", () => {
     expect(onNavigate).toHaveBeenCalledWith("/settings");
   });
 
+  it("closes the mobile drawer on Escape and on its backdrop, handing focus back to the trigger", async () => {
+    const onNavigate = vi.fn();
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Home</p></AppShell>));
+    const trigger = container.querySelector("[data-sheet-open] summary") as HTMLElement;
+
+    // Focus transfer into the panel: the drawer shows, the focus scope lands on
+    // the panel's first control instead of leaving the caret behind the scrim.
+    await act(async () => { trigger.focus(); trigger.click(); });
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dialog).not.toBeNull();
+    expect(dialog.contains(browser.document.activeElement)).toBe(true);
+
+    await act(async () => dialog.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as Event));
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(browser.document.activeElement).toBe(trigger);
+
+    // Backdrop dismissal comes from the drawer, not from a second panel.
+    await act(async () => trigger.click());
+    const opened = container.querySelector('[role="dialog"]') as HTMLElement;
+    const backdrop = opened.previousElementSibling as HTMLButtonElement;
+    expect(backdrop.tagName).toBe("BUTTON");
+    expect(backdrop.getAttribute("aria-label")).toBeTruthy();
+    await act(async () => backdrop.click());
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(browser.document.activeElement).toBe(trigger);
+  });
+
   it("does not restore Tasks through the navigation-load failure fallback without its permission", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
     const session = { ...admin, capabilities: ["knowledge:read"], permissionMask: "0x0" };

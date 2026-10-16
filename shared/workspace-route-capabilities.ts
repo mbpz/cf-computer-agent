@@ -26,15 +26,28 @@ export interface WorkspaceRouteCapability {
   moduleKey: WorkbenchModuleKey;
   capability: WorkspaceCapability | null;
   requiredPermission?: PermissionKey;
+  /**
+   * The top-level menu entry this route hangs beneath in the server-owned menu
+   * tree (`menus.parent_id` -> menu id without the `menu-` prefix, e.g.
+   * "knowledge"). The seeded rows are re-parented by
+   * migrations/0074_knowledge_family_menu_nesting.sql and the shell's client
+   * fallback tree derives its nesting from this field, so the two layers agree
+   * by construction. Absent means the route is a top-level entry.
+   */
+  parentRouteId?: string;
 }
 
 export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "home", path: "/", pageKind: "home", availability: "ready", labelKey: "NAV_HOME", group: "workspace", moduleKey: "workbench", capability: null },
-  { id: "submit", path: "/submit", pageKind: "submit", availability: "ready", labelKey: "NAV_SUBMIT", group: "workspace", moduleKey: "knowledge", capability: "submission:create" },
+  // The AI knowledge family is one top-level entry: `knowledge` owns `/knowledge`
+  // and the four related entries hang beneath it via `parentRouteId`, in the same
+  // order the seeded rows carry (`menus.position` 0-3 under menu-knowledge). The
+  // order here is the family's reading order and mirrors the menu tree.
   { id: "knowledge", path: "/knowledge", pageKind: "knowledge", availability: "ready", labelKey: "NAV_KNOWLEDGE_BASE", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read" },
-  { id: "search", path: "/search", pageKind: "search", availability: "ready", labelKey: "NAV_SEARCH", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read" },
-  { id: "agent", path: "/agent", pageKind: "agent", availability: "ready", labelKey: "NAV_AGENT", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read" },
-  { id: "my-submissions", path: "/my-submissions", pageKind: "my-submissions", availability: "ready", labelKey: "NAV_MY_SUBMISSIONS", group: "workspace", moduleKey: "knowledge", capability: "submission:read-own" },
+  { id: "search", path: "/search", pageKind: "search", availability: "ready", labelKey: "NAV_SEARCH", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read", parentRouteId: "knowledge" },
+  { id: "agent", path: "/agent", pageKind: "agent", availability: "ready", labelKey: "NAV_AGENT", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read", parentRouteId: "knowledge" },
+  { id: "submit", path: "/submit", pageKind: "submit", availability: "ready", labelKey: "NAV_SUBMIT", group: "workspace", moduleKey: "knowledge", capability: "submission:create", parentRouteId: "knowledge" },
+  { id: "my-submissions", path: "/my-submissions", pageKind: "my-submissions", availability: "ready", labelKey: "NAV_MY_SUBMISSIONS", group: "workspace", moduleKey: "knowledge", capability: "submission:read-own", parentRouteId: "knowledge" },
   { id: "graph", path: "/graph", pageKind: "graph", availability: "ready", labelKey: "NAV_GRAPH", group: "workspace", moduleKey: "workbench", capability: null, requiredPermission: "workspace.tasks" },
   { id: "tasks", path: "/tasks", pageKind: "tasks", availability: "ready", labelKey: "NAV_TASKS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "goals", path: "/goals", pageKind: "goals", availability: "ready", labelKey: "NAV_GOALS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },

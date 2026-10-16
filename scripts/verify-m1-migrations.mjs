@@ -79,6 +79,7 @@ const localMigrations = [...migrations,
   ["0071_admin_operation_receipts.sql", "37fac82bcff9f651ea278fa8b6d38262f9e67e8e252ebdbdd0379928bcb79826"],
   ["0072_knowledge_recycle_bin_menu.sql", "cc49b35f922ad7f816406873667888ca29f44ddf6e00b3beeb951742b266862b"],
   ["0073_submission_draft_discard_receipts.sql", "87a9e58df98f1299c32fb3e753cbcca30bbe92e77a666f9ca9fd11bcb1cdaf9a"],
+  ["0074_knowledge_family_menu_nesting.sql", "0412f30ec2f218690f9c0eb5701f5dc726038239a789f3b5d622abd17cdae3f8"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

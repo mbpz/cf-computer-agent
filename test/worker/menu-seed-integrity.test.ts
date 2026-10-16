@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { MENU_LABEL_KEYS } from "../../shared/admin-menu-fields";
 import { WORKSPACE_ROUTE_CAPABILITIES, type WorkspaceRouteCapability } from "../../shared/workspace-route-capabilities";
 import { parsePermissionMask, permissionMaskFor, serializePermissionMask } from "../../src/authorization/permission-bitmap";
+import { buildMenuTree, type MenuRow as MenuTreeRow } from "../../src/authorization/menu-tree";
 import { MIGRATIONS } from "../fixtures/d1";
 
 interface MenuRow {
@@ -25,11 +26,24 @@ const UNSEEDED_ROUTE_IDS: readonly string[] = ["settings"];
 
 // The deterministic workspace order the admin editor and the member navigation
 // both read. `/environments` stays last because it is the only workspace.vm entry.
+// The knowledge family (`menu-search`, `menu-agent`, `menu-submit`,
+// `menu-my-submissions`) is no longer flat here: it hangs beneath `menu-knowledge`
+// (0031 for search/agent, 0074 for submit/my-submissions), which keeps
+// `/knowledge` as that entry's own destination.
 const WORKSPACE_SEED_ORDER = [
-  "menu-home", "menu-knowledge", "menu-submit", "menu-my-submissions", "menu-tasks", "menu-boards",
+  "menu-home", "menu-knowledge", "menu-tasks", "menu-boards",
   "menu-notifications", "menu-messages", "menu-inbox", "menu-goals", "menu-projects", "menu-graph",
   "menu-calendar", "menu-today", "menu-focus", "menu-workbench-review", "menu-environments",
 ] as const;
+
+// The one top-level knowledge entry's children, in seeded position order.
+const KNOWLEDGE_SEED_ORDER = ["menu-search", "menu-agent", "menu-submit", "menu-my-submissions"] as const;
+
+// The masks these four rows were published with. The re-parenting migration must
+// not move them: the family reads as nested navigation, not as a new gate.
+const KNOWLEDGE_CHILD_BITS: Readonly<Record<string, string>> = {
+  "menu-search": "0x40000", "menu-agent": "0x20000", "menu-submit": "0x40", "menu-my-submissions": "0x80",
+};
 
 describe("menu seed integrity against the shared route registry", () => {
   beforeEach(async () => {
@@ -128,5 +142,58 @@ describe("menu seed integrity against the shared route registry", () => {
       .sort((left, right) => left.position - right.position || left.id.localeCompare(right.id))
       .map((row) => row.id);
     expect(order).toEqual([...WORKSPACE_SEED_ORDER]);
+
+    const knowledgeOrder = rows
+      .filter((row) => row.parent_id === "menu-knowledge" && row.is_system === 1)
+      .sort((left, right) => left.position - right.position || left.id.localeCompare(right.id))
+      .map((row) => row.id);
+    expect(knowledgeOrder).toEqual([...KNOWLEDGE_SEED_ORDER]);
+  });
+
+  it("keeps the knowledge family under one top-level entry in both layers", async () => {
+    const rows = await menuRows();
+    const children = rows.filter((row) => row.parent_id === "menu-knowledge");
+    // The parent is still its own page: /knowledge stays reachable in one click.
+    expect(rows.find((row) => row.id === "menu-knowledge")).toMatchObject({
+      parent_id: "menu-workspace", path: "/knowledge", label_key: "NAV_KNOWLEDGE_BASE", required_bits: "0x1",
+    });
+    // Re-parenting changed only the tree shape: every child keeps its own URL,
+    // label and published mask, so no capability gate moved with it.
+    expect(Object.fromEntries(children.map((row) => [row.id, row.required_bits]))).toEqual(KNOWLEDGE_CHILD_BITS);
+    expect(children.every((row) => row.group_name === "workspace" && row.is_system === 1 && row.path !== null)).toBe(true);
+    // The registry states the same nesting (`parentRouteId`), in the same order,
+    // so the client fallback tree and the seeded rows agree by construction.
+    const routes: readonly WorkspaceRouteCapability[] = WORKSPACE_ROUTE_CAPABILITIES;
+    const declared = routes.filter((route) => route.parentRouteId !== undefined);
+    expect(declared.map((route) => route.id)).toEqual(["search", "agent", "submit", "my-submissions"]);
+    expect(declared.every((route) => route.parentRouteId === "knowledge")).toBe(true);
+    expect(declared.map((route) => `menu-${route.id}`)).toEqual([...KNOWLEDGE_SEED_ORDER]);
+  });
+
+  it("projects only the knowledge children a partial mask may reach", async () => {
+    const rows = (await env.DB.prepare(
+      `SELECT id, parent_id AS parentId, key, label_key AS labelKey, path, icon, group_name AS groupName,
+              position, required_bits AS requiredBits, status, visible, is_system AS isSystem
+       FROM menus`,
+    ).all<MenuTreeRow>()).results;
+    const family = (mask: bigint): string[] => buildMenuTree(rows, mask)
+      .find((node) => node.id === "menu-workspace")?.children
+      .find((node) => node.id === "menu-knowledge")?.children.map((node) => node.id) ?? [];
+
+    // The family parent itself is gated by knowledge:read, so a member without it
+    // never receives the entry and no child leaks through the nesting.
+    const withoutRead = buildMenuTree(rows, permissionMaskFor(["submission:create"]))
+      .find((node) => node.id === "menu-workspace")?.children.map((node) => node.id) ?? [];
+    expect(withoutRead).not.toContain("menu-knowledge");
+    expect(withoutRead).not.toContain("menu-submit");
+
+    // With the family entry but only part of the family's capabilities, exactly
+    // the reachable children survive — nesting never hands out an extra gate.
+    expect(family(permissionMaskFor(["knowledge:read"]))).toEqual([]);
+    expect(family(permissionMaskFor(["knowledge:read", "submission:create"]))).toEqual(["menu-submit"]);
+    expect(family(permissionMaskFor(["knowledge:read", "submission:read-own"]))).toEqual(["menu-my-submissions"]);
+    expect(family(permissionMaskFor(["knowledge:read", "search:use", "agent:use"]))).toEqual(["menu-search", "menu-agent"]);
+    // A full administrator mask reaches the whole family in seeded order.
+    expect(family(parsePermissionMask("0x7ffff"))).toEqual([...KNOWLEDGE_SEED_ORDER]);
   });
 });

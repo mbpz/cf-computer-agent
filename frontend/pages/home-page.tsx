@@ -69,15 +69,12 @@ export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: 
 
   return (
     <section className="space-y-6" aria-labelledby="workbench-title">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium uppercase tracking-[0.18em] text-primary">{frontendText(locale, "APP_BRAND_EYEBROW")}</p>
-          <h1 id="workbench-title" className="mt-2 text-3xl font-semibold tracking-tight">{frontendText(locale, "WORKBENCH_TITLE")}</h1>
-          <p className="mt-2 max-w-2xl text-muted-foreground">{frontendText(locale, "WORKBENCH_DESCRIPTION")}</p>
-        </div>
-        <a href="/submit" className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90">
-          {frontendText(locale, "WORKBENCH_OPEN_CAPTURE")}
-        </a>
+      {/* One capture action per page: the card below owns `/submit`, so the
+          header carries the title and description only. */}
+      <div>
+        <p className="text-sm font-medium uppercase tracking-[0.18em] text-primary">{frontendText(locale, "APP_BRAND_EYEBROW")}</p>
+        <h1 id="workbench-title" className="mt-2 text-3xl font-semibold tracking-tight">{frontendText(locale, "WORKBENCH_TITLE")}</h1>
+        <p className="mt-2 max-w-2xl text-muted-foreground">{frontendText(locale, "WORKBENCH_DESCRIPTION")}</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">

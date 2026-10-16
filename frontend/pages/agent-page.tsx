@@ -31,6 +31,15 @@ export function AgentPage({ scope, state, locale, question = "", onQuestionChang
     ...(state.kind === "ready" && state.confidence === "low" ? [{ label: frontendText(locale, "AGENT_CONFIDENCE"), value: frontendText(locale, "AGENT_CONFIDENCE_LOW") }] : []),
   ];
   return <section className="flex flex-col space-y-6 lg:h-full lg:min-h-0"><div><PageHeader title={frontendText(locale, "AGENT_TITLE")} /><SummaryRow className="mt-1" locale={locale} items={summaryItems} /></div>
+    {/* Kept hand-rolled on purpose. beUI's `prompt-input` (registry slug
+        `@beui/prompt-input`, evaluated 2026-10-16) carries the drafted question
+        (`value`/`onValueChange` plus `id` through its textarea props) and honours
+        `disabled`, so the write-blocked guard survives - but it renders the
+        submit/cancel pair as icon-only buttons whose accessible names are the
+        hardcoded English literals "Send prompt" / "Stop generating" with no prop
+        to override them. Adopting it would drop the localized AGENT_SUBMIT and
+        AGENT_STOP affordances this composer owes both locales, so the two
+        controls stay here. */}
     <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
       <Label htmlFor="agent-question">{frontendText(locale, "AGENT_QUESTION_LABEL")}</Label>
       <div className="flex flex-col gap-2 sm:flex-row"><Input id="agent-question" name="question" disabled={state.kind === "loading" || feedbackBlocked} value={question} onChange={(event) => onQuestionChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "AGENT_QUESTION_PLACEHOLDER")} autoComplete="off" /><Button type="submit" disabled={!onSubmit || state.kind === "loading" || feedbackBlocked}>{frontendText(locale, "AGENT_SUBMIT")}</Button></div>

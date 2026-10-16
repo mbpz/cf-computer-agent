@@ -3,18 +3,16 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { HomePage } from "../../frontend/pages/home-page";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { buildWorkbenchSummary } from "../../frontend/lib/workbench-data";
 
 const summary = {
   taskCount: 4,
   overdueTaskCount: 1,
   recentKnowledge: [{ id: "k1", title: "Work guide", summary: "2026-09-08T00:00:00.000Z" }],
   recentActivity: [{ id: "a1", label: "knowledge.published", href: "/knowledge/k1", createdAt: "2026-09-08T00:00:00.000Z" }],
-  quickActions: [
-    { id: "create-knowledge", href: "/submit", labelKey: "WORKBENCH_QUICK_SUBMIT" },
-    { id: "open-tasks", href: "/tasks", labelKey: "WORKBENCH_QUICK_TASKS" },
-    { id: "ask-ai", href: "/agent", labelKey: "WORKBENCH_QUICK_AI" },
-    { id: "search-knowledge", href: "/search", labelKey: "WORKBENCH_QUICK_SEARCH" },
-  ],
+  // The shortcut grid is the summary's real list, not a hand-copied one, so a
+  // second capture shortcut cannot slip back in through the data.
+  quickActions: buildWorkbenchSummary({}).quickActions,
 } as const;
 
 describe("workbench home", () => {
@@ -28,6 +26,20 @@ describe("workbench home", () => {
     expect(html).toContain("Ask AI");
     expect(html).toContain("Work guide");
     expect(html).not.toContain("undefined");
+  });
+
+  it.each(["en", "zh-CN"] as const)("offers exactly one capture action to /submit in %s", (navigatorLanguage) => {
+    const locale = createLocaleRuntime({ navigatorLanguage });
+    const html = renderToStaticMarkup(<HomePage locale={locale} state={{ kind: "ready", summary }} />);
+    expect(html.match(/href="\/submit"/gu) ?? []).toHaveLength(1);
+    expect(html).toContain(locale.t("WORKBENCH_QUICK_SUBMIT"));
+    expect(html).not.toContain("WORKBENCH_OPEN_CAPTURE");
+  });
+
+  it("keeps the legacy embed on a single capture action as well", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    const html = renderToStaticMarkup(<HomePage locale={locale} state={{ kind: "ready", total: 4, pending: 1, published: 3, recent: [] }} />);
+    expect(html.match(/href="\/submit"/gu) ?? []).toHaveLength(1);
   });
 
   it("renders explicit empty and error states", () => {

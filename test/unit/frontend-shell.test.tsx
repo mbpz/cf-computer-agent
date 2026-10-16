@@ -75,6 +75,54 @@ describe("frontend application shell", () => {
     expect(direct).not.toContain("Graph content must not render");
   });
 
+  it("keeps the knowledge family nested under one fallback entry", () => {
+    const html = renderToStaticMarkup(
+      <AppShell session={contributor} pathname="/knowledge" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
+        <h1>Knowledge</h1>
+      </AppShell>,
+    );
+    const navigation = html.match(/<nav data-shell-sidebar-scroll[\s\S]*?<\/nav>/u)?.[0] ?? "";
+    // The fallback tree derives the family from the shared registry's parentRouteId,
+    // so it has to render the server tree's nesting: one depth-1 `/knowledge` entry
+    // with the four related entries as depth-2 children. A flat re-parenting that
+    // merely reordered the same rows would keep the DOM order but fail on the depth.
+    const nodes = navigation.split("data-nav-node").slice(1).map((segment) => ({
+      depth: /data-nav-depth="(\d+)"/u.exec(segment)?.[1],
+      routeId: /data-route-id="([^"]+)"/u.exec(segment)?.[1],
+    }));
+    expect(nodes).toEqual([
+      { depth: "1", routeId: "home" },
+      { depth: "1", routeId: "knowledge" },
+      { depth: "2", routeId: "search" },
+      { depth: "2", routeId: "agent" },
+      { depth: "2", routeId: "submit" },
+      { depth: "2", routeId: "my-submissions" },
+    ]);
+  });
+
+  it("hides the knowledge children the fallback session cannot reach", () => {
+    const html = renderToStaticMarkup(
+      <AppShell session={{ ...contributor, capabilities: ["knowledge:read"] }} pathname="/knowledge" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
+        <h1>Knowledge</h1>
+      </AppShell>,
+    );
+    const navigation = html.match(/<nav data-shell-sidebar-scroll[\s\S]*?<\/nav>/u)?.[0] ?? "";
+    const nodes = navigation.split("data-nav-node").slice(1).map((segment) => ({
+      depth: /data-nav-depth="(\d+)"/u.exec(segment)?.[1],
+      routeId: /data-route-id="([^"]+)"/u.exec(segment)?.[1],
+    }));
+    // knowledge:read reaches the family entry and its two read-only children only;
+    // the entry is still its own destination, so `/knowledge` remains clickable.
+    expect(nodes).toEqual([
+      { depth: "1", routeId: "home" },
+      { depth: "1", routeId: "knowledge" },
+      { depth: "2", routeId: "search" },
+      { depth: "2", routeId: "agent" },
+    ]);
+    expect(navigation).not.toContain('href="/submit"');
+    expect(navigation).not.toContain('href="/my-submissions"');
+  });
+
   it("does not render admin navigation for a contributor", () => {
     const html = renderToStaticMarkup(
       <AppShell session={contributor} pathname="/" locale={createLocaleRuntime()}>

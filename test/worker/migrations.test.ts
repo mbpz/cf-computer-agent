@@ -1306,8 +1306,8 @@ describe("Phase 1 control-plane migrations", () => {
     const rows = await env.DB.prepare(
       `SELECT id, parent_id, label_key, path, position
        FROM menus
-       WHERE id IN ('menu-knowledge', 'menu-search', 'menu-agent', 'menu-admin',
-         'menu-governance', 'menu-members', 'menu-roles', 'menu-menus',
+       WHERE id IN ('menu-knowledge', 'menu-search', 'menu-agent', 'menu-submit', 'menu-my-submissions',
+         'menu-admin', 'menu-governance', 'menu-members', 'menu-roles', 'menu-menus',
          'menu-spaces', 'menu-audit', 'menu-analytics')
        ORDER BY id`,
     ).all<{ id: string; parent_id: string | null; label_key: string; path: string | null; position: number }>();
@@ -1320,9 +1320,13 @@ describe("Phase 1 control-plane migrations", () => {
       { id: "menu-knowledge", parent_id: "menu-workspace", label_key: "NAV_KNOWLEDGE_BASE", path: "/knowledge", position: 1 },
       { id: "menu-members", parent_id: "menu-governance", label_key: "NAV_MEMBERS", path: "/admin/members", position: 0 },
       { id: "menu-menus", parent_id: "menu-governance", label_key: "NAV_MENUS", path: "/admin/menus", position: 2 },
+      // 0074 re-parents the last two flat knowledge rows so the whole family hangs
+      // beneath the one `/knowledge` entry, after the children 0031 already moved.
+      { id: "menu-my-submissions", parent_id: "menu-knowledge", label_key: "NAV_MY_SUBMISSIONS", path: "/my-submissions", position: 3 },
       { id: "menu-roles", parent_id: "menu-governance", label_key: "NAV_ROLES", path: "/admin/roles", position: 1 },
       { id: "menu-search", parent_id: "menu-knowledge", label_key: "NAV_KNOWLEDGE_SEARCH", path: "/search", position: 0 },
       { id: "menu-spaces", parent_id: "menu-governance", label_key: "NAV_SPACES", path: "/admin/spaces", position: 3 },
+      { id: "menu-submit", parent_id: "menu-knowledge", label_key: "NAV_SUBMIT", path: "/submit", position: 2 },
     ]);
   });
 
@@ -1468,6 +1472,45 @@ describe("Phase 1 control-plane migrations", () => {
       `SELECT COUNT(*) AS count, COUNT(DISTINCT position) AS distinct_positions FROM menus
        WHERE parent_id = 'menu-workspace' AND group_name = 'workspace' AND is_system = 1`,
     ).first()).resolves.toEqual({ count: 17, distinct_positions: 17 });
+  });
+
+  it("nests the knowledge family idempotently and never moves an administrator-managed row", async () => {
+    const registration = MIGRATIONS.find((migration) => migration.name === "0074_knowledge_family_menu_nesting.sql")!;
+    expect(registration).toBeDefined();
+    // The migration harness splits the pinned file into statements; run them
+    // verbatim so this test never rewrites the migration text.
+    const statements = registration.queries;
+    expect(statements).toHaveLength(2);
+    expect(statements.filter((statement) => /^UPDATE menus/u.test(statement.trim()))).toHaveLength(2);
+    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, MIGRATIONS.indexOf(registration)));
+    const apply0074 = async () => { for (const statement of statements) await env.DB.prepare(statement).run(); };
+    const placement = async () => (await env.DB.prepare(
+      `SELECT id, parent_id, position, path, label_key, required_bits FROM menus
+       WHERE id IN ('menu-submit', 'menu-my-submissions') ORDER BY id`,
+    ).all()).results;
+
+    await apply0074();
+    const nested = await placement();
+    expect(nested).toEqual([
+      // Navigation only: path, label and mask are exactly what 0029 published.
+      { id: "menu-my-submissions", parent_id: "menu-knowledge", position: 3, path: "/my-submissions", label_key: "NAV_MY_SUBMISSIONS", required_bits: "0x80" },
+      { id: "menu-submit", parent_id: "menu-knowledge", position: 2, path: "/submit", label_key: "NAV_SUBMIT", required_bits: "0x40" },
+    ]);
+    // A rerun is a no-op: the rows are already canonical for this migration.
+    await apply0074();
+    await expect(placement()).resolves.toEqual(nested);
+    // Every seeded workspace sibling keeps a unique position, and the two vacated
+    // slots are simply unused rather than shifting a published order.
+    await expect(env.DB.prepare(
+      `SELECT COUNT(*) AS count, COUNT(DISTINCT position) AS distinct_positions FROM menus
+       WHERE parent_id = 'menu-workspace' AND group_name = 'workspace' AND is_system = 1`,
+    ).first()).resolves.toEqual({ count: 15, distinct_positions: 15 });
+
+    // A row an administrator owns (is_system = 0) is preserved verbatim.
+    await env.DB.prepare("UPDATE menus SET is_system = 0, parent_id = 'menu-workspace', position = 99 WHERE id = 'menu-my-submissions'").run();
+    await apply0074();
+    await expect(env.DB.prepare("SELECT parent_id, position FROM menus WHERE id = 'menu-my-submissions'").first())
+      .resolves.toEqual({ parent_id: "menu-workspace", position: 99 });
   });
 
   it("realigns the 0062 contributor workspace.tasks mask without overriding managed roles", async () => {
