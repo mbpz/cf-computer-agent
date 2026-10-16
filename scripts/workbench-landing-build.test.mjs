@@ -36,14 +36,19 @@ export async function loadBuildGraph(manifestPath) {
   assert.ok(entries.length, 'MISSING_INITIAL_ENTRY');
   const sceneRuntimeKey = Object.keys(manifest).find(key => key.endsWith('/workbench-scene-runtime.ts'));
   assert.ok(sceneRuntimeKey, 'MISSING_SCENE_RUNTIME');
-  const closure = (seeds, dynamic) => {
+  // The bundler folds the shared initial chunk into the scene runtime's static graph (React et al
+  // live there), so following dynamic imports out of that chunk would count every sibling lazy
+  // chunk in the app - the agent highlighter, the environments file surface, graph cytoscape - as
+  // if it were 3D scene JavaScript. Walk the scene's own graph: static imports everywhere, dynamic
+  // imports only from chunks that are not part of the initial static set.
+  const closure = (seeds, dynamic, stopDynamicFrom = new Set()) => {
     const visited = new Set();
     const visit = key => {
       if (visited.has(key)) return;
       assert.ok(manifest[key], `MISSING_GRAPH_NODE:${key}`);
       visited.add(key);
       for (const next of manifest[key].imports ?? []) visit(next);
-      if (dynamic) for (const next of manifest[key].dynamicImports ?? []) visit(next);
+      if (dynamic && !stopDynamicFrom.has(key)) for (const next of manifest[key].dynamicImports ?? []) visit(next);
     };
     seeds.forEach(visit);
     return visited;
@@ -76,7 +81,7 @@ export async function loadBuildGraph(manifestPath) {
     }
   }
   assert.ok(closure(entries, true).has(sceneRuntimeKey), 'UNREACHABLE_SCENE_RUNTIME');
-  const sceneClosureKeys = closure([sceneRuntimeKey], true);
+  const sceneClosureKeys = closure([sceneRuntimeKey], true, initialStaticKeys);
   assert.ok([...sceneClosureKeys].some(key => provenance.chunks[manifest[key].file].modules.some(isThree)), 'PROVENANCE_THREE');
   const cytoscapeKeys = [...sceneClosureKeys].filter(key => provenance.chunks[manifest[key].file].modules.some(isCytoscape));
   if (cytoscapeKeys.length > 0) {
