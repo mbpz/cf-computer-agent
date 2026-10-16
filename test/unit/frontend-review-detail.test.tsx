@@ -18,6 +18,7 @@ describe("React review detail boundary", () => {
     const onDecision = vi.fn();
     const detail = reviewDetailModel({ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "review_pending", content: "# Guide\n\nBody", warnings: ["No title"] });
     const html = renderToStaticMarkup(<ReviewDetailPage state={{ kind: "ready", detail }} onDecision={onDecision} />);
+    expect((html.match(/<h1/g) ?? []).length).toBe(1);
     expect(html).toContain("Guide");
     expect(html).toContain("Publish");
     expect(html).toContain("Request changes");

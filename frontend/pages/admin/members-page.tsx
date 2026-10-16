@@ -4,6 +4,7 @@ import { ConfirmAction } from "../../components/ui/confirm-action";
 import { DataTable } from "../../components/data-table";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { PageHeader } from "../../components/ui/page-header";
 import { Card, CardContent } from "../../components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
 import { Input } from "../../components/motion/input";
@@ -117,7 +118,8 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
   if (loading) return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
   if (error) return <PageState kind={forbidden ? "forbidden" : "error"} title={error} description={frontendText(locale, "COMMON_UNABLE_TO_LOAD")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
   return <><section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={validConfirmation || addOpen} aria-hidden={validConfirmation || addOpen || undefined}>
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_MEMBERS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_MEMBERS_DESCRIPTION")}</p></div><label className="text-sm text-muted-foreground">Status <select aria-label="Member status" className="ml-2 h-9 rounded-md border bg-background px-2" disabled={pending} value={status} onChange={(event) => onStatusFilterChange?.(event.target.value as "" | "active" | "disabled")}><option value="">All</option><option value="active">Active</option><option value="disabled">Disabled</option></select></label></div>
+    <PageHeader title={frontendText(locale, "ADMIN_MEMBERS_TITLE")} description={frontendText(locale, "ADMIN_MEMBERS_DESCRIPTION")}
+      actions={<label className="text-sm text-muted-foreground">Status <select aria-label="Member status" className="ml-2 h-9 rounded-md border bg-background px-2" disabled={pending} value={status} onChange={(event) => onStatusFilterChange?.(event.target.value as "" | "active" | "disabled")}><option value="">All</option><option value="active">Active</option><option value="disabled">Disabled</option></select></label>} />
     {statusRecordBlocked && <div role="alert" data-member-status-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardStatusRecord}>{frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD")}</Button></div>}
     {(actionError || pageError || readRequired) && <div role="alert" className="space-y-2 text-sm text-destructive">{(actionError || pageError) && <p>{actionError || pageError}</p>}{readRequired && <p>{frontendText(locale, "ADMIN_MEMBER_READ_REQUIRED")}</p>}{onLoadRetry && <Button type="button" variant="outline" disabled={pending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</div>}
     <DataTable

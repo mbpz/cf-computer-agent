@@ -1,4 +1,5 @@
 import { Button } from "../../components/ui/button";
+import { PageHeader } from "../../components/ui/page-header";
 import { ButtonLink } from "../../components/motion/button/base";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { NumberTicker } from "../../components/motion/number-ticker";
@@ -21,12 +22,8 @@ export function AdminDashboardPage({ metrics, locale, links, onRetry, onRefresh 
 }) {
   const pending = Object.values(metrics).some((metric) => metric.kind === "loading");
   return <section className="space-y-4" data-admin-dashboard>
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><p className="text-sm font-medium text-primary">{frontendText(locale, "ADMIN_EYEBROW")}</p>
-        <h1 className="mt-1 text-2xl font-semibold">{frontendText(locale, "ADMIN_TITLE")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_DESCRIPTION")}</p></div>
-      <Button variant="outline" size="sm" data-dashboard-refresh disabled={pending} onClick={onRefresh}>{frontendText(locale, "ADMIN_METRIC_REFRESH")}</Button>
-    </div>
+    <PageHeader title={frontendText(locale, "ADMIN_TITLE")} description={frontendText(locale, "ADMIN_DESCRIPTION")}
+      actions={<Button variant="outline" size="sm" data-dashboard-refresh disabled={pending} onClick={onRefresh}>{frontendText(locale, "ADMIN_METRIC_REFRESH")}</Button>} />
     <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_METRIC_SCOPE")}</p>
     <div className="grid gap-3 md:grid-cols-3">{cards.map(({ key, label, description, href }) => {
       const metric = metrics[key];

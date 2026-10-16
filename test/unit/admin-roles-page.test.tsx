@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AdminRolesPage } from "../../frontend/pages/admin/roles-page";
 import { AdminRoleDetailPage } from "../../frontend/pages/admin/role-detail-page";
+import { AdminRoleCreatePage } from "../../frontend/pages/admin/create-role-page";
 import { normalizeAdminRole, type AdminRole } from "../../frontend/lib/admin-roles-data";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -70,5 +71,17 @@ describe("admin role permission detail", () => {
   it("falls back to an unavailable state for an unknown role id", () => {
     const html = renderToStaticMarkup(<AdminRoleDetailPage locale={locale()} state={{ kind: "ready", roles: [role] }} roleId="missing" />);
     expect(html).toContain("Role unavailable");
+  });
+
+  it("renders exactly one titled h1 on each role page through the shared header", () => {
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ["Roles &amp; permissions", renderToStaticMarkup(<AdminRolesPage locale={locale()} state={{ kind: "ready", roles: [role] }} />)],
+      ["Create role", renderToStaticMarkup(<AdminRoleCreatePage locale={locale()} />)],
+      ["Roles &amp; permissions", renderToStaticMarkup(<AdminRoleDetailPage locale={locale()} state={{ kind: "ready", roles: [role] }} roleId="role-admin" />)],
+    ];
+    for (const [title, html] of cases) {
+      expect((html.match(/<h1/g) ?? []).length, title).toBe(1);
+      expect(html, title).toContain(title);
+    }
   });
 });

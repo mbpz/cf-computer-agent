@@ -1,4 +1,5 @@
 import { Button } from "../../components/ui/button";
+import { PageHeader } from "../../components/ui/page-header";
 import { DataTable } from "../../components/data-table";
 import { PageState } from "../../components/ui/page-state";
 import { Skeleton } from "../../components/ui/skeleton";
@@ -13,7 +14,8 @@ export function AuditPage({ state, action = "", pending = false, localError, onR
   if (state.kind === "loading") return <div aria-busy="true"><Skeleton className="h-24" /></div>;
   if (state.kind === "error") return <div aria-busy={pending}><PageState kind="error" title={state.message || frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE")}>{retry}</PageState></div>;
   return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0" aria-busy={pending}>
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_AUDIT_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_AUDIT_DESCRIPTION")}</p></div><label className="text-sm text-muted-foreground">Action <select aria-label="Audit action" className="ml-2 h-9 rounded-md border bg-background px-2" disabled={pending} value={action} onChange={(event) => onActionChange?.(event.target.value)}><option value="">All</option>{actions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div>
+    <PageHeader title={frontendText(locale, "ADMIN_AUDIT_TITLE")} description={frontendText(locale, "ADMIN_AUDIT_DESCRIPTION")}
+      actions={<label className="text-sm text-muted-foreground">Action <select aria-label="Audit action" className="ml-2 h-9 rounded-md border bg-background px-2" disabled={pending} value={action} onChange={(event) => onActionChange?.(event.target.value)}><option value="">All</option>{actions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>} />
     {localError && <PageState kind="error" title={localError}>{retry}</PageState>}
     <DataTable
       locale={locale}

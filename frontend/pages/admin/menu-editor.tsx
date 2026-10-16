@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { MENU_LABEL_KEYS } from "../../../shared/admin-menu-fields";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Button } from "../../components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
+import { Input } from "../../components/motion/input";
+import { Switch } from "../../components/motion/switch";
 import type { AdminMenu, AdminMenuCreate, AdminMenuUpdate } from "../../lib/admin-menus-data";
 import { useCreateDraft } from "../../lib/use-create-draft";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -14,6 +17,7 @@ export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave, initia
   initialFields?: MenuEditorFields; onFields?: (fields: MenuEditorFields) => void;
 }) {
   const initialDraft = useRef(menuEditorBaseline(menu));
+  const titleId = useId();
   const [invalid, setInvalid] = useState(false);
   const submitting = useRef(false);
   const [pending, setPending] = useState(false);
@@ -53,8 +57,12 @@ export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave, initia
   const visit = (nodes: readonly AdminMenu[], depth: number) => nodes.forEach(node => { if (!excluded.has(node.id) && depth + (menu ? height(menu) : 1) <= 4) parents.push(node); visit(node.children, depth + 1); });
   visit(menus, 1);
   const text = (key: string) => frontendText(locale, key);
-  const field = (name: keyof typeof draft, label: string, choices?: readonly { value: string; label: string }[]) => <label className="grid gap-1 text-sm" key={name}><span>{text(label)}</span>{choices ? <select className="h-10 rounded-md border bg-background px-3" name={name} value={draft[name]} onChange={event => formDraft.edit(name, event.target.value)}>{choices.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select> : <input autoFocus={name === (menu ? "path" : "key")} className="h-10 rounded-md border bg-background px-3" name={name} type={name === "position" ? "number" : "text"} min={name === "position" ? 0 : undefined} max={name === "position" ? 10000 : undefined} maxLength={name === "path" ? 200 : 128} value={draft[name]} onChange={event => formDraft.edit(name, event.target.value)} />}</label>;
-  return <><form inert={validConfirmation || undefined} aria-hidden={validConfirmation || undefined} className="rounded-lg border p-4" aria-label={text(menu ? "ADMIN_MENUS_EDIT" : "ADMIN_MENUS_CREATE")} noValidate onSubmit={async event => {
+  const selectField = (name: keyof typeof draft, label: string, choices: readonly { value: string; label: string }[]) => <label className="grid gap-1 text-sm" key={name}><span>{text(label)}</span><select className="h-10 rounded-md border bg-background px-3" name={name} value={draft[name]} onChange={event => formDraft.edit(name, event.target.value)}>{choices.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></label>;
+  const textField = (name: keyof typeof draft, label: string) => <Input key={name} name={name} label={text(label)} autoFocus={name === (menu ? "path" : "key")} type={name === "position" ? "number" : "text"} min={name === "position" ? 0 : undefined} max={name === "position" ? 10000 : undefined} maxLength={name === "path" ? 200 : 128} value={draft[name]} onChange={value => formDraft.edit(name, value)} />;
+  const requestCancel = () => { if (pending || submitting.current || confirmationRef.current || formDraft.isConfirming()) return; const draft = formDraft.current.current; if (JSON.stringify(draft) !== JSON.stringify(initialDraft.current)) requestConfirmation({ kind: "discard", draft }); else onCancel(); };
+  return <><Dialog open onOpenChange={(next) => { if (!next) requestCancel(); }}><DialogContent role="dialog" {...(menu ? { "data-menu-edit-dialog": "" } : { "data-menu-create-dialog": "" })} aria-labelledby={titleId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
+    <DialogTitle id={titleId}>{text(menu ? "ADMIN_MENUS_EDIT" : "ADMIN_MENUS_CREATE")}</DialogTitle>
+    <form inert={validConfirmation || undefined} aria-hidden={validConfirmation || undefined} className="mt-4" aria-label={text(menu ? "ADMIN_MENUS_EDIT" : "ADMIN_MENUS_CREATE")} noValidate onSubmit={async event => {
     event.preventDefault();
     if (!alive.current || disabled || submitting.current || confirmationRef.current || formDraft.isConfirming()) return;
     const draft = formDraft.current.current;
@@ -66,22 +74,22 @@ export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave, initia
     if (menu) requestConfirmation({ kind: "save", input: { ...common, status: draft.status as "active" | "disabled", visible: draft.visible === "true" }, draft, menus });
     else await save({ ...common, key: draft.key, icon: draft.icon || null, groupName: draft.groupName as "workspace" | "admin" });
   }}>
-    <h2 className="mb-4 font-semibold">{text(menu ? "ADMIN_MENUS_EDIT" : "ADMIN_MENUS_CREATE")}</h2>
     <fieldset disabled={disabled} className="grid gap-4 sm:grid-cols-2">
-      {!menu && field("key", "ADMIN_MENUS_KEY")}
-      {field("labelKey", "ADMIN_MENUS_LABEL", MENU_LABEL_KEYS.map(key => ({ value: key, label: `${text(key)} · ${key}` })))}
-      {field("path", "ADMIN_MENUS_PATH")}
-      {field("parentId", "ADMIN_MENUS_PARENT", [{ value: "", label: text("ADMIN_MENUS_ROOT") }, ...parents.map(parent => ({ value: parent.id, label: `${parent.labelKey} · ${parent.key}` }))])}
-      {field("position", "ADMIN_MENUS_POSITION")}{field("requiredBits", "ADMIN_MENUS_PERMISSIONS")}
-      {!menu && field("icon", "ADMIN_MENUS_ICON")}
-      {!menu && field("groupName", "ADMIN_MENUS_GROUP", ["workspace", "admin"].map(value => ({ value, label: text(value === "workspace" ? "SHELL_GROUP_WORKSPACE" : "SHELL_GROUP_ADMIN") })))}
-      {menu && field("status", "ADMIN_MENUS_STATUS", ["active", "disabled"].map(value => ({ value, label: text(value === "active" ? "ADMIN_MENUS_ACTIVE" : "ADMIN_MENUS_DISABLED") })))}
-      {menu && field("visible", "ADMIN_MENUS_VISIBILITY", ["true", "false"].map(value => ({ value, label: text(value === "true" ? "ADMIN_MENUS_SHOW" : "ADMIN_MENUS_HIDE") })))}
+      {!menu && textField("key", "ADMIN_MENUS_KEY")}
+      {selectField("labelKey", "ADMIN_MENUS_LABEL", MENU_LABEL_KEYS.map(key => ({ value: key, label: `${text(key)} · ${key}` })))}
+      {textField("path", "ADMIN_MENUS_PATH")}
+      {selectField("parentId", "ADMIN_MENUS_PARENT", [{ value: "", label: text("ADMIN_MENUS_ROOT") }, ...parents.map(parent => ({ value: parent.id, label: `${parent.labelKey} · ${parent.key}` }))])}
+      {textField("position", "ADMIN_MENUS_POSITION")}{textField("requiredBits", "ADMIN_MENUS_PERMISSIONS")}
+      {!menu && textField("icon", "ADMIN_MENUS_ICON")}
+      {!menu && selectField("groupName", "ADMIN_MENUS_GROUP", ["workspace", "admin"].map(value => ({ value, label: text(value === "workspace" ? "SHELL_GROUP_WORKSPACE" : "SHELL_GROUP_ADMIN") })))}
+      {menu && selectField("status", "ADMIN_MENUS_STATUS", ["active", "disabled"].map(value => ({ value, label: text(value === "active" ? "ADMIN_MENUS_ACTIVE" : "ADMIN_MENUS_DISABLED") })))}
+      {menu && <Switch key="visible" checked={draft.visible === "true"} onCheckedChange={checked => formDraft.edit("visible", checked ? "true" : "false")} disabled={disabled} label={text("ADMIN_MENUS_VISIBILITY")} className="text-sm" />}
     </fieldset>
     <p className="mt-3 text-sm text-muted-foreground">{text("ADMIN_MENUS_EDITOR_HINT")}</p>
     {invalid && <p role="alert" className="mt-3 text-sm text-destructive">{text("ADMIN_MENUS_INVALID")}</p>}
-    <div className="mt-4 flex gap-2"><Button type="submit" disabled={disabled}>{text(menu ? "ADMIN_MENUS_SAVE_FULL" : "ADMIN_MENUS_CREATE_SUBMIT")}</Button><Button type="button" variant="outline" disabled={pending} onClick={() => { if (pending || submitting.current || confirmationRef.current || formDraft.isConfirming()) return; const draft = formDraft.current.current; if (JSON.stringify(draft) !== JSON.stringify(initialDraft.current)) requestConfirmation({ kind: "discard", draft }); else onCancel(); }}>{text("ADMIN_MENUS_CANCEL")}</Button></div>
-  </form><ConfirmAction open={validConfirmation}
+    <div className="mt-4 flex gap-2"><Button type="submit" disabled={disabled}>{text(menu ? "ADMIN_MENUS_SAVE_FULL" : "ADMIN_MENUS_CREATE_SUBMIT")}</Button><Button type="button" {...(menu ? { "data-menu-edit-cancel": "" } : { "data-menu-create-cancel": "" })} variant="outline" disabled={pending} onClick={requestCancel}>{text("ADMIN_MENUS_CANCEL")}</Button></div>
+  </form>
+  </DialogContent></Dialog><ConfirmAction open={validConfirmation}
     title={text(confirmation?.kind === "discard" ? "ADMIN_MENUS_DISCARD_TITLE" : "ADMIN_MENUS_CONFIRM_TITLE")}
     description={confirmation?.kind === "save" && menu ? `${menu.key} · ${menu.path || menu.id}. ${describeMenuChanges(menu, confirmation.input, locale)}` : text("ADMIN_MENUS_DISCARD_IMPACT")}
     cancelLabel={text("COMMON_CANCEL")} confirmLabel={text(confirmation?.kind === "discard" ? "ADMIN_MENUS_DISCARD_CONFIRM" : "ADMIN_MENUS_APPLY_CONFIRM")}

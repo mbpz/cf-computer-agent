@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { PageHeader } from "../../components/ui/page-header";
 import { DataTable } from "../../components/data-table";
 import { Skeleton } from "../../components/ui/skeleton";
 import { PageState } from "../../components/ui/page-state";
@@ -25,9 +26,7 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
   if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{retry}</PageState>;
   const locked = reviewDecisionLocked(decisionState);
   return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
-    <div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_REVIEW_QUEUE_TITLE")}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")}</p>
-    </div>
+    <PageHeader title={frontendText(locale, "ADMIN_REVIEW_QUEUE_TITLE")} description={frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")} />
     {decisionRecordBlocked && <div role="alert" data-review-decision-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardDecisionRecord}>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD")}</Button></div>}
     <ReviewDecisionFeedback allowUnknownReload state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onReloadDecision} />
     {localError && <><p role="alert" className="text-sm text-destructive">{localError}</p>{retry}</>}

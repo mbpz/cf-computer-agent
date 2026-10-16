@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { PageHeader } from "../../components/ui/page-header";
 import { DataTable } from "../../components/data-table";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -55,10 +56,7 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
   const { items, pagination } = state.data;
   return <>
     <section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={valid} aria-hidden={valid || undefined}>
-      <div>
-        <h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_DUPLICATE_TITLE")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_DUPLICATE_DESCRIPTION")}</p>
-      </div>
+      <PageHeader title={frontendText(locale, "ADMIN_DUPLICATE_TITLE")} description={frontendText(locale, "ADMIN_DUPLICATE_DESCRIPTION")} />
       {decisionRecordBlocked && <div role="alert" data-duplicate-decision-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_DUPLICATE_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardDecisionRecord}>{frontendText(locale, "ADMIN_DUPLICATE_RECORD_DISCARD")}</Button></div>}
       {localError && <p role="alert" className="text-sm text-destructive">{localError}</p>}
       {readRequired && <p role="status" className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_DUPLICATE_READ_REQUIRED")}</p>}

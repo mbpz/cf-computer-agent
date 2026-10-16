@@ -135,4 +135,22 @@ describe("React administrator pages", () => {
     expect(queue).toContain("暂无待审核提交");
     expect(queue).not.toContain("Review queue");
   });
+
+  it("gives every migrated admin page exactly one titled h1 through the shared header", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const pagination = { page: 1, pageSize: 20, total: 0, totalPages: 0 };
+    const pages: ReadonlyArray<readonly [string, string]> = [
+      ["Administration", renderToStaticMarkup(<AdminDashboardPage locale={locale} metrics={{ pending: { kind: "ready", total: 1 }, assets: { kind: "ready", total: 0 }, members: { kind: "ready", total: 0 } }} links={[]} onRetry={() => {}} onRefresh={() => {}} />)],
+      ["Site analytics", renderToStaticMarkup(<AdminAnalyticsPage locale={locale} state={{ kind: "ready", data: { range: { from: "2026-08-20", to: "2026-08-26", days: 7 }, totals: { pageViews: 0, uniqueVisitors: 0, loginUsers: 0 }, daily: [], breakdowns: { paths: [], regions: [], countries: [] }, recentVisitors: { items: [], pagination } } }} />)],
+      ["Asset queue", renderToStaticMarkup(<AssetQueuePage locale={locale} data={{ items: [], pagination }} />)],
+      ["Audit log", renderToStaticMarkup(<AuditPage locale={locale} state={{ kind: "ready", page: { items: [], pagination } }} />)],
+      ["Duplicate candidates", renderToStaticMarkup(<DuplicateQueuePage locale={locale} state={{ kind: "ready", data: { items: [], pagination } }} />)],
+      ["Members", renderToStaticMarkup(<MembersPage locale={locale} members={[]} />)],
+      ["Review queue", renderToStaticMarkup(<ReviewQueuePage locale={locale} state={{ kind: "ready", data: { items: [], pagination } }} />)],
+    ];
+    for (const [title, html] of pages) {
+      expect((html.match(/<h1/g) ?? []).length, title).toBe(1);
+      expect(html, title).toContain(title);
+    }
+  });
 });

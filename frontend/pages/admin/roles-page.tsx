@@ -1,6 +1,7 @@
 import { DataTable } from "../../components/data-table";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { writeWorkspaceHistory } from "../../lib/workspace-location";
@@ -17,14 +18,8 @@ export function AdminRolesPage({ onLoadRetry, state, locale }: { onLoadRetry?: (
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
   if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "ADMIN_ROLES_UNAVAILABLE")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
   return <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <p className="text-sm font-medium text-primary">{frontendText(locale, "ADMIN_EYEBROW")}</p>
-        <h1 className="mt-2 text-2xl font-semibold">{frontendText(locale, "ADMIN_ROLES_TITLE")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ROLES_DESCRIPTION")}</p>
-      </div>
-      <Button type="button" onClick={() => writeWorkspaceHistory("push", "/admin/roles/new")}>{frontendText(locale, "ADMIN_ROLES_CREATE")}</Button>
-    </div>
+    <PageHeader title={frontendText(locale, "ADMIN_ROLES_TITLE")} description={frontendText(locale, "ADMIN_ROLES_DESCRIPTION")}
+      actions={<Button type="button" onClick={() => writeWorkspaceHistory("push", "/admin/roles/new")}>{frontendText(locale, "ADMIN_ROLES_CREATE")}</Button>} />
     <DataTable
       locale={locale}
       ariaLabel={frontendText(locale, "ADMIN_ROLES_TITLE")}

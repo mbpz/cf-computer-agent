@@ -92,13 +92,9 @@ beUI center-morph 模态的落地副本，`frontend/` 第一方源码当前没�
 | `frontend/components/motion/not-found/shared.tsx:55:7` | app-boundary | 路由 fallback 渲染 404；homeHref 默认 `/` | motion.a 指向 homeHref；whileTap/whileHover 受 reduced-motion 与 hover 能力门控。 |
 | `frontend/components/motion/not-found/shared.tsx:65:9` | unmounted-ui | 仅当调用方传入 browseHref 时渲染 | 第二 CTA 当前没有调用点传 browseHref，因此不出现在工作台界面中。 |
 
-## `frontend/components/motion/switch.tsx`（1）
+## `frontend/components/motion/switch.tsx`（0，2026-10-16 归属管理端菜单编辑器）
 
-beUI switch 的落地副本，`frontend/` 第一方源码当前没有 import 或渲染点，属无消费者原语；候选是无消费者的开关控件本身，不是已接线的设置项。
-
-| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
-| --- | --- | --- | --- |
-| `frontend/components/motion/switch.tsx:51:9` | unmounted-ui | 若调用者以受控 checked/onCheckedChange 渲染该 switch | role=switch 按钮：未 disabled 时点击调用 onCheckedChange(!checked)；pointerdown/up/leave 只切换按压态与 thumb 压缩。没有网络写入。 |
+管理端菜单编辑器的布尔可见性字段改为使用该组件（`menu-editor.tsx`），因此本文件的候选归属管理端，不再计入未归属项。
 
 ## `frontend/components/shell/context-rail.tsx`（6）
 
@@ -324,22 +320,22 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/pages/admin/create-role-page.tsx:54:5` | app-boundary | 已挂载且存在 draftMemberId、未 blocked、未 suppressDraft | 监听 WORKSPACE_LOCATION_CHANGE_EVENT，离开时清除该成员的本地草稿记录。 |
-| `frontend/pages/admin/create-role-page.tsx:82:7` | app-boundary | 页面已挂载且可见 | 左上返回按钮；onCancel 存在时调用它，否则写 workspace history push /admin/roles。 |
-| `frontend/pages/admin/create-role-page.tsx:87:22` | app-boundary | draftBlocked 为真 | role=alert 提示草稿记录被阻止，并给出丢弃入口；不代表服务端状态。 |
-| `frontend/pages/admin/create-role-page.tsx:87:158` | app-boundary | draftBlocked 为真，用户点击丢弃 | discardDraft 丢弃被阻止的本地草稿并清空提示。 |
-| `frontend/pages/admin/create-role-page.tsx:88:21` | app-boundary | draftNotice 非空 | role=alert 显示草稿未记录的提示。 |
+| `frontend/pages/admin/create-role-page.tsx:55:5` | app-boundary | 已挂载且存在 draftMemberId、未 blocked、未 suppressDraft | 监听 WORKSPACE_LOCATION_CHANGE_EVENT，离开时清除该成员的本地草稿记录。 |
+| `frontend/pages/admin/create-role-page.tsx:83:7` | app-boundary | 页面已挂载且可见 | 左上返回按钮；onCancel 存在时调用它，否则写 workspace history push /admin/roles。 |
+| `frontend/pages/admin/create-role-page.tsx:86:22` | app-boundary | draftBlocked 为真 | role=alert 提示草稿记录被阻止，并给出丢弃入口；不代表服务端状态。 |
+| `frontend/pages/admin/create-role-page.tsx:86:158` | app-boundary | draftBlocked 为真，用户点击丢弃 | discardDraft 丢弃被阻止的本地草稿并清空提示。 |
+| `frontend/pages/admin/create-role-page.tsx:87:21` | app-boundary | draftNotice 非空 | role=alert 显示草稿未记录的提示。 |
 | `frontend/pages/admin/create-role-page.tsx:90:7` | app-boundary | 未 locked | 更新本地 newKey 草稿字段。 |
 | `frontend/pages/admin/create-role-page.tsx:91:7` | app-boundary | 未 locked | 更新本地 newName 草稿字段。 |
-| `frontend/pages/admin/create-role-page.tsx:92:7` | app-boundary | 未 locked | 更新本地 newMask 草稿字段。 |
-| `frontend/pages/admin/create-role-page.tsx:93:250` | app-boundary | 按 permissionGroups 逐 key 渲染，未 locked | 勾选/取消该 key 位，只翻转本地 mask 字符串。 |
-| `frontend/pages/admin/create-role-page.tsx:94:21` | app-boundary | saveError 非空 | role=alert 显示保存错误。 |
+| `frontend/pages/admin/create-role-page.tsx:89:7` | app-boundary | 未 locked | 更新本地 newMask 草稿字段。 |
+| `frontend/pages/admin/create-role-page.tsx:92:250` | app-boundary | 按 permissionGroups 逐 key 渲染，未 locked | 勾选/取消该 key 位，只翻转本地 mask 字符串。 |
+| `frontend/pages/admin/create-role-page.tsx:93:21` | app-boundary | saveError 非空 | role=alert 显示保存错误。 |
 | `frontend/pages/admin/create-role-page.tsx:96:9` | app-boundary | 未 locked、onCreate 存在且 key/name 非空 | 提交创建，成功后 reset 草稿并调用 onCreated 返回列表；提交前快照输入，迟到成功不覆盖更新的输入。 |
-| `frontend/pages/admin/create-role-page.tsx:97:9` | app-boundary | 未 locked | 取消并返回列表，与返回按钮同一路径。 |
-| `frontend/pages/admin/create-role-page.tsx:100:23` | app-boundary | recordBlocked 为真 | role=alert 提示写入记录被阻止，并给出丢弃入口。 |
-| `frontend/pages/admin/create-role-page.tsx:100:178` | app-boundary | recordBlocked 为真，用户点击丢弃 | 调用 onDiscardRecord 丢弃被阻止的写入记录意图。 |
-| `frontend/pages/admin/create-role-page.tsx:101:64` | app-boundary | readRequired 或 saveError 为真 | role=status 提示需要先重新读取。 |
-| `frontend/pages/admin/create-role-page.tsx:101:136` | app-boundary | 同上，readPending 为假时点击 | 调用 onLoadRetry 重新读取。 |
+| `frontend/pages/admin/create-role-page.tsx:95:9` | app-boundary | 未 locked | 取消并返回列表，与返回按钮同一路径。 |
+| `frontend/pages/admin/create-role-page.tsx:99:23` | app-boundary | recordBlocked 为真 | role=alert 提示写入记录被阻止，并给出丢弃入口。 |
+| `frontend/pages/admin/create-role-page.tsx:99:178` | app-boundary | recordBlocked 为真，用户点击丢弃 | 调用 onDiscardRecord 丢弃被阻止的写入记录意图。 |
+| `frontend/pages/admin/create-role-page.tsx:100:64` | app-boundary | readRequired 或 saveError 为真 | role=status 提示需要先重新读取。 |
+| `frontend/pages/admin/create-role-page.tsx:100:136` | app-boundary | 同上，readPending 为假时点击 | 调用 onLoadRetry 重新读取。 |
 
 ## `frontend/pages/admin/role-detail-page.tsx`（20）
 
@@ -347,26 +343,26 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/pages/admin/role-detail-page.tsx:41:157` | app-boundary | 非 loading 且 state 非 ready，onLoadRetry 存在 | 错误/空态的重试按钮，调用 onLoadRetry 重新读取。 |
-| `frontend/pages/admin/role-detail-page.tsx:43:174` | app-boundary | 状态就绪但找不到该 roleId，onBack 存在 | 返回角色列表按钮。 |
-| `frontend/pages/admin/role-detail-page.tsx:44:10` | app-boundary | 状态就绪且找到该角色 | 把 state/role 与全部回调、只读与草稿 props 转交给 RolePermissionEditor；是 props 边界，不是新动作。 |
-| `frontend/pages/admin/role-detail-page.tsx:72:5` | app-boundary | 编辑器已挂载且存在 draftMemberId、未 blocked、未 suppressDraft | 监听 WORKSPACE_LOCATION_CHANGE_EVENT，离开时清除本地草稿记录。 |
-| `frontend/pages/admin/role-detail-page.tsx:139:22` | app-boundary | draftBlocked 为真 | role=alert 提示草稿记录被阻止，与丢弃入口同组。 |
-| `frontend/pages/admin/role-detail-page.tsx:139:158` | app-boundary | draftBlocked 为真，用户点击丢弃 | discardDraft 丢弃被阻止的本地草稿并清空提示。 |
-| `frontend/pages/admin/role-detail-page.tsx:140:21` | app-boundary | draftNotice 非空 | role=alert 显示草稿未记录的提示。 |
-| `frontend/pages/admin/role-detail-page.tsx:142:7` | app-boundary | 编辑器已挂载且可见 | 左上返回按钮；onBack 存在时调用它，否则写 push /admin/roles。 |
-| `frontend/pages/admin/role-detail-page.tsx:148:713` | app-boundary | 逐 key 渲染权限矩阵 | 勾选/取消该 key，但系统角色的非 workbench 位禁用；只翻转本地 mask。 |
-| `frontend/pages/admin/role-detail-page.tsx:149:179` | app-boundary | dirtyPermissions 为真 | role=status 提示权限有改动，成员指派暂不可用。 |
-| `frontend/pages/admin/role-detail-page.tsx:149:535` | app-boundary | 非系统角色、未 locked、无权限改动，onUnassignMember 存在 | 打开取消指派确认，不做即时写入。 |
-| `frontend/pages/admin/role-detail-page.tsx:149:1000` | app-boundary | role.isSystem 为假 | 更新本地待指派成员 ID 输入。 |
-| `frontend/pages/admin/role-detail-page.tsx:149:1236` | app-boundary | 非系统角色、未 locked、无权限改动、成员 ID 非空且未在已指派列表 | 打开指派确认，不做即时写入。 |
-| `frontend/pages/admin/role-detail-page.tsx:150:21` | app-boundary | saveError 非空 | role=alert 显示保存错误。 |
-| `frontend/pages/admin/role-detail-page.tsx:151:7` | app-boundary | 可保存（系统角色需仅新增 workbench 位）且未 locked | 打开保存确认，不做即时写入。 |
-| `frontend/pages/admin/role-detail-page.tsx:153:13` | app-boundary | validConfirmation 为真 | 确认框显示受影响成员与权限摘要；确认时先同步消费确认，再调用 onSave/onAssignMember/onUnassignMember。 |
-| `frontend/pages/admin/role-detail-page.tsx:157:99` | app-boundary | recordBlocked 为真 | role=alert 提示写入记录被阻止，并给出丢弃入口。 |
-| `frontend/pages/admin/role-detail-page.tsx:157:254` | app-boundary | recordBlocked 为真，用户点击丢弃 | 调用 onDiscardRecord 丢弃被阻止的写入记录意图。 |
-| `frontend/pages/admin/role-detail-page.tsx:157:447` | app-boundary | readRequired 或 saveError 为真 | role=status 提示需要先重新读取。 |
-| `frontend/pages/admin/role-detail-page.tsx:157:519` | app-boundary | 同上，readPending 为假时点击 | 调用 onLoadRetry 重新读取。 |
+| `frontend/pages/admin/role-detail-page.tsx:42:157` | app-boundary | 非 loading 且 state 非 ready，onLoadRetry 存在 | 错误/空态的重试按钮，调用 onLoadRetry 重新读取。 |
+| `frontend/pages/admin/role-detail-page.tsx:44:174` | app-boundary | 状态就绪但找不到该 roleId，onBack 存在 | 返回角色列表按钮。 |
+| `frontend/pages/admin/role-detail-page.tsx:45:10` | app-boundary | 状态就绪且找到该角色 | 把 state/role 与全部回调、只读与草稿 props 转交给 RolePermissionEditor；是 props 边界，不是新动作。 |
+| `frontend/pages/admin/role-detail-page.tsx:73:5` | app-boundary | 编辑器已挂载且存在 draftMemberId、未 blocked、未 suppressDraft | 监听 WORKSPACE_LOCATION_CHANGE_EVENT，离开时清除本地草稿记录。 |
+| `frontend/pages/admin/role-detail-page.tsx:140:22` | app-boundary | draftBlocked 为真 | role=alert 提示草稿记录被阻止，与丢弃入口同组。 |
+| `frontend/pages/admin/role-detail-page.tsx:140:158` | app-boundary | draftBlocked 为真，用户点击丢弃 | discardDraft 丢弃被阻止的本地草稿并清空提示。 |
+| `frontend/pages/admin/role-detail-page.tsx:141:21` | app-boundary | draftNotice 非空 | role=alert 显示草稿未记录的提示。 |
+| `frontend/pages/admin/role-detail-page.tsx:143:7` | app-boundary | 编辑器已挂载且可见 | 左上返回按钮；onBack 存在时调用它，否则写 push /admin/roles。 |
+| `frontend/pages/admin/role-detail-page.tsx:147:713` | app-boundary | 逐 key 渲染权限矩阵 | 勾选/取消该 key，但系统角色的非 workbench 位禁用；只翻转本地 mask。 |
+| `frontend/pages/admin/role-detail-page.tsx:148:179` | app-boundary | dirtyPermissions 为真 | role=status 提示权限有改动，成员指派暂不可用。 |
+| `frontend/pages/admin/role-detail-page.tsx:148:535` | app-boundary | 非系统角色、未 locked、无权限改动，onUnassignMember 存在 | 打开取消指派确认，不做即时写入。 |
+| `frontend/pages/admin/role-detail-page.tsx:148:1000` | app-boundary | role.isSystem 为假 | 更新本地待指派成员 ID 输入。 |
+| `frontend/pages/admin/role-detail-page.tsx:148:1236` | app-boundary | 非系统角色、未 locked、无权限改动、成员 ID 非空且未在已指派列表 | 打开指派确认，不做即时写入。 |
+| `frontend/pages/admin/role-detail-page.tsx:149:21` | app-boundary | saveError 非空 | role=alert 显示保存错误。 |
+| `frontend/pages/admin/role-detail-page.tsx:150:7` | app-boundary | 可保存（系统角色需仅新增 workbench 位）且未 locked | 打开保存确认，不做即时写入。 |
+| `frontend/pages/admin/role-detail-page.tsx:152:13` | app-boundary | validConfirmation 为真 | 确认框显示受影响成员与权限摘要；确认时先同步消费确认，再调用 onSave/onAssignMember/onUnassignMember。 |
+| `frontend/pages/admin/role-detail-page.tsx:156:99` | app-boundary | recordBlocked 为真 | role=alert 提示写入记录被阻止，并给出丢弃入口。 |
+| `frontend/pages/admin/role-detail-page.tsx:156:254` | app-boundary | recordBlocked 为真，用户点击丢弃 | 调用 onDiscardRecord 丢弃被阻止的写入记录意图。 |
+| `frontend/pages/admin/role-detail-page.tsx:156:447` | app-boundary | readRequired 或 saveError 为真 | role=status 提示需要先重新读取。 |
+| `frontend/pages/admin/role-detail-page.tsx:156:519` | app-boundary | 同上，readPending 为假时点击 | 调用 onLoadRetry 重新读取。 |
 
 ## `frontend/pages/workbench-landing/workbench-scene-runtime.ts`（5）
 
@@ -459,10 +455,9 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `tools/browser-vm/checkpoint-recovery-browser.mjs`: `06a498590a0c6e00c9cf5c91dff81de7a6aa3b01c4c9768aa718ebc0de3d9efe`
 - `tools/browser-vm/runtime-owner-browser.mjs`: `e5973069f711204d6ad79f011be6772e9243d403b6bb1ebd515ff361537c4c90`
 - `frontend/components/motion/center-morph-modal.tsx`: `d988640275b067c94db3d2196930398078efc2b6fb23ee850d9364f467227346`
-- `frontend/components/motion/switch.tsx`: `4f5c190f81d382942e91ecbaa8a21345e1fa8074f2f9557602ea34598600b633`
 - `frontend/components/ui/checkbox.tsx`: `fef87a6c4e79957e3ce8de94872beceafb0b6cc5f01b3f045b3e0bf62fa911f9`
-- `frontend/pages/admin/create-role-page.tsx`: `216c4ac2c58182d459ed66c031eca695efec7804892185e5f18516283a8f9fe3`
-- `frontend/pages/admin/role-detail-page.tsx`: `ae15378921ee6303e3e8d9b7386091e61bfdfb8f21836c34071e1cc847998a01`
+- `frontend/pages/admin/create-role-page.tsx`: `865451232601448f8aa2ebc9d46445bd6f7f8c765315c42d800b98e38f25e0c6`
+- `frontend/pages/admin/role-detail-page.tsx`: `62ca5193ccbfc104c1d18a71a77f05ab44953329accb5c1ad9cacddd2d90b329`
 
 
 ### 2026-10-10 知识页读取生命周期后重新审查

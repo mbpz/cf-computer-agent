@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PERMISSION_BITS, hasPermission, parsePermissionMask, type PermissionKey } from "../../../src/authorization/permission-bitmap";
 import { Button } from "../../components/ui/button";
+import { PageHeader } from "../../components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/motion/input";
 import { Checkbox } from "../../components/motion/checkbox";
@@ -80,10 +81,8 @@ export function AdminRoleCreatePage({ locale, onCreate, onCreated, onCancel, sav
   return <section className="mx-auto flex w-full max-w-2xl flex-col gap-5">
     <div>
       <Button type="button" variant="ghost" size="sm" onClick={back}>← {frontendText(locale, "ADMIN_ROLES_LIST")}</Button>
-      <p className="mt-3 text-sm font-medium text-primary">{frontendText(locale, "ADMIN_EYEBROW")}</p>
-      <h1 className="mt-2 text-2xl font-semibold">{frontendText(locale, "ADMIN_ROLES_CREATE")}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ROLES_DESCRIPTION")}</p>
     </div>
+    <PageHeader title={frontendText(locale, "ADMIN_ROLES_CREATE")} description={frontendText(locale, "ADMIN_ROLES_DESCRIPTION")} />
     {draftBlocked && <div role="alert" data-role-draft-blocked className="space-y-2 text-sm"><p>{frontendText(locale, "ADMIN_ROLE_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardDraft}>{frontendText(locale, "ADMIN_ROLE_DRAFT_RECORD_DISCARD")}</Button></div>}
     {draftNotice && <p role="alert" className="text-sm">{draftNotice}</p>}
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_ROLES_CREATE")}</CardTitle></CardHeader><CardContent className="space-y-5">

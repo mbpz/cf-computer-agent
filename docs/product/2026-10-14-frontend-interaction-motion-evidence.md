@@ -325,3 +325,36 @@
 ### 13.4 验证
 
 `npm run typecheck` 0 错误；单测 **5317/5317**；worker 1203/1203；smoke 88/14/30；`npm run build` 通过（20 个资产）；`verify:landing` 100/100；`frontend/app` 经 esbuild 独立打包成功（6.9MB）。各页面切片的弹窗行为由新增的专项用例覆盖（新增约 29 个用例），既有用例按新结构迁移且未删减任何行为断言。
+
+## 14. 管理端 beUI 统一（2026-10-16）
+
+依据 `docs/product/2026-10-15-authenticated-workspace-design-research.md`：§4.2 共享页面头部、§4.3 操作区一致、§4.5 编辑与反馈守卫、§6 beUI 接入边界。
+
+### 14.1 新增共享件
+
+`frontend/components/ui/page-header.tsx`：唯一 `<h1>` + 至多一行上下文 + 可选状态行 + 动作行，响应式自动换行；项目自研组合（不冒称 beUI 官方组件），带单测。13 个管理页全部改用它，动作归位到 `actions`，各页恰好一个 `h1` 并逐页加断言；各页重复的 eyebrow 一并移除（符合眉毛配额，i18n 键保持存活）。
+
+### 14.2 表单迁入弹窗
+
+| 页面 | 结果 |
+| --- | --- |
+| 空间 `/admin/spaces` | 创建与编辑/集合表单改为弹窗（`data-space-create-dialog` / `data-space-edit-dialog`），文本字段改用 beUI `Input`；**枚举下拉刻意保留原生 `<select>`**，以保住既有 `#admin-record-*` id、选项表与版本 CAS/草稿机；卡片网格与空/加载/错状态不变 |
+| 菜单 `/admin/menus` + 编辑器 | 创建/编辑改为弹窗（`data-menu-create-dialog` / `data-menu-edit-dialog`），布尔可见性字段改用 beUI `Switch`、文本用 beUI `Input`；FileTree、恢复与草稿块、写入载荷逐字不变 |
+
+### 14.3 修掉的一处能力门禁缺口
+
+`/admin/roles/new` 与 `/admin/roles/:id` 未被 `frontend/lib/router.ts` 的 `matchRoute` 匹配，导致外壳的客户端能力门禁对这两个页面不生效（服务端仍按 `role:manage` 拦截）。现已在 `PARAMETERIZED_ROUTES` 增加规则并附断言；刻意**不**把它们注册为 route capability，避免出现在模块侧栏与导航数据中。
+
+### 14.4 按调研红线不做的事
+
+- **不加排序、搜索与批量操作**：`src/pagination.ts` 只接受 `page`/`pageSize` 与白名单筛选键，服务端没有排序与搜索参数；按文档要求不把组件内排序伪装成服务端全量排序。
+- 空间（卡片网格）与菜单（树）**不强塞表格**；分析、概览等非表格页面不加 `fill`。
+
+### 14.5 需要决策的两处不一致（未擅自改动）
+
+1. `admin-analytics` 在注册表声明 `analytics:read`，服务端实际要求 `audit:read`（由 `route-access.ts` 桥接）。"管理员可见入口与服务端权限一致"尚未严格成立；涉及授权语义，留给决策。
+2. `AdminForbiddenPage` 有定义与测试，但没有任何路由使用（403 由外壳统一处理）。
+
+### 14.6 验证
+
+`npm run typecheck` 0 错误；单测 **5325/5325**；worker 1203/1203；smoke 88/14/30；inventory 门禁 10/10；`npm run build` 通过（20 个资产）。

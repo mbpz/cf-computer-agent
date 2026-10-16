@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { PageHeader } from "../../components/ui/page-header";
 import { ButtonLink } from "../../components/motion/button/base";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Skeleton } from "../../components/ui/skeleton";
@@ -33,12 +34,8 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
   </section>;
   const { detail } = state;
   return <section className="space-y-5">
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div><p className="text-sm font-medium text-primary">{frontendText(locale, "ADMIN_REVIEW_DETAIL_LABEL")}</p>
-        <h1 className="mt-1 text-2xl font-semibold">{detail.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_SUBMITTER")}: {detail.submitter}</p>
-      </div><Badge variant="outline">{detail.status}</Badge>
-    </div>
+    <PageHeader title={detail.title} description={<>{frontendText(locale, "ADMIN_REVIEW_SUBMITTER")}: {detail.submitter}</>}
+      status={<Badge variant="outline">{detail.status}</Badge>} />
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_REVIEW_CONTENT")}</CardTitle></CardHeader><CardContent>
       <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-4 text-sm leading-7">{detail.content || frontendText(locale, "ADMIN_REVIEW_NO_CONTENT")}</pre>
     </CardContent></Card>
