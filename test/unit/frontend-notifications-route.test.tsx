@@ -430,6 +430,7 @@ describe("notification inbox route", () => {
     expect(container.querySelector('[data-notification-id="notification-last"]')).not.toBeNull();
 
     const bulk = [...container.querySelectorAll("button")].find((button) => button.textContent === "Mark visible as read") as HTMLButtonElement;
+    expect(bulk).toBeTruthy();
     await act(async () => { bulk.click(); bulk.click(); });
     // Repeated clicks during one bulk write still send a single bounded id list.
     expect(posts).toBe(1);
@@ -660,17 +661,29 @@ describe("notification inbox route", () => {
     await act(async () => root.render(<NotificationsRoute locale={createLocaleRuntime()} search={browser.location.search} />));
     await flush();
   }
+  /** Below the shell's `lg` edge the filter row moves into a portalled bottom
+      sheet, so its controls are found in the document rather than in `container`
+      and the disclosure has to be opened first. Selecting an option leaves the
+      panel open, and re-clicking the trigger would only re-open it. */
+  async function openFilters() {
+    const trigger = container.querySelector<HTMLButtonElement>("[data-filter-disclosure-trigger]");
+    if (!trigger || trigger.getAttribute("aria-expanded") === "true") return;
+    await act(async () => trigger.click());
+  }
   async function click(label: string) {
-    const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label) as HTMLButtonElement;
-    expect(button).toBeTruthy(); await act(async () => button.click());
+    const find = () => [...container.querySelectorAll("button"), ...browser.document.querySelectorAll("button")].find((candidate) => candidate.textContent === label) as HTMLButtonElement | undefined;
+    let button = find();
+    if (!button) { await openFilters(); button = find(); }
+    expect(button, `button ${label}`).toBeTruthy(); await act(async () => button!.click());
   }
   /** Both inbox filters are beUI listboxes now: the trigger carries the historical
       accessible name in an sr-only span; pick the option by its visible label. */
   async function selectFilter(ariaLabel: string, optionLabel: string) {
-    const trigger = [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === ariaLabel);
+    await openFilters();
+    const trigger = [...browser.document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === ariaLabel);
     expect(trigger, `filter ${ariaLabel}`).toBeTruthy();
     await act(async () => trigger!.click());
-    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === optionLabel);
+    const option = [...browser.document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === optionLabel);
     expect(option, `option ${optionLabel}`).toBeTruthy();
     await act(async () => option!.click());
   }

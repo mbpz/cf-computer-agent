@@ -47,7 +47,7 @@ export function ExpandableTabs<TId extends string>({ items, value, onValueChange
             aria-controls={item.controls}
             data-expandable-tab={item.id}
             onClick={() => onValueChange(active ? null : item.id)}
-            className={cn("relative flex min-h-10 items-center rounded-md px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring", active ? "text-accent-foreground" : "text-muted-foreground", !active && canHover && "hover:text-foreground")}
+            className={cn("relative flex min-h-10 items-center rounded-md px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring max-lg:min-h-11", active ? "text-accent-foreground" : "text-muted-foreground", !active && canHover && "hover:text-foreground")}
           >
             {active ? <motion.span aria-hidden="true" layoutId={`${uid}-pill`} transition={reduce ? { duration: 0 } : SPRING_LAYOUT} className="absolute inset-0 rounded-md bg-accent" /> : null}
             <span className="relative z-10 flex items-center gap-2">

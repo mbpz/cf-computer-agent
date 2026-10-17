@@ -8,7 +8,13 @@
 - 迁移：`wrangler d1 migrations apply DB --remote` 应用 **`0074_knowledge_family_menu_nesting.sql`**（执行前 `migrations list --remote` 显示待应用仅此一条；执行 3 条命令）。
 - Worker：`wrangler deploy` 上线，版本 **`9a4da2ea-a179-43ee-bb9e-345517ef4632`**，自定义域 `memory.crgmhrc.asia`。
 - 生产核验（contributor 会话，真实冷加载与真实点击）：`/api/navigation` 已是 `workspace → knowledge → [search, agent, submit, my-submissions]`；桌面侧栏展开「AI 知识库」得四个二级项；首页指向 `/submit` 的入口收敛为 1 个；`/knowledge` 分享按钮 24×32；移动抽屉「打开导航」→「工作区导航」焦点进入面板、Escape 关闭并把焦点归还触发器。逐项证据见 `docs/product/2026-10-16-beui-interaction-acceptance.md` §5。
-- 仍未覆盖（见同文档 §6）：移动抽屉为**既有平铺**设计（未体现知识族嵌套）；320/768/1280 视口与英文；不可逆管理写入。
+- 仍未覆盖（见同文档 §6）：320/768/1280 视口与英文；不可逆管理写入。
+
+**第三批部署（2026-10-17，版本 `4f27b8a0-f305-4c1e-b010-af6b188d1d88`）**：关闭 I3/M2（移动端筛选披露 + 44px 触控，含手工落盘 beUI `bottom-sheet` 并接入同一 `sheet.tsx` 适配层）、I8（维护区在永久性配置缺失下不再给「重试」）、I5/I6（命令面板与侧栏的 beUI 采用**有据拒绝**）。门禁：`npm test`（smoke 88/14/30 + 单元 5629 + worker 1304）+ `npm run typecheck` + `npm run build`。
+
+生产实测（用户已登录标签，起点 `/tasks`）：`/notifications` 移动端披露触发器 44px；面板 `data-side="bottom"`、两个 `FilterSelect` 均 44px、焦点进入面板、`body` 滚动锁；Escape → 面板关闭、`aria-expanded="false"`、**焦点回到触发器**、滚动恢复；批量动作「标记可见为已读」留在**页面内**（不在面板内）且 44px。`/tasks` 移动端披露 44px；桌面 1440 **不渲染披露**、行内选择器仍 36px、页面横向溢出 0。英文边界测试用的语言偏好已切回 `zh-CN`。
+
+**未在 UI 核验**：`/admin` 维护区（需管理员会话，本轮不切角色以免打断 contributor 会话）——该面板由 6 条单测覆盖（未配置态不渲染任何按钮、点明缺 `MAINTENANCE_CONTROL_TOKEN`、手册链接、读取失败仍保留重试）。
 
 ## 0. 2026-10-16 第二轮（首次部署后的追加）
 

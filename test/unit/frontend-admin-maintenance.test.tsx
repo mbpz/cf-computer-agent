@@ -119,6 +119,40 @@ describe("admin maintenance status panel", () => {
     expect(container.querySelector("[data-maintenance-resume]")).toBeNull();
   });
 
+  it("offers no retry for the permanent not-configured state, and explains the missing token and its runbook", async () => {
+    const { requester, calls } = recordingRequester({ status: () => json({ error: { code: "MAINTENANCE_CONTROL_UNAVAILABLE", message: "Maintenance control is not enabled", retryable: true } }, 503) });
+    await mount(requester);
+    expect(attr("[data-maintenance-control]", "data-maintenance-control")).toBe("unavailable");
+    // A missing control token is configuration, not a transient failure: retrying
+    // can only read the same unconfigured instance again, so no retry is offered.
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+    expect(container.textContent).not.toContain("Try again");
+    // The region still names the token that is missing and where it is provisioned.
+    expect(container.querySelector("[data-maintenance-not-configured]")?.textContent).toContain("MAINTENANCE_CONTROL_TOKEN");
+    const runbook = container.querySelector("[data-maintenance-runbook]");
+    expect(runbook?.getAttribute("href")).toContain("production-activation-preflight.md");
+    expect(runbook?.textContent).toContain("runbook");
+    // Nothing is retried behind the user's back, and no write leaves the panel.
+    expect(calls.filter((call) => call.method === "GET")).toHaveLength(1);
+    expect(calls.filter((call) => call.method !== "GET")).toHaveLength(0);
+  });
+
+  it("keeps the retry for a transient read failure", async () => {
+    let attempts = 0;
+    const { requester, calls } = recordingRequester({
+      status: () => { attempts += 1; return attempts === 1 ? json({ error: { code: "INTERNAL", message: "INTERNAL", retryable: true } }, 500) : json(openStatus); },
+    });
+    await mount(requester);
+    expect(container.querySelector("[data-maintenance-phase]")).toBeNull();
+    const retry = container.querySelector("button");
+    expect(retry?.textContent).toContain("Try again");
+    expect(container.querySelector("[data-maintenance-runbook]")).toBeNull();
+    await act(async () => { (retry as HTMLButtonElement).click(); });
+    await flush();
+    expect(attr("[data-maintenance-phase]", "data-maintenance-phase")).toBe("OPEN");
+    expect(calls.filter((call) => call.path === "/api/admin/maintenance/status" && call.method === "GET").length).toBeGreaterThan(1);
+  });
+
   it("offers no drain or resume control, and names the operations endpoints instead", async () => {
     const { requester, calls } = recordingRequester({});
     await mount(requester);

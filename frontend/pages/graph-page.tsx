@@ -7,6 +7,7 @@ import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-fil
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { FilterSelect } from "../components/ui/filter-select";
+import { FilterDisclosure } from "../components/ui/filter-disclosure";
 import { Input } from "../components/ui/input";
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
@@ -254,11 +255,13 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
       />
       <Card>
         <CardHeader><CardTitle>{frontendText(locale, "GRAPH_LENS_TITLE")}</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_12rem_12rem]">
-          <Input data-graph-query aria-label={frontendText(locale, "GRAPH_QUERY_LABEL")} placeholder={frontendText(locale, "GRAPH_QUERY_PLACEHOLDER")} value={query} onChange={(event) => onQueryChange?.(event.currentTarget.value)} />
-          <FilterSelect label={frontendText(locale, "GRAPH_LENS_LABEL")} ariaLabel={frontendText(locale, "GRAPH_LENS_LABEL")} value={lens} onChange={(value) => onLensChange?.(value as GraphLens)} options={lensOptions} />
-          <FilterSelect label={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} ariaLabel={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} value={temporalRange} onChange={(value) => onTemporalRangeChange?.(value as GraphTemporalRange)} options={temporalRangeOptions} />
-          <FilterSelect label={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} ariaLabel={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} value={changeKind} onChange={(value) => onChangeKindChange?.(value as NonNullable<GraphPageProps["changeKind"]>)} options={changeKindOptions} />
+        <CardContent>
+          <FilterDisclosure label={frontendText(locale, "COMMON_FILTERS")} appliedCount={appliedFilters.length} rowClassName="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_12rem_12rem]">
+            <Input data-graph-query aria-label={frontendText(locale, "GRAPH_QUERY_LABEL")} placeholder={frontendText(locale, "GRAPH_QUERY_PLACEHOLDER")} value={query} onChange={(event) => onQueryChange?.(event.currentTarget.value)} />
+            <FilterSelect label={frontendText(locale, "GRAPH_LENS_LABEL")} ariaLabel={frontendText(locale, "GRAPH_LENS_LABEL")} value={lens} onChange={(value) => onLensChange?.(value as GraphLens)} options={lensOptions} />
+            <FilterSelect label={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} ariaLabel={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} value={temporalRange} onChange={(value) => onTemporalRangeChange?.(value as GraphTemporalRange)} options={temporalRangeOptions} />
+            <FilterSelect label={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} ariaLabel={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} value={changeKind} onChange={(value) => onChangeKindChange?.(value as NonNullable<GraphPageProps["changeKind"]>)} options={changeKindOptions} />
+          </FilterDisclosure>
         </CardContent>
       </Card>
       {/* Applied conditions describe the result window; a revoked read has none to describe,

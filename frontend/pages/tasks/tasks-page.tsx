@@ -7,6 +7,7 @@ import { DataTable } from "../../components/data-table";
 import { Input } from "../../components/ui/input";
 import { AppliedFilters, type AppliedFilter } from "../../components/ui/applied-filters";
 import { FilterSelect } from "../../components/ui/filter-select";
+import { FilterDisclosure } from "../../components/ui/filter-disclosure";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -76,13 +77,13 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
       description={frontendText(locale, "TASKS_DESCRIPTION")}
       actions={onCreate && <Button disabled={Boolean(actionPendingId)} onClick={onCreate}>{frontendText(locale, "TASKS_NEW")}</Button>}
     />
-    <div className="flex flex-wrap items-center gap-2">
+    <FilterDisclosure label={frontendText(locale, "COMMON_FILTERS")} appliedCount={appliedFilters.length} rowClassName="flex flex-wrap items-center gap-2">
       <Input aria-label={frontendText(locale, "TASKS_SEARCH")} value={filters.q ?? ""} onChange={(event) => onTextFilterChange?.({ ...filters, q: event.currentTarget.value || undefined })} placeholder={frontendText(locale, "TASKS_SEARCH")} />
       <FilterSelect label={frontendText(locale, "TASKS_STATUS")} ariaLabel={frontendText(locale, "TASKS_STATUS")} value={filters.status ?? ""} onChange={(value) => onFilterChange?.({ ...filters, status: (value || undefined) as TaskStatus | undefined })} options={[{ value: "", label: "All" }, { value: "todo", label: "todo" }, { value: "doing", label: "doing" }, { value: "blocked", label: "blocked" }, { value: "done", label: "done" }, { value: "canceled", label: "canceled" }]} />
       <FilterSelect label={frontendText(locale, "TASKS_PRIORITY")} ariaLabel={frontendText(locale, "TASKS_PRIORITY")} value={filters.priority ?? ""} onChange={(value) => onFilterChange?.({ ...filters, priority: (value || undefined) as TaskPriority | undefined })} options={[{ value: "", label: "All" }, { value: "low", label: "low" }, { value: "medium", label: "medium" }, { value: "high", label: "high" }]} />
       <Input aria-label={frontendText(locale, "TASKS_TAG")} value={filters.tag ?? ""} onChange={(event) => onTextFilterChange?.({ ...filters, tag: event.currentTarget.value || undefined })} placeholder={frontendText(locale, "TASKS_TAG")} />
       <FilterSelect label={frontendText(locale, "TASKS_DUE")} ariaLabel={frontendText(locale, "TASKS_DUE")} value={filters.due ?? ""} onChange={(value) => onFilterChange?.({ ...filters, due: (value || undefined) as TaskFilterState["due"] })} options={[{ value: "", label: "All" }, { value: "today", label: "today" }, { value: "overdue", label: "overdue" }, { value: "none", label: "none" }]} />
-    </div>
+    </FilterDisclosure>
     <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedFilters} onClear={() => onFilterChange?.({})} />
     {state.kind === "loading" && <PageState kind="loading" title={frontendText(locale, "TASKS_LOADING")} />}
     {state.kind === "error" && <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>}

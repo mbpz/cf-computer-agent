@@ -19,6 +19,17 @@ type StatusState =
   | { kind: "disabled"; message: string }
   | { kind: "error"; message: string };
 
+/**
+ * Where the missing coordinator control token is provisioned. A missing secret is
+ * a permanent configuration fact for this instance, so the not-configured state
+ * points at the operations runbook instead of offering a retry that can only read
+ * the same unconfigured instance again. Source of truth in the repository:
+ * `docs/operations/evidence/2026-09-22-r14-production-activation-preflight.md`
+ * ("生产激活顺序", step 2).
+ */
+const MAINTENANCE_ACTIVATION_RUNBOOK =
+  "https://github.com/mbpz/cf-computer-agent/blob/HEAD/docs/operations/evidence/2026-09-22-r14-production-activation-preflight.md";
+
 function messageOf(error: unknown, fallbackKey: string, locale?: LocaleRuntime): string {
   return error instanceof ApiRequestError ? error.message || error.code : frontendText(locale, fallbackKey);
 }
@@ -34,6 +45,11 @@ function messageOf(error: unknown, fallbackKey: string, locale?: LocaleRuntime):
  * coordinator's own state — phase, epoch, window, registered active permits and
  * the record capacity it enforces — and names the two control endpoints for the
  * operator's runbook instead of inventing a control.
+ *
+ * When the status read answers `MAINTENANCE_CONTROL_UNAVAILABLE` the instance is
+ * reporting a missing configuration, which no retry can change: that branch names
+ * the missing coordinator control token and points at the activation runbook, and
+ * only a genuinely transient read failure keeps the retry affordance.
  */
 export function MaintenanceStatusPanel({ locale, requester = fetch }: { locale?: LocaleRuntime; requester?: Fetcher }) {
   const [state, setState] = useState<StatusState>({ kind: "loading" });
@@ -75,7 +91,12 @@ export function MaintenanceStatusPanel({ locale, requester = fetch }: { locale?:
       {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
         : state.kind !== "ready" ? <div role="alert" data-maintenance-control="unavailable" className="space-y-2 text-sm">
           <p className={state.kind === "error" ? "text-destructive" : "text-muted-foreground"}>{state.message}</p>
-          <Button type="button" variant="outline" onClick={read}>{frontendText(locale, "COMMON_RETRY")}</Button>
+          {state.kind === "disabled"
+            ? <>
+              <p data-maintenance-not-configured className="text-muted-foreground">{frontendText(locale, "ADMIN_MAINTENANCE_DISABLED_RUNBOOK")}</p>
+              <a data-maintenance-runbook className="font-medium text-primary underline-offset-4 hover:underline" href={MAINTENANCE_ACTIVATION_RUNBOOK} target="_blank" rel="noreferrer noopener">{frontendText(locale, "ADMIN_MAINTENANCE_RUNBOOK_LINK")}</a>
+            </>
+            : <Button type="button" variant="outline" onClick={read}>{frontendText(locale, "COMMON_RETRY")}</Button>}
         </div>
         : <>
           {state.status.phase === "DRAINING" && <div role="alert" data-maintenance-drain="in-flight" className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm">

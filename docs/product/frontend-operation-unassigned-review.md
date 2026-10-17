@@ -388,7 +388,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/components/motion/not-found/shared.tsx`: `f98d45223967f45277bf89b659b308e63c784397d4da9c2830565b9bcfc508da`
 - `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
 - `frontend/components/ui/card.tsx`: `6de765c3d44b584bccdd7619816718d0500fdcd20428fcaa98a74c31f0614923`
-- `frontend/components/ui/tabs.tsx`: `1db24d455b581eae7de2ed76e1aa6cc01d0370fa8b9b221fca4d78207cdc9a77`
+- `frontend/components/ui/tabs.tsx`: `11da49213cc5fb1635dbe9c3b35af924189133976ef38b54e437a858d196db6c`
 - `frontend/features/environments/account-network-boundary.tsx`: `9835f50b5387cc2173e47a5dd4c4f85e0f64ec419d88926578b262bf971716b2`
 - `frontend/features/environments/account-network-owner.mjs`: `06943c97426e9b8df13e267ff0f668bbc2e3c80445905d2ac3a76591593f735f`
 - `frontend/features/environments/account-network.mjs`: `9e954525f93dc3b37b5d3d5b7755ad4c6c9d1ef56d6312337072299d9680501b`

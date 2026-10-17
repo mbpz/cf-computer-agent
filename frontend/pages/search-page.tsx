@@ -9,6 +9,7 @@ import { PageState } from "../components/ui/page-state";
 import { DataTable } from "../components/data-table";
 import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-filters";
 import { FilterSelect } from "../components/ui/filter-select";
+import { FilterDisclosure } from "../components/ui/filter-disclosure";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { SavedViewItem } from "../lib/saved-views-data";
 import { cn } from "../lib/utils";
@@ -105,14 +106,18 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
     setFilterError(undefined);
   }
   const kindOptions = [{ value: SEARCH_KIND_ALL, label: frontendText(locale, "SEARCH_FILTER_KIND_ALL") }, { value: "text", label: frontendText(locale, "INBOX_KIND_TEXT") }, { value: "markdown", label: frontendText(locale, "SUBMIT_MARKDOWN_LABEL") }, { value: "code", label: frontendText(locale, "SUBMIT_CODE_LABEL") }];
-  const commitFilters = () => {
+  // The condition filters apply together: one submit, one history entry, one query.
+  // It answers whether the draft was committed, so the panel that submitted can
+  // close on success and stay open on the rejection whose alert it holds.
+  const commitFilters = (): boolean => {
     const authorId = draft.authorId.trim();
-    if (authorId && !FILTER_ID.test(authorId)) { setFilterError(frontendText(locale, "SEARCH_FILTER_AUTHOR_INVALID")); return; }
+    if (authorId && !FILTER_ID.test(authorId)) { setFilterError(frontendText(locale, "SEARCH_FILTER_AUTHOR_INVALID")); return false; }
     const publishedFrom = timestampOf(draft.publishedFrom);
     const publishedTo = timestampOf(draft.publishedTo);
-    if (publishedFrom && publishedTo && publishedFrom > publishedTo) { setFilterError(frontendText(locale, "SEARCH_FILTER_RANGE_INVALID")); return; }
+    if (publishedFrom && publishedTo && publishedFrom > publishedTo) { setFilterError(frontendText(locale, "SEARCH_FILTER_RANGE_INVALID")); return false; }
     setFilterError(undefined);
     onFilterChange?.({ ...applied, kind: KIND_VALUES.find((value) => value === draft.kind), authorId: authorId || undefined, publishedFrom, publishedTo });
+    return true;
   };
   // Every applied condition stays visible as removable text. Dropping a Space drops the
   // conditions that require it, and dropping the last tag drops the tag mode with it.
@@ -136,7 +141,7 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
     <div className="flex flex-wrap items-center gap-3" data-search-controls-row>
       <form className="flex min-w-0 flex-1 basis-72 items-end gap-2" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
         <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="knowledge-search">{frontendText(locale, "SEARCH_QUERY_LABEL")}</Label><Input id="knowledge-search" name="q" value={inputQuery} disabled={queryLocked} onChange={(event) => onQueryChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "SEARCH_QUERY_PLACEHOLDER")} autoComplete="off" /></div>
-        <Button type="submit" disabled={!onSubmit || queryLocked}>{frontendText(locale, "SEARCH_SUBMIT")}</Button>
+        <Button type="submit" disabled={!onSubmit || queryLocked} className="max-lg:h-11">{frontendText(locale, "SEARCH_SUBMIT")}</Button>
       </form>
       {(savedViews || onSaveView) && <div className="min-w-0 flex-1 basis-72 space-y-2" data-saved-view-controls>
         {savedViewError && !savedViewRecordBlocked && <p role="alert" className="text-sm text-destructive">{savedViewError}</p>}
@@ -154,14 +159,23 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
         </div>
       </div>}
     </div>
-    {onFilterChange && <form data-search-filters className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-3" onSubmit={(event) => { event.preventDefault(); commitFilters(); }}>
-      <FilterSelect label={frontendText(locale, "KNOWLEDGE_FILTER_KIND")} ariaLabel={frontendText(locale, "KNOWLEDGE_FILTER_KIND")} value={draft.kind} disabled={queryLocked} options={kindOptions} onChange={(value) => setDraft((current) => ({ ...current, kind: value }))} />
-      <div className="space-y-2"><Label htmlFor="search-filter-author">{frontendText(locale, "KNOWLEDGE_FILTER_AUTHOR")}</Label><Input id="search-filter-author" data-search-filter-author className="w-48" value={draft.authorId} disabled={queryLocked} autoComplete="off" placeholder={frontendText(locale, "SEARCH_FILTER_AUTHOR_PLACEHOLDER")} onChange={(event) => setDraft((current) => ({ ...current, authorId: event.currentTarget.value }))} /></div>
-      <div className="space-y-2"><Label htmlFor="search-filter-published-from">{frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_FROM")}</Label><Input id="search-filter-published-from" data-search-filter-published-from type="date" className="w-44" value={draft.publishedFrom} disabled={queryLocked} onChange={(event) => setDraft((current) => ({ ...current, publishedFrom: event.currentTarget.value }))} /></div>
-      <div className="space-y-2"><Label htmlFor="search-filter-published-to">{frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_TO")}</Label><Input id="search-filter-published-to" data-search-filter-published-to type="date" className="w-44" value={draft.publishedTo} disabled={queryLocked} onChange={(event) => setDraft((current) => ({ ...current, publishedTo: event.currentTarget.value }))} /></div>
-      <Button type="submit" data-search-filters-apply disabled={queryLocked}>{frontendText(locale, "SEARCH_FILTERS_APPLY")}</Button>
-      {filterError && <p role="alert" className="text-sm text-destructive">{filterError}</p>}
-    </form>}
+    {onFilterChange && <FilterDisclosure
+      label={frontendText(locale, "COMMON_FILTERS")}
+      appliedCount={appliedChips.length}
+      rowClassName="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-3"
+      /* The row is a form on both surfaces: the Apply button only submits while it
+         is inside the form element, and the panel renders that same element. A
+         successful commit dismisses the panel so the results are what is left on
+         screen; a rejected draft keeps it open, where its alert is. */
+      renderRow={(className, close) => <form data-search-filters className={className} onSubmit={(event) => { event.preventDefault(); if (commitFilters()) close(); }}>
+        <FilterSelect label={frontendText(locale, "KNOWLEDGE_FILTER_KIND")} ariaLabel={frontendText(locale, "KNOWLEDGE_FILTER_KIND")} value={draft.kind} disabled={queryLocked} options={kindOptions} onChange={(value) => setDraft((current) => ({ ...current, kind: value }))} />
+        <div className="space-y-2"><Label htmlFor="search-filter-author">{frontendText(locale, "KNOWLEDGE_FILTER_AUTHOR")}</Label><Input id="search-filter-author" data-search-filter-author className="w-48 max-lg:w-full" value={draft.authorId} disabled={queryLocked} autoComplete="off" placeholder={frontendText(locale, "SEARCH_FILTER_AUTHOR_PLACEHOLDER")} onChange={(event) => setDraft((current) => ({ ...current, authorId: event.currentTarget.value }))} /></div>
+        <div className="space-y-2"><Label htmlFor="search-filter-published-from">{frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_FROM")}</Label><Input id="search-filter-published-from" data-search-filter-published-from type="date" className="w-44 max-lg:w-full" value={draft.publishedFrom} disabled={queryLocked} onChange={(event) => setDraft((current) => ({ ...current, publishedFrom: event.currentTarget.value }))} /></div>
+        <div className="space-y-2"><Label htmlFor="search-filter-published-to">{frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_TO")}</Label><Input id="search-filter-published-to" data-search-filter-published-to type="date" className="w-44 max-lg:w-full" value={draft.publishedTo} disabled={queryLocked} onChange={(event) => setDraft((current) => ({ ...current, publishedTo: event.currentTarget.value }))} /></div>
+        <Button type="submit" data-search-filters-apply disabled={queryLocked} className="max-lg:h-11">{frontendText(locale, "SEARCH_FILTERS_APPLY")}</Button>
+        {filterError && <p role="alert" className="text-sm text-destructive">{filterError}</p>}
+      </form>}
+    />}
     {onFilterChange && <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedChips} onClear={() => onFilterChange({ tagIds: [] })} />}
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
       : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_SEARCH_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>

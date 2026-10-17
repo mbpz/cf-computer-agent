@@ -5,6 +5,7 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { DataTable } from "../../components/data-table";
 import { FilterSelect } from "../../components/ui/filter-select";
+import { FilterDisclosure } from "../../components/ui/filter-disclosure";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -68,11 +69,13 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
          loading, in read-only recovery, on a read failure or a revoked read. */
       actions={ready && <p className="text-sm font-medium" aria-live="polite">{frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} {summary?.unread ?? 0}</p>}
     />
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
+    <FilterDisclosure label={frontendText(locale, "COMMON_FILTERS")} appliedCount={appliedFilters.length} rowClassName="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
       <FilterSelect label={frontendText(locale, "NOTIFICATIONS_READ_FILTER")} ariaLabel={frontendText(locale, "NOTIFICATIONS_READ_FILTER")} value={filters.read ?? ""} disabled={pending} onChange={(value) => onFilterChange({ ...filters, read: readFilter(value) })} options={readOptions} />
       <FilterSelect label={frontendText(locale, "NOTIFICATIONS_TYPE_FILTER")} ariaLabel={frontendText(locale, "NOTIFICATIONS_TYPE_FILTER")} value={filters.eventType ?? ""} disabled={pending} onChange={(value) => onFilterChange({ ...filters, eventType: eventFilter(value) })} options={typeOptions} />
-      {ready && <Button variant="outline" disabled={actionsDisabled || visibleUnreadIds.length === 0} onClick={() => onMarkVisibleRead(visibleUnreadIds)}>{frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ")}</Button>}
-    </div>
+    </FilterDisclosure>
+    {/* The bulk action is an action, not a condition: it stays in the page on
+        both surfaces instead of moving behind the mobile filter disclosure. */}
+    {ready && <Button variant="outline" className="max-lg:h-11" disabled={actionsDisabled || visibleUnreadIds.length === 0} onClick={() => onMarkVisibleRead(visibleUnreadIds)}>{frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ")}</Button>}
     <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedFilters} onClear={() => onFilterChange({})} />
     {recordBlocked && <Alert variant="destructive" data-notification-update-record-blocked="">
       <AlertTitle>{frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_BLOCKED")}</AlertTitle>

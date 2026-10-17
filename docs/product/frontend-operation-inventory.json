@@ -44,6 +44,7 @@
     "frontend/components/knowledge/knowledge-research-panel.tsx",
     "frontend/components/knowledge/knowledge-share-button.tsx",
     "frontend/components/motion/animated-toast-stack.tsx",
+    "frontend/components/motion/bottom-sheet.tsx",
     "frontend/components/motion/button/base.tsx",
     "frontend/components/motion/center-morph-modal.tsx",
     "frontend/components/motion/checkbox.tsx",
@@ -106,6 +107,7 @@
     "frontend/components/ui/dialog.tsx",
     "frontend/components/ui/dropdown-menu.tsx",
     "frontend/components/ui/expandable-tabs.tsx",
+    "frontend/components/ui/filter-disclosure.tsx",
     "frontend/components/ui/filter-select.tsx",
     "frontend/components/ui/focus-scope.tsx",
     "frontend/components/ui/input.tsx",
@@ -400,65 +402,79 @@
         "frontend/components/graph/graph-inspector.tsx:50:21",
         "frontend/components/graph/graph-inspector.tsx:68:15",
         "frontend/components/graph/graph-inspector.tsx:83:44",
+        "frontend/components/motion/bottom-sheet.tsx:93:5",
+        "frontend/components/motion/bottom-sheet.tsx:156:13",
+        "frontend/components/motion/bottom-sheet.tsx:176:13",
+        "frontend/components/motion/bottom-sheet.tsx:208:17",
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
+        "frontend/components/motion/drawer.tsx:41:5",
+        "frontend/components/motion/drawer.tsx:62:13",
+        "frontend/components/motion/drawer.tsx:83:13",
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
         "frontend/components/ui/card.tsx:9:85",
         "frontend/components/ui/card.tsx:10:83",
         "frontend/components/ui/card.tsx:12:86",
+        "frontend/components/ui/filter-disclosure.tsx:58:7",
+        "frontend/components/ui/filter-disclosure.tsx:77:14",
         "frontend/components/ui/filter-select.tsx:24:7",
+        "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/components/ui/input.tsx:12:5",
         "frontend/components/ui/page-state.tsx:12:10",
+        "frontend/components/ui/sheet.tsx:59:17",
+        "frontend/components/ui/sheet.tsx:63:12",
+        "frontend/components/ui/sheet.tsx:66:5",
         "frontend/components/ui/skeleton.tsx:4:92",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
+        "frontend/lib/list-mode.ts:19:3",
         "frontend/lib/workspace-browser-history.ts:122:3",
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
-        "frontend/pages/graph-page.tsx:98:5",
-        "frontend/pages/graph-page.tsx:206:47",
-        "frontend/pages/graph-page.tsx:209:7",
+        "frontend/pages/graph-page.tsx:99:5",
+        "frontend/pages/graph-page.tsx:207:47",
         "frontend/pages/graph-page.tsx:210:7",
-        "frontend/pages/graph-page.tsx:211:28",
-        "frontend/pages/graph-page.tsx:213:39",
-        "frontend/pages/graph-page.tsx:258:11",
-        "frontend/pages/graph-page.tsx:259:11",
-        "frontend/pages/graph-page.tsx:260:11",
-        "frontend/pages/graph-page.tsx:261:11",
-        "frontend/pages/graph-page.tsx:266:38",
-        "frontend/pages/graph-page.tsx:267:23",
-        "frontend/pages/graph-page.tsx:267:197",
-        "frontend/pages/graph-page.tsx:268:22",
-        "frontend/pages/graph-page.tsx:269:25",
-        "frontend/pages/graph-page.tsx:271:9",
-        "frontend/pages/graph-page.tsx:274:81",
-        "frontend/pages/graph-page.tsx:276:102",
-        "frontend/pages/graph-page.tsx:277:114",
-        "frontend/pages/graph-page.tsx:279:9",
+        "frontend/pages/graph-page.tsx:211:7",
+        "frontend/pages/graph-page.tsx:212:28",
+        "frontend/pages/graph-page.tsx:214:39",
+        "frontend/pages/graph-page.tsx:260:13",
+        "frontend/pages/graph-page.tsx:261:13",
+        "frontend/pages/graph-page.tsx:262:13",
+        "frontend/pages/graph-page.tsx:263:13",
+        "frontend/pages/graph-page.tsx:269:38",
+        "frontend/pages/graph-page.tsx:270:23",
+        "frontend/pages/graph-page.tsx:270:197",
+        "frontend/pages/graph-page.tsx:271:22",
+        "frontend/pages/graph-page.tsx:272:25",
+        "frontend/pages/graph-page.tsx:274:9",
+        "frontend/pages/graph-page.tsx:277:81",
+        "frontend/pages/graph-page.tsx:279:102",
+        "frontend/pages/graph-page.tsx:280:114",
         "frontend/pages/graph-page.tsx:282:9",
-        "frontend/pages/graph-page.tsx:283:44",
-        "frontend/pages/graph-page.tsx:288:29",
-        "frontend/pages/graph-page.tsx:291:23",
-        "frontend/pages/graph-page.tsx:293:26",
-        "frontend/pages/graph-page.tsx:296:11",
-        "frontend/pages/graph-page.tsx:302:197",
-        "frontend/pages/graph-page.tsx:304:92",
-        "frontend/pages/graph-page.tsx:307:13",
-        "frontend/pages/graph-page.tsx:315:13",
-        "frontend/pages/graph-page.tsx:430:10",
-        "frontend/pages/graph-page.tsx:436:269",
-        "frontend/pages/graph-page.tsx:438:34"
+        "frontend/pages/graph-page.tsx:285:9",
+        "frontend/pages/graph-page.tsx:286:44",
+        "frontend/pages/graph-page.tsx:291:29",
+        "frontend/pages/graph-page.tsx:294:23",
+        "frontend/pages/graph-page.tsx:296:26",
+        "frontend/pages/graph-page.tsx:299:11",
+        "frontend/pages/graph-page.tsx:305:197",
+        "frontend/pages/graph-page.tsx:307:92",
+        "frontend/pages/graph-page.tsx:310:13",
+        "frontend/pages/graph-page.tsx:318:13",
+        "frontend/pages/graph-page.tsx:433:10",
+        "frontend/pages/graph-page.tsx:439:269",
+        "frontend/pages/graph-page.tsx:441:34"
       ],
       "unresolvedSymbols": []
     },
@@ -649,6 +665,10 @@
         "frontend/components/inbox-create-form.tsx:135:144",
         "frontend/components/inbox-create-form.tsx:136:9",
         "frontend/components/inbox-create-form.tsx:137:15",
+        "frontend/components/motion/bottom-sheet.tsx:93:5",
+        "frontend/components/motion/bottom-sheet.tsx:156:13",
+        "frontend/components/motion/bottom-sheet.tsx:176:13",
+        "frontend/components/motion/bottom-sheet.tsx:208:17",
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/checkbox.tsx:59:7",
@@ -658,8 +678,8 @@
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -692,9 +712,9 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/badge.tsx:20:72",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
@@ -722,9 +742,10 @@
         "frontend/components/ui/pagination.tsx:65:5",
         "frontend/components/ui/select.tsx:6:135",
         "frontend/components/ui/select.tsx:9:113",
-        "frontend/components/ui/sheet.tsx:37:5",
-        "frontend/components/ui/sheet.tsx:40:7",
-        "frontend/components/ui/sheet.tsx:46:98",
+        "frontend/components/ui/sheet.tsx:59:17",
+        "frontend/components/ui/sheet.tsx:63:12",
+        "frontend/components/ui/sheet.tsx:66:5",
+        "frontend/components/ui/sheet.tsx:73:98",
         "frontend/components/ui/skeleton.tsx:4:92",
         "frontend/components/ui/textarea.tsx:11:5",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
@@ -1604,8 +1625,8 @@
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -1634,9 +1655,9 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/badge.tsx:20:72",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
@@ -1730,14 +1751,21 @@
         "frontend/components/data-table.tsx:90:5",
         "frontend/components/data-table.tsx:102:67",
         "frontend/components/data-table.tsx:103:19",
+        "frontend/components/motion/bottom-sheet.tsx:93:5",
+        "frontend/components/motion/bottom-sheet.tsx:156:13",
+        "frontend/components/motion/bottom-sheet.tsx:176:13",
+        "frontend/components/motion/bottom-sheet.tsx:208:17",
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/checkbox.tsx:59:7",
+        "frontend/components/motion/drawer.tsx:41:5",
+        "frontend/components/motion/drawer.tsx:62:13",
+        "frontend/components/motion/drawer.tsx:83:13",
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -1766,9 +1794,9 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
         "frontend/components/ui/card.tsx:12:86",
@@ -1779,6 +1807,8 @@
         "frontend/components/ui/dialog.tsx:34:5",
         "frontend/components/ui/dialog.tsx:35:5",
         "frontend/components/ui/dialog.tsx:39:99",
+        "frontend/components/ui/filter-disclosure.tsx:58:7",
+        "frontend/components/ui/filter-disclosure.tsx:77:14",
         "frontend/components/ui/filter-select.tsx:24:7",
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/components/ui/input.tsx:12:5",
@@ -1796,6 +1826,9 @@
         "frontend/components/ui/pagination.tsx:65:5",
         "frontend/components/ui/select.tsx:6:135",
         "frontend/components/ui/select.tsx:9:113",
+        "frontend/components/ui/sheet.tsx:59:17",
+        "frontend/components/ui/sheet.tsx:63:12",
+        "frontend/components/ui/sheet.tsx:66:5",
         "frontend/components/ui/skeleton.tsx:4:92",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
         "frontend/lib/list-mode.ts:19:3",
@@ -1807,37 +1840,37 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/search-page.tsx:132:25",
-        "frontend/pages/search-page.tsx:132:187",
-        "frontend/pages/search-page.tsx:133:24",
-        "frontend/pages/search-page.tsx:137:7",
-        "frontend/pages/search-page.tsx:138:137",
-        "frontend/pages/search-page.tsx:139:9",
-        "frontend/pages/search-page.tsx:142:55",
-        "frontend/pages/search-page.tsx:143:36",
-        "frontend/pages/search-page.tsx:143:155",
-        "frontend/pages/search-page.tsx:144:30",
-        "frontend/pages/search-page.tsx:146:26",
-        "frontend/pages/search-page.tsx:147:13",
-        "frontend/pages/search-page.tsx:148:13",
-        "frontend/pages/search-page.tsx:150:36",
-        "frontend/pages/search-page.tsx:151:293",
-        "frontend/pages/search-page.tsx:151:471",
-        "frontend/pages/search-page.tsx:152:34",
-        "frontend/pages/search-page.tsx:157:24",
-        "frontend/pages/search-page.tsx:158:7",
-        "frontend/pages/search-page.tsx:159:129",
-        "frontend/pages/search-page.tsx:160:145",
-        "frontend/pages/search-page.tsx:161:141",
-        "frontend/pages/search-page.tsx:162:7",
-        "frontend/pages/search-page.tsx:163:23",
-        "frontend/pages/search-page.tsx:165:24",
-        "frontend/pages/search-page.tsx:167:133",
-        "frontend/pages/search-page.tsx:169:24",
-        "frontend/pages/search-page.tsx:169:128",
+        "frontend/pages/search-page.tsx:137:25",
+        "frontend/pages/search-page.tsx:137:187",
+        "frontend/pages/search-page.tsx:138:24",
+        "frontend/pages/search-page.tsx:142:7",
+        "frontend/pages/search-page.tsx:143:137",
+        "frontend/pages/search-page.tsx:144:9",
+        "frontend/pages/search-page.tsx:147:55",
+        "frontend/pages/search-page.tsx:148:36",
+        "frontend/pages/search-page.tsx:148:155",
+        "frontend/pages/search-page.tsx:149:30",
+        "frontend/pages/search-page.tsx:151:26",
+        "frontend/pages/search-page.tsx:152:13",
+        "frontend/pages/search-page.tsx:153:13",
+        "frontend/pages/search-page.tsx:155:36",
+        "frontend/pages/search-page.tsx:156:293",
+        "frontend/pages/search-page.tsx:156:471",
+        "frontend/pages/search-page.tsx:157:34",
+        "frontend/pages/search-page.tsx:170:40",
         "frontend/pages/search-page.tsx:171:9",
-        "frontend/pages/search-page.tsx:187:160",
-        "frontend/pages/search-page.tsx:189:409"
+        "frontend/pages/search-page.tsx:172:131",
+        "frontend/pages/search-page.tsx:173:147",
+        "frontend/pages/search-page.tsx:174:143",
+        "frontend/pages/search-page.tsx:175:9",
+        "frontend/pages/search-page.tsx:176:25",
+        "frontend/pages/search-page.tsx:179:24",
+        "frontend/pages/search-page.tsx:181:133",
+        "frontend/pages/search-page.tsx:183:24",
+        "frontend/pages/search-page.tsx:183:128",
+        "frontend/pages/search-page.tsx:185:9",
+        "frontend/pages/search-page.tsx:201:160",
+        "frontend/pages/search-page.tsx:203:409"
       ],
       "unresolvedSymbols": []
     },
@@ -1919,8 +1952,8 @@
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -2015,9 +2048,9 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/badge.tsx:20:72",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
@@ -2093,6 +2126,10 @@
         "frontend/components/data-table.tsx:90:5",
         "frontend/components/data-table.tsx:102:67",
         "frontend/components/data-table.tsx:103:19",
+        "frontend/components/motion/bottom-sheet.tsx:93:5",
+        "frontend/components/motion/bottom-sheet.tsx:156:13",
+        "frontend/components/motion/bottom-sheet.tsx:176:13",
+        "frontend/components/motion/bottom-sheet.tsx:208:17",
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/checkbox.tsx:59:7",
@@ -2102,8 +2139,8 @@
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -2132,9 +2169,9 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/badge.tsx:20:72",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
@@ -2146,6 +2183,8 @@
         "frontend/components/ui/dialog.tsx:34:5",
         "frontend/components/ui/dialog.tsx:35:5",
         "frontend/components/ui/dialog.tsx:39:99",
+        "frontend/components/ui/filter-disclosure.tsx:58:7",
+        "frontend/components/ui/filter-disclosure.tsx:77:14",
         "frontend/components/ui/filter-select.tsx:24:7",
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/components/ui/input.tsx:12:5",
@@ -2162,9 +2201,10 @@
         "frontend/components/ui/pagination.tsx:65:5",
         "frontend/components/ui/select.tsx:6:135",
         "frontend/components/ui/select.tsx:9:113",
-        "frontend/components/ui/sheet.tsx:37:5",
-        "frontend/components/ui/sheet.tsx:40:7",
-        "frontend/components/ui/sheet.tsx:46:98",
+        "frontend/components/ui/sheet.tsx:59:17",
+        "frontend/components/ui/sheet.tsx:63:12",
+        "frontend/components/ui/sheet.tsx:66:5",
+        "frontend/components/ui/sheet.tsx:73:98",
         "frontend/components/ui/skeleton.tsx:4:92",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
         "frontend/lib/list-mode.ts:19:3",
@@ -2222,23 +2262,23 @@
         "frontend/pages/tasks/task-editor.tsx:322:7",
         "frontend/pages/tasks/task-editor.tsx:323:7",
         "frontend/pages/tasks/task-editor.tsx:325:5",
-        "frontend/pages/tasks/tasks-page.tsx:77:28",
-        "frontend/pages/tasks/tasks-page.tsx:80:7",
+        "frontend/pages/tasks/tasks-page.tsx:78:28",
         "frontend/pages/tasks/tasks-page.tsx:81:7",
         "frontend/pages/tasks/tasks-page.tsx:82:7",
         "frontend/pages/tasks/tasks-page.tsx:83:7",
         "frontend/pages/tasks/tasks-page.tsx:84:7",
-        "frontend/pages/tasks/tasks-page.tsx:86:5",
-        "frontend/pages/tasks/tasks-page.tsx:88:78",
-        "frontend/pages/tasks/tasks-page.tsx:90:21",
-        "frontend/pages/tasks/tasks-page.tsx:91:24",
-        "frontend/pages/tasks/tasks-page.tsx:91:132",
-        "frontend/pages/tasks/tasks-page.tsx:92:5",
-        "frontend/pages/tasks/tasks-page.tsx:121:13",
-        "frontend/pages/tasks/tasks-page.tsx:122:24",
-        "frontend/pages/tasks/tasks-page.tsx:123:13",
+        "frontend/pages/tasks/tasks-page.tsx:85:7",
+        "frontend/pages/tasks/tasks-page.tsx:87:5",
+        "frontend/pages/tasks/tasks-page.tsx:89:78",
+        "frontend/pages/tasks/tasks-page.tsx:91:21",
+        "frontend/pages/tasks/tasks-page.tsx:92:24",
+        "frontend/pages/tasks/tasks-page.tsx:92:132",
+        "frontend/pages/tasks/tasks-page.tsx:93:5",
+        "frontend/pages/tasks/tasks-page.tsx:122:13",
+        "frontend/pages/tasks/tasks-page.tsx:123:24",
         "frontend/pages/tasks/tasks-page.tsx:124:13",
-        "frontend/pages/tasks/tasks-page.tsx:129:13"
+        "frontend/pages/tasks/tasks-page.tsx:125:13",
+        "frontend/pages/tasks/tasks-page.tsx:130:13"
       ],
       "unresolvedSymbols": []
     },
@@ -2363,8 +2403,8 @@
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -2390,9 +2430,9 @@
         "frontend/components/motion/table/table-menu.tsx:86:15",
         "frontend/components/motion/table/table-menu.tsx:90:15",
         "frontend/components/motion/table/table-menu.tsx:103:19",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/confirm-action.tsx:12:10",
         "frontend/components/ui/confirm-action.tsx:13:5",
@@ -2515,11 +2555,12 @@
         }
       ],
       "candidateOperationIds": [
-        "frontend/components/admin/maintenance-status-panel.tsx:76:36",
-        "frontend/components/admin/maintenance-status-panel.tsx:78:11",
-        "frontend/components/admin/maintenance-status-panel.tsx:81:49",
-        "frontend/components/admin/maintenance-status-panel.tsx:85:48",
-        "frontend/components/admin/maintenance-status-panel.tsx:100:38",
+        "frontend/components/admin/maintenance-status-panel.tsx:92:36",
+        "frontend/components/admin/maintenance-status-panel.tsx:97:15",
+        "frontend/components/admin/maintenance-status-panel.tsx:99:15",
+        "frontend/components/admin/maintenance-status-panel.tsx:102:49",
+        "frontend/components/admin/maintenance-status-panel.tsx:106:48",
+        "frontend/components/admin/maintenance-status-panel.tsx:121:38",
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/button/base.tsx:172:7",
@@ -2839,8 +2880,8 @@
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -2869,9 +2910,9 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/badge.tsx:20:72",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
@@ -2962,8 +3003,8 @@
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -2992,9 +3033,9 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/badge.tsx:20:72",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
@@ -3361,8 +3402,8 @@
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -3391,9 +3432,9 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
         "frontend/components/ui/card.tsx:12:86",
@@ -3543,14 +3584,21 @@
         "frontend/components/data-table.tsx:90:5",
         "frontend/components/data-table.tsx:102:67",
         "frontend/components/data-table.tsx:103:19",
+        "frontend/components/motion/bottom-sheet.tsx:93:5",
+        "frontend/components/motion/bottom-sheet.tsx:156:13",
+        "frontend/components/motion/bottom-sheet.tsx:176:13",
+        "frontend/components/motion/bottom-sheet.tsx:208:17",
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/checkbox.tsx:59:7",
+        "frontend/components/motion/drawer.tsx:41:5",
+        "frontend/components/motion/drawer.tsx:62:13",
+        "frontend/components/motion/drawer.tsx:83:13",
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
         "frontend/components/motion/table/index.tsx:265:7",
         "frontend/components/motion/table/index.tsx:292:11",
@@ -3579,14 +3627,17 @@
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
-        "frontend/components/ui/applied-filters.tsx:24:5",
-        "frontend/components/ui/applied-filters.tsx:28:11",
-        "frontend/components/ui/applied-filters.tsx:31:7",
+        "frontend/components/ui/applied-filters.tsx:28:5",
+        "frontend/components/ui/applied-filters.tsx:32:11",
+        "frontend/components/ui/applied-filters.tsx:35:7",
         "frontend/components/ui/badge.tsx:20:72",
         "frontend/components/ui/button.tsx:33:5",
         "frontend/components/ui/card.tsx:5:37",
         "frontend/components/ui/card.tsx:12:86",
+        "frontend/components/ui/filter-disclosure.tsx:58:7",
+        "frontend/components/ui/filter-disclosure.tsx:77:14",
         "frontend/components/ui/filter-select.tsx:24:7",
+        "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/components/ui/page-state.tsx:12:10",
         "frontend/components/ui/pagination.tsx:35:145",
         "frontend/components/ui/pagination.tsx:38:118",
@@ -3600,6 +3651,9 @@
         "frontend/components/ui/pagination.tsx:65:5",
         "frontend/components/ui/select.tsx:6:135",
         "frontend/components/ui/select.tsx:9:113",
+        "frontend/components/ui/sheet.tsx:59:17",
+        "frontend/components/ui/sheet.tsx:63:12",
+        "frontend/components/ui/sheet.tsx:66:5",
         "frontend/components/ui/skeleton.tsx:4:92",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
         "frontend/lib/list-mode.ts:19:3",
@@ -3607,18 +3661,18 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/notifications/notifications-page.tsx:72:7",
         "frontend/pages/notifications/notifications-page.tsx:73:7",
-        "frontend/pages/notifications/notifications-page.tsx:74:17",
-        "frontend/pages/notifications/notifications-page.tsx:76:5",
-        "frontend/pages/notifications/notifications-page.tsx:79:29",
-        "frontend/pages/notifications/notifications-page.tsx:86:9",
-        "frontend/pages/notifications/notifications-page.tsx:90:192",
-        "frontend/pages/notifications/notifications-page.tsx:91:108",
-        "frontend/pages/notifications/notifications-page.tsx:92:120",
-        "frontend/pages/notifications/notifications-page.tsx:93:32",
-        "frontend/pages/notifications/notifications-page.tsx:117:21",
-        "frontend/pages/notifications/notifications-page.tsx:118:38"
+        "frontend/pages/notifications/notifications-page.tsx:74:7",
+        "frontend/pages/notifications/notifications-page.tsx:78:15",
+        "frontend/pages/notifications/notifications-page.tsx:79:5",
+        "frontend/pages/notifications/notifications-page.tsx:82:29",
+        "frontend/pages/notifications/notifications-page.tsx:89:9",
+        "frontend/pages/notifications/notifications-page.tsx:93:192",
+        "frontend/pages/notifications/notifications-page.tsx:94:108",
+        "frontend/pages/notifications/notifications-page.tsx:95:120",
+        "frontend/pages/notifications/notifications-page.tsx:96:32",
+        "frontend/pages/notifications/notifications-page.tsx:120:21",
+        "frontend/pages/notifications/notifications-page.tsx:121:38"
       ],
       "unresolvedSymbols": []
     },
@@ -4364,6 +4418,10 @@
         }
       ],
       "candidateOperationIds": [
+        "frontend/components/motion/bottom-sheet.tsx:93:5",
+        "frontend/components/motion/bottom-sheet.tsx:156:13",
+        "frontend/components/motion/bottom-sheet.tsx:176:13",
+        "frontend/components/motion/bottom-sheet.tsx:208:17",
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/drawer.tsx:41:5",
@@ -4458,11 +4516,12 @@
         "frontend/components/ui/dropdown-menu.tsx:153:10",
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/components/ui/input.tsx:12:5",
-        "frontend/components/ui/sheet.tsx:37:5",
-        "frontend/components/ui/sheet.tsx:40:7",
-        "frontend/components/ui/sheet.tsx:45:95",
-        "frontend/components/ui/sheet.tsx:46:98",
-        "frontend/components/ui/sheet.tsx:49:10",
+        "frontend/components/ui/sheet.tsx:59:17",
+        "frontend/components/ui/sheet.tsx:63:12",
+        "frontend/components/ui/sheet.tsx:66:5",
+        "frontend/components/ui/sheet.tsx:72:95",
+        "frontend/components/ui/sheet.tsx:73:98",
+        "frontend/components/ui/sheet.tsx:76:10",
         "frontend/components/ui/tooltip.tsx:6:10",
         "frontend/components/ui/tooltip.tsx:10:10",
         "frontend/components/ui/tooltip.tsx:14:10",
@@ -4496,8 +4555,8 @@
         "frontend/components/motion/select.tsx:177:5",
         "frontend/components/motion/select.tsx:178:5",
         "frontend/components/motion/select.tsx:247:5",
-        "frontend/components/motion/select.tsx:380:5",
-        "frontend/components/motion/select.tsx:442:7",
+        "frontend/components/motion/select.tsx:384:5",
+        "frontend/components/motion/select.tsx:446:7",
         "frontend/components/motion/tabs.tsx:160:5",
         "frontend/components/motion/tabs.tsx:226:9",
         "frontend/components/motion/tabs.tsx:230:7",
@@ -7692,10 +7751,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/admin/maintenance-status-panel.tsx:76:36",
+      "id": "frontend/components/admin/maintenance-status-panel.tsx:92:36",
       "path": "frontend/components/admin/maintenance-status-panel.tsx",
       "owner": "MaintenanceStatusPanel",
-      "line": 76,
+      "line": 92,
       "column": 36,
       "kind": "jsx",
       "tag": "div",
@@ -7722,11 +7781,50 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/admin/maintenance-status-panel.tsx:78:11",
+      "id": "frontend/components/admin/maintenance-status-panel.tsx:97:15",
       "path": "frontend/components/admin/maintenance-status-panel.tsx",
       "owner": "MaintenanceStatusPanel",
-      "line": 78,
-      "column": 11,
+      "line": 97,
+      "column": 15,
+      "kind": "jsx",
+      "tag": "a",
+      "attributes": {
+        "data-maintenance-runbook": "true",
+        "className": "\"font-medium text-primary underline-offset-4 hover:underline\"",
+        "href": "MAINTENANCE_ACTIVATION_RUNBOOK",
+        "target": "\"_blank\"",
+        "rel": "\"noreferrer noopener\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_MAINTENANCE_RUNBOOK_LINK\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"loading\"",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "state.kind !== \"ready\"",
+          "branch": "true"
+        },
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"disabled\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/admin/maintenance-status-panel.tsx:99:15",
+      "path": "frontend/components/admin/maintenance-status-panel.tsx",
+      "owner": "MaintenanceStatusPanel",
+      "line": 99,
+      "column": 15,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -7751,15 +7849,20 @@
           "kind": "branch",
           "expression": "state.kind !== \"ready\"",
           "branch": "true"
+        },
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"disabled\"",
+          "branch": "false"
         }
       ],
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/admin/maintenance-status-panel.tsx:81:49",
+      "id": "frontend/components/admin/maintenance-status-panel.tsx:102:49",
       "path": "frontend/components/admin/maintenance-status-panel.tsx",
       "owner": "MaintenanceStatusPanel",
-      "line": 81,
+      "line": 102,
       "column": 49,
       "kind": "jsx",
       "tag": "div",
@@ -7791,10 +7894,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/admin/maintenance-status-panel.tsx:85:48",
+      "id": "frontend/components/admin/maintenance-status-panel.tsx:106:48",
       "path": "frontend/components/admin/maintenance-status-panel.tsx",
       "owner": "MaintenanceStatusPanel",
-      "line": 85,
+      "line": 106,
       "column": 48,
       "kind": "jsx",
       "tag": "div",
@@ -7826,10 +7929,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/admin/maintenance-status-panel.tsx:100:38",
+      "id": "frontend/components/admin/maintenance-status-panel.tsx:121:38",
       "path": "frontend/components/admin/maintenance-status-panel.tsx",
       "owner": "MaintenanceStatusPanel",
-      "line": 100,
+      "line": 121,
       "column": 38,
       "kind": "jsx",
       "tag": "p",
@@ -14481,6 +14584,153 @@
       "earlyReturns": []
     },
     {
+      "id": "frontend/components/motion/bottom-sheet.tsx:93:5",
+      "path": "frontend/components/motion/bottom-sheet.tsx",
+      "owner": "BottomSheet",
+      "line": 93,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "\"keydown\"",
+      "arguments": [
+        "\"keydown\"",
+        "onKey"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!open",
+          "source": "if (!open) return;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/motion/bottom-sheet.tsx:156:13",
+      "path": "frontend/components/motion/bottom-sheet.tsx",
+      "owner": "BottomSheet",
+      "line": 156,
+      "column": 13,
+      "kind": "jsx",
+      "tag": "motion.button",
+      "attributes": {
+        "type": "\"button\"",
+        "aria-label": "\"Close bottom sheet\"",
+        "initial": "{ opacity: 0 }",
+        "animate": "{ opacity: 1 }",
+        "exit": "{ opacity: 0 }",
+        "transition": "DRAWER",
+        "onClick": "() => onOpenChange(false)",
+        "className": "\"pointer-events-auto fixed inset-0 z-50 bg-background/40 backdrop-blur-sm\""
+      },
+      "handlers": {
+        "onClick": "() => onOpenChange(false)"
+      },
+      "spreads": [
+        "gate"
+      ],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "open",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "!mounted",
+          "source": "if (!mounted) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/motion/bottom-sheet.tsx:176:13",
+      "path": "frontend/components/motion/bottom-sheet.tsx",
+      "owner": "BottomSheet",
+      "line": 176,
+      "column": 13,
+      "kind": "jsx",
+      "tag": "motion.div",
+      "attributes": {
+        "ref": "sheetRef",
+        "drag": "\"y\"",
+        "dragControls": "dragControls",
+        "dragListener": "false",
+        "dragConstraints": "{ top: 0, bottom: 0 }",
+        "dragElastic": "{ top: 0.02, bottom: 0.4 }",
+        "dragMomentum": "false",
+        "onDragEnd": "onDragEnd",
+        "initial": "reduce ? { y: 0, opacity: 0 } : { y: \"100%\" }",
+        "animate": "reduce ? { y: 0, opacity: 1 } : { y: 0 }",
+        "exit": "reduce ? { y: 0, opacity: 0 } : { y: \"100%\" }",
+        "transition": "reduce ? { duration: 0.18, ease: EASE_DRAWER } : DRAWER",
+        "onAnimationComplete": "() => {\n                if (sheetRef.current)\n                  heightRef.current = sheetRef.current.offsetHeight;\n              }",
+        "style": "{ ...heightStyle, ...gate.style }",
+        "className": "cn(\n                \"pointer-events-auto fixed bottom-0 left-0 right-0 z-50 mx-auto flex max-w-2xl flex-col overflow-hidden rounded-t-3xl will-change-transform\",\n                \"border border-border bg-background shadow-xl\",\n                className,\n              )",
+        "role": "\"dialog\"",
+        "aria-modal": "\"true\"",
+        "aria-labelledby": "title ? titleId : undefined",
+        "aria-describedby": "description ? descriptionId : undefined",
+        "aria-label": "title ? undefined : \"Bottom sheet\""
+      },
+      "handlers": {
+        "onDragEnd": "onDragEnd",
+        "onAnimationComplete": "() => {\n                if (sheetRef.current)\n                  heightRef.current = sheetRef.current.offsetHeight;\n              }"
+      },
+      "spreads": [
+        "gate"
+      ],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "open",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "!mounted",
+          "source": "if (!mounted) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/motion/bottom-sheet.tsx:208:17",
+      "path": "frontend/components/motion/bottom-sheet.tsx",
+      "owner": "BottomSheet",
+      "line": 208,
+      "column": 17,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "onPointerDown": "(event) => dragControls.start(event)",
+        "className": "cn(\n                    \"flex cursor-grab touch-none items-center justify-center py-1 active:cursor-grabbing\",\n                    TOUCH_GESTURE_CONTENT_CLASS,\n                  )"
+      },
+      "handlers": {
+        "onPointerDown": "(event) => dragControls.start(event)"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "open",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "!mounted",
+          "source": "if (!mounted) return null;"
+        }
+      ]
+    },
+    {
       "id": "frontend/components/motion/button/base.tsx:105:7",
       "path": "frontend/components/motion/button/base.tsx",
       "owner": "Button",
@@ -15153,7 +15403,7 @@
         "aria-controls": "ctx.listId",
         "onClick": "() => ctx.setOpen(!ctx.open)",
         "style": "{\n        borderTopLeftRadius: ctx.reduce || !isTop ? RADIUS : nearRadius,\n        borderTopRightRadius: ctx.reduce || !isTop ? RADIUS : nearRadius,\n        borderBottomLeftRadius: ctx.reduce || isTop ? RADIUS : nearRadius,\n        borderBottomRightRadius: ctx.reduce || isTop ? RADIUS : nearRadius,\n      }",
-        "className": "cn(\n        \"relative z-10 flex w-full items-center justify-between gap-2 border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors\",\n        \"hover:border-(--color-border-strong) focus-visible:ring-2 focus-visible:ring-foreground/20\",\n        \"disabled:pointer-events-none disabled:opacity-50\",\n        className,\n      )"
+        "className": "cn(\n        \"relative z-10 flex w-full items-center justify-between gap-2 border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors\",\n        \"hover:border-(--color-border-strong) focus-visible:ring-2 focus-visible:ring-foreground/20\",\n        \"disabled:pointer-events-none disabled:opacity-50\",\n        // Every picker is a thumb target below the shell's `lg` edge, where\n        // `ui/input.tsx` already stands 44px tall. On desktop the row keeps the\n        // density call sites like `ui/filter-select.tsx` set with `h-9`.\n        \"max-lg:min-h-11\",\n        className,\n      )"
       },
       "handlers": {
         "onClick": "() => ctx.setOpen(!ctx.open)"
@@ -15166,10 +15416,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/motion/select.tsx:380:5",
+      "id": "frontend/components/motion/select.tsx:384:5",
       "path": "frontend/components/motion/select.tsx",
       "owner": "SelectContent",
-      "line": 380,
+      "line": 384,
       "column": 5,
       "kind": "jsx",
       "tag": "motion.div",
@@ -15190,10 +15440,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/motion/select.tsx:442:7",
+      "id": "frontend/components/motion/select.tsx:446:7",
       "path": "frontend/components/motion/select.tsx",
       "owner": "SelectItem",
-      "line": 442,
+      "line": 446,
       "column": 7,
       "kind": "jsx",
       "tag": "button",
@@ -24421,10 +24671,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/applied-filters.tsx:24:5",
+      "id": "frontend/components/ui/applied-filters.tsx:28:5",
       "path": "frontend/components/ui/applied-filters.tsx",
       "owner": "AppliedFilters",
-      "line": 24,
+      "line": 28,
       "column": 5,
       "kind": "jsx",
       "tag": "div",
@@ -24446,10 +24696,10 @@
       ]
     },
     {
-      "id": "frontend/components/ui/applied-filters.tsx:28:11",
+      "id": "frontend/components/ui/applied-filters.tsx:32:11",
       "path": "frontend/components/ui/applied-filters.tsx",
       "owner": "AppliedFilters",
-      "line": 28,
+      "line": 32,
       "column": 11,
       "kind": "jsx",
       "tag": "button",
@@ -24457,7 +24707,7 @@
         "type": "\"button\"",
         "aria-label": "`${clearLabel}: ${filter.label}`",
         "onClick": "filter.onRemove",
-        "className": "\"text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full\""
+        "className": "\"inline-flex items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full max-lg:min-h-11 max-lg:min-w-11\""
       },
       "handlers": {
         "onClick": "filter.onRemove"
@@ -24480,10 +24730,10 @@
       ]
     },
     {
-      "id": "frontend/components/ui/applied-filters.tsx:31:7",
+      "id": "frontend/components/ui/applied-filters.tsx:35:7",
       "path": "frontend/components/ui/applied-filters.tsx",
       "owner": "AppliedFilters",
-      "line": 31,
+      "line": 35,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -24491,6 +24741,7 @@
         "variant": "\"ghost\"",
         "size": "\"sm\"",
         "data-filters-clear": "true",
+        "className": "\"max-lg:h-11\"",
         "onClick": "onClear"
       },
       "handlers": {
@@ -25093,7 +25344,7 @@
         "aria-controls": "item.controls",
         "data-expandable-tab": "item.id",
         "onClick": "() => onValueChange(active ? null : item.id)",
-        "className": "cn(\"relative flex min-h-10 items-center rounded-md px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring\", active ? \"text-accent-foreground\" : \"text-muted-foreground\", !active && canHover && \"hover:text-foreground\")"
+        "className": "cn(\"relative flex min-h-10 items-center rounded-md px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring max-lg:min-h-11\", active ? \"text-accent-foreground\" : \"text-muted-foreground\", !active && canHover && \"hover:text-foreground\")"
       },
       "handlers": {
         "onClick": "() => onValueChange(active ? null : item.id)"
@@ -25107,6 +25358,67 @@
         }
       ],
       "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/ui/filter-disclosure.tsx:58:7",
+      "path": "frontend/components/ui/filter-disclosure.tsx",
+      "owner": "FilterDisclosure",
+      "line": 58,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "data-filter-disclosure-trigger": "true",
+        "aria-haspopup": "\"dialog\"",
+        "aria-expanded": "open",
+        "className": "\"h-11 w-full justify-between px-4\"",
+        "onClick": "() => setOpen(true)"
+      },
+      "handlers": {
+        "onClick": "() => setOpen(true)"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!mobile",
+          "source": "if (!mobile) return <>{row(rowClassName)}</>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/ui/filter-disclosure.tsx:77:14",
+      "path": "frontend/components/ui/filter-disclosure.tsx",
+      "owner": "FilterDisclosure",
+      "line": 77,
+      "column": 14,
+      "kind": "jsx",
+      "tag": "Sheet",
+      "attributes": {
+        "open": "true",
+        "onOpenChange": "setOpen"
+      },
+      "handlers": {
+        "onOpenChange": "setOpen"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "open",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "!mobile",
+          "source": "if (!mobile) return <>{row(rowClassName)}</>;"
+        }
+      ]
     },
     {
       "id": "frontend/components/ui/filter-select.tsx:24:7",
@@ -25509,39 +25821,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/sheet.tsx:37:5",
+      "id": "frontend/components/ui/sheet.tsx:59:17",
       "path": "frontend/components/ui/sheet.tsx",
       "owner": "SheetContent",
-      "line": 37,
-      "column": 5,
-      "kind": "jsx",
-      "tag": "Drawer",
-      "attributes": {
-        "open": "true",
-        "onOpenChange": "(next) => { onOpenChange?.(next); }",
-        "side": "side",
-        "ariaLabel": "ariaLabel",
-        "className": "cn(\"w-72 p-6\", className)"
-      },
-      "handlers": {
-        "onOpenChange": "(next) => { onOpenChange?.(next); }"
-      },
-      "spreads": [],
-      "labels": [],
-      "context": [],
-      "earlyReturns": [
-        {
-          "condition": "!open",
-          "source": "if (!open) return null;"
-        }
-      ]
-    },
-    {
-      "id": "frontend/components/ui/sheet.tsx:40:7",
-      "path": "frontend/components/ui/sheet.tsx",
-      "owner": "SheetContent",
-      "line": 40,
-      "column": 7,
+      "line": 59,
+      "column": 17,
       "kind": "jsx",
       "tag": "div",
       "attributes": {
@@ -25557,13 +25841,41 @@
       "labels": [
         "children"
       ],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!open",
+          "source": "if (!open) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/ui/sheet.tsx:63:12",
+      "path": "frontend/components/ui/sheet.tsx",
+      "owner": "SheetContent",
+      "line": 63,
+      "column": 12,
+      "kind": "jsx",
+      "tag": "BottomSheet",
+      "attributes": {
+        "open": "true",
+        "onOpenChange": "(next) => { onOpenChange?.(next); }",
+        "title": "ariaLabel",
+        "snapPoints": "[\"auto\"]",
+        "className": "className"
+      },
+      "handlers": {
+        "onOpenChange": "(next) => { onOpenChange?.(next); }"
+      },
+      "spreads": [],
+      "labels": [
+        "scope"
+      ],
       "context": [
         {
-          "kind": "container",
-          "tag": "Drawer",
-          "attributes": {
-            "open": "true"
-          }
+          "kind": "branch",
+          "expression": "side === \"bottom\"",
+          "branch": "true"
         }
       ],
       "earlyReturns": [
@@ -25574,10 +25886,44 @@
       ]
     },
     {
-      "id": "frontend/components/ui/sheet.tsx:45:95",
+      "id": "frontend/components/ui/sheet.tsx:66:5",
+      "path": "frontend/components/ui/sheet.tsx",
+      "owner": "SheetContent",
+      "line": 66,
+      "column": 5,
+      "kind": "jsx",
+      "tag": "Drawer",
+      "attributes": {
+        "open": "true",
+        "onOpenChange": "(next) => { onOpenChange?.(next); }",
+        "side": "side",
+        "ariaLabel": "ariaLabel",
+        "className": "cn(\"w-72 p-6\", className)"
+      },
+      "handlers": {
+        "onOpenChange": "(next) => { onOpenChange?.(next); }"
+      },
+      "spreads": [],
+      "labels": [
+        "scope"
+      ],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!open",
+          "source": "if (!open) return null;"
+        },
+        {
+          "condition": "side === \"bottom\"",
+          "source": "if (side === \"bottom\") {\n    // `auto` grows the sheet to its content: a snap-point surface would open\n    // twice as tall as a two-control filter row needs it to be.\n    return <BottomSheet open onOpenChange={(next) => { onOpenChange?.(next); }} title={ariaLabel} snapPoints={[\"auto\"]} className={className}>{scope}</BottomSheet>;\n  }"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/ui/sheet.tsx:72:95",
       "path": "frontend/components/ui/sheet.tsx",
       "owner": "SheetHeader",
-      "line": 45,
+      "line": 72,
       "column": 95,
       "kind": "jsx",
       "tag": "div",
@@ -25593,10 +25939,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/sheet.tsx:46:98",
+      "id": "frontend/components/ui/sheet.tsx:73:98",
       "path": "frontend/components/ui/sheet.tsx",
       "owner": "SheetTitle",
-      "line": 46,
+      "line": 73,
       "column": 98,
       "kind": "jsx",
       "tag": "h2",
@@ -25612,10 +25958,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/sheet.tsx:49:10",
+      "id": "frontend/components/ui/sheet.tsx:76:10",
       "path": "frontend/components/ui/sheet.tsx",
       "owner": "SheetClose",
-      "line": 49,
+      "line": 76,
       "column": 10,
       "kind": "jsx",
       "tag": "button",
@@ -25749,7 +26095,7 @@
         "aria-disabled": "disabled ? \"true\" : undefined",
         "tabIndex": "active ? 0 : -1",
         "disabled": "disabled",
-        "className": "cn(\"rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground\", className)",
+        "className": "cn(\"rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground max-lg:min-h-11\", className)",
         "onClick": "(event) => { onClick?.(event); if (!event.defaultPrevented && !disabled) context.setValue(value); }",
         "data-state": "active ? \"active\" : \"inactive\""
       },
@@ -42158,10 +42504,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:98:5",
+      "id": "frontend/pages/graph-page.tsx:99:5",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 98,
+      "line": 99,
       "column": 5,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -42178,10 +42524,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:206:47",
+      "id": "frontend/pages/graph-page.tsx:207:47",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 206,
+      "line": 207,
       "column": 47,
       "kind": "jsx",
       "tag": "div",
@@ -42209,10 +42555,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:209:7",
+      "id": "frontend/pages/graph-page.tsx:210:7",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 209,
+      "line": 210,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -42250,10 +42596,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:210:7",
+      "id": "frontend/pages/graph-page.tsx:211:7",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 210,
+      "line": 211,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -42291,10 +42637,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:211:28",
+      "id": "frontend/pages/graph-page.tsx:212:28",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 211,
+      "line": 212,
       "column": 28,
       "kind": "jsx",
       "tag": "p",
@@ -42333,10 +42679,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:213:39",
+      "id": "frontend/pages/graph-page.tsx:214:39",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 213,
+      "line": 214,
       "column": 39,
       "kind": "jsx",
       "tag": "p",
@@ -42363,11 +42709,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:258:11",
+      "id": "frontend/pages/graph-page.tsx:260:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 258,
-      "column": 11,
+      "line": 260,
+      "column": 13,
       "kind": "jsx",
       "tag": "Input",
       "attributes": {
@@ -42386,11 +42732,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:259:11",
+      "id": "frontend/pages/graph-page.tsx:261:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 259,
-      "column": 11,
+      "line": 261,
+      "column": 13,
       "kind": "jsx",
       "tag": "FilterSelect",
       "attributes": {
@@ -42409,11 +42755,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:260:11",
+      "id": "frontend/pages/graph-page.tsx:262:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 260,
-      "column": 11,
+      "line": 262,
+      "column": 13,
       "kind": "jsx",
       "tag": "FilterSelect",
       "attributes": {
@@ -42432,11 +42778,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:261:11",
+      "id": "frontend/pages/graph-page.tsx:263:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 261,
-      "column": 11,
+      "line": 263,
+      "column": 13,
       "kind": "jsx",
       "tag": "FilterSelect",
       "attributes": {
@@ -42455,10 +42801,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:266:38",
+      "id": "frontend/pages/graph-page.tsx:269:38",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 266,
+      "line": 269,
       "column": 38,
       "kind": "jsx",
       "tag": "AppliedFilters",
@@ -42483,10 +42829,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:267:23",
+      "id": "frontend/pages/graph-page.tsx:270:23",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 267,
+      "line": 270,
       "column": 23,
       "kind": "jsx",
       "tag": "div",
@@ -42508,10 +42854,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:267:197",
+      "id": "frontend/pages/graph-page.tsx:270:197",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 267,
+      "line": 270,
       "column": 197,
       "kind": "jsx",
       "tag": "Button",
@@ -42536,10 +42882,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:268:22",
+      "id": "frontend/pages/graph-page.tsx:271:22",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 268,
+      "line": 271,
       "column": 22,
       "kind": "jsx",
       "tag": "p",
@@ -42562,10 +42908,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:269:25",
+      "id": "frontend/pages/graph-page.tsx:272:25",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 269,
+      "line": 272,
       "column": 25,
       "kind": "jsx",
       "tag": "div",
@@ -42587,10 +42933,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:271:9",
+      "id": "frontend/pages/graph-page.tsx:274:9",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 271,
+      "line": 274,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -42615,10 +42961,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:274:81",
+      "id": "frontend/pages/graph-page.tsx:277:81",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 274,
+      "line": 277,
       "column": 81,
       "kind": "jsx",
       "tag": "p",
@@ -42641,10 +42987,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:276:102",
+      "id": "frontend/pages/graph-page.tsx:279:102",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 276,
+      "line": 279,
       "column": 102,
       "kind": "jsx",
       "tag": "Button",
@@ -42670,10 +43016,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:277:114",
+      "id": "frontend/pages/graph-page.tsx:280:114",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 277,
+      "line": 280,
       "column": 114,
       "kind": "jsx",
       "tag": "Button",
@@ -42699,10 +43045,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:279:9",
+      "id": "frontend/pages/graph-page.tsx:282:9",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 279,
+      "line": 282,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -42728,10 +43074,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:282:9",
+      "id": "frontend/pages/graph-page.tsx:285:9",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 282,
+      "line": 285,
       "column": 9,
       "kind": "jsx",
       "tag": "GraphSuggestionsPanel",
@@ -42755,10 +43101,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:283:44",
+      "id": "frontend/pages/graph-page.tsx:286:44",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 283,
+      "line": 286,
       "column": 44,
       "kind": "jsx",
       "tag": "div",
@@ -42785,10 +43131,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:288:29",
+      "id": "frontend/pages/graph-page.tsx:291:29",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 288,
+      "line": 291,
       "column": 29,
       "kind": "jsx",
       "tag": "Button",
@@ -42832,10 +43178,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:291:23",
+      "id": "frontend/pages/graph-page.tsx:294:23",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 291,
+      "line": 294,
       "column": 23,
       "kind": "jsx",
       "tag": "div",
@@ -42862,10 +43208,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:293:26",
+      "id": "frontend/pages/graph-page.tsx:296:26",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 293,
+      "line": 296,
       "column": 26,
       "kind": "jsx",
       "tag": "Button",
@@ -42902,10 +43248,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:296:11",
+      "id": "frontend/pages/graph-page.tsx:299:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 296,
+      "line": 299,
       "column": 11,
       "kind": "jsx",
       "tag": "GraphCanvas",
@@ -42933,10 +43279,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:302:197",
+      "id": "frontend/pages/graph-page.tsx:305:197",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 302,
+      "line": 305,
       "column": 197,
       "kind": "jsx",
       "tag": "Button",
@@ -42969,10 +43315,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:304:92",
+      "id": "frontend/pages/graph-page.tsx:307:92",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 304,
+      "line": 307,
       "column": 92,
       "kind": "jsx",
       "tag": "Button",
@@ -43010,10 +43356,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:307:13",
+      "id": "frontend/pages/graph-page.tsx:310:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 307,
+      "line": 310,
       "column": 13,
       "kind": "jsx",
       "tag": "GraphInspector",
@@ -43041,10 +43387,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:315:13",
+      "id": "frontend/pages/graph-page.tsx:318:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 315,
+      "line": 318,
       "column": 13,
       "kind": "jsx",
       "tag": "GraphEvidencePanel",
@@ -43068,10 +43414,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:430:10",
+      "id": "frontend/pages/graph-page.tsx:433:10",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphRoute",
-      "line": 430,
+      "line": 433,
       "column": 10,
       "kind": "jsx",
       "tag": "GraphPage",
@@ -43118,10 +43464,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:436:269",
+      "id": "frontend/pages/graph-page.tsx:439:269",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphSuggestionsPanel",
-      "line": 436,
+      "line": 439,
       "column": 269,
       "kind": "jsx",
       "tag": "Button",
@@ -43141,10 +43487,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:438:34",
+      "id": "frontend/pages/graph-page.tsx:441:34",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphSuggestionsPanel",
-      "line": 438,
+      "line": 441,
       "column": 34,
       "kind": "jsx",
       "tag": "p",
@@ -48601,10 +48947,10 @@
       ]
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:72:7",
+      "id": "frontend/pages/notifications/notifications-page.tsx:73:7",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 72,
+      "line": 73,
       "column": 7,
       "kind": "jsx",
       "tag": "FilterSelect",
@@ -48625,10 +48971,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:73:7",
+      "id": "frontend/pages/notifications/notifications-page.tsx:74:7",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 73,
+      "line": 74,
       "column": 7,
       "kind": "jsx",
       "tag": "FilterSelect",
@@ -48649,15 +48995,16 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:74:17",
+      "id": "frontend/pages/notifications/notifications-page.tsx:78:15",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 74,
-      "column": 17,
+      "line": 78,
+      "column": 15,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
         "variant": "\"outline\"",
+        "className": "\"max-lg:h-11\"",
         "disabled": "actionsDisabled || visibleUnreadIds.length === 0",
         "onClick": "() => onMarkVisibleRead(visibleUnreadIds)"
       },
@@ -48678,10 +49025,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:76:5",
+      "id": "frontend/pages/notifications/notifications-page.tsx:79:5",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 76,
+      "line": 79,
       "column": 5,
       "kind": "jsx",
       "tag": "AppliedFilters",
@@ -48700,10 +49047,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:79:29",
+      "id": "frontend/pages/notifications/notifications-page.tsx:82:29",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 79,
+      "line": 82,
       "column": 29,
       "kind": "jsx",
       "tag": "Button",
@@ -48728,10 +49075,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:86:9",
+      "id": "frontend/pages/notifications/notifications-page.tsx:89:9",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 86,
+      "line": 89,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -48757,10 +49104,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:90:192",
+      "id": "frontend/pages/notifications/notifications-page.tsx:93:192",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 90,
+      "line": 93,
       "column": 192,
       "kind": "jsx",
       "tag": "Button",
@@ -48786,10 +49133,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:91:108",
+      "id": "frontend/pages/notifications/notifications-page.tsx:94:108",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 91,
+      "line": 94,
       "column": 108,
       "kind": "jsx",
       "tag": "Button",
@@ -48815,10 +49162,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:92:120",
+      "id": "frontend/pages/notifications/notifications-page.tsx:95:120",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 92,
+      "line": 95,
       "column": 120,
       "kind": "jsx",
       "tag": "Button",
@@ -48844,10 +49191,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:93:32",
+      "id": "frontend/pages/notifications/notifications-page.tsx:96:32",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 93,
+      "line": 96,
       "column": 32,
       "kind": "jsx",
       "tag": "DataTable",
@@ -48884,10 +49231,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:117:21",
+      "id": "frontend/pages/notifications/notifications-page.tsx:120:21",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 117,
+      "line": 120,
       "column": 21,
       "kind": "jsx",
       "tag": "Button",
@@ -48918,10 +49265,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/notifications/notifications-page.tsx:118:38",
+      "id": "frontend/pages/notifications/notifications-page.tsx:121:38",
       "path": "frontend/pages/notifications/notifications-page.tsx",
       "owner": "NotificationsPage",
-      "line": 118,
+      "line": 121,
       "column": 38,
       "kind": "jsx",
       "tag": "Button",
@@ -49908,10 +50255,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:132:25",
+      "id": "frontend/pages/search-page.tsx:137:25",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 132,
+      "line": 137,
       "column": 25,
       "kind": "jsx",
       "tag": "div",
@@ -49933,10 +50280,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:132:187",
+      "id": "frontend/pages/search-page.tsx:137:187",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 132,
+      "line": 137,
       "column": 187,
       "kind": "jsx",
       "tag": "Button",
@@ -49962,10 +50309,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:133:24",
+      "id": "frontend/pages/search-page.tsx:138:24",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 133,
+      "line": 138,
       "column": 24,
       "kind": "jsx",
       "tag": "p",
@@ -49987,10 +50334,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:137:7",
+      "id": "frontend/pages/search-page.tsx:142:7",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 137,
+      "line": 142,
       "column": 7,
       "kind": "jsx",
       "tag": "form",
@@ -50007,10 +50354,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:138:137",
+      "id": "frontend/pages/search-page.tsx:143:137",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 138,
+      "line": 143,
       "column": 137,
       "kind": "jsx",
       "tag": "Input",
@@ -50038,16 +50385,17 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:139:9",
+      "id": "frontend/pages/search-page.tsx:144:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 139,
+      "line": 144,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
         "type": "\"submit\"",
-        "disabled": "!onSubmit || queryLocked"
+        "disabled": "!onSubmit || queryLocked",
+        "className": "\"max-lg:h-11\""
       },
       "handlers": {},
       "spreads": [],
@@ -50064,10 +50412,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:142:55",
+      "id": "frontend/pages/search-page.tsx:147:55",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 142,
+      "line": 147,
       "column": 55,
       "kind": "jsx",
       "tag": "p",
@@ -50095,10 +50443,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:143:36",
+      "id": "frontend/pages/search-page.tsx:148:36",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 143,
+      "line": 148,
       "column": 36,
       "kind": "jsx",
       "tag": "div",
@@ -50125,10 +50473,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:143:155",
+      "id": "frontend/pages/search-page.tsx:148:155",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 143,
+      "line": 148,
       "column": 155,
       "kind": "jsx",
       "tag": "Button",
@@ -50160,10 +50508,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:144:30",
+      "id": "frontend/pages/search-page.tsx:149:30",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 144,
+      "line": 149,
       "column": 30,
       "kind": "jsx",
       "tag": "Button",
@@ -50195,10 +50543,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:146:26",
+      "id": "frontend/pages/search-page.tsx:151:26",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 146,
+      "line": 151,
       "column": 26,
       "kind": "jsx",
       "tag": "form",
@@ -50226,10 +50574,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:147:13",
+      "id": "frontend/pages/search-page.tsx:152:13",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 147,
+      "line": 152,
       "column": 13,
       "kind": "jsx",
       "tag": "Input",
@@ -50267,10 +50615,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:148:13",
+      "id": "frontend/pages/search-page.tsx:153:13",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 148,
+      "line": 153,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -50303,10 +50651,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:150:36",
+      "id": "frontend/pages/search-page.tsx:155:36",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 150,
+      "line": 155,
       "column": 36,
       "kind": "jsx",
       "tag": "div",
@@ -50334,10 +50682,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:151:293",
+      "id": "frontend/pages/search-page.tsx:156:293",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 151,
+      "line": 156,
       "column": 293,
       "kind": "jsx",
       "tag": "button",
@@ -50374,10 +50722,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:151:471",
+      "id": "frontend/pages/search-page.tsx:156:471",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 151,
+      "line": 156,
       "column": 471,
       "kind": "jsx",
       "tag": "button",
@@ -50414,10 +50762,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:152:34",
+      "id": "frontend/pages/search-page.tsx:157:34",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 152,
+      "line": 157,
       "column": 34,
       "kind": "jsx",
       "tag": "Button",
@@ -50457,20 +50805,20 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:157:24",
+      "id": "frontend/pages/search-page.tsx:170:40",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 157,
-      "column": 24,
+      "line": 170,
+      "column": 40,
       "kind": "jsx",
       "tag": "form",
       "attributes": {
         "data-search-filters": "true",
-        "className": "\"flex flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-3\"",
-        "onSubmit": "(event) => { event.preventDefault(); commitFilters(); }"
+        "className": "className",
+        "onSubmit": "(event) => { event.preventDefault(); if (commitFilters()) close(); }"
       },
       "handlers": {
-        "onSubmit": "(event) => { event.preventDefault(); commitFilters(); }"
+        "onSubmit": "(event) => { event.preventDefault(); if (commitFilters()) close(); }"
       },
       "spreads": [],
       "labels": [],
@@ -50484,11 +50832,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:158:7",
+      "id": "frontend/pages/search-page.tsx:171:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 158,
-      "column": 7,
+      "line": 171,
+      "column": 9,
       "kind": "jsx",
       "tag": "FilterSelect",
       "attributes": {
@@ -50519,17 +50867,17 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:159:129",
+      "id": "frontend/pages/search-page.tsx:172:131",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 159,
-      "column": 129,
+      "line": 172,
+      "column": 131,
       "kind": "jsx",
       "tag": "Input",
       "attributes": {
         "id": "\"search-filter-author\"",
         "data-search-filter-author": "true",
-        "className": "\"w-48\"",
+        "className": "\"w-48 max-lg:w-full\"",
         "value": "draft.authorId",
         "disabled": "queryLocked",
         "autoComplete": "\"off\"",
@@ -50556,18 +50904,18 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:160:145",
+      "id": "frontend/pages/search-page.tsx:173:147",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 160,
-      "column": 145,
+      "line": 173,
+      "column": 147,
       "kind": "jsx",
       "tag": "Input",
       "attributes": {
         "id": "\"search-filter-published-from\"",
         "data-search-filter-published-from": "true",
         "type": "\"date\"",
-        "className": "\"w-44\"",
+        "className": "\"w-44 max-lg:w-full\"",
         "value": "draft.publishedFrom",
         "disabled": "queryLocked",
         "onChange": "(event) => setDraft((current) => ({ ...current, publishedFrom: event.currentTarget.value }))"
@@ -50592,18 +50940,18 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:161:141",
+      "id": "frontend/pages/search-page.tsx:174:143",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 161,
-      "column": 141,
+      "line": 174,
+      "column": 143,
       "kind": "jsx",
       "tag": "Input",
       "attributes": {
         "id": "\"search-filter-published-to\"",
         "data-search-filter-published-to": "true",
         "type": "\"date\"",
-        "className": "\"w-44\"",
+        "className": "\"w-44 max-lg:w-full\"",
         "value": "draft.publishedTo",
         "disabled": "queryLocked",
         "onChange": "(event) => setDraft((current) => ({ ...current, publishedTo: event.currentTarget.value }))"
@@ -50628,17 +50976,18 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:162:7",
+      "id": "frontend/pages/search-page.tsx:175:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 162,
-      "column": 7,
+      "line": 175,
+      "column": 9,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
         "type": "\"submit\"",
         "data-search-filters-apply": "true",
-        "disabled": "queryLocked"
+        "disabled": "queryLocked",
+        "className": "\"max-lg:h-11\""
       },
       "handlers": {},
       "spreads": [],
@@ -50660,11 +51009,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:163:23",
+      "id": "frontend/pages/search-page.tsx:176:25",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 163,
-      "column": 23,
+      "line": 176,
+      "column": 25,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -50696,10 +51045,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:165:24",
+      "id": "frontend/pages/search-page.tsx:179:24",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 165,
+      "line": 179,
       "column": 24,
       "kind": "jsx",
       "tag": "AppliedFilters",
@@ -50724,10 +51073,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:167:133",
+      "id": "frontend/pages/search-page.tsx:181:133",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 167,
+      "line": 181,
       "column": 133,
       "kind": "jsx",
       "tag": "Button",
@@ -50758,10 +51107,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:169:24",
+      "id": "frontend/pages/search-page.tsx:183:24",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 169,
+      "line": 183,
       "column": 24,
       "kind": "jsx",
       "tag": "div",
@@ -50792,10 +51141,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:169:128",
+      "id": "frontend/pages/search-page.tsx:183:128",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 169,
+      "line": 183,
       "column": 128,
       "kind": "jsx",
       "tag": "Button",
@@ -50832,10 +51181,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:171:9",
+      "id": "frontend/pages/search-page.tsx:185:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 171,
+      "line": 185,
       "column": 9,
       "kind": "jsx",
       "tag": "DataTable",
@@ -50878,10 +51227,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:187:160",
+      "id": "frontend/pages/search-page.tsx:201:160",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 187,
+      "line": 201,
       "column": 160,
       "kind": "jsx",
       "tag": "a",
@@ -50909,10 +51258,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:189:409",
+      "id": "frontend/pages/search-page.tsx:203:409",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 189,
+      "line": 203,
       "column": 409,
       "kind": "jsx",
       "tag": "a",
@@ -53836,10 +54185,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:77:28",
+      "id": "frontend/pages/tasks/tasks-page.tsx:78:28",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 77,
+      "line": 78,
       "column": 28,
       "kind": "jsx",
       "tag": "Button",
@@ -53871,10 +54220,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:80:7",
+      "id": "frontend/pages/tasks/tasks-page.tsx:81:7",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 80,
+      "line": 81,
       "column": 7,
       "kind": "jsx",
       "tag": "Input",
@@ -53901,10 +54250,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:81:7",
+      "id": "frontend/pages/tasks/tasks-page.tsx:82:7",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 81,
+      "line": 82,
       "column": 7,
       "kind": "jsx",
       "tag": "FilterSelect",
@@ -53932,10 +54281,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:82:7",
+      "id": "frontend/pages/tasks/tasks-page.tsx:83:7",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 82,
+      "line": 83,
       "column": 7,
       "kind": "jsx",
       "tag": "FilterSelect",
@@ -53963,10 +54312,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:83:7",
+      "id": "frontend/pages/tasks/tasks-page.tsx:84:7",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 83,
+      "line": 84,
       "column": 7,
       "kind": "jsx",
       "tag": "Input",
@@ -53993,10 +54342,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:84:7",
+      "id": "frontend/pages/tasks/tasks-page.tsx:85:7",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 84,
+      "line": 85,
       "column": 7,
       "kind": "jsx",
       "tag": "FilterSelect",
@@ -54024,10 +54373,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:86:5",
+      "id": "frontend/pages/tasks/tasks-page.tsx:87:5",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 86,
+      "line": 87,
       "column": 5,
       "kind": "jsx",
       "tag": "AppliedFilters",
@@ -54054,10 +54403,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:88:78",
+      "id": "frontend/pages/tasks/tasks-page.tsx:89:78",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 88,
+      "line": 89,
       "column": 78,
       "kind": "jsx",
       "tag": "Button",
@@ -54090,10 +54439,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:90:21",
+      "id": "frontend/pages/tasks/tasks-page.tsx:91:21",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 90,
+      "line": 91,
       "column": 21,
       "kind": "jsx",
       "tag": "div",
@@ -54128,10 +54477,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:91:24",
+      "id": "frontend/pages/tasks/tasks-page.tsx:92:24",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 91,
+      "line": 92,
       "column": 24,
       "kind": "jsx",
       "tag": "div",
@@ -54164,10 +54513,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:91:132",
+      "id": "frontend/pages/tasks/tasks-page.tsx:92:132",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 91,
+      "line": 92,
       "column": 132,
       "kind": "jsx",
       "tag": "Button",
@@ -54206,10 +54555,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:92:5",
+      "id": "frontend/pages/tasks/tasks-page.tsx:93:5",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 92,
+      "line": 93,
       "column": 5,
       "kind": "jsx",
       "tag": "DataTable",
@@ -54253,10 +54602,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:121:13",
+      "id": "frontend/pages/tasks/tasks-page.tsx:122:13",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 121,
+      "line": 122,
       "column": 13,
       "kind": "jsx",
       "tag": "a",
@@ -54286,10 +54635,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:122:24",
+      "id": "frontend/pages/tasks/tasks-page.tsx:123:24",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 122,
+      "line": 123,
       "column": 24,
       "kind": "jsx",
       "tag": "Button",
@@ -54329,10 +54678,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:123:13",
+      "id": "frontend/pages/tasks/tasks-page.tsx:124:13",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 123,
+      "line": 124,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -54367,10 +54716,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:124:13",
+      "id": "frontend/pages/tasks/tasks-page.tsx:125:13",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 124,
+      "line": 125,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -54405,10 +54754,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/tasks/tasks-page.tsx:129:13",
+      "id": "frontend/pages/tasks/tasks-page.tsx:130:13",
       "path": "frontend/pages/tasks/tasks-page.tsx",
       "owner": "TasksPage",
-      "line": 129,
+      "line": 130,
       "column": 13,
       "kind": "jsx",
       "tag": "ConfirmAction",

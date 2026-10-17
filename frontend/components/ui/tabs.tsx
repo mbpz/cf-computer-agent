@@ -63,7 +63,7 @@ export function TabsTrigger({ className, value, disabled = false, onClick, ...pr
   const suffix = encodeURIComponent(value).replace(/%/gu, "_");
   const tabId = `${context.baseId}-tab-${suffix}`;
   const panelId = `${context.baseId}-panel-${suffix}`;
-  return <button type="button" role="tab" id={tabId} data-tab-value={value} aria-controls={panelId} aria-selected={active ? "true" : "false"} aria-disabled={disabled ? "true" : undefined} tabIndex={active ? 0 : -1} disabled={disabled} className={cn("rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground", className)} onClick={(event) => { onClick?.(event); if (!event.defaultPrevented && !disabled) context.setValue(value); }} {...props} data-state={active ? "active" : "inactive"} />;
+  return <button type="button" role="tab" id={tabId} data-tab-value={value} aria-controls={panelId} aria-selected={active ? "true" : "false"} aria-disabled={disabled ? "true" : undefined} tabIndex={active ? 0 : -1} disabled={disabled} className={cn("rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground max-lg:min-h-11", className)} onClick={(event) => { onClick?.(event); if (!event.defaultPrevented && !disabled) context.setValue(value); }} {...props} data-state={active ? "active" : "inactive"} />;
 }
 
 export function TabsContent({ className, value, ...props }: React.HTMLAttributes<HTMLDivElement> & { value: string }) {

@@ -262,6 +262,10 @@ export function SelectTrigger({ className, children }: SelectTriggerProps) {
         "relative z-10 flex w-full items-center justify-between gap-2 border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors",
         "hover:border-(--color-border-strong) focus-visible:ring-2 focus-visible:ring-foreground/20",
         "disabled:pointer-events-none disabled:opacity-50",
+        // Every picker is a thumb target below the shell's `lg` edge, where
+        // `ui/input.tsx` already stands 44px tall. On desktop the row keeps the
+        // density call sites like `ui/filter-select.tsx` set with `h-9`.
+        "max-lg:min-h-11",
         className,
       )}
     >
