@@ -13,11 +13,10 @@ const ToastContext = createContext<ToastApi | null>(null);
 /**
  * Global transient feedback channel.
  *
- * Write outcomes in this application deliberately stay as durable inline state
- * (retries never replay a write silently), so this channel is only for events
- * that would otherwise have no home at all — for example an action executed from
- * the command palette, whose own inline affordance is already unmounted by the
- * time the result arrives.
+ * Only feedback that is safe to miss belongs here: confirmations for a write that
+ * already resolved, and outcomes whose inline affordance is already unmounted by
+ * the time the result arrives. Durable state — failures, blocked records and
+ * recovery intents — stays inline so a refresh never erases it.
  */
 export function ToastProvider({ children, locale }: { children: ReactNode; locale: LocaleRuntime }) {
   const stack = useAnimatedToastStack({ limit: 3 });

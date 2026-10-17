@@ -419,3 +419,257 @@ payload 行号（live registry 取回逐行核对）：`CenterMorphModalContent`
 ### 11.8 门禁（本切片）
 
 `npm run typecheck`（worker + frontend）干净。套件：`npx vitest run frontend-agent-cancellation-route / frontend-agent-page-summary / frontend-agent-source-identity / frontend-agent-receipt-read / frontend-agent-data / frontend-agent-turn-intent / frontend-a11y / frontend-graph-a11y / chat-feedback-service` → **9 文件 / 123 测试全绿**（`frontend-agent-page-summary` 本轮新增 2 条，见下）。新增断言：`test/unit/frontend-agent-page-summary.test.tsx:131`（作答中：`data-state="streaming"`、`data-content="step"`、中文阶段文案在、`Thinking`／`Searching the web` 不在、英文 `Stop` 不在）与 `:146`（恢复线程：每条 `Message` 的 `aria-label` 为本地化角色名、无 `user message`／`assistant message` 英文默认名、引用链接保留、滚动区 `h-80 lg:h-96` 且不吃页面高度）。
+
+## 12. Wave 3 · 一致性收口（ConsistencyCleanup 切片：圆角／骨架／依赖／`folderMode`，2026-10-17）
+
+**结论**：本切片登记的 5 个目标里 **3 个在此前波次已关闭**（本节 12.1 逐条附 grep，不再改动），真正落地的是 2 项：移除已无导入点的 `@radix-ui/react-tooltip`（并把它此前以传递依赖身份供给 beUI tooltip 源的 `@floating-ui/dom` 转为直接依赖，见 12.2），删除零调用点的 `AssetDropzone.folderMode`（12.3）。`frontend/` 生产代码净改动 **2 行**（`asset-dropzone.tsx`），未改 `frontend/lib/i18n.ts`、未动 ledger 三件、未重生成 operation inventory、未新增 i18n 键与 `data-*` 钩子。
+
+### 12.1 三个"残留"的复核：均已合规（证据即 grep，本轮零改动）
+
+| 登记项（§6 Wave 3 待清理） | 实际状态 | 证明 |
+| --- | --- | --- |
+| `motion/card.tsx` 残留 `rounded-2xl` | **无残留**：根节点是 `rounded-lg` = `--radius` | `grep -n "rounded" frontend/components/motion/card.tsx` → 仅 `:7,:8`（文档注释里说明"payload 的 `rounded-2xl` 会带来第二套圆角"）与 `:126` 的 `rounded-lg` |
+| `motion/alert.tsx` 残留 `rounded-xl` | **无残留**：外壳是 `rounded-lg` = `--radius` | `grep -n "rounded" frontend/components/motion/alert.tsx` → `:150`（注释）＋ `:152`（`rounded-lg p-4`）＋ `:236`（关闭按钮 `rounded-lg`） |
+| `ui/skeleton.tsx` 直引 `motion/react` | **无该导入** | `grep -rn "motion/react" frontend/components/ui/skeleton.tsx` → 0 行。§10.2 已把脉动改为 `motion-safe:animate-pulse`（只动 `opacity`，reduced-motion 下不应用动画），因此 §6 那一行"适配层外 `motion/react` 11"已由 §10.2 自行回填为 10 |
+
+`rounded-lg` 为什么等于 `--radius`：`frontend/styles/globals.css:22` 定义 `--radius: 0.55rem`，`:89` 定义 `--radius-lg: var(--radius)`，因此这两个文件用的是唯一圆角刻度，无需替换为任意值写法。
+
+**`ui/skeleton.tsx` 为何不改成"渲染 `loader`"（有意保留，非遗漏）**：`Skeleton` 是**条形占位**（`h-8`／`h-24` 两块，调用点见 `ui/page-state.tsx:21`），`motion/loader` 是**旋转/点阵指示器**；把条形位换成 loader 会改掉 loading 态的几何与观感（等于换了一个加载表示），而 §10.2 已经落实了"加载态的 beUI 源由 `page-state.tsx` 直接渲染已装 `motion/loader` 承担"。本切片验收要求"此外无行为变化"，故保留现有实现。
+
+### 12.2 依赖：`@radix-ui/react-tooltip` 移除；`@floating-ui/dom` 转为直接依赖（**必须一并做**）
+
+1. 先证明无导入点：`grep -rn "@radix-ui" frontend test scripts --include=*.ts --include=*.tsx --include=*.mjs` → 全仓仅 `scripts/.environment-page-*`（**未跟踪、已 gitignore 的旧构建产物**，`git ls-files scripts | grep -c '.environment-page'` = 0，由 `scripts/browser-vm-environments-page.test.mjs:10` 每次重建）里出现。源码零导入。
+2. `npm uninstall @radix-ui/react-tooltip` → `removed 24 packages`。`package.json` 依赖表不再有条目；`grep -c "react-tooltip" package-lock.json` = **0**；`npm ls @radix-ui/react-tooltip --depth=0` → `(empty)`；`node_modules/@radix-ui/react-tooltip` 已不存在。锁文件改动 `-434/+3`：删除的全部是该包及其独占传递依赖（`@floating-ui/{core,dom,react-dom,utils}`、`@radix-ui/*`），新增的 3 行只是 `@types/react`／`@types/react-dom`／`csstype` 从 `devOptional` 降为 `dev`（它们此前因该包的 optional peer 而标 `devOptional`），无版本变化。
+3. **捆绑修掉它造成的断链**：`@floating-ui/dom` 原本只是 `@radix-ui/react-tooltip` 的传递依赖，但已落盘的 beUI tooltip 源**真接**它——`frontend/components/motion/tooltip/use-position.ts:14`（`arrow/autoUpdate/computePosition/flip/hide/offset/shift/Placement/VirtualElement`）。移除 radix 后该 import 立即无解析目标（`npm run typecheck:frontend` 报错、所有 import `frontend/app.tsx` 的套件无法加载）。处置：`npm install @floating-ui/dom@^1.8.0`（解析为 **1.8.0**，与此前树内版本逐字相同）→ `package.json` 的 `dependencies` 新增 `"@floating-ui/dom": "^1.8.0"`，**`use-position.ts` 保持 payload 原样，未改一行**。这不是"擅自安装 payload 依赖"：该包此前已在依赖树内且被源码使用，只是身份是隐式传递依赖；把它写成直接依赖是让既有事实显式化，没有新增任何能力。（同理，§7.1 记的 `attachment-upload` 需要 `@floating-ui/dom` 的判据不变——那是**别的 slug** 的需求报告，与本次转正无关。）
+
+### 12.3 死代码：`AssetDropzone.folderMode` 确认零调用点后删除
+
+- 调用点取证（删前）：`grep -rn "folderMode" --include=*.ts --include=*.tsx --include=*.mjs . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist` → 源码只有**声明与其自身的消费**（`asset-dropzone.tsx:6` 形参、`:44` 的 `webkitdirectory` 分支），另两处命中在未跟踪的 `scripts/.environment-page-*` 构建产物里。零个调用点：`asset-availability-panel.tsx:36` 与 `asset-upload-panel.tsx:33` 都不传、`test/` 无任何 `folderMode`。
+- 删除内容：形参 `folderMode = false`、类型字段 `folderMode?: boolean`、以及 `input` 上 `{...(folderMode ? ({ webkitdirectory: "" } as Record<string, string>) : {})}` 这层 `Record<string, string>` 断言（顺带去掉本文件唯一一处对 DOM 属性的非类型安全写法）。默认值语义等价：默认分支本来就是"不写 `webkitdirectory`"，故**零行为变化**。
+- 保留：`displayRelativePath`（`asset-upload-model.ts:26`）不动——它服务队列里的相对路径显示（`asset-dropzone.tsx:46`），且 `test/unit/frontend-submit-pages.test.tsx:237-238` 直接断言其净化行为；被删的只是"能否用目录选择器产生 `webkitRelativePath`"这条从未启用的入口。
+
+### 12.4 只报告、不动的遗留（越出本切片范围）
+
+- `frontend/components/ui/dialog.tsx:69` 仍是 `rounded-2xl`（`1rem`），`frontend/components/motion/shared-layout-bg.tsx:109` 的 `rounded-2xl` 属 payload 原文。前者是适配层内的第二套圆角，与 design lock（唯一 `--radius`）相抵，但它是本应用唯一模态的面板几何、且 §9 已记录"`ui/dialog.tsx` 保留适配层"的整体判据；改它会动 15 个导入点的观感，应由一致性锁的**父级验收**统一裁决，本切片不自作主张。
+- `scripts/.environment-page-*` 两份旧构建产物仍含 `@radix-ui/react-tooltip` 与 `folderMode` 的字符串：未跟踪、gitignored、每次测试重建，无需清理（重新跑 `browser-vm-environments-page.test.mjs` 即刷新）。
+
+### 12.5 门禁（本切片）
+
+`npm run typecheck`（worker + frontend）**干净**。套件：`npx vitest run shadcn-primitives frontend-tooltip-source frontend-asset-dropzone frontend-asset-upload-route frontend-asset-availability-route frontend-submit-pages` → **6 文件 / 35 测试全绿**；依赖变更的消费面复跑 `npx vitest run frontend-shell frontend-a11y workspace-shell` → **3 文件 / 53 测试全绿**（tooltip provider 与 `app.tsx` 的导入链在新依赖表下可正常解析）。
+
+## 13. Wave 3 · 瞬态通知频道与 i18n 死键（ToastAndI18n 切片，2026-10-17）
+
+**结论：`animated-toast-stack` 从"已通但几乎没用"变成通知面确认反馈的唯一出口；死键 `SUBMIT_ASSET_NOT_CONNECTED` 双向删除；没有新增 slug、没有新增依赖、没有新增颜色/圆角，持久态一处未动。**
+
+### 13.1 落的调用点（`frontend/app.tsx`）
+
+`ToastProvider` 的挂载点（`app.tsx:235`）不变，只把两处内联瞬态反馈改走频道：
+
+| 调用点 | 之前 | 之后 |
+| --- | --- | --- |
+| `NotificationsRoute.onMarkRead`（`app.tsx:3136`） | 写成功后只重载列表，界面无确认 | `mutate(..., "NOTIFICATIONS_MARKED_READ")`；`await operation()` 解析后才入队 `status: "success"`、`duration: 3200` |
+| `NotificationsRoute.onMarkVisibleRead`（`app.tsx:3137`） | 同上 | `mutate(..., "NOTIFICATIONS_MARKED_VISIBLE_READ")`，同一时序 |
+| `TasksRoute.resolveListUnknown` 的 `outcome === "applied"`（`app.tsx:1929`） | 内联 `<p role="status">`（`:1955`） | 频道 `status: "success"`、`duration: 4000`，复用既有键 `TASKS_WRITE_APPLIED` |
+
+实现要点：`mutate` 新增可选第三参 `confirmationKey`，只在 `await operation()` 成功且组件仍挂载（`activeRef.current`）时入队；`catch` 分支、`recordBlocked`、`NOTIFICATIONS_RECOVERY_DESCRIPTION`、`revokedTarget` 全部原样保留（**写失败/结果未知绝不弹成功 toast**，本轮新增套件对此有断言）。`onOpen` 不传 `confirmationKey`——它要么导航到目标、要么进入 `revokedTarget` 持久态，没有任何"瞬态成功"可报。
+
+`TasksRoute` 的内联 `<p role="status">` **保留**，但只剩两个不属于"成功确认"的结算结果：`TASKS_WRITE_MISSING`（任务已不可用）与 `TASKS_LIST_WRITE_NOT_APPLIED`（更改不在任务上，可再试）。它们解释"列表为什么与这次写入不一致"，是用户后续动作的依据，按"持久态不动"的判据留在原处。`frontend/lib/use-toast.tsx` 的频道政策注释同步改写（原注释说"只给内联无处安放的事件"，已不成立）；`ToastApi` 形状未变，`useToast()` 在无 provider 时仍是 no-op（渲染壳与既有套件照旧）。
+
+### 13.2 i18n 键（`frontend/lib/i18n.ts`）
+
+**新增（en + zh-CN 成对，均无占位符）**
+
+| 键 | en | zh-CN |
+| --- | --- | --- |
+| `NOTIFICATIONS_MARKED_READ` | `Notification marked as read.` | `已将该通知标记为已读。` |
+| `NOTIFICATIONS_MARKED_VISIBLE_READ` | `Visible notifications marked as read.` | `已将当前可见通知标记为已读。` |
+
+放在 `NOTIFICATIONS_MARK_VISIBLE_READ` 之后，与同组键相邻。文案不写条数：单条与批量各自的句子在两种语言里都自然，也不需要为此引入复数规则。
+
+**删除（两种语言同时删）**：`SUBMIT_ASSET_NOT_CONNECTED`（en `:1869` 原「Object storage is configured, but uploads are not connected yet.」/ zh 原「对象存储已配置，但实际上传链路尚未接通。」）。§7.1 已查明 `frontend/` 无任何调用点（`AssetAvailabilityPanel` 只有 loading／读取失败／已配置未登录／未配置四态）；删除后 `frontend/`、`test/`、`shared/`、`scripts/*.mjs` 源码零引用，仅 `scripts/.environment-page-*` 两份未跟踪的旧构建产物还带这个字符串（每次测试重建，不清理）。
+
+**保留（并说明理由）**：`SUBMIT_ASSET_DISABLED`。它**不是**死键——`frontend/components/assets/asset-dropzone.tsx:41` 用 `disabledMessage ?? frontendText(locale, "SUBMIT_ASSET_DISABLED")` 作缺省回退；两个现存调用点（`asset-availability-panel.tsx:36`、`asset-upload-panel.tsx:33`）都显式传了文案，所以它是"调用方漏传时仍给出可读边界"的兜底，删掉会把禁用态降级成空文案。按"保留回退、只删真死键"处理。
+
+### 13.3 套件改动
+
+- 新增 `test/unit/frontend-toast-confirmation.test.tsx`（3 条）：① 单条标记已读后 toast 出现在 `document.body`（portal），且**不在**路由自己的 `container` 里；② 批量标记已读的 body 仍是 `{ ids: [...] }`，两种语言各自出现对应文案；③ POST 500 时 `[data-page-state='error']` 恢复面与 `NOTIFICATIONS_RECOVERY_DESCRIPTION` 留在页面内、且不存在任何成功 toast。
+- `test/unit/frontend-tasks-route.test.tsx` 的 `unknown list writes` render 助手改为包一层 `ToastProvider`，三处「The change was saved.」断言从 `container.textContent` 改为 `browser.document.body.textContent`（行为是有意迁移的，断言位置随之迁移；`banner()`、sessionStorage、leave-guard 断言一字未动）。`frontend-task-editor-route.test.tsx` 的两处同名断言属编辑器自己的 `notice`（`task-editor.tsx:278`），与本切片无关，未改且复跑通过。
+
+### 13.4 门禁（本切片）
+
+`npm run typecheck`（worker + frontend）**干净**；`npm run verify:i18n` **pass**（`keys=434 placeholders=55 files=6`；硬编码文案扫描通过）。套件：`npx vitest run frontend-notifications-route frontend-notifications-page frontend-notifications-data frontend-shell-notifications frontend-notification-summary-refresh frontend-i18n frontend-locale-pages frontend-tasks-route frontend-tasks-page frontend-toast-confirmation` → **10 文件 / 139 测试全绿**；相邻面复跑 `frontend-task-editor-route frontend-task-structure frontend-task-list-status frontend-task-list-notes` → **4 文件 / 91 测试全绿**。未改 ledger 三件、未重生成 operation inventory、未新增 `data-*`/`aria-*` 契约、未动任何持久态文案。
+
+**交叉切片依赖**：本轮 `@radix-ui/react-tooltip` 退出依赖树时，`@floating-ui/dom`（此前仅经 radix 传递）一并消失，而 Wave 1 落盘的 `motion/tooltip/use-position.ts:14` 直接 import 它；ConsistencyCleanup 已把它转为直接依赖（`^1.8.0`），`use-position.ts` 保持逐字未改——本切片 final 门禁在上述依赖状态下取得。
+
+## Wave 3 · 表单控件收口 + `range-slider`（ControlsAndRanges 切片，2026-10-17）
+
+**结论：17 处裸 `<select>` 与 7 处裸 `<textarea>` 全部改走既有适配层（`ui/select`／`ui/textarea`），一处 `<input type="range">` 采用 beUI 的 `range-slider`；落盘 2 个 payload 文件（`components/motion/range-slider.tsx`、`lib/hooks/use-slider.ts`），未新增依赖、未新增 i18n 键、未改 `frontend/lib/i18n.ts`、未动 ledger 三件与 `frontend-operation-inventory.*`。**
+
+`grep -rn "<select\|<textarea" frontend --include=*.tsx`（排除 `components/ui/`、`components/motion/`）现为**零命中**。
+
+### 8.1 `<select>` → `ui/select`（17 处，12 文件）
+
+`ui/select.tsx` 本身就是**原生** `<select>`（`§8.2.3` 已有的判定），只是画在共享字段壳上，所以每个调用点的 `id`／`name`／`aria-label`、`value`/`onChange`、`disabled`、`<optgroup>` 与 `data-*` 全部原样落地，无需任何测试驱动改写。
+
+| 文件 | 处数 | 保留的契约（有断言的） |
+| --- | --- | --- |
+| `components/timeline-item-editor.tsx` | 1 | `aria-label=PROJECT_TIMELINE_EDIT_KIND`；`fieldset[disabled]` 锁 |
+| `components/timeline-create-form.tsx` | 1 | `<label>` 包裹命名；`disabled={locked}` |
+| `components/knowledge/knowledge-research-panel.tsx` | 1 | `#research-query-subquestion` + `data-research-query-subquestion` + `htmlFor` |
+| `components/submissions/submission-target-picker.tsx` | 3 | `data-submission-target-space/-collection/-visibility`、`data-submission-target-collection-loading`、`disabled` 三态 |
+| `components/inbox-create-form.tsx` | 1 | `aria-label=INBOX_KIND`；`[data-inbox-capture-dialog] select` 驱动（`frontend-inbox-create.test.tsx:175-179`） |
+| `pages/tasks/task-editor.tsx` | 3 | `aria-label` 三键（含逐子任务 `` `${TASKS_SUBTASK_STATUS}: ${title}` ``）；`select[aria-label=…]` 驱动（`frontend-inbox-task-operation-matrix.test.tsx:85`） |
+| `pages/settings-page.tsx` | 1 | 外层 `<label>`（`.sr-only` `SHELL_LANGUAGE_LABEL`）；`select.value`+change（`settings-page.test.tsx:83-84`）、静态标记 `"<select"`（`:33`） |
+| `pages/admin/menu-editor.tsx` | 1（工厂） | `name` 属性（表单字段名）与 `<label>` 命名 |
+| `pages/admin/analytics-page.tsx` | 1 | `#admin-analytics-range` + `label[htmlFor]`；`select.value="30"`+change 与 `.value` 断言（`frontend-admin-analytics-route.test.tsx:75,77,117,174,243`） |
+| `pages/admin/spaces-page.tsx` | 2 | `#admin-record-status`／`#admin-record-parent`：`.value=`+change（`frontend-admin-space-confirmation.test.tsx:83-119`）、`#admin-record-parent option` 值序（`frontend-admin-space-recovery.test.tsx:143,151`） |
+| `pages/submit-page.tsx` | 1 | `#submission-mode`（`frontend-user-read-pages.test.tsx:163` 断言 `id` 在位） |
+| `pages/knowledge-reader-page.tsx` | 1 | `aria-label=KNOWLEDGE_NOTE_SHARE_SELECT`；`flex-1` 行为 `w-auto flex-1` 保住 |
+
+**为什么不是 `ui/filter-select`**：这 17 处没有一处是工具栏分面筛选（无 `AppliedFilters` chip 契约、无 `button[aria-haspopup="listbox"]` 选择面）。它们都是带 `id`／`name`／`htmlFor` 关联的表单字段，且套件按原生控件驱动（`select.value` + `change`，见上表）。`analytics` 的 `days` 是页头里一个**有 label 关联的报告窗口字段**（`#admin-analytics-range`），换成 listbox 会让 `label[htmlFor]` 与那 5 条 `.value` 断言同时失效——那是换契约，不是统一外观。`filter-select` 保持只服务筛选行。
+
+**几何**：全部落在共享字段壳（`h-11`、pill、`text-base`、`ring-ring/40`、`aria-invalid` 破坏性环），只保留调用点必需的覆盖：`analytics` `w-auto`（页头行）、`knowledge-reader` `w-auto flex-1 min-w-0`（与分享按钮同行）、`subtask-status` `mt-1`。移动端 44px 因此**只升不降**（原先多为 `h-9`/`h-10`）。
+
+### 8.2 `<textarea>` → `ui/textarea`（7 处，5 文件）
+
+| 文件 | 处数 | 保留 |
+| --- | --- | --- |
+| `components/knowledge/knowledge-research-panel.tsx` | 3 | `#research-completion/-steps/-subquestions` 与三个 `data-research-*`；套件按 `type("[data-research-completion]", …)` 键入（`frontend-knowledge-reader-research-draft.test.tsx:174-176`） |
+| `components/review/review-source-panel.tsx` | 1 | `#reparse-candidate` + `data-review-reparse-candidate` + `rows={8}` + `disabled` + `font-mono text-xs` |
+| `components/assets/asset-upload-panel.tsx` | 1 | `#asset-alternative-input` + `data-asset-alternative-input` + `rows={4}` + `disabled`；显示/隐藏断言（`frontend-asset-url-alternative.test.tsx:135-148`） |
+| `pages/messages/thread-page.tsx` | 1 | `#discussion-composer`（11 处查询/键入，`frontend-discussion-route.test.tsx`）、`maxLength`、`placeholder`、`resize-y` 保留 |
+| `pages/knowledge-reader-page.tsx` | 1 | `#reader-note-body` + `readOnly` + `maxLength`（`frontend-reader-note-sharing.test.tsx:37`、`frontend-reader-read-lifecycle.test.tsx:269,287`） |
+
+多行几何仍是 `--radius` 系 `rounded-lg` + `min-h-24`（`textareaFieldClass`），单行仍是 pill——两行控件不再各写一份边框/焦点环。
+
+### 8.3 `pages/goals-page.tsx` 的 `<input type="range">`：**采用** beUI `range-slider`
+
+payload `https://beui.dev/r/range-slider.json`（5 个文件，逐行核对）。落盘 2 个、复用 3 个：`components/motion/range-slider.tsx` 与 `lib/hooks/use-slider.ts` 为新文件；payload 携带的 `lib/{ease,touch,utils}.ts` 与仓库**同名同实现**，按 §5 契约**不覆盖**（本仓库 `ease.ts` 的 `SPRING_GLIDE` 仍带 `type: "spring"`），payload 声明的 `clsx`/`motion`/`tailwind-merge` 均已在依赖中，**未新增任何依赖**。
+
+它承载得住原有契约，逐条对照：
+
+- **值**：受控 `value` + `onValueChange`（`use-slider.ts:62-79`）；`min/max/step` 同签名。`:69` 的 `clamp` 与 `:11-23` 的 `snapSliderValue` 保证 0–100/step 1 与原生一致（含 `max` 作为合法点）。
+- **无障碍名**：`SliderOptions["aria-label"]`（`:33`）原样写到 handle（`:167`），仍是 `` `${GOALS_PROGRESS} ${goal.title}` `` 逐字。
+- **播报**：handle 是 `role="slider"` + `aria-valuemin/max/now`（`:165-170`），与原生 range 的语义等价；并额外给了 `formatValueText={(value) => `${value}%`}` ⇒ `aria-valuetext="75%"`，与单元格里可见的 `{goal.progress}%` 对齐（原生 range 只播报裸数字）。
+- **键盘**：`ArrowUp/Down/Left/Right`、`PageUp/PageDown`（±10 step）、`Home`/`End` 全部 `preventDefault` 后提交（`:121-140`）——原生 range 的键位集合是它的子集。
+- **禁用**：`disabled` ⇒ 轨道 `pointer-events-none opacity-50`、handle `tabIndex=-1` 且 `aria-disabled`（`:166-172`）。原调用点的条件表达式（`statusConfirmation.open || createLocked || pending || goal.status === "archived"`）**逐字保留**。
+- **同 tick 守卫**：原 `onChange={(event) => !statusConfirmation.isOpen() && …}` 的"确认面已开就丢弃同 tick 编辑"守卫**原样保留**在 `onValueChange` 里——这正是套件 `frontend-planning-status-confirmation.test.tsx`「blocks a same-tick progress change」所钉的行为。
+- **设计锁**：颜色只用 `muted`/`foreground`（`bg-muted`、`bg-foreground/15|25`、`ring-foreground/30`），圆角 `rounded-lg` = `var(--radius)`；动效只动 `transform`（`x`、`scaleY`）且 `useReducedMotion` 下退化为静态（`:50,102`）。**一处有意偏离 payload**：轨道 `h-10` 上加 `max-lg:h-11`（44px 触控面不回退），已写在文件头注释里。
+
+**测试驱动改写（4 文件，断言强度未降）**：`input[type="range"]` 已不存在，四处改为按滑块自己的契约驱动，而不是回钉类名或内部 prop：
+
+| 套件 | 原驱动 | 现驱动 | 断言 |
+| --- | --- | --- | --- |
+| `frontend-planning-conflicts.test.tsx` | `__reactProps$.onChange({currentTarget:{value:"75"}})` | `setGoalProgress(75)`：给轨道 `getBoundingClientRect` 定 100px，派发一次 `pointerdown clientX=75`（+`pointerup`） | 不变：`bodies == [{progress:75, expectedUpdatedAt: oldVersion}]` |
+| `frontend-planning-write-recovery.test.tsx` | 同上 | 同上 | 不变：写屏障 + `recover()` + `complete().disabled` |
+| `frontend-planning-status-confirmation.test.tsx` | 同 tick 里 `trigger.click()` + 伪造 `onChange` | 同 tick 里 `trigger.click()` + 轨道 `pointerdown` | 不变：`progress` 未调用、无写入、`[role=alertdialog]` 在位 |
+| `frontend-goal-tasks.test.tsx` | `input[type=range].disabled === true` | `[role="slider"]` 的 `aria-disabled === "true"` | 不弱：`disabled` 在 `role="slider"` 上的等价表达就是 `aria-disabled` + `tabIndex=-1`，仍是"此处不可改进度" |
+
+`pointerdown` 驱动一次即提交一个值（与原生 range 一样是"一次手势一次提交"），因此上述 `toEqual([...])` 的**单次写入**语义原样成立（实测 13/13 通过，见 §8.5）。
+
+### 8.4 有意保留原样 / 只报告
+
+- **没有保留任何裸 `<select>`／`<textarea>`**，所以本切片不存在"因测试钉原生控件而放弃迁移"的调用点。
+- `frontend/pages/search-page.tsx`、`frontend/pages/my-submissions-page.tsx`：**未触碰**（peer 持有）。
+- **只报告不改**（不属本票枚举的控件，留给输入类切片判定）：`components/knowledge/knowledge-research-panel.tsx` 的 `#research-query-text`、`#research-query-rationale`、`#research-goal` 仍是裸 `<input className="w-full rounded-md border px-2 py-1 text-sm">`；`pages/knowledge-reader-page.tsx` 的 `#reader-note-title` 同样是裸 `<input className="… h-9 …">`；`submission-target-picker.tsx` 的 `data-submission-target-retry/-collection-retry/-more-*` 与 `asset-upload-panel.tsx` 的 `data-asset-*` 仍是裸 `<button className="rounded-md border px-3 py-2">`。它们与本节改动同文件，但 `ui/input` 在这里会改高度/圆角，需由输入/按钮切片统一决策，避免同一切片内两套结论。
+
+### 8.5 门禁（本切片）
+
+`npm run typecheck`（worker + frontend）**干净**。套件（5 批，共 **104 文件 / 2083 测试全绿**）：
+
+1. timeline / reader / research：`frontend-timeline*`、`frontend-project-timeline*`、`frontend-reader*`、`frontend-knowledge-reader*`、`frontend-knowledge-research*` → 23 文件 / 422；
+2. submit / inbox / task / discussion / settings：`frontend-submit*`、`frontend-submission*`、`frontend-inbox*`、`frontend-task*`、`frontend-discussion*`、`frontend-messages-page`、`settings-page` → 34 / 737；
+3. admin 与资产、复盘：`frontend-admin-menu*`、`admin-menus-page`、`frontend-admin-analytics*`、`frontend-admin-space*`、`frontend-asset*`、`frontend-review*` → 35 / 582；
+4. 横面与基元：`shadcn-primitives`、`frontend-a11y`、`frontend-responsive`、`frontend-page-state`、`frontend-workbench-maturity-routes`、`frontend-workbench-review*`、`frontend-user-read-pages`、`frontend-feature-matrix` → 8 / 222；
+5. goals 与滑块：`frontend-planning-conflicts`、`frontend-planning-write-recovery`、`frontend-planning-status-confirmation`、`frontend-goal-tasks`、`frontend-goals-page` → 4 / 120。
+
+未跑整仓 `npm test`、未 build／deploy；`motion/range-slider.tsx` 与 `lib/hooks/use-slider.ts` 的 operation 身份需由父级重生成 inventory，ledger 三件与 `docs/product/frontend-operation-*` 未动。
+
+
+## 14. Wave 3 · 日期范围（DayRangeSurfaces 切片：`date-range-picker` + 两个 day-range 面，2026-10-17）
+
+**结论：`date-range-picker` 落盘并在两处采用**——my-submissions 的 `from`/`to` 与 search 的 `publishedFrom`/`publishedTo`；两者共用一个新适配层 `ui/date-range-input.tsx`。票面说 search 还有"裸 `<select>`／`<textarea>`"：**实测该文件没有**（它的原生控件只有两个 `type="date"`，现已换装），其余控件早已在适配层上，故该清扫无剩余项。
+
+### 14.1 落盘（手工，未新增依赖）
+
+- `motion/date-range-picker.tsx`（994 行）+ `motion/date-range-picker/{context,date-utils,types,use-date-range-picker}.ts`。统一改写：`lucide-react`→`@phosphor-icons/react`（`CalendarDays→CalendarDots`、`Chevron*→Caret*`、`ArrowRight` 同名）、`@/lib/*`→相对路径、`@/components/motion/popover-morph`→`./popover-morph`。
+- payload 同时携带的 `components/motion/popover-morph.tsx`、`components/motion/popover-position.ts`、`lib/{ease,utils}.ts`、`lib/hooks/use-hover-capable.ts` **仓库已有，逐字复用、未覆盖**。payload `dependencies` = `clsx`/`motion`/`tailwind-merge`/`lucide-react`；前三者已在依赖树，lucide 由 Phosphor 取代 ⇒ **零新增依赖**。
+- 设计锁改动都在新落盘文件内：`rounded-2xl`/`rounded-xl` → `rounded-lg`（`--radius` 系）；去掉触发器内联 `borderRadius: 12`；日历面 `w-80` → `w-[21rem]`（7 列 × 44px）；`iconClass`、月/年按钮、日期单元格与日期按钮、清除按钮加 `max-lg:` 44px（`size-11`/`h-11`/`min-h-11`）。颜色只用既有 token（`foreground`/`background`/`muted`/`border`），无新色；动效沿用 payload 的 `useReducedMotion`/`useHoverCapable`。
+
+### 14.2 共享适配层与两处采用
+
+`frontend/components/ui/date-range-input.tsx`（新，163 行）＝唯一实现：
+
+- 值形状 `DayRange{from,to}`（`YYYY-MM-DD`，空串＝该端未声明），与两处 query param 同构；`onChange` 只交还草稿，**提交仍由页面完成**（my-submissions 的 Apply；search 的表单提交）。因此参数名、ISO 写法、校验与 `AppliedFilters` 的 chip/clear 契约全部不变。
+- 组合 `DateRangePicker` 的 controller + `DateRangePickerCalendar/Header/Grid/Footer/Selection`，但**面板在流内**，不走 `DateRangePickerContent` 的 `document.body` portal：search 的筛选行在 `lg` 以下进入 `ui/filter-disclosure` 的 focus-scoped bottom sheet（`filter-disclosure.tsx:74-80` + `focus-scope.tsx` 根节点 Tab 陷阱），portal 会把日历放到作用域外。payload 本身允许自定义 parts（`DateRangePickerProps.children`），所以未改 payload 行为、未 fork 内部。
+- 触发器逐字本地化：`aria-label` = 两侧标签（有值时追加摘要）；摘要用 `CALENDAR_RANGE_FROM/TO`（submissions）与 `KNOWLEDGE_FILTER_PUBLISHED_FROM/TO`（search）；清除用 `COMMON_CLEAR_FILTERS`；月/星期/日期名由 payload 的 `Intl.DateTimeFormat(locale)` 生成（`en`/`zh-CN`）。
+- 键盘/焦点：打开后落在活动日期；`Escape` 关闭并把焦点交回触发器；双端选完 `closeOnSelect` 收起；日历自身的 WAI 网格方向键 / Home / End / PageUp / PageDown 原样。
+- 值守卫：`DateRange.from` 必填（`date-range-picker/types.ts:4-7`），controller 对乱序/不可解析值直接 `throw`（`use-date-range-picker.ts:57-68`）。位置可以只声明 `to`（chips 单独删除 from 之后），也可能给出乱序值，因此只把"可解析且有序"的范围交给 payload；只声明 `to` 时触发器摘要与 chips 仍显示它，日历从新范围开始。
+
+两页最终控件清单：
+
+| 页面 | 控件 | 承载 |
+| --- | --- | --- |
+| my-submissions | 提交日期范围（1） | **`DateRangeInput`（beUI `date-range-picker`）** |
+| | Apply / Retry / 行内重提动作 | `ui/button` 与既有行内按钮（未动） |
+| | 表格 / 状态 pill / 五态 / 已应用 chips | `DataTable` + `ui/badge` + `ui/page-state` + `ui/applied-filters` |
+| search | 查询词 / 保存视图名 / 作者 ID（3） | `ui/input` |
+| | 类型筛选（1） | `ui/filter-select`（beUI select） |
+| | 发布时间范围（1） | **`DateRangeInput`** |
+| | Apply / 保存 / 重试 / 保存视图动作 | `ui/button` |
+| | `<select>` / `<textarea>` / `type="date"` | **0** |
+
+### 14.3 契约保留与测试驱动
+
+- **my-submissions**：`from`/`to` 参数名、`writeSubmissionRange`、`normalizeSubmissionRange` 的 `invalid` 判定、`data-submissions-range-filter`、`data-submissions-range-error`、chips 的单边删除与 clear-all 全部原样；空草稿仍可 Apply（沿用原行为）。新增回归 `frontend-knowledge-submissions-header.test.tsx`「applies a day range picked on the beUI calendar」：开触发器 → 点当月第 1/2 天 → Apply，断言 `?from=<d1>&to=<d2>`，并断言触发器无障碍名同时含两侧标签。
+- **search**：`commitFilters`、`data-search-filters`、`data-search-filters-apply`、`data-search-filter-author`、`SEARCH_FILTER_RANGE_INVALID`、saved-view/URL 往返全部原样。`data-search-filter-published-from`/`-to` **未删除**，改为落在同一个触发器上（两个属性并存），因为两个原生输入已合成一个范围控件。`frontend-search-query-draft.test.tsx` 的日期步骤由"直接写 `input.onChange`"改为"开日历 → 点当月前两日 → 提交"，断言仍是 URL / saved view 的 canonical UTC 值（动态取自触发器摘要），未弱化为"只看 chip"。
+
+### 14.4 到达 UI 的英文无障碍名（未覆盖，按要求只报告）
+
+可见摘要/页脚/触发器的 payload 默认文案已全部由适配层覆盖（`Start date`/`End date`/`Select date`、`Select dates`/`Select end`、`N days selected`、`Clear`/`Clear date range` 均不再出现）。仍会到达 UI、且 payload 没有覆盖口的：
+
+1. `motion/date-range-picker.tsx:150-156`：日历键盘说明 `<p id={ctx.help} class="sr-only">`，被网格 `aria-describedby` 引用——纯英文，且是朗读给屏幕阅读器的操作说明。
+2. 同文件 `:246` `aria-label="Choose month"`、`:269` `"Choose year"`、`:288-292` `Previous years/Previous year/Previous month`、`:303-307` `Next years/Next year/Next month`。
+3. 同文件 `:394-398`：月/年选择 `fieldset` 的 `label`：`Choose a month in ${year}` / `Choose a year from ${yearPage} to ${yearPageEnd}`。
+4. `use-date-range-picker.ts:193-207` 与 `:433`：`role="status"` 朗读句框为英文（`Start date … Choose an end date.`、`This range includes unavailable dates…`、`… selected.`、`${name} selected.`），日期本身走本地化 `Intl`。
+
+这些都不是历史 `aria-label`、也不对应既有 i18n 键，按票面"报告而不 fork"处理；要清零需 payload 提供 `labels`/`helpText` 覆盖口，或在适配层重组 Header/Choices（会复制 payload 的键盘/选择逻辑，本次不做）。
+
+### 14.5 门禁
+
+`npm run typecheck`（worker + frontend）**干净**。
+
+- 指定集：`frontend-knowledge-submissions-header`、`frontend-my-submissions-data`、`frontend-my-submissions-identity`、`frontend-search-query-draft`、`frontend-search-data`、`frontend-search-matched-fields`、`frontend-search-title-excerpt`、`frontend-list-filters`、`frontend-a11y`、`frontend-mobile-filters`、`frontend-user-read-pages`、`frontend-submit-pages`、`frontend-submission-loop-routes` → **13 文件 / 103 测试全绿**。
+- 邻接路由：`frontend-reader-pagination-routes`、`frontend-read-pages-paging`、`frontend-saved-view-list-read`、`frontend-saved-views-route`、`frontend-notifications-route`、`frontend-workbench-maturity-routes`、`frontend-shell`、`frontend-submit-owner-route`、`frontend-app-routes`、`frontend-contract`、`frontend-submission-loop-routes` → **12 文件 / 332 测试全绿**。
+
+未跑整仓 `npm test`、未 build／deploy；ledger 三件与 operation inventory 未动，新文件的 operation 身份由父级统一重生成。
+
+## 15. Wave 3 收尾（一致性锁定，2026-10-17）
+
+- **采用**：`range-slider` 用于目标进度条（44px 触屏下限、数值经 `formatValueText` 本地化、键盘 Page/Home/End 完整；四个套件从 `input[type=range]` 改驱 `[role="slider"]`，写断言不变）；`date-range-picker` 用于两个**日粒度**区间（新 `ui/date-range-input.tsx` 刻意走**行内**而非载荷的无条件 portal，因为搜索筛选行在移动端会进底部抽屉；`from`/`to`、ISO 校验、chips/清除契约不变）。
+- **原生控件清零**：17 个裸 `<select>` + 7 个裸 `<textarea>` 全部改到共享字段壳（`ui/select`、`ui/textarea`）；`ui/` 之外已无裸 select/textarea（grep 为空）。适配层本身即原生控件 + beUI 字段令牌，因此 `id`/`name`/`aria-label`/`data-*`/`<optgroup>` 与按原生控件驱动的套件全部不变。
+- **瞬态反馈接入 `animated-toast-stack`**：标记已读、批量已读、任务写入「已应用」在操作**确认成功后**入队；持久状态（错误、`recordBlocked`、恢复说明、撤销目标）与两种非成功结算保持内联。新增键 `NOTIFICATIONS_MARKED_READ`、`NOTIFICATIONS_MARKED_VISIBLE_READ`，删除死键 `SUBMIT_ASSET_NOT_CONNECTED`（`SUBMIT_ASSET_DISABLED` 是活 fallback，保留）。
+- **清理**：移除已无导入的 `@radix-ui/react-tooltip`；其被连带移除、但 beUI tooltip 直接 import 的 `@floating-ui/dom` 升为直接依赖（同为 1.8.0，payload 保持原样）；删除经 grep 证明无调用点的死参数 `folderMode`；对话框圆角对齐到 `rounded-lg`（`var(--radius)`）。
+- **一处表述修正**：`sm/md/lg/xl` 是主题从 `--radius` 派生的**同一套刻度**，不是"多套圆角"；迁移前线上那 4 个值正是这套刻度。真正被消除的是：**基元来源混用**（`ui/` 接 beUI 源 7 → 16+）、**裸原生控件**（24 处 → 0）、**外来颜色/圆角漂移**（`emerald`/`orange`、`rounded-2xl/3xl` 拒绝入内）、**重复弹层实现**（tooltip 家族收敛到 beUI，Radix tooltip 移出）。
+- **仍残留（已报告，未 fork）**：`date-range-picker` 载荷里的英文无障碍串（sr-only 键盘帮助、月/年切换与选择字段集的 aria-label、`role="status"` 播报句）——可见文案已全部本地化，但上述串无覆盖口；`ui/dialog.tsx` 仍由手写 motion 承载（beUI modal 无法同时满足静态标记测试与非 portal 渲染）；`motion/popover.tsx` 无第一方消费者，作为 popover 家族定义保留。
+- **门禁**：`npm run typecheck` 干净；四个切片自报合计逾三千条测试绿（含 104 文件/2083 测试的原生控件批量改造）。整仓 `npm test`、operation inventory 与视觉前后对比由父级在提交前完成。
+
+
+## 16. 视觉验收（前后对比，2026-10-17）
+
+基准选择天然成立：迁移前三波代码都未上线，所以**部署版本 `4f27b8a0` 就是"迁移前"**，`98e52185` 是"迁移后"。
+
+采集方式：同一 relay 登录标签、同一组 10 个代表页（`/`、`/knowledge`、阅读器、`/tasks`、`/boards`、`/agent`、`/submit`、`/goals`、`/settings`、`/notifications`）在 1440×900 浅色下各抓一次；迁移后再补 4 页 390×844 与 3 页深色。截图为本机临时文件（`$TMPDIR/omp-sshots-*.webp`，文件名带 `before-` / `after-` 前缀）。
+
+**可量化的差异**（同一探针、同一页面集）：
+
+| 指标 | 迁移前 (`4f27b8a0`) | 迁移后 (`98e52185`) |
+| --- | --- | --- |
+| 交互元素的圆角集合 | `{0, pill, 6.8, 8.8, 12, 16}px` | `{0, pill, 6.8, 8.8, 12}px`（16px 漂移消除） |
+| 裸原生 `<select>`/`<textarea>`（源码） | 17 + 7 | **0**（适配层本身即原生控件 + 统一字段壳） |
+| `ui/` 基元接 beUI 源 | 7 / 26 | 16+ / 26（其余为模态/菜单适配层或有据拒绝） |
+| `motion/` 已装 beUI 组件 | 23 | 40+ |
+
+**关于圆角的表述修正**：`sm/md/lg/xl` 是主题从 `--radius`（`0.55rem`）派生的**同一套刻度**，不是"多套圆角"——迁移前那 4 个非胶囊值正是这套刻度。本轮真正消除的是刻度之外的漂移（`16px`）与载荷带来的外来色/圆角（`emerald`/`orange`、`rounded-2xl/3xl` 一律不入内）。因此"风格凌乱"的根因与修复都不在圆角数量，而在**基元来源混用**：按钮/字段/徽标/提示条/弹层/日期范围/对话面现在分别只有一套实现。
+
+**探针限制（自我更正）**：我一度用 `main select:not([data-field])` 数"裸 select"，但那会把我方适配层渲染的原生 `<select>` 一并计入（例如 `/submit` 的 4 个都是适配层字段），因此该数字不可用于结论；裸控件的真实依据是源码 grep 为空。

@@ -29,6 +29,8 @@
 
 2026-10-17 beUI 全量采用（Wave 1）后重新对账：本批把告警、按钮、卡片、菜单、弹层与 agent 消息一族换成 beUI 源码落地副本（`frontend/components/motion/{alert,card,context-menu,popover,preview-rail}.tsx`、`motion/button/stateful.tsx`、`frontend/components/agents/{agent-activity/*,loading-states/reasoning-text,message,message-bubble,message-scroller,streaming-response}.tsx`），并把 `components/ui/{alert,button,card}.tsx` 改为适配器（前两者本地包装、card 为纯再导出）。未归属候选由 121 变为 **159**（净增 38）：本批最终新增 39 条坐标、移除 1 条（`frontend/components/ui/card.tsx:13:85`，其部件候选随实现移入 `motion/card.tsx`）、按 handler 配对重记 45 条既有坐标（`asset-import-panel.tsx` 23、`knowledge-import-panel.tsx` 14、`shell/context-rail.tsx` 6、`app.tsx` 2，前三者因顶部新增一行导入整体下移一行）；核对期间并行的 agent slice 在 `pages/agent-page.tsx` 接入 `StreamingResponse`、`AgentActivity`、`ReasoningText` 与 `Message` 一族，其中 20 条坐标随之归属路由并从本记录的候选表移除（见文末小节）。逐项处置见下表与文末 2026-10-17 小节；本轮只同步相关指纹，不代替运行验收。
 
+2026-10-17 beUI 全量采用（Wave 3）后重新对账：本批落地 `motion/range-slider.tsx` 与 `lib/hooks/use-slider.ts`、`motion/date-range-picker.tsx` 及 `motion/date-range-picker/{context,date-utils,types,use-date-range-picker}.ts`、`ui/date-range-input.tsx`，并更新 tooltip/popover/context-menu/breadcrumb/collapsible 安装副本与 agent 聊天部件、`ui/{skeleton,dialog,select,textarea,page-state}.tsx` 适配器内部。这些来源的候选绝大多数已被正式消费者覆盖（`range-slider` 由 `goals-page`、`ui/date-range-input` 由搜索页与「我的提交」页、`breadcrumb` 由 `app-shell`、`collapsible` 由知识阅读器与衍生面板、`tooltip` 经 `ui/tooltip.tsx` 被页头消费、agent 部件由 `agent-page`），故未归属候选仅由 159 变为 **162**：新增 3 条（`motion/date-range-picker.tsx` 的 `DateRangePickerTrigger`/`DateRangePickerContent`/`DateRangePickerDropdown` 便捷组合层，归 `unmounted-ui`——适配器自绘触发器、未使用它们），并按 handler 重记 1 条（`lib/use-toast.tsx` 29:7→28:7）。只同步 `app.tsx`、`lib/use-toast.tsx` 与新增来源的指纹，`package.json` 的依赖变化（移除 `@radix-ui/react-tooltip`、改为直接依赖 `@floating-ui/dom`）不产生候选行。不扩大本记录的运行验收结论。
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
@@ -36,11 +38,11 @@
 | app-boundary | 24 | App 外层、history fault 与账户 owner 已有正式消费；2026-10-17 增记经适配器再导出、或由 App 的 transcript 区域实际挂载的 beUI 原语（`StatefulButton`、Card 根与四个部件、`MessageBubble`/`MessageBubbleContent`、`MessageScroller` 的视口/内容区/根节点），它们只渲染调用方 props/children 并回调调用方 | 跨路由、真实身份/退出、导航故障旅程 |
 | public-dynamic | 5 | landing 动态导入的 WebGL 生命周期 | 原生浏览器可见性、超时、context loss 与回退验收 |
 | background | 3 | Service Worker 生命周期，不是可见控件 | 真实浏览器注册/缓存/离线行为 |
-| unmounted-ui | 44 | ContextRail / Tabs 无当前正式消费者；2026-10-17 的 beUI 副本里，`motion/context-menu.tsx`、`motion/popover.tsx`（2 条）、`motion/preview-rail.tsx`（仅在无人传入的 `navigation="rail"` 下渲染）、`agents/message*.tsx` 的五个无调用点部件、`AlertAction`、`CardAction`、`CardFooter` 与 card 的 interactive 按压路径虽有实现但无调用点 | 按实际需求保留或接线；不得直接认定缺失业务 |
+| unmounted-ui | 47 | ContextRail / Tabs 无当前正式消费者；2026-10-17 的 beUI 副本里，`motion/date-range-picker.tsx` 的 trigger/content/dropdown 便捷组合层（适配器自绘触发器，未使用），`motion/context-menu.tsx`、`motion/popover.tsx`（2 条）、`motion/preview-rail.tsx`（仅在无人传入的 `navigation="rail"` 下渲染）、`agents/message*.tsx` 的五个无调用点部件、`AlertAction`、`CardAction`、`CardFooter` 与 card 的 interactive 按压路径虽有实现但无调用点 | 按实际需求保留或接线；不得直接认定缺失业务 |
 | vm-runtime-unshipped | 77 | 正式 `/environments` 页面已挂载、创建或惰性加载文件面、运行时与本地快照；本版本**有意**不发布 VM 引擎与镜像（六件启动产物约 66 MiB，pin 不授权再分发、不构成许可证清单或签名发布清单），因此面向用户或面向 VM 的动作永久不可用：禁用、不渲染，或只存在于无法成功启动的路径。按状态命名而非按模块，引擎发布决策改变后自然翻转。 | 不要读成“未接线”，也不要当成按需修复的缺陷；待引擎发布决策改变后再重新分类 |
 | vm-not-mounted | 6 | 连接器、会话与网络 lifecycle 惰性路径仍无正式调用者：只有显式 connect/open 才创建，页面挂载不会 | 沿既有 G0 边界完成正式接线及身份/生命周期验收 |
 
-A01、A02、A05、D04 仍开放。源码人工分类覆盖这 159 项，但 A01 还缺每页实际可见性、动态 HTML/门户/第三方控件和触发状态的呈现核验；A02 还缺全操作到服务端授权/持久化及运行证据的闭合。禁止把文档行数、指纹或绿色测试当作上述父项验收通过。
+A01、A02、A05、D04 仍开放。源码人工分类覆盖这 162 项，但 A01 还缺每页实际可见性、动态 HTML/门户/第三方控件和触发状态的呈现核验；A02 还缺全操作到服务端授权/持久化及运行证据的闭合。禁止把文档行数、指纹或绿色测试当作上述父项验收通过。
 
 下表“条件”与组内共同守卫叠加。状态提示、role、option、props 转发和监听器均保留；不是每一行都对应一次用户操作。未挂载项的条件均是假设调用者接线之后的源码条件，不能误读为当前正式页面已可用。
 
@@ -189,6 +191,16 @@ beUI 右键菜单的落地副本，`frontend/` 第一方源码零 import——`c
 | `frontend/components/motion/context-menu.tsx:623:10` | unmounted-ui | 调用方渲染 `ContextMenuItem` | 透传 props/children 到 ContextMenuItemBase（role=menuitem）；自身无动作。 |
 | `frontend/components/motion/context-menu.tsx:640:5` | unmounted-ui | 调用方渲染 `ContextMenuCheckboxItem` 并点击 | 调用调用方 `onCheckedChange(!checked)`；勾选标记是本地动画，不写持久化。 |
 | `frontend/components/motion/context-menu.tsx:716:5` | unmounted-ui | 调用方在 `ContextMenuRadioGroup` 内渲染 `ContextMenuRadioItem` 并点击 | 调用调用方 `group.onValueChange(value)`；选中态来自 group，不写持久化。 |
+
+## `frontend/components/motion/date-range-picker.tsx`（3）
+
+beUI 日期区间选择器的 vendored 落地副本。除下列三条外，本文件的候选都已归属：正式适配器 `components/ui/date-range-input.tsx` 组合 `DateRangePicker` 根与 Calendar/Header/Grid/Footer/Selection 并接到搜索页与「我的提交」页，所以这些部件由各自路由 root 覆盖。未归属的三条是 payload 自带的便捷组合层（`DateRangePickerTrigger`、`DateRangePickerContent`、`DateRangePickerDropdown`），适配器自绘触发器、未使用它们，故无调用点；三者都只渲染调用方 props/children、维护本地开合与焦点，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/date-range-picker.tsx:757:7` | unmounted-ui | 仅当调用方渲染 `DateRangePickerTrigger` 时出现（当前无调用点；`ui/date-range-input.tsx` 自绘触发器） | MorphPopoverTrigger 内的 motion.button：转发 props/ref/style，`disabled` 取 `disabled \|\| ctx.disabled`，`aria-label` 缺省为 `${ctx.label}: ${summary}`，显示格式化区间摘要；点击后由 MorphPopover 开合，不发请求。 |
+| `frontend/components/motion/date-range-picker.tsx:839:5` | unmounted-ui | 仅当调用方渲染 `DateRangePickerContent` 时出现（当前无调用点） | MorphPopoverContent 承载日历面：onOpenAutoFocus 记录内容节点并按 `autoFocus` 聚焦所选日期；开合与焦点都是本地行为，不写业务状态。 |
+| `frontend/components/motion/date-range-picker.tsx:872:5` | unmounted-ui | 仅当调用方渲染便捷组合 `DateRangePickerDropdown` 时出现（当前无调用点） | 组合 root + trigger + content + calendar 并透传 `placeholder`/`autoFocus`/`showSummary` 等 props；自身不写状态，选值与提交仍由调用方回调决定。 |
 
 ## `frontend/components/motion/loader.tsx`（0，2026-10-15 归属落地页）
 
@@ -483,7 +495,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/lib/use-toast.tsx:29:7` | app-boundary | ToastProvider 挂载（App 已认证分支） | 把通知栈固定渲染在右下角并 portal 到 body；`dismissLabel` 取本地化文案；不在无 Provider 时抛错。 |
+| `frontend/lib/use-toast.tsx:28:7` | app-boundary | ToastProvider 挂载（App 已认证分支） | 把通知栈固定渲染在右下角（`fixed position="bottom-right"`，`maxVisible` 3）并 portal 到 body；`dismissLabel` 取本地化文案；不在无 Provider 时抛错。 |
 
 ## 验证范围与维护
 
@@ -494,7 +506,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `cf8e813f24d191ba5ef035471e65048c4671726167b536026c310f3396e089b6`
+- `frontend/app.tsx`: `2c927d5fed7d61bfa38f9ad99684dc11c3f845fa5e8b19eedbbac6bed853edf1`
 - `frontend/components/agent/answer-panel.tsx`: `d604801b674d21ef059a70f79cc367326ceccf60ba5e400c4d3480eca1e63586`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/agents/message-bubble.tsx`: `0fe1347583c44eee1d69e84aae80e2ea2097334ddc55a29469775616e0b7b43d`
@@ -506,6 +518,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/components/motion/button/stateful.tsx`: `ef3ae73bbcc434a1bbdeaf06a891c44720f3d88d3f94a8aafe574d80a1c2e728`
 - `frontend/components/motion/card.tsx`: `b9214ef617d7e77111f0e14dede7b411fe388b4eb3faf0f5475fb51a4eba126d`
 - `frontend/components/motion/context-menu.tsx`: `a2b35b09002a9498784029f22d612d12b657bf507b895916bcc59f2d47fa7591`
+- `frontend/components/motion/date-range-picker.tsx`: `1e346dbbe4251c74296546e8f8f3563fd5df3b801c0db1dd2c47f61812562f89`
 - `frontend/components/motion/scroll-reveal.tsx`: `7853c47a57dc1ac4c9b41d744a2421c9473d0597555300e4a84d1e54407abc97`
 - `frontend/components/motion/not-found/glitch.tsx`: `f63ed5577881f978c331ffd4552241abc90c71c14cd2bb5e2eafa2ed2556ef03`
 - `frontend/components/motion/not-found/shared.tsx`: `f98d45223967f45277bf89b659b308e63c784397d4da9c2830565b9bcfc508da`
@@ -533,7 +546,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/features/environments/files/stream-download.mjs`: `b491973525cb44aefce8a265490471e947931c2380b605d15b37226ca7295943`
 - `frontend/features/environments/network-lifecycle.mjs`: `0e40ef5fc54547a8eb8769598176d1bdae454d99a4e62a143981b7f545d89e06`
 - `frontend/features/environments/storage/checkpoints.mjs`: `0f3e6fdf0a47455748cc139f7b811ca87be00a144c8a3c25433c26647c085722`
-- `frontend/lib/use-toast.tsx`: `7156c51d16a4247a000682d67ce6c2784b77f09b35c374ca1abff8c6a1f94a87`
+- `frontend/lib/use-toast.tsx`: `0b4f788931e28f9eb5d87d8d84414568187c35736094130452ad272891b950a8`
 - `frontend/lib/workspace-location.ts`: `b77ff862964645fe25610e09f79b8409740f72a85a5685d934adc7e0ff60b92d`
 - `frontend/main.tsx`: `9ba6f443d0f7da037015cb7f1d1b3444777989588c66429d3630a0c5fb500391`
 - `frontend/pages/workbench-landing/public-workbench-page.tsx`: `797896e7a11327b89eebdf03c802c55872bf2017517ebd94410f714793974866`
@@ -632,3 +645,12 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - 坐标位移：`frontend/features/environments/files/asset-import-panel.tsx`（23 行）与 `.../knowledge-import-panel.tsx`（14 行）各因顶部新增一行 `Checkbox` 导入整体下移 1 行，`frontend/components/shell/context-rail.tsx`（6 行）与 `frontend/app.tsx`（2 行）同样整体下移 1 行；四组均逐项按 handler 配对后重记坐标（例如 parse 32:9→33:9、cancel 33:9→34:9，context-rail 关闭控件 33:7→34:7，app.tsx 外层 234:106→235:106、261:39→262:39），触发/行为措辞逐字不变。
 - 指纹：新增 10 条（`motion/{alert,card,context-menu,popover,preview-rail}.tsx`、`motion/button/stateful.tsx`、`agents/{message,message-bubble,message-scroller}.tsx`，以及作为 `StatefulButton` caller 证据的 `components/ui/button.tsx`），`components/ui/card.tsx` 作为 Card 适配器保留；刷新 6 条（`app.tsx`、`agent/answer-panel.tsx`、`components/ui/card.tsx`、`shell/context-rail.tsx`、`files/{asset,knowledge}-import-panel.tsx`）。核对期间曾为 `agents/{streaming-response,agent-activity/*,loading-states/reasoning-text}.tsx` 补加的 4 条指纹随这批文件归属路由一并移除，`motion/collapsible.tsx` 因候选全部归属未入表；其余 fingerprint 字节未变。
 - 本轮只做源码对账：不修改任何产品行为、不 push/部署/迁移、不读密钥，也不改变 A01、A02、A05、D04 的开放状态。注意本轮期间仍有并行 slice 在同一工作树新增源码（例如 `motion/collapsible.tsx`、`agents/streaming-response.tsx` 在核对过程中出现），索引与本文档需在该批落定后重跑一次 `node --test scripts/frontend-operation-inventory.test.mjs` 确认。
+
+### 2026-10-17 beUI 全量采用（Wave 3）后重新对账
+
+- 触发变化：本批新增 beUI 安装副本 `motion/range-slider.tsx`（含 `lib/hooks/use-slider.ts`）、`motion/date-range-picker.tsx` 与其 `date-range-picker/{context,date-utils,types,use-date-range-picker}.ts`、适配器 `ui/date-range-input.tsx`，并更新 tooltip/popover/context-menu/breadcrumb/collapsible 的安装副本、agent 聊天部件与 `ui/{skeleton,dialog,select,textarea,page-state}.tsx` 内部。索引重生成后为 162 未归属。
+- 本批**不需要**为新文件补行，因为它们的候选都已在以 root symbol 为起点的图内：`range-slider` 由 `frontend/pages/goals-page.tsx:11` 直接渲染；`ui/date-range-input.tsx` 由 `frontend/pages/search-page.tsx:13` 与 `frontend/pages/my-submissions-page.tsx:6` 渲染，它组合 `DateRangePicker` 根与 Calendar/Header/Grid/Footer/Selection，从而覆盖了 `date-range-picker.tsx` 的 20 条候选；`breadcrumb` 由 `components/shell/app-shell.tsx:21` 消费并按 root 归属；`collapsible` 由知识阅读器页与 `knowledge-derivatives-panel.tsx` 消费；`tooltip` 经 `ui/tooltip.tsx` 生效；agent 聊天部件由 `pages/agent-page.tsx` 渲染；五个 `ui/*` 适配器的候选随原调用点归属。`motion/popover.tsx` 仍无 import，只剩此前记录的 2 条未归属。
+- 新增 3 行，全部为 `unmounted-ui`：`motion/date-range-picker.tsx` 的 `DateRangePickerTrigger`（`:757:7`，MorphPopoverTrigger 内的 motion.button，转发 props/ref 并渲染格式化区间摘要）、`DateRangePickerContent`（`:839:5`，MorphPopoverContent 承载日历面，onOpenAutoFocus 记录节点并按 autoFocus 聚焦）、`DateRangePickerDropdown`（`:872:5`，root+trigger+content+calendar 的便捷组合）。三者是 payload 自带的库内便捷层，正式适配器自绘触发器并直接组合 Calendar，因此没有调用点；它们只渲染调用方 props/children 与本地开合/焦点，没有网络写入。这与 Wave 1 的判据一致：vendored 组件的库内动作记 `unmounted-ui`，由 App/路由实际挂载的边界记 `app-boundary`。
+- 坐标重记 1 条：`frontend/lib/use-toast.tsx` 29:7→28:7（ToastProvider 内 `<AnimatedToastStack>` 行；该文件删掉一行注释后整体上移，行为措辞逐字不变，仅补记 `fixed position="bottom-right"`、`maxVisible` 3）。其余既有行的坐标未变，未归属文件集合也未变。
+- 指纹：新增 1 条（`motion/date-range-picker.tsx`），刷新 2 条（`app.tsx` 因新增导入与路由分支、`lib/use-toast.tsx` 因上述改动）。`motion/range-slider.tsx`、`lib/hooks/use-slider.ts`、`date-range-picker/*` 其余模块与五个 `ui/*` 适配器没有候选，故不入表。
+- 本轮只做源码对账：不修改产品行为、不 push/部署/迁移、不读密钥，也不改变 A01、A02、A05、D04 的开放状态。最终 `node --test scripts/frontend-operation-inventory.test.mjs` 10/10 通过（含索引新鲜度一条），可作为本轮的文档门禁证据，但仍不是业务旅程回归。

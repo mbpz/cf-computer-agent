@@ -5,6 +5,7 @@ import { createAssetUrlWorkflow, createAssetWorkflow, type AssetUrlWorkflow, typ
 import { xhrUploadRequester } from "../../lib/asset-upload-transport";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { AssetDropzone } from "./asset-dropzone";
+import { Textarea } from "../ui/textarea";
 
 const idleState: AssetWorkflowState = { kind: "idle", busy: false, uploading: false, progress: null };
 const errorKeys: Record<AssetWorkflowError, string> = { storage: "ASSET_FLOW_STORAGE", validation: "SUBMIT_ASSET_INVALID", different_file: "ASSET_FLOW_DIFFERENT", request: "ASSET_FLOW_ERROR", cancel_conflict: "ASSET_FLOW_CANCEL_CONFLICT", not_ready: "ASSET_FLOW_NOT_READY", alternative_unavailable: "ASSET_ALTERNATIVE_UNAVAILABLE" };
@@ -69,7 +70,7 @@ export function AssetUploadView({ maxBytes, title, locale, fileState, urlState, 
       <p className="font-medium">{text("ASSET_ALTERNATIVE_TITLE")}</p>
       <p className="text-muted-foreground">{text("ASSET_ALTERNATIVE_HINT")}</p>
       <label className="block" htmlFor="asset-alternative-input">{text("ASSET_ALTERNATIVE_LABEL")}
-        <textarea id="asset-alternative-input" data-asset-alternative-input rows={4} value={alternative} disabled={state.busy} className="mt-1 w-full rounded-md border px-2 py-1" onChange={event => setAlternative(event.target.value)} />
+        <Textarea id="asset-alternative-input" data-asset-alternative-input rows={4} value={alternative} disabled={state.busy} className="mt-1" onChange={event => setAlternative(event.target.value)} />
       </label>
       {alternativeErrorKey && <p role="alert" data-asset-alternative-error className="text-destructive">{text(alternativeErrorKey)}</p>}
       <button type="submit" data-asset-alternative-submit disabled={state.busy || state.error === "storage" || !alternative.trim() || !title.trim()} className="rounded-md border px-3 py-2">{text("ASSET_ALTERNATIVE_SUBMIT")}</button>

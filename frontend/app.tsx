@@ -64,7 +64,7 @@ import { ThreadPage, type ThreadPageState } from "./pages/messages/thread-page";
 import { LoginPage } from "./pages/login-page";
 import { PublicWorkbenchPage } from "./pages/workbench-landing/public-workbench-page";
 import { NotFoundGlitch } from "./components/motion/not-found/glitch";
-import { ToastProvider } from "./lib/use-toast";
+import { ToastProvider, useToast } from "./lib/use-toast";
 import { Loader } from "./components/motion/loader";
 import { SettingsPage } from "./pages/settings-page";
 import { GraphRoute } from "./pages/graph-page";
@@ -1745,6 +1745,7 @@ export function MySubmissionsRoute({ locale, search, memberId }: { locale: Local
 }
 
 export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
+  const toast = useToast();
   // A write whose result was unknown before a refresh comes back locked: field drafts reopen their
   // editor so they stay visible, every other operation is reconciled from the list.
   const [stored] = useState(() => memberId ? loadTaskWrite(memberId) : { kind: "empty" as const });
@@ -1923,7 +1924,10 @@ export function TasksRoute({ locale, search, memberId }: { locale: LocaleRuntime
       if (!live()) return;
       if (!unrecord(pending.intent)) { setActionError(frontendText(locale, "TASKS_WRITE_RECORD_STUCK")); return; }
       listUnknownRef.current = null; setListUnknown(null);
-      setActionNotice(frontendText(locale, outcome === "applied" ? "TASKS_WRITE_APPLIED" : outcome === "missing" ? "TASKS_WRITE_MISSING" : "TASKS_LIST_WRITE_NOT_APPLIED"));
+      // A confirmed save is transient feedback; "missing"/"not applied" stay inline because they
+      // explain why the list disagrees with the attempted write and invite another look.
+      if (outcome === "applied") toast.show({ status: "success", title: frontendText(locale, "TASKS_WRITE_APPLIED"), duration: 4000 });
+      else setActionNotice(frontendText(locale, outcome === "missing" ? "TASKS_WRITE_MISSING" : "TASKS_LIST_WRITE_NOT_APPLIED"));
       setRetryVersion((value) => value + 1);
     } catch (error: unknown) {
       if (!live() || clearDeniedTasks(error)) return;
@@ -2924,6 +2928,7 @@ export function WorkbenchReviewRoute({ locale, memberId }: { locale: LocaleRunti
 }
 
 export function NotificationsRoute({ locale, search, isAdmin = false, memberId }: { locale: LocaleRuntime; search: string; isAdmin?: boolean; memberId?: string }) {
+  const toast = useToast();
   const [stored] = useState(() => memberId ? loadNotificationUpdate(memberId) : { kind: "empty" as const });
   const [filters, setFilters] = useState<NotificationFilters>(() => parseNotificationSearch(search).filters);
   const filtersRef = useRef(filters);
@@ -3074,7 +3079,9 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
     });
   };
 
-  const mutate = async (intent: NotificationUpdateIntent, operation: () => Promise<unknown>) => {
+  // `confirmationKey` is the transient success copy: it is queued only after the write resolves, so a
+  // rejected or unknown update keeps its durable inline recovery state and never claims success.
+  const mutate = async (intent: NotificationUpdateIntent, operation: () => Promise<unknown>, confirmationKey?: string) => {
     if (actionPendingRef.current || unknownRef.current || recordBlockedRef.current || !readyRef.current) return;
     if (memberId && !saveNotificationUpdate(memberId, intent)) {
       setActionError(frontendText(locale, "NOTIFICATIONS_UPDATE_NOT_RECORDED"));
@@ -3086,6 +3093,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
     setActionPending(true); setActionError(undefined);
     try {
       await operation();
+      if (confirmationKey && activeRef.current) toast.show({ status: "success", title: frontendText(locale, confirmationKey), duration: 3200 });
       if (activeRef.current && readWorkspaceLocation().pathname === "/notifications") {
         invalidateSnapshot({ kind: "loading" });
         setRetryVersion((value) => value + 1);
@@ -3125,8 +3133,8 @@ export function NotificationsRoute({ locale, search, isAdmin = false, memberId }
       setRecordBlocked(false);
       setActionError(undefined);
     }}
-    onMarkRead={(id) => void mutate({ op: "read", id }, () => markNotificationRead(id))}
-    onMarkVisibleRead={(ids) => void mutate({ op: "bulk", ids: [...ids] }, () => markVisibleNotificationsRead(ids))}
+    onMarkRead={(id) => void mutate({ op: "read", id }, () => markNotificationRead(id), "NOTIFICATIONS_MARKED_READ")}
+    onMarkVisibleRead={(ids) => void mutate({ op: "bulk", ids: [...ids] }, () => markVisibleNotificationsRead(ids), "NOTIFICATIONS_MARKED_VISIBLE_READ")}
     onOpen={(id) => {
       const epoch = locationEpochRef.current;
       void mutate({ op: "open", id }, async () => {

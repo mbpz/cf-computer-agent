@@ -7,6 +7,7 @@ import type { TimelineCreateIntent, ProjectTimelineKind } from "../lib/projects-
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
+import { Select } from "./ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { loadTimelineIntent, saveTimelineIntent, acknowledgeTimelineIntent, clearTimelineIntent } from "../lib/timeline-create-intent";
 import { discardBlockedTimelineDraft, loadTimelineDraft, persistTimelineDraft } from "../lib/timeline-draft";
@@ -143,12 +144,12 @@ export function TimelineCreateForm({ locale, createMemberId, createProjectId, pe
       <fieldset disabled={locked} className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1 text-sm">
           <span>{frontendText(locale, "PROJECT_TIMELINE_KIND")}</span>
-          <select disabled={locked} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={kind} onChange={(event) => draft.edit("kind", event.currentTarget.value as ProjectTimelineKind)}>
+          <Select disabled={locked} value={kind} onChange={(event) => draft.edit("kind", event.currentTarget.value as ProjectTimelineKind)}>
             <option value="meeting">{frontendText(locale, "PROJECT_TIMELINE_KIND_MEETING")}</option>
             <option value="decision">{frontendText(locale, "PROJECT_TIMELINE_KIND_DECISION")}</option>
             <option value="action_item">{frontendText(locale, "PROJECT_TIMELINE_KIND_ACTION")}</option>
             <option value="milestone">{frontendText(locale, "PROJECT_TIMELINE_KIND_MILESTONE")}</option>
-          </select>
+          </Select>
         </label>
         <Input disabled={locked} aria-label={frontendText(locale, "PROJECT_TIMELINE_TITLE_FIELD")} value={title} onChange={(event) => draft.edit("title", event.currentTarget.value)} placeholder={frontendText(locale, "PROJECT_TIMELINE_TITLE_PLACEHOLDER")} />
         <Textarea disabled={locked} className="md:col-span-2" aria-label={frontendText(locale, "PROJECT_TIMELINE_BODY_FIELD")} value={body} onChange={(event) => draft.edit("body", event.currentTarget.value)} placeholder={frontendText(locale, "PROJECT_TIMELINE_BODY_PLACEHOLDER")} rows={3} />

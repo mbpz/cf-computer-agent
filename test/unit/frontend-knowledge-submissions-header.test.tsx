@@ -133,6 +133,25 @@ describe("list headers survive first load and read failure", () => {
     await click("[data-filters-clear]");
     expect(browser.location.search).toBe("");
   });
+
+  it("applies a day range picked on the beUI calendar", async () => {
+    browser.history.replaceState({}, "", "/my-submissions");
+    await remount(<MySubmissionsPage locale={locale} state={submissionsReady} />);
+    const trigger = container.querySelector<HTMLButtonElement>("[data-submissions-range-filter] button[aria-expanded]");
+    expect(trigger).not.toBeNull();
+    expect(trigger!.getAttribute("aria-label")).toBe(`${frontendText(locale, "CALENDAR_RANGE_FROM")} – ${frontendText(locale, "CALENDAR_RANGE_TO")}`);
+    await act(async () => trigger!.click());
+    const days = [...container.querySelectorAll<HTMLButtonElement>('[data-submissions-range-filter] [role="grid"] button:not([disabled])')];
+    expect(days.length).toBeGreaterThan(1);
+    await act(async () => days[0].click());
+    await act(async () => days[1].click());
+    const stated = [...(trigger!.textContent ?? "").matchAll(/\d{4}-\d{2}-\d{2}/gu)].map((match) => match[0]);
+    expect(stated).toHaveLength(2);
+    const apply = [...container.querySelectorAll<HTMLButtonElement>("[data-submissions-range-filter] button")].find((node) => node.textContent === frontendText(locale, "CALENDAR_RANGE_APPLY"));
+    expect(apply).toBeTruthy();
+    await act(async () => apply!.click());
+    expect(browser.location.search).toBe(`?from=${stated[0]}&to=${stated[1]}`);
+  });
 });
 
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); for (let index = 0; index < 12; index += 1) await Promise.resolve(); }); }

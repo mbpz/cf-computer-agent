@@ -10,6 +10,7 @@ import { Card, CardContent } from "../../components/ui/card";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { Select, SelectOption } from "../../components/ui/select";
+import { Textarea } from "../../components/ui/textarea";
 import type { DiscussionMessage, DiscussionSendInput, DiscussionThread } from "../../lib/discussions-data";
 import { frontendPaginationLabels, frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { useCreateDraft } from "../../lib/use-create-draft";
@@ -166,7 +167,7 @@ function DiscussionComposer({ locale, body, status, locked, replyTo, onBodyChang
     {status === "error" && <Alert variant="destructive"><AlertTitle>{frontendText(locale, "MESSAGES_SEND_ERROR")}</AlertTitle></Alert>}
     {operationKey && <div className="space-y-2 text-xs text-muted-foreground"><p>{frontendText(locale, "MESSAGES_OPERATION_KEY")} <code className="break-all">{operationKey}</code></p>{onLookup && <Button type="button" variant="outline" disabled={status === "pending" || status === "checking"} onClick={() => void onLookup()}>{frontendText(locale, status === "checking" ? "MESSAGES_CHECKING_RESULT" : "MESSAGES_CHECK_RESULT")}</Button>}</div>}
     <label className="block text-sm font-medium" htmlFor="discussion-composer">{frontendText(locale, "MESSAGES_COMPOSER_LABEL")}</label>
-    <textarea id="discussion-composer" value={body} onChange={(event) => onBodyChange(event.currentTarget.value)} maxLength={5_000} disabled={locked} className="min-h-24 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder={frontendText(locale, "MESSAGES_COMPOSER_PLACEHOLDER")} />
+    <Textarea id="discussion-composer" value={body} onChange={(event) => onBodyChange(event.currentTarget.value)} maxLength={5_000} disabled={locked} className="resize-y" placeholder={frontendText(locale, "MESSAGES_COMPOSER_PLACEHOLDER")} />
     <div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">{frontendText(locale, "MESSAGES_MENTION_HINT")}</p><Button type="submit" disabled={status === "pending" || status === "checking" || !body.trim()}>{status === "pending" ? frontendText(locale, "MESSAGES_SENDING") : frontendText(locale, status === "error" ? "MESSAGES_RETRY_SEND" : "MESSAGES_SEND")}</Button></div>
   </form>;
 }

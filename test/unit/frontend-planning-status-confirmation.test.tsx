@@ -84,8 +84,11 @@ describe.each(["goals", "projects"] as const)("%s status confirmation", kind => 
   });
   if (kind === "goals") it("blocks a same-tick progress change behind the confirmation", async () => {
     const progress = vi.fn(); await mount({ onProgressChange: progress }); const trigger = action("Archive");
-    const input = container.querySelector('input[type="range"]')!; const prop = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
-    await act(async () => { trigger.click(); (input as unknown as Record<string, { onChange: (event: unknown) => void }>)[prop].onChange({ currentTarget: { value: "75" } }); });
+    // The progress control is beUI's RangeSlider: a `role="slider"` handle on a
+    // pointer track, so the same-tick edit is a click on that track.
+    const slider = container.querySelector<HTMLElement>('[role="slider"]')!; const track = slider.parentElement as HTMLElement;
+    Object.defineProperty(track, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, width: 100, top: 0, height: 44, right: 100, bottom: 44, x: 0, y: 0, toJSON: () => ({}) }) });
+    await act(async () => { trigger.click(); track.dispatchEvent(new browser.PointerEvent("pointerdown", { clientX: 75, pointerId: 1, bubbles: true }) as unknown as Event); });
     expect(progress).not.toHaveBeenCalled(); expect(write).not.toHaveBeenCalled(); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
   });
   if (kind === "projects") it("invalidates when relation editing begins but not for summary-only updates", async () => {

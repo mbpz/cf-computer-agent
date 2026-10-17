@@ -4,6 +4,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { PageState } from "../ui/page-state";
+import { Textarea } from "../ui/textarea";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { ApiRequestError, type Fetcher } from "../../lib/api";
 import {
@@ -190,10 +191,10 @@ export function ReviewSourcePanel({ submissionId, sourceVersion, locale, request
               <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs leading-6">{job.candidate.content}</pre>
             </div>}
             <label className="block" htmlFor="reparse-candidate">{frontendText(locale, "ADMIN_REPARSE_CANDIDATE_EDIT")}</label>
-            <textarea id="reparse-candidate" data-review-reparse-candidate rows={8} value={candidateDraft}
+            <Textarea id="reparse-candidate" data-review-reparse-candidate rows={8} value={candidateDraft}
               disabled={pending !== null || job.status !== "indexed"}
               onChange={(event) => setCandidateDraft(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2 font-mono text-xs" />
+              className="font-mono text-xs" />
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" data-review-reparse-save-candidate
                 disabled={pending !== null || job.status !== "indexed" || candidateDraft.length === 0}

@@ -49,6 +49,16 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
     const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
     await click(confirm!);
   }
+  /** Progress is beUI's RangeSlider: one click on the pointer track at the target ratio. */
+  async function setGoalProgress(value: number) {
+    const slider = main().querySelector<HTMLElement>('[role="slider"]')!;
+    const track = slider.parentElement as HTMLElement;
+    Object.defineProperty(track, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, width: 100, top: 0, height: 44, right: 100, bottom: 44, x: 0, y: 0, toJSON: () => ({}) }) });
+    await act(async () => {
+      track.dispatchEvent(new app!.browser.PointerEvent("pointerdown", { clientX: value, pointerId: 1, bubbles: true }));
+      track.dispatchEvent(new app!.browser.PointerEvent("pointerup", { clientX: value, pointerId: 1, bubbles: true }));
+    });
+  }
   afterEach(async () => { await app?.unmount(); app = undefined; writes = []; reads = []; failure = undefined; detailId = "row"; delayed = false; defer = undefined; writeStatus = 503; listFailure = undefined; detailVersion = version; delayDetail = false; resolveDetail = undefined; });
   it("cancel and route exit leave no write recovery marker or request", async () => {
     await mount(); await click(complete()); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
@@ -136,8 +146,7 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
     await submitStatus(); expect(writes).toEqual([{ status: "completed", expectedUpdatedAt: "2026-09-27T00:00:00.002Z" }]);
   });
   if (module === "goals") it("persists the progress write barrier too", async () => {
-    await mount(); const node = main().querySelector('input[type="range"]')!; const prop = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
-    await act(async () => { (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[prop].onChange({ currentTarget: { value: "75" } }); });
+    await mount(); await setGoalProgress(75);
     expect(writes).toEqual([{ progress: 75, expectedUpdatedAt: version }]); expect(recover()).toBeTruthy(); expect(complete().disabled).toBe(true);
   });
 });

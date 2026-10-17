@@ -10,6 +10,7 @@ import { DataTable } from "../components/data-table";
 import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-filters";
 import { FilterSelect } from "../components/ui/filter-select";
 import { FilterDisclosure } from "../components/ui/filter-disclosure";
+import { DateRangeInput } from "../components/ui/date-range-input";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { SavedViewItem } from "../lib/saved-views-data";
 import { cn } from "../lib/utils";
@@ -170,8 +171,21 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
       renderRow={(className, close) => <form data-search-filters className={className} onSubmit={(event) => { event.preventDefault(); if (commitFilters()) close(); }}>
         <FilterSelect label={frontendText(locale, "KNOWLEDGE_FILTER_KIND")} ariaLabel={frontendText(locale, "KNOWLEDGE_FILTER_KIND")} value={draft.kind} disabled={queryLocked} options={kindOptions} onChange={(value) => setDraft((current) => ({ ...current, kind: value }))} />
         <div className="space-y-2"><Label htmlFor="search-filter-author">{frontendText(locale, "KNOWLEDGE_FILTER_AUTHOR")}</Label><Input id="search-filter-author" data-search-filter-author className="w-48 max-lg:w-full" value={draft.authorId} disabled={queryLocked} autoComplete="off" placeholder={frontendText(locale, "SEARCH_FILTER_AUTHOR_PLACEHOLDER")} onChange={(event) => setDraft((current) => ({ ...current, authorId: event.currentTarget.value }))} /></div>
-        <div className="space-y-2"><Label htmlFor="search-filter-published-from">{frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_FROM")}</Label><Input id="search-filter-published-from" data-search-filter-published-from type="date" className="w-44 max-lg:w-full" value={draft.publishedFrom} disabled={queryLocked} onChange={(event) => setDraft((current) => ({ ...current, publishedFrom: event.currentTarget.value }))} /></div>
-        <div className="space-y-2"><Label htmlFor="search-filter-published-to">{frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_TO")}</Label><Input id="search-filter-published-to" data-search-filter-published-to type="date" className="w-44 max-lg:w-full" value={draft.publishedTo} disabled={queryLocked} onChange={(event) => setDraft((current) => ({ ...current, publishedTo: event.currentTarget.value }))} /></div>
+        <DateRangeInput
+          value={{ from: draft.publishedFrom, to: draft.publishedTo }}
+          onChange={(next) => setDraft((current) => ({ ...current, publishedFrom: next.from, publishedTo: next.to }))}
+          locale={locale.locale}
+          disabled={queryLocked}
+          texts={{
+            label: `${frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_FROM")} – ${frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_TO")}`,
+            placeholder: `${frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_FROM")} – ${frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_TO")}`,
+            start: frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_FROM"),
+            end: frontendText(locale, "KNOWLEDGE_FILTER_PUBLISHED_TO"),
+            clear: frontendText(locale, "COMMON_CLEAR_FILTERS"),
+          }}
+          triggerProps={{ "data-search-filter-published-from": "", "data-search-filter-published-to": "" }}
+          className="max-lg:w-full"
+        />
         <Button type="submit" data-search-filters-apply disabled={queryLocked} className="max-lg:h-11">{frontendText(locale, "SEARCH_FILTERS_APPLY")}</Button>
         {filterError && <p role="alert" className="text-sm text-destructive">{filterError}</p>}
       </form>}

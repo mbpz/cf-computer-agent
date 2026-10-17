@@ -37,6 +37,17 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
     const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
     await click(confirm!);
   }
+  /** Progress is beUI's RangeSlider: a `role="slider"` handle on a pointer track,
+   * so it is driven the way a user drives it — one click at the target ratio. */
+  async function setGoalProgress(value: number) {
+    const slider = main().querySelector<HTMLElement>('[role="slider"]')!;
+    const track = slider.parentElement as HTMLElement;
+    Object.defineProperty(track, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, width: 100, top: 0, height: 44, right: 100, bottom: 44, x: 0, y: 0, toJSON: () => ({}) }) });
+    await act(async () => {
+      track.dispatchEvent(new app!.browser.PointerEvent("pointerdown", { clientX: value, pointerId: 1, bubbles: true }));
+      track.dispatchEvent(new app!.browser.PointerEvent("pointerup", { clientX: value, pointerId: 1, bubbles: true }));
+    });
+  }
   afterEach(async () => { await app?.unmount(); app = undefined; });
   it("sends the displayed version and reloads conflict data without automatically replaying the write", async () => {
     await mount(); await submitStatus();
@@ -76,9 +87,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
   });
   if (kind === "goals") it("sends the displayed version for a progress edit and reconciles its conflict", async () => {
     await mount();
-    const node = main().querySelector('input[type="range"]')!;
-    const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
-    await act(async () => { (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange({ currentTarget: { value: "75" } }); });
+    await setGoalProgress(75);
     await waitForApp(() => main().textContent!.includes("Fresh private row"));
     expect(bodies).toEqual([{ progress: 75, expectedUpdatedAt: oldVersion }]);
   });

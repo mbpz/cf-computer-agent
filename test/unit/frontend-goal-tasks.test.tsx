@@ -151,7 +151,7 @@ describe("goal task association journey", () => {
     expect(app!.browser.document.activeElement).toBe(button("Manage task links"));
   });
   it("paginates owned candidates and prevents other goal mutations while editing", async () => {
-    await mount(); expect((main().querySelector('input[type="range"]') as HTMLInputElement).disabled).toBe(true);
+    await mount(); expect(main().querySelector('[role="slider"]')!.getAttribute("aria-disabled")).toBe("true");
     await next();
     await waitForApp(() => editor().textContent?.includes("Private task 22") === true);
     expect(editor().textContent).toContain("Private task 0"); expect(reads.at(-1)).toContain("page=2");

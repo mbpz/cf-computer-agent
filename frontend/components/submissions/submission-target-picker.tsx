@@ -1,3 +1,4 @@
+import { Select } from "../ui/select";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { isSubmittableSpace, type SubmissionTargetsActions, type SubmissionTargetsView } from "../../lib/submission-targets-data";
 
@@ -24,16 +25,16 @@ export function SubmissionTargetPicker({ locale, view, actions }: { locale?: Loc
     {view.storedTargetMissing && <p data-submission-target-stored-missing role="status" className="text-sm">{text("SUBMIT_TARGET_STORED_MISSING")}</p>}
     <label className="block space-y-1">
       <span className="text-sm">{text("SUBMIT_TARGET_SPACE")}</span>
-      <select data-submission-target-space className="w-full rounded-md border px-3 py-2" value={view.spaceId ?? ""} disabled={spaces.length === 0} onChange={(event) => actions.selectSpace(event.target.value)}>
+      <Select data-submission-target-space value={view.spaceId ?? ""} disabled={spaces.length === 0} onChange={(event) => actions.selectSpace(event.target.value)}>
         {spaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}
-      </select>
+      </Select>
     </label>
     <label className="block space-y-1">
       <span className="text-sm">{text("SUBMIT_TARGET_COLLECTION")}</span>
-      <select data-submission-target-collection data-submission-target-collection-loading={view.collections.kind === "loading" ? "" : undefined} className="w-full rounded-md border px-3 py-2" value={view.collectionId ?? ""} disabled={view.spaceId === null || !collectionsReady} onChange={(event) => actions.selectCollection(event.target.value === "" ? null : event.target.value)}>
+      <Select data-submission-target-collection data-submission-target-collection-loading={view.collections.kind === "loading" ? "" : undefined} value={view.collectionId ?? ""} disabled={view.spaceId === null || !collectionsReady} onChange={(event) => actions.selectCollection(event.target.value === "" ? null : event.target.value)}>
         <option value="">{text("SUBMIT_TARGET_COLLECTION_NONE")}</option>
         {collectionsReady && collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
-      </select>
+      </Select>
     </label>
     {view.spaceId !== null && view.collections.kind === "loading" && <p className="text-sm">{text("SUBMIT_TARGET_COLLECTION_LOADING")}</p>}
     {view.spaceId !== null && view.collections.kind === "error" && <div role="alert" className="space-y-2 text-sm">
@@ -44,10 +45,10 @@ export function SubmissionTargetPicker({ locale, view, actions }: { locale?: Loc
     {view.collections.hasMore && <button type="button" data-submission-target-more-collections className="rounded-md border px-3 py-2 text-sm" onClick={() => actions.loadMoreCollections()}>{text("SUBMIT_TARGET_MORE_COLLECTIONS")}</button>}
     <label className="block space-y-1">
       <span className="text-sm">{text("SUBMIT_TARGET_VISIBILITY")}</span>
-      <select data-submission-target-visibility className="w-full rounded-md border px-3 py-2" value={view.visibility} onChange={(event) => actions.selectVisibility(event.target.value === "admin_only" ? "admin_only" : "shared")}>
+      <Select data-submission-target-visibility value={view.visibility} onChange={(event) => actions.selectVisibility(event.target.value === "admin_only" ? "admin_only" : "shared")}>
         <option value="shared">{text("SUBMIT_TARGET_SHARED")}</option>
         <option value="admin_only">{text("SUBMIT_TARGET_ADMIN_ONLY")}</option>
-      </select>
+      </Select>
     </label>
     {view.hasMoreSpaces && <button type="button" data-submission-target-more-spaces className="rounded-md border px-3 py-2 text-sm" onClick={() => actions.loadMoreSpaces()}>{text("SUBMIT_TARGET_MORE_SPACES")}</button>}
   </fieldset>;

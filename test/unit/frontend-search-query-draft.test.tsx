@@ -191,6 +191,24 @@ describe("search query draft ownership", () => {
     await act(async () => option!.click());
   }
   const appliedDate = (url: string, key: string) => new URLSearchParams(url.slice(url.indexOf("?"))).get(key);
+  /**
+   * Picks the first two days of the displayed month through the beUI calendar
+   * and reports the days its summary states; the submit that follows is what
+   * turns them into canonical UTC timestamps.
+   */
+  async function pickPublishedRange() {
+    const trigger = container.querySelector<HTMLButtonElement>("[data-search-filter-published-from]")!;
+    expect(trigger).toBeTruthy();
+    const settle = async () => { const { promise, resolve } = Promise.withResolvers<void>(); setTimeout(resolve, 20); await promise; };
+    await act(async () => { trigger.click(); await settle(); });
+    const days = [...container.querySelectorAll<HTMLButtonElement>('[role="grid"] button:not([disabled])')];
+    expect(days.length).toBeGreaterThan(1);
+    await act(async () => { days[0].click(); await settle(); });
+    await act(async () => { days[1].click(); await settle(); });
+    const stated = [...(trigger.textContent ?? "").matchAll(/\d{4}-\d{2}-\d{2}/gu)].map((match) => match[0]);
+    expect(stated).toHaveLength(2);
+    return { fromDay: stated[0], toDay: stated[1], from: `${stated[0]}T00:00:00.000Z`, to: `${stated[1]}T00:00:00.000Z` };
+  }
 
   it("round-trips the four search filters through refresh and a saved view, and clears the list on a failed change", async () => {
     const searchCalls: string[] = [];
@@ -211,23 +229,22 @@ describe("search query draft ownership", () => {
 
     await chooseKind("Markdown");
     await act(async () => editFilter("[data-search-filter-author]", "member-b"));
-    await act(async () => editFilter("[data-search-filter-published-from]", "2026-01-01"));
-    await act(async () => editFilter("[data-search-filter-published-to]", "2026-02-01"));
+    const picked = await pickPublishedRange();
     await submitFilters();
 
     const location = new URLSearchParams(browser.location.search);
     expect(location.get("kind")).toBe("markdown");
     expect(location.get("authorId")).toBe("member-b");
-    expect(location.get("publishedFrom")).toBe("2026-01-01T00:00:00.000Z");
-    expect(location.get("publishedTo")).toBe("2026-02-01T00:00:00.000Z");
+    expect(location.get("publishedFrom")).toBe(picked.from);
+    expect(location.get("publishedTo")).toBe(picked.to);
     expect(location.get("q")).toBe("docs");
     // The applied conditions are rendered back as removable text.
     expect(container.querySelector("[data-applied-filters]")?.textContent).toContain("Author: member-b");
     const sent = searchCalls.at(-1)!;
     expect(appliedDate(sent, "kind")).toBe("markdown");
     expect(appliedDate(sent, "authorId")).toBe("member-b");
-    expect(appliedDate(sent, "publishedFrom")).toBe("2026-01-01T00:00:00.000Z");
-    expect(appliedDate(sent, "publishedTo")).toBe("2026-02-01T00:00:00.000Z");
+    expect(appliedDate(sent, "publishedFrom")).toBe(picked.from);
+    expect(appliedDate(sent, "publishedTo")).toBe(picked.to);
 
     // A refresh restores the same conditions and asks for the same rows.
     const callsBeforeRefresh = searchCalls.length;
@@ -235,13 +252,13 @@ describe("search query draft ownership", () => {
     root = createRoot(container);
     await mount(savedViewHandler, searchHandler);
     expect(filterInput("[data-search-filter-author]").value).toBe("member-b");
-    expect(filterInput("[data-search-filter-published-from]").value).toBe("2026-01-01");
+    expect(container.querySelector("[data-search-filter-published-from]")?.textContent).toContain(picked.fromDay);
     expect(appliedDate(searchCalls.at(-1)!, "kind")).toBe("markdown");
     expect(searchCalls.length).toBeGreaterThan(callsBeforeRefresh);
 
     // The saved view carries all four, and applying it restores them after leaving.
     await act(async () => edit("Filtered")); await submit();
-    expect(posted!.filters).toEqual({ q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or", kind: "markdown", authorId: "member-b", publishedFrom: "2026-01-01T00:00:00.000Z", publishedTo: "2026-02-01T00:00:00.000Z" });
+    expect(posted!.filters).toEqual({ q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or", kind: "markdown", authorId: "member-b", publishedFrom: picked.from, publishedTo: picked.to });
     await act(async () => writeWorkspaceHistory("push", "/search?q=other"));
     // Clear this tab's write journal so the apply path is exercised on its own; the
     // journal itself is covered by the saved-view intent tests.
@@ -254,8 +271,8 @@ describe("search query draft ownership", () => {
     expect(restored.get("q")).toBe("docs");
     expect(restored.get("kind")).toBe("markdown");
     expect(restored.get("authorId")).toBe("member-b");
-    expect(restored.get("publishedFrom")).toBe("2026-01-01T00:00:00.000Z");
-    expect(restored.get("publishedTo")).toBe("2026-02-01T00:00:00.000Z");
+    expect(restored.get("publishedFrom")).toBe(picked.from);
+    expect(restored.get("publishedTo")).toBe(picked.to);
 
     // A failing condition change must not leave the previous conditions' rows on screen.
     expect(container.textContent).toContain("Previous condition row");

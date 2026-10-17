@@ -5,6 +5,7 @@ import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
+import { Select } from "./ui/select";
 
 import { loadInboxIntent, saveInboxIntent, acknowledgeInboxIntent, clearInboxIntent, validInboxIntent, type StoredInboxIntent, type InboxCreateIntent } from "../lib/inbox-create-intent";
 import { discardBlockedInboxDraft, loadInboxDraft, persistInboxDraft } from "../lib/inbox-draft";
@@ -128,7 +129,7 @@ export function InboxCreateForm({ locale, createMemberId, pending = false, isSub
   return <div className="space-y-3" aria-busy={phase === "writing" || phase === "reading"}>
     {recordBlocked && <div role="alert" data-inbox-draft-blocked className="space-y-2 text-sm"><p>{frontendText(locale, "INBOX_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardRecord}>{frontendText(locale, "INBOX_DRAFT_RECORD_DISCARD")}</Button></div>}
     {recordNotice && <p role="alert">{recordNotice}</p>}
-    <div className="flex flex-wrap gap-2"><select aria-label={frontendText(locale, "INBOX_KIND")} className="h-10 rounded-md border bg-background px-3 text-sm" value={kind} disabled={locked} onChange={event => draft.edit("kind", event.currentTarget.value as "text" | "link")}><option value="text">{frontendText(locale, "INBOX_KIND_TEXT")}</option><option value="link">{frontendText(locale, "INBOX_KIND_LINK")}</option></select>{kind === "link" && <Input aria-label={frontendText(locale, "INBOX_SOURCE_URL")} value={sourceUrl} disabled={locked} onChange={event => draft.edit("sourceUrl", event.currentTarget.value)} placeholder={frontendText(locale, "INBOX_SOURCE_URL")} />}</div>
+    <div className="flex flex-wrap gap-2"><Select aria-label={frontendText(locale, "INBOX_KIND")} value={kind} disabled={locked} onChange={event => draft.edit("kind", event.currentTarget.value as "text" | "link")}><option value="text">{frontendText(locale, "INBOX_KIND_TEXT")}</option><option value="link">{frontendText(locale, "INBOX_KIND_LINK")}</option></Select>{kind === "link" && <Input aria-label={frontendText(locale, "INBOX_SOURCE_URL")} value={sourceUrl} disabled={locked} onChange={event => draft.edit("sourceUrl", event.currentTarget.value)} placeholder={frontendText(locale, "INBOX_SOURCE_URL")} />}</div>
     <Textarea aria-label={frontendText(locale, "INBOX_CONTENT")} value={content} disabled={locked} onChange={event => draft.edit("content", event.currentTarget.value)} placeholder={frontendText(locale, "INBOX_CONTENT_PLACEHOLDER")} rows={4} />
     {phase === "storage-blocked" ? <><p role="alert">{frontendText(locale, "INBOX_CREATE_STORAGE_BLOCKED")}</p><Button type="button" data-create-storage-retry disabled={pending} onClick={reloadStored}>{frontendText(locale, "INBOX_CREATE_STORAGE_RETRY")}</Button></>
       : phase === "unknown" ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "INBOX_CREATE_UNKNOWN")}</p><Button type="button" data-create-retry disabled={pending} onClick={() => void submit()}>{frontendText(locale, "INBOX_CREATE_RETRY")}</Button></>

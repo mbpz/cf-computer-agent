@@ -8,6 +8,7 @@ import { registerWorkspaceLeaveGuard } from "../../frontend/lib/workspace-locati
 import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
 import { TasksRoute } from "../../frontend/app";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
+import { ToastProvider } from "../../frontend/lib/use-toast";
 import { stubListViewport } from "../helpers/list-viewport";
 
 const vmContexts = new WeakSet<object>();
@@ -418,7 +419,7 @@ describe("private tasks route", () => {
   describe("unknown list writes", () => {
     const KEY = "memory-garden:task-write:v1:alice";
     async function leave() { let result: string | undefined; await act(async () => { result = writeWorkspaceHistory("push", "/settings"); }); return result; }
-    async function render(memberId?: string) { await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} {...(memberId ? { memberId } : {})} />)); await flush(); }
+    async function render(memberId?: string) { const locale = createLocaleRuntime(); await act(async () => root.render(<ToastProvider locale={locale}><TasksRoute locale={locale} search={browser.location.search} {...(memberId ? { memberId } : {})} /></ToastProvider>)); await flush(); }
     const banner = () => container.querySelector("[data-task-list-unknown]") as HTMLElement | null;
 
     it("locks an unknown status change, keeps list queries usable, and settles it by a read-only check", async () => {
@@ -445,7 +446,8 @@ describe("private tasks route", () => {
       await clickButton("Check the result"); await flush();
       expect(posts).toBe(1); expect(gets).toContain("/api/tasks/task-alpha");
       expect(banner()).toBeNull();
-      expect(container.textContent).toContain("The change was saved.");
+      // A settled save is transient feedback: it lives in the toast channel, outside the route tree.
+      expect(browser.document.body.textContent).toContain("The change was saved.");
       expect(await leave()).toBe("committed");
     });
 
@@ -477,7 +479,8 @@ describe("private tasks route", () => {
       await clickButton("Retry same operation"); await flush();
       expect(deletes).toBe(2);
       expect(banner()).toBeNull();
-      expect(container.textContent).toContain("The change was saved.");
+      // A settled save is transient feedback: it lives in the toast channel, outside the route tree.
+      expect(browser.document.body.textContent).toContain("The change was saved.");
     });
 
     it("restores an unknown delete after refresh from the tab record and checks it", async () => {
@@ -495,7 +498,8 @@ describe("private tasks route", () => {
       expect(await leave()).toBe("blocked");
       await clickButton("Check the result"); await flush();
       expect(banner()).toBeNull();
-      expect(container.textContent).toContain("The change was saved.");
+      // A settled save is transient feedback: it lives in the toast channel, outside the route tree.
+      expect(browser.document.body.textContent).toContain("The change was saved.");
       expect(browser.sessionStorage.getItem(KEY)).toBeNull();
     });
 

@@ -3,7 +3,7 @@ import { Files } from "@phosphor-icons/react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { DataTable, type DataTablePage } from "../components/data-table";
-import { Input } from "../components/ui/input";
+import { DateRangeInput, type DayRange } from "../components/ui/date-range-input";
 import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-filters";
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
@@ -94,20 +94,31 @@ function applyRange(next: { from: string; to: string }): void {
  * an empty interval disables Apply and reports it inline instead.
  */
 function SubmissionRangeFilter({ locale, range, pending }: { locale: LocaleRuntime; range: SubmissionRangeQuery; pending: boolean }) {
-  const [from, setFrom] = useState(() => dateFieldValue(range.from));
-  const [to, setTo] = useState(() => dateFieldValue(range.to));
+  const [draft, setDraft] = useState<DayRange>(() => submissionRangeDraft(range));
   // An applied filter (including one restored by history) wins over a stale draft.
-  useEffect(() => { setFrom(dateFieldValue(range.from)); setTo(dateFieldValue(range.to)); }, [range.from, range.to]);
-  const invalid = (!!from && !!to && from > to) || range.invalid;
+  useEffect(() => { setDraft(submissionRangeDraft(range)); }, [range.from, range.to]);
+  const invalid = (!!draft.from && !!draft.to && draft.from > draft.to) || range.invalid;
+  const start = frontendText(locale, "CALENDAR_RANGE_FROM");
+  const end = frontendText(locale, "CALENDAR_RANGE_TO");
   return <div data-submissions-range-filter className="space-y-2 rounded-lg border p-4">
     <p className="text-sm text-muted-foreground">{frontendText(locale, "SUBMISSIONS_RANGE_HINT")}</p>
     <div className="flex flex-wrap items-end gap-3">
-      <label className="space-y-1 text-sm">{frontendText(locale, "CALENDAR_RANGE_FROM")}<Input aria-label={frontendText(locale, "CALENDAR_RANGE_FROM")} type="date" value={from} disabled={pending} onChange={(event) => setFrom(event.currentTarget.value)} /></label>
-      <label className="space-y-1 text-sm">{frontendText(locale, "CALENDAR_RANGE_TO")}<Input aria-label={frontendText(locale, "CALENDAR_RANGE_TO")} type="date" value={to} disabled={pending} onChange={(event) => setTo(event.currentTarget.value)} /></label>
-      <Button type="button" disabled={pending || invalid} onClick={() => { if (invalid) return; applyRange({ from, to }); }}>{frontendText(locale, "CALENDAR_RANGE_APPLY")}</Button>
+      <DateRangeInput
+        value={draft}
+        onChange={setDraft}
+        locale={locale?.locale ?? "en"}
+        disabled={pending}
+        texts={{ label: `${start} – ${end}`, placeholder: `${start} – ${end}`, start, end, clear: frontendText(locale, "COMMON_CLEAR_FILTERS") }}
+      />
+      <Button type="button" disabled={pending || invalid} onClick={() => { if (invalid) return; applyRange(draft); }}>{frontendText(locale, "CALENDAR_RANGE_APPLY")}</Button>
     </div>
     {invalid && <p role="alert" data-submissions-range-error className="text-sm text-destructive">{frontendText(locale, "SUBMISSIONS_RANGE_INVALID")}</p>}
   </div>;
+}
+
+/** The applied bounds as the day values the range control edits. */
+function submissionRangeDraft(range: SubmissionRangeQuery): DayRange {
+  return { from: dateFieldValue(range.from), to: dateFieldValue(range.to) };
 }
 
 /** A stated instant is shown by its UTC day, which is the granularity of the input. */

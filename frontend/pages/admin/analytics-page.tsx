@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
+import { Select } from "../../components/ui/select";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminAnalyticsOverview } from "../../lib/admin-analytics-data";
 import { NumberTicker } from "../../components/motion/number-ticker";
@@ -16,7 +17,7 @@ export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, l
   // for every state; only the panel below switches between loading, failure and the report.
   return <section className="space-y-4" aria-busy={pending || state.kind === "loading" || undefined}>
     <PageHeader title={frontendText(locale, "ADMIN_ANALYTICS_TITLE")} description={frontendText(locale, "ADMIN_ANALYTICS_DESCRIPTION")}
-      actions={<><label htmlFor="admin-analytics-range" className="sr-only">{frontendText(locale, "ADMIN_ANALYTICS_RANGE")}</label><select id="admin-analytics-range" className="h-9 rounded-md border bg-background px-3 text-sm" value={days} onChange={(event) => onDaysChange?.(Number(event.target.value))}>{![7, 14, 30].includes(days) && <option value={days}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_CUSTOM").replace("{days}", String(days))}</option>}<option value={7}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_7")}</option><option value={14}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_14")}</option><option value={30}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_30")}</option></select><Button data-analytics-refresh type="button" variant="outline" size="sm" disabled={pending} onClick={onRefresh}>{frontendText(locale, "ADMIN_ANALYTICS_REFRESH")}</Button></>} />
+      actions={<><label htmlFor="admin-analytics-range" className="sr-only">{frontendText(locale, "ADMIN_ANALYTICS_RANGE")}</label><Select id="admin-analytics-range" className="w-auto" value={days} onChange={(event) => onDaysChange?.(Number(event.target.value))}>{![7, 14, 30].includes(days) && <option value={days}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_CUSTOM").replace("{days}", String(days))}</option>}<option value={7}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_7")}</option><option value={14}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_14")}</option><option value={30}>{frontendText(locale, "ADMIN_ANALYTICS_RANGE_30")}</option></Select><Button data-analytics-refresh type="button" variant="outline" size="sm" disabled={pending} onClick={onRefresh}>{frontendText(locale, "ADMIN_ANALYTICS_REFRESH")}</Button></>} />
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
       : state.kind === "error" || state.kind === "forbidden" ? <PageState kind={state.kind} title={frontendText(locale, state.kind === "forbidden" ? "ADMIN_ANALYTICS_FORBIDDEN" : "ADMIN_ANALYTICS_UNAVAILABLE")}>{retry}</PageState>
       : <>

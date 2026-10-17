@@ -5,6 +5,7 @@ import type { WorkspaceLeaveDecision } from "../lib/workspace-navigation-gate";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
+import { Select } from "./ui/select";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { ProjectTimelineItem, TimelineEditContent } from "../lib/projects-data";
 
@@ -123,9 +124,9 @@ export function TimelineItemEditor({ locale, item, pending, onSave }: {
   }}>
     <fieldset disabled={locked} className="grid gap-3 md:grid-cols-2">
       <legend className="mb-2 text-sm font-medium">{frontendText(locale, "PROJECT_TIMELINE_EDIT")}</legend>
-      <label className="space-y-1 text-sm"><span>{frontendText(locale, "PROJECT_TIMELINE_EDIT_KIND")}</span><select className="h-10 w-full rounded-md border bg-background px-3" aria-label={frontendText(locale, "PROJECT_TIMELINE_EDIT_KIND")} value={kind} onChange={event => edit("kind", event.currentTarget.value as ProjectTimelineItem["kind"])}>
+      <label className="space-y-1 text-sm"><span>{frontendText(locale, "PROJECT_TIMELINE_EDIT_KIND")}</span><Select aria-label={frontendText(locale, "PROJECT_TIMELINE_EDIT_KIND")} value={kind} onChange={event => edit("kind", event.currentTarget.value as ProjectTimelineItem["kind"])}>
         {(["meeting", "decision", "action_item", "milestone"] as const).map(value => <option key={value} value={value}>{frontendText(locale, `PROJECT_TIMELINE_KIND_${value.toUpperCase()}`)}</option>)}
-      </select></label>
+      </Select></label>
       <label className="space-y-1 text-sm"><span>{frontendText(locale, "PROJECT_TIMELINE_EDIT_TITLE")}</span><Input ref={titleInput} maxLength={200} aria-label={frontendText(locale, "PROJECT_TIMELINE_EDIT_TITLE")} value={title} onChange={event => edit("title", event.currentTarget.value)} /></label>
       <label className="space-y-1 text-sm md:col-span-2"><span>{frontendText(locale, "PROJECT_TIMELINE_EDIT_BODY")}</span><Textarea rows={4} maxLength={200000} aria-label={frontendText(locale, "PROJECT_TIMELINE_EDIT_BODY")} value={body} onChange={event => edit("body", event.currentTarget.value)} /></label>
       <label className="space-y-1 text-sm"><span>{frontendText(locale, "PROJECT_TIMELINE_EDIT_START")}</span><Input type="datetime-local" step="0.001" aria-label={frontendText(locale, "PROJECT_TIMELINE_EDIT_START")} value={startsAt} onChange={event => edit("startsAt", event.currentTarget.value)} /></label>
