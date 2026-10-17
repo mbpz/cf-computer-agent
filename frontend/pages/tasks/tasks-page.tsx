@@ -3,6 +3,7 @@ import { Checks } from "@phosphor-icons/react";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { ButtonLink } from "../../components/motion/button/base";
 import { DataTable } from "../../components/data-table";
 import { Input } from "../../components/ui/input";
 import { AppliedFilters, type AppliedFilter } from "../../components/ui/applied-filters";
@@ -119,7 +120,7 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
           const taskLabel = trimmedTitle ? `${trimmedTitle} (${task.id})` : task.id;
           const statusAction = frontendText(locale, task.status === "done" ? "TASKS_REOPEN" : "TASKS_COMPLETE");
           return <div className="flex flex-wrap gap-2">
-            <a href={contextDiscussionHref({ kind: "task", id: task.id })} className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium transition hover:bg-accent hover:text-accent-foreground">{frontendText(locale, "MESSAGES_DISCUSS")}</a>
+            <ButtonLink variant="outline" size="sm" href={contextDiscussionHref({ kind: "task", id: task.id })}>{frontendText(locale, "MESSAGES_DISCUSS")}</ButtonLink>
             {onOpen && <Button variant="outline" size="sm" disabled={Boolean(actionPendingId)} aria-label={`${frontendText(locale, "TASKS_EDIT")}: ${task.title ? `${task.title} (${task.id})` : task.id}`} onClick={() => onOpen(task.id)}>{frontendText(locale, "TASKS_EDIT")}</Button>}
             <Button aria-label={`${statusAction}: ${taskLabel}`} size="sm" variant="outline" disabled={validConfirmation || actionPendingId != null} onClick={() => { if (!confirmationRef.current) onStatusChange?.(task.id, task.status === "done" ? "todo" : "done"); }}>{statusAction}</Button>
             <Button aria-label={`${frontendText(locale, "TASKS_DELETE")}: ${taskLabel}`} size="sm" variant="destructive" disabled={validConfirmation || deleteBlocked} onClick={() => requestDelete(task)}>{frontendText(locale, "TASKS_DELETE")}</Button>

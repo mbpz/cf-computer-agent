@@ -17,6 +17,40 @@ export function Dialog({ open = false, onOpenChange, children }: { open?: boolea
  * `will-change`: those properties make the ancestor the containing block for
  * `position: fixed` descendants, so the panel would centre on the ancestor box
  * instead of the viewport.
+ *
+ * This adapter is also the whole app's modal contract, and beUI's installed
+ * `motion/center-morph-modal` cannot carry it — so the surface stays here, and
+ * that file stays the source for surfaces that can accept its shape:
+ *
+ * - `CenterMorphModalContent` renders nothing until its own mount effect runs
+ *   (`motion/center-morph-modal.tsx:200` sets the flag, `:251` returns null), so
+ *   an open dialog has no markup outside a live browser. `test/unit/frontend-focus-scope.test.tsx`
+ *   renders an open dialog with `renderToStaticMarkup` and asserts the panel's
+ *   `data-focus-scope` and `tabindex` there.
+ * - It portals unconditionally (`:253`). Every dialog except the command
+ *   palette renders inline unless the caller passes `portal`, which is what
+ *   keeps the panel inside the container the dialog, confirmation and admin
+ *   suites query (`container.querySelector('[role="alertdialog"]')`, the
+ *   `data-*-dialog` hooks) and inside the caller's own stacking and `inert`
+ *   context.
+ * - Its props stop at `children`/`ariaLabel`/`className`/`backdropClassName`
+ *   (`:188-199`). The call sites need `role="alertdialog"`, `aria-labelledby`,
+ *   `onKeyDown` and `data-*` on the panel element itself, all of which land
+ *   here through the rest-props spread below.
+ * - It brings its own modal machinery — body scroll lock (`:208`), a window
+ *   Tab trap (`:242`), Escape (`:217`) and focus return to the element named by
+ *   `context.triggerId` (`:247`). That would run alongside `useFocusScope`,
+ *   double-handling Tab and Escape, and for the call sites that open from a
+ *   controller rather than a `CenterMorphModalTrigger` it would return focus to
+ *   nothing at all.
+ * - Its accessible names are hardcoded English (`closeButtonLabel = "Close
+ *   modal"` `:194`, the backdrop's `aria-label="Dismiss modal"` `:261`) and its
+ *   close control is on by default (`:193`), in a shell that names every
+ *   control in both locales, where this wave may not add i18n keys.
+ *
+ * Adoption therefore needs the affected suites moved off static markup and onto
+ * DOM mounting, and the app to accept a portalled dialog everywhere — a
+ * parent-level decision, not a change to this file.
  */
 export const DialogContent = ({ className, portal = false, ...props }: HTMLMotionProps<"div"> & { portal?: boolean }) => {
   const { open, onOpenChange } = React.useContext(DialogContext);

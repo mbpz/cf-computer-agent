@@ -418,6 +418,29 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
     }
     return;
   }
+  // The agent's non-transport failures are deliberately *notices*: an
+  // unavailable backend renders `data-agent-unavailable` + a polite `degraded`
+  // alert with a retry, an unconfirmed/stopped turn renders a bare polite
+  // `degraded` notice whose recovery is the composer, and only a transport
+  // failure takes `error`/`role="alert"`. See the three-way contract in
+  // test/unit/frontend-agent-cancellation-route.test.tsx.
+  if (routeId === "agent") {
+    await waitForApp(() => journey.container.querySelector('main [data-agent-unavailable], main [data-page-state="degraded"], main [role="alert"]') !== null);
+    const unavailable = journey.container.querySelector("main [data-agent-unavailable]");
+    if (unavailable) {
+      expect(unavailable.querySelector('[data-page-state="degraded"]')?.closest('[role="status"]')).not.toBeNull();
+      expect(unavailable.querySelector("button:not([disabled])")).not.toBeNull();
+    } else if (journey.container.querySelector('main [data-page-state="degraded"]')) {
+      // A stopped/unconfirmed turn is announced politely and offers no in-place
+      // button (recovery is resubmitting from the composer); the contract this
+      // audit owns is the announcement, which must stay polite, not assertive.
+      expect(journey.container.querySelector('main [data-page-state="degraded"]')?.closest('[role="status"]')).not.toBeNull();
+      expect(journey.container.querySelector('main [role="alert"]')).toBeNull();
+    } else {
+      expect(journey.container.querySelector('main [role="alert"] button')).not.toBeNull();
+    }
+    return;
+  }
   await waitForApp(() => journey.container.querySelector('main [role="alert"]') !== null);
   expect(journey.container.querySelector('main [role="alert"]')).not.toBeNull();
   if (routeId === "submit") {

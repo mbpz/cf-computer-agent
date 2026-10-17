@@ -13,6 +13,7 @@ import { loadPlanningIntent, clearPlanningIntent } from "./lib/planning-create-i
 import { ProjectRelationsEditor } from "./components/project-relations-editor";
 import { useCreateDraft } from "./lib/use-create-draft";
 import { AgentHistoryList } from "./components/agent/agent-history-list";
+import { AgentTranscript } from "./components/agent/agent-transcript";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Alert, AlertTitle } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
@@ -1421,7 +1422,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
       {composerNotice && <p role="alert">{composerNotice}</p>}
       {feedbackRecordBlocked && <div role="alert" data-agent-feedback-record-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "AGENT_FEEDBACK_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RECORD_DISCARD")}</Button></div>}
       {feedbackIntent && visibleConversation !== feedbackIntent.conversationId && <div role="alert" data-agent-feedback-unconfirmed className="space-y-2 rounded-md border p-4"><p>{feedbackNotice ?? frontendText(locale, "AGENT_FEEDBACK_UNKNOWN")}</p><Button type="button" variant="outline" onClick={retryFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RETRY")}</Button></div>}
-      {history.length > 0 && <section aria-label={frontendText(locale, "AGENT_HISTORY")} className="space-y-3"><h2>{frontendText(locale, "AGENT_HISTORY")}</h2><p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_HISTORY_DETAIL")}</p>{history.map((message, index) => <article key={index} className="rounded-md border p-3"><h3 className="font-medium">{frontendText(locale, message.role === "user" ? "AGENT_QUESTION_LABEL" : "AGENT_HISTORY_ANSWER")}</h3><p className="whitespace-pre-wrap">{message.content}</p>{message.citations.map((citation) => <a key={citation.id} className="mr-3 underline" href={citation.href}>{citation.title ?? citation.id}</a>)}</article>)}</section>}
+      {history.length > 0 && <AgentTranscript locale={locale} messages={history} />}
       {conversationIdRef.current && <a className="underline" href={`/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}`}>{frontendText(locale, "AGENT_RESTORE_LINK")}</a>}
       <AgentPage locale={locale} memberId={memberId} scope={scope} state={state} stage={stage} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} isWriteBlocked={locked} sourceDraft={sourceDraft} feedbackAdmission={feedbackAdmission} feedbackBlocked={feedbackBlocked} />
       <AgentHistoryList locale={locale} />

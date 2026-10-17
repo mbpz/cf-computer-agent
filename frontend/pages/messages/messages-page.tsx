@@ -1,4 +1,5 @@
 import { ChatCircle } from "@phosphor-icons/react";
+import { ButtonLink } from "../../components/motion/button/base";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageHeader } from "../../components/ui/page-header";
@@ -43,7 +44,7 @@ export function MessagesPage({ locale, state, page, limit, pending, onRetry, onN
     >
       <div className="mt-4 flex flex-wrap gap-2">
         <Button variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button>
-        <a href="/messages" className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent">{frontendText(locale, "MESSAGES_BACK")}</a>
+        <ButtonLink variant="outline" size="md" href="/messages">{frontendText(locale, "MESSAGES_BACK")}</ButtonLink>
       </div>
     </PageState>}
     {state.kind === "ready" && <>
@@ -51,7 +52,7 @@ export function MessagesPage({ locale, state, page, limit, pending, onRetry, onN
       {state.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "MESSAGES_EMPTY")} /> : state.items.map((thread) => <Card key={thread.id}>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0"><p className="font-medium">{frontendText(locale, thread.contextKind === "task" ? "MESSAGES_CONTEXT_TASK" : "MESSAGES_CONTEXT_KNOWLEDGE")}</p><p className="truncate text-sm text-muted-foreground">{thread.contextId}</p><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, "MESSAGES_MESSAGE_COUNT")} {thread.lastSequence}</p></div>
-          <div className="flex flex-wrap gap-2"><a href={discussionContextHref({ kind: thread.contextKind, id: thread.contextId })} className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent">{frontendText(locale, "MESSAGES_OPEN_CONTEXT")}</a><a href={threadDiscussionHref(thread.id)} className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90">{frontendText(locale, "MESSAGES_OPEN_THREAD")}</a></div>
+          <div className="flex flex-wrap gap-2"><ButtonLink variant="outline" size="md" href={discussionContextHref({ kind: thread.contextKind, id: thread.contextId })}>{frontendText(locale, "MESSAGES_OPEN_CONTEXT")}</ButtonLink><ButtonLink variant="primary" size="md" href={threadDiscussionHref(thread.id)}>{frontendText(locale, "MESSAGES_OPEN_THREAD")}</ButtonLink></div>
         </CardContent>
       </Card>)}
     </div>

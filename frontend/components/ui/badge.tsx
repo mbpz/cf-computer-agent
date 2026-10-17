@@ -1,20 +1,39 @@
-import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "../../lib/utils";
+import {
+  AnimatedBadge,
+  type AnimatedBadgeProps,
+  type AnimatedBadgeSize,
+  type AnimatedBadgeStatus,
+} from "../motion/animated-badge";
 
-const badgeVariants = cva("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors", {
-  variants: {
-    variant: {
-      default: "border-transparent bg-primary text-primary-foreground",
-      secondary: "border-transparent bg-secondary text-secondary-foreground",
-      outline: "text-foreground",
-      success: "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
-      warning: "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-      destructive: "border-transparent bg-destructive text-white",
-    },
-  },
-  defaultVariants: { variant: "default" },
-});
+/**
+ * The app's single Badge, rendered by beUI's `motion/animated-badge`, so every
+ * status pill in tables, headers and cards is the same surface. The historical
+ * variant names map onto beUI's status palette, which keeps all importers
+ * unchanged; the icon roll and the layout animation come from the source and
+ * degrade to a static swap under `useReducedMotion`.
+ */
+const VARIANT = {
+  // beUI's "info" is the primary-tinted status, which is what "default" meant.
+  default: "info",
+  secondary: "neutral",
+  // beUI has one neutral status; "outline" was the other unemphatic pill.
+  outline: "neutral",
+  success: "success",
+  warning: "warning",
+  destructive: "danger",
+} as const satisfies Record<string, AnimatedBadgeStatus>;
 
-export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
-export const Badge = ({ className, variant, ...props }: BadgeProps) => <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+const SIZE = { sm: "sm", md: "md" } as const satisfies Record<string, AnimatedBadgeSize>;
+
+export type BadgeVariantName = keyof typeof VARIANT;
+export type BadgeSizeName = keyof typeof SIZE;
+
+export interface BadgeProps extends Omit<AnimatedBadgeProps, "status" | "size"> {
+  variant?: BadgeVariantName;
+  /** Default "sm": the compact pill the tables and headers were laid out for. */
+  size?: BadgeSizeName;
+}
+
+export const Badge = ({ variant = "default", size = "sm", className, ...props }: BadgeProps) => (
+  <AnimatedBadge status={VARIANT[variant]} size={SIZE[size]} className={className} {...props} />
+);

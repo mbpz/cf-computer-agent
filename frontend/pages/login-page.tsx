@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { GithubLogo, ShieldCheck } from "@phosphor-icons/react";
-import { Button } from "../components/ui/button";
+import { Button, StatefulButton } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -49,7 +49,7 @@ export function LoginPage({ locale, error, githubEnabled = true, submit = submit
             {formError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{formError}</p>}
             <div className="space-y-1"><Label htmlFor="login-code-email">{frontendText(locale, "LOGIN_CODE_EMAIL_LABEL")}</Label><Input id="login-code-email" type="email" autoComplete="email" value={email} disabled={pending} onChange={(event) => setEmail(event.target.value)} /></div>
             <div className="space-y-1"><Label htmlFor="login-code-code">{frontendText(locale, "LOGIN_CODE_CODE_LABEL")}</Label><Input id="login-code-code" type="text" autoComplete="one-time-code" className="font-mono" value={code} disabled={pending} onChange={(event) => setCode(event.target.value)} /></div>
-            <Button type="submit" className="h-11 w-full" size="lg" disabled={!canSubmit}>{frontendText(locale, pending ? "LOGIN_CODE_PENDING" : "LOGIN_CODE_SUBMIT")}</Button>
+            <StatefulButton type="submit" className="h-11 w-full" size="lg" state={pending ? "loading" : "idle"} loadingText={frontendText(locale, "LOGIN_CODE_PENDING")} disabled={!canSubmit}>{frontendText(locale, "LOGIN_CODE_SUBMIT")}</StatefulButton>
           </form>
           <p className="text-center text-xs leading-relaxed text-muted-foreground">{frontendText(locale, "LOGIN_ALLOWLIST_NOTE")}</p>
         </CardContent>

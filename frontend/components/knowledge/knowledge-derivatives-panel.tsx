@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleIndicator, CollapsibleTrigger } from "../motion/collapsible";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import {
   EVIDENCE_INSUFFICIENT_MESSAGE_KEY,
@@ -212,10 +213,17 @@ function ArtifactBody(props: {
         {artifact.sortStatus === "unsorted" && <p className="text-xs text-muted-foreground" data-derivative-unsorted="true">{frontendText(locale, "KNOWLEDGE_DERIVATIVES_UNSORTED")}</p>}
         <ol className="space-y-3">
           {artifact.events.map((event, index) => <li key={index} className="border-l pl-3">
-            <p className="text-xs font-medium text-muted-foreground">{event.date ?? frontendText(locale, "KNOWLEDGE_DERIVATIVES_DATE_UNKNOWN")}</p>
-            <p className="text-sm font-medium">{event.title}</p>
-            <p className="text-sm whitespace-pre-wrap">{event.description}</p>
-            {citationsOf(event.citations)}
+            <Collapsible defaultOpen>
+              <CollapsibleTrigger>
+                <span className="text-xs font-medium text-muted-foreground">{event.date ?? frontendText(locale, "KNOWLEDGE_DERIVATIVES_DATE_UNKNOWN")}</span>
+                <span className="text-sm font-medium">{event.title}</span>
+                <CollapsibleIndicator />
+              </CollapsibleTrigger>
+              <CollapsibleContent contentClassName="px-3 pb-2">
+                <p className="text-sm whitespace-pre-wrap">{event.description}</p>
+                {citationsOf(event.citations)}
+              </CollapsibleContent>
+            </Collapsible>
           </li>)}
         </ol>
       </>;

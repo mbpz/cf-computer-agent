@@ -136,6 +136,42 @@ describe("shadcn workspace shell", () => {
     expect(html).toContain("data-breadcrumb");
   });
 
+  it("expands and collapses the knowledge family through the rail's own group control", async () => {
+    // The desktop rail's group toggle row and its caret are the app's Button
+    // now, so this keeps the toggle itself, its aria-expanded contract and the
+    // rows it reveals pinned on the fallback tree (the tree the SSR suite
+    // asserts above).
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    await act(async () => root.render(<AppShell session={admin} pathname="/knowledge" locale={createLocaleRuntime({ navigatorLanguage: "en" })}><p>Knowledge</p></AppShell>));
+    const rail = container.querySelector("[data-shell-sidebar-scroll]") as HTMLElement;
+    const familyHrefs = () => Array.from(rail.querySelectorAll("a[data-route-id]"), (link) => link.getAttribute("href"));
+
+    expect(familyHrefs()).toContain("/search");
+    const collapse = rail.querySelector('button[aria-label="AI knowledge base collapse"]') as HTMLButtonElement;
+    expect(collapse).not.toBeNull();
+    expect(collapse.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => collapse.click());
+    const expand = rail.querySelector('button[aria-label="AI knowledge base expand"]') as HTMLButtonElement;
+    expect(expand).not.toBeNull();
+    expect(expand.getAttribute("aria-expanded")).toBe("false");
+    expect(familyHrefs()).not.toContain("/search");
+
+    await act(async () => expand.click());
+    expect(familyHrefs()).toContain("/search");
+  });
+
+  it("routes the breadcrumb home crumb through the shell instead of reloading the document", async () => {
+    const onNavigate = vi.fn();
+    await act(async () => root.render(<AppShell session={admin} pathname="/knowledge" locale={createLocaleRuntime({ navigatorLanguage: "en" })} onNavigate={onNavigate}><p>Knowledge</p></AppShell>));
+    const crumb = container.querySelector('[data-breadcrumb] a[href="/"]') as HTMLAnchorElement;
+    expect(crumb).not.toBeNull();
+    const event = new browser.MouseEvent("click", { bubbles: true, cancelable: true });
+    await act(async () => { crumb.dispatchEvent(event as unknown as MouseEvent); });
+    expect(event.defaultPrevented).toBe(true);
+    expect(onNavigate).toHaveBeenCalledWith("/");
+  });
+
   it("keeps the independent site analytics menu admin-only", () => {
     const html = renderToStaticMarkup(
       <AppShell session={{ ...admin, member: { ...admin.member, role: "contributor" }, capabilities: ["knowledge:read"] }} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>

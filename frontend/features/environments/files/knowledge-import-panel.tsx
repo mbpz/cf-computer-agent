@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Button } from '../../../components/ui/button';
+import { Checkbox } from '../../../components/ui/checkbox';
 import { Input } from '../../../components/ui/input';
 import { Select } from '../../../components/ui/select';
 import type { KnowledgeImport } from './knowledge-import';
@@ -22,7 +23,7 @@ export function KnowledgeImportPanel({model,locale='en'}:{model:KnowledgeImport;
       <label className="block">{t('Title','标题')}<Input data-import-title value={title} maxLength={200} disabled={!editable} onChange={e=>setTitle(e.target.value)}/></label>
       <label className="block">{t('Requested space ID (server checks access)','目标空间 ID（服务端校验权限）')}<Input data-import-space value={space} maxLength={200} disabled={!editable} onChange={e=>setSpace(e.target.value)}/></label>
       <label className="block">{t('Requested visibility; still subject to review','申请可见范围，仍需审核')}<Select value={visibility} disabled={!editable} onChange={e=>setVisibility(e.target.value as 'shared'|'admin_only')}><option value="shared">{t('Shared','共享')}</option><option value="admin_only">{t('Administrators only','仅管理员')}</option></Select></label>
-      <label className="flex items-start gap-2"><input data-import-ack type="checkbox" checked={ack} disabled={!editable} onChange={e=>setAck(e.target.checked)}/>{t('I reviewed the exact content, space and visibility; it contains no credentials or secrets. Only this file will be submitted.','我已检查以上完整内容、空间和可见范围，确认不含凭证或密钥。仅提交此文件。')}</label>
+      <label className="flex items-start gap-2"><Checkbox data-import-ack checked={ack} disabled={!editable} onChange={e=>setAck(e.target.checked)}/>{t('I reviewed the exact content, space and visibility; it contains no credentials or secrets. Only this file will be submitted.','我已检查以上完整内容、空间和可见范围，确认不含凭证或密钥。仅提交此文件。')}</label>
       {editable&&<Button data-import-confirm disabled={!ack||!title.trim()||!space.trim()} onClick={()=>void model.confirm({title,target:{requestedSpaceId:space,requestedCollectionId:null,requestedVisibility:visibility},acknowledged:ack})}>{t('Confirm submission for review','确认提交审核')}</Button>}
     </>}
     {state.error&&<p role="alert">{state.error==='IMPORT_OUTCOME_UNKNOWN'?t('Outcome unknown. Check My submissions, or explicitly retry the same key and original payload. Closing the session clears this recovery state, not any server submission.','结果未知。请检查“我的提交”，或明确使用原幂等键和原内容重试。关闭会话会清除本地恢复状态，不会撤销服务端提交。'):state.error==='IMPORT_TYPE_UNSUPPORTED'?t('This is not a supported text format. Use Import asset for supported PDF, image and document formats.','此格式不支持文本提交。支持的 PDF、图片与文档请使用“导入资产”上传和解析。'):t('Cannot submit. Check the file type, size, sensitive content and confirmation fields.','无法提交。请检查文件类型、大小、敏感内容和确认信息。')}</p>}

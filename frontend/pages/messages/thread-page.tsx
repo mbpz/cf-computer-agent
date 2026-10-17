@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ChatCircle } from "@phosphor-icons/react";
 import { Alert, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
+import { ButtonLink } from "../../components/motion/button/base";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageHeader } from "../../components/ui/page-header";
@@ -64,7 +65,7 @@ export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending,
     if (!recoveryOwner || !discardBlockedDiscussionDraft(recoveryOwner.memberId, recoveryOwner.threadId)) return;
     setRecordBlocked(false);
   };
-  const recordBanner = recordBlocked ? <div data-discussion-draft-blocked role="alert"><p>{frontendText(locale, "MESSAGES_DRAFT_RECORD_BLOCKED")}</p><button type="button" onClick={discardRecord}>{frontendText(locale, "MESSAGES_DRAFT_RECORD_DISCARD")}</button></div>
+  const recordBanner = recordBlocked ? <div data-discussion-draft-blocked role="alert"><p>{frontendText(locale, "MESSAGES_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardRecord}>{frontendText(locale, "MESSAGES_DRAFT_RECORD_DISCARD")}</Button></div>
     : recordNotice ? <p role="alert">{recordNotice}</p> : null;
   const { body, replyId, replyAuthor } = draft.fields;
   const frozen = submitControllerRef.current.snapshot();
@@ -133,7 +134,7 @@ export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending,
       <PageState kind="forbidden" title={frontendText(locale, "MESSAGES_THREAD_REVOKED")} description={frontendText(locale, "MESSAGES_THREAD_REVOKED_DESCRIPTION")}>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button>
-          <a href="/messages" className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent">{frontendText(locale, "MESSAGES_BACK")}</a>
+          <ButtonLink variant="outline" size="md" href="/messages">{frontendText(locale, "MESSAGES_BACK")}</ButtonLink>
         </div>
       </PageState>
     </div>}

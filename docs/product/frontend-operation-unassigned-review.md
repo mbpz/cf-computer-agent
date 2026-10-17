@@ -27,18 +27,20 @@
 
 2026-10-16 成员草稿丢弃入口接入后复核：`/submit` 的草稿状态行新增受确认门禁的「丢弃草稿」控件（`frontend/pages/submit-page.tsx`，`onDraftDiscard`），丢弃写经 `frontend/lib/use-submission-draft.ts` 与 `frontend/lib/submission-draft-data.ts` 复用同一份写入 journal（先复查再重发同一操作，未确认的结果不当作已丢弃），服务端为 `DELETE /api/submissions/drafts/:id`（`src/routes/member.ts`、`src/submissions/service.ts`、`src/submissions/repository.ts`、迁移 `0073_submission_draft_discard_receipts.sql`）。`frontend/app.tsx` 的两个未归属外层边界候选（navigate/logout 转发与 settings props 透传）属性、回调与前置条件均未变，本轮改动均在其坐标 234:106、261:39 之后，坐标因此未动；未归属候选集合与分类处置未变，只同步该文件指纹。索引重生成后为 365 文件 / 1533 候选 / 121 未归属。本轮未改动本记录的任何处置行，也不扩大本记录的运行验收结论。
 
+2026-10-17 beUI 全量采用（Wave 1）后重新对账：本批把告警、按钮、卡片、菜单、弹层与 agent 消息一族换成 beUI 源码落地副本（`frontend/components/motion/{alert,card,context-menu,popover,preview-rail}.tsx`、`motion/button/stateful.tsx`、`frontend/components/agents/{agent-activity/*,loading-states/reasoning-text,message,message-bubble,message-scroller,streaming-response}.tsx`），并把 `components/ui/{alert,button,card}.tsx` 改为适配器（前两者本地包装、card 为纯再导出）。未归属候选由 121 变为 **159**（净增 38）：本批最终新增 39 条坐标、移除 1 条（`frontend/components/ui/card.tsx:13:85`，其部件候选随实现移入 `motion/card.tsx`）、按 handler 配对重记 45 条既有坐标（`asset-import-panel.tsx` 23、`knowledge-import-panel.tsx` 14、`shell/context-rail.tsx` 6、`app.tsx` 2，前三者因顶部新增一行导入整体下移一行）；核对期间并行的 agent slice 在 `pages/agent-page.tsx` 接入 `StreamingResponse`、`AgentActivity`、`ReasoningText` 与 `Message` 一族，其中 20 条坐标随之归属路由并从本记录的候选表移除（见文末小节）。逐项处置见下表与文末 2026-10-17 小节；本轮只同步相关指纹，不代替运行验收。
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
 | --- | ---: | --- | --- |
-| app-boundary | 13 | App 外层、history fault 与账户 owner 已有正式消费 | 跨路由、真实身份/退出、导航故障旅程 |
+| app-boundary | 24 | App 外层、history fault 与账户 owner 已有正式消费；2026-10-17 增记经适配器再导出、或由 App 的 transcript 区域实际挂载的 beUI 原语（`StatefulButton`、Card 根与四个部件、`MessageBubble`/`MessageBubbleContent`、`MessageScroller` 的视口/内容区/根节点），它们只渲染调用方 props/children 并回调调用方 | 跨路由、真实身份/退出、导航故障旅程 |
 | public-dynamic | 5 | landing 动态导入的 WebGL 生命周期 | 原生浏览器可见性、超时、context loss 与回退验收 |
 | background | 3 | Service Worker 生命周期，不是可见控件 | 真实浏览器注册/缓存/离线行为 |
-| unmounted-ui | 17 | ContextRail / CardFooter / Tabs 无当前正式消费者 | 按实际需求保留或接线；不得直接认定缺失业务 |
+| unmounted-ui | 44 | ContextRail / Tabs 无当前正式消费者；2026-10-17 的 beUI 副本里，`motion/context-menu.tsx`、`motion/popover.tsx`（2 条）、`motion/preview-rail.tsx`（仅在无人传入的 `navigation="rail"` 下渲染）、`agents/message*.tsx` 的五个无调用点部件、`AlertAction`、`CardAction`、`CardFooter` 与 card 的 interactive 按压路径虽有实现但无调用点 | 按实际需求保留或接线；不得直接认定缺失业务 |
 | vm-runtime-unshipped | 77 | 正式 `/environments` 页面已挂载、创建或惰性加载文件面、运行时与本地快照；本版本**有意**不发布 VM 引擎与镜像（六件启动产物约 66 MiB，pin 不授权再分发、不构成许可证清单或签名发布清单），因此面向用户或面向 VM 的动作永久不可用：禁用、不渲染，或只存在于无法成功启动的路径。按状态命名而非按模块，引擎发布决策改变后自然翻转。 | 不要读成“未接线”，也不要当成按需修复的缺陷；待引擎发布决策改变后再重新分类 |
 | vm-not-mounted | 6 | 连接器、会话与网络 lifecycle 惰性路径仍无正式调用者：只有显式 connect/open 才创建，页面挂载不会 | 沿既有 G0 边界完成正式接线及身份/生命周期验收 |
 
-A01、A02、A05、D04 仍开放。源码人工分类覆盖这 121 项，但 A01 还缺每页实际可见性、动态 HTML/门户/第三方控件和触发状态的呈现核验；A02 还缺全操作到服务端授权/持久化及运行证据的闭合。禁止把文档行数、指纹或绿色测试当作上述父项验收通过。
+A01、A02、A05、D04 仍开放。源码人工分类覆盖这 159 项，但 A01 还缺每页实际可见性、动态 HTML/门户/第三方控件和触发状态的呈现核验；A02 还缺全操作到服务端授权/持久化及运行证据的闭合。禁止把文档行数、指纹或绿色测试当作上述父项验收通过。
 
 下表“条件”与组内共同守卫叠加。状态提示、role、option、props 转发和监听器均保留；不是每一行都对应一次用户操作。未挂载项的条件均是假设调用者接线之后的源码条件，不能误读为当前正式页面已可用。
 
@@ -48,8 +50,16 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 121 项，但 A01 
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:234:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:261:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:235:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:262:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+
+## `frontend/components/agents/agent-activity/activity-row.tsx`（0，2026-10-17 随 agent-page 接入归属）
+
+本文件是 beUI agent 活动行的落地副本。核对期间并行的 agent slice 在 `frontend/pages/agent-page.tsx` 接入 `AgentActivity`，`activity-row.tsx` 的活动行候选随该能力根进入 root 图，不再计入未归属项。原先单条候选（`SearchResultRow` 的 `<a href={result.url}>`，只渲染上游给出的搜索结果地址、不改写 URL）的处置随本次归属一并撤销，历史措辞见本轮对账记录。
+
+## `frontend/components/agents/agent-activity/index.tsx`（0，2026-10-17 随 agent-page 接入归属）
+
+`AgentActivity` 现由 `frontend/pages/agent-page.tsx` 渲染，本文件的 5 条候选（working 状态行、摘要展开按钮、`AgentDisclosure` 容器、活动列表与逐项 listitem）随该路由 root 归入能力图，不再计入未归属项。这些动作只切换本地展开与观看流式追加，没有网络写入。
 
 ## `frontend/components/agents/citations.tsx`（1）
 
@@ -59,6 +69,48 @@ beUI citations 组件的落地副本，由 agent 答案面板（`frontend/compon
 | --- | --- | --- | --- |
 | `frontend/components/agents/citations.tsx:81:5` | unmounted-ui | 仅当调用方渲染内联角标 `Citation` 时挂载；当前无调用点 | 锚点指向 `#<idPrefix>-<citationId>` 定位同页来源行；默认英文 `View citation {index}` 仅在该未接线组件内出现。 |
 
+## `frontend/components/agents/loading-states/reasoning-text.tsx`（0，2026-10-17 随 agent-page 接入归属）
+
+`ReasoningText` 现由 `frontend/pages/agent-page.tsx` 的推理状态渲染，本文件的 4 条候选（role=status 容器、cascade/scramble/swap 三种短语动效）随该路由 root 归入能力图，不再计入未归属项。这些动作只是本地短语轮播与 CSS 动画，没有网络写入。
+
+## `frontend/components/agents/message-bubble.tsx`（5）
+
+beUI 气泡的落地副本。`components/agent/agent-transcript.tsx:1` 由 `frontend/app.tsx:1425` 渲染，并在其中使用 `MessageBubble` 与 `MessageBubbleContent`，因此这两个部件虽未进入以 root symbol 为起点的图（静态图不追到这条声明处），却是产品实际挂载的表面，记 `app-boundary`；`MessageBubbleGroup`、`MessageBubbleCollapsible` 与其折叠按钮当前无调用点，记 `unmounted-ui`。全部部件只转发调用方 props/children，折叠状态为本地或调用方受控，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/agents/message-bubble.tsx:127:7` | app-boundary | App 的 transcript 区域经 `agent-transcript.tsx` 渲染 `<MessageBubble variant="tint"\|"soft">` | motion.div 带 data-slot/data-align/data-variant，对齐取 `align` 或 MessageSideContext；转发 props/children，入场动画受 reduced-motion 门控，无写入。 |
+| `frontend/components/agents/message-bubble.tsx:264:5` | app-boundary | 同上，`<MessageBubbleContent>` 包裹每条消息正文（传 render 时克隆该子元素） | 转发 props/children 到 div，或 cloneElement(render) 并合并 ref/className/data-slot；不写业务状态。 |
+| `frontend/components/agents/message-bubble.tsx:281:5` | unmounted-ui | 仅当调用方渲染 `<MessageBubbleGroup>`（当前无调用点） | 转发 props/children 到 flex 容器，按 spacing 选间距；自身无动作。 |
+| `frontend/components/agents/message-bubble.tsx:330:5` | unmounted-ui | 仅当调用方渲染 `<MessageBubbleCollapsible>`（当前无调用点） | 转发 props/children 到带 data-state 的容器，未展开时用行数裁剪与遮罩；折叠状态来自本地或调用方。 |
+| `frontend/components/agents/message-bubble.tsx:348:7` | unmounted-ui | 仅当上述折叠部件被渲染且按钮点击（当前无调用点） | setOpen(!currentOpen)（受控时回调 onOpenChange）；按钮 aria-expanded/aria-controls 指向内容，不写业务状态。 |
+
+## `frontend/components/agents/message-scroller.tsx`（4）
+
+beUI 消息滚动区的落地副本。`components/agent/agent-transcript.tsx:16` 渲染 `<MessageScroller>`（App 的历史区域），因此视口、内容区与根节点三条候选虽未进入 root 图，仍是产品实际挂载的容器，记 `app-boundary`；`navigation="rail"` 无调用点传入，故 `PreviewRail` 那条（`:462`）在实际产品中不渲染，记 `unmounted-ui`。视口事件只维护本地“跟随最新”状态，其余是转发与展示，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/agents/message-scroller.tsx:410:5` | app-boundary | App 的 transcript 区域渲染 `<MessageScroller>` 后，用户滚动/滚轮/触摸/按键 | scroll → handleScroll + 调用方 onViewportScroll；wheel/touchstart → leaveLiveEdge + 调用方回调；keydown 的 ArrowUp/PageUp/Home 也离开 live edge；仅改本地跟随状态。 |
+| `frontend/components/agents/message-scroller.tsx:441:7` | app-boundary | 同上（内容区随消息追加渲染） | role=log、aria-live=polite 的容器（浏览器播报追加内容），转发 contentProps 与 children；不写业务状态。 |
+| `frontend/components/agents/message-scroller.tsx:456:5` | app-boundary | 同上（根节点） | 转发 props/children 到根 div（data-slot=message-scroller）；无动作。 |
+| `frontend/components/agents/message-scroller.tsx:462:9` | unmounted-ui | 仅当调用方传 `navigation="rail"` 且轨道溢出时渲染（当前无调用点传该 prop） | 渲染 `PreviewRail` 并把 `onItemSelect` 接到 scrollToRailItem：只滚动本地视口、更新 activeRailId 与跟随标志；不请求、不写业务状态。 |
+
+## `frontend/components/agents/message.tsx`（4）
+
+beUI 消息原语的落地副本。`components/agent/answer-panel.tsx:3` 与 `components/agent/agent-transcript.tsx:1` 已 import `Message`、`MessageBubble(Content)`、`MessageContent`、`MessageFooter`、`MessageHeader`、`MessageScroller`，其中 `Message`/`MessageContent`/`MessageHeader`/`MessageFooter` 四条候选已随消费者归属，剩 `MessageGroup`、`MessageAvatar`、`MessageMarker`、`MessageTyping` 四个部件无调用点，故仍为未归属（声明侧坐标不随调用点归属变化）。剩余四条都是容器：只透传 props/children，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/agents/message.tsx:144:5` | unmounted-ui | 仅当调用方渲染 `<MessageGroup>`（当前无调用点） | 转发 props/children 到 flex 容器，按 spacing 选间距；自身无动作。 |
+| `frontend/components/agents/message.tsx:163:5` | unmounted-ui | 仅当调用方渲染 `<MessageAvatar>`（当前无调用点） | 转发 props/children 到圆形容器；placeholder 为真时 aria-hidden 且不可见（占位对齐用）。 |
+| `frontend/components/agents/message.tsx:228:5` | unmounted-ui | 仅当调用方渲染 `<MessageMarker>`（当前无调用点） | 转发 props/children 到居中的分隔条容器；无动作。 |
+| `frontend/components/agents/message.tsx:247:5` | unmounted-ui | 仅当调用方渲染 `<MessageTyping>`（当前无调用点） | 转发 props/children 与 label 到 span（typing 动效受 reduced-motion 门控）；无动作。 |
+
+## `frontend/components/agents/streaming-response.tsx`（0，2026-10-17 随 agent-page 接入归属）
+
+`StreamingResponse` 现由 `frontend/pages/agent-page.tsx:15` 渲染，本文件的 6 条候选（内部 `ResponseAction`、复制、重试、赞/踩、来源展开）随该路由 root 归入能力图，不再计入未归属项。这些动作只调用调用方回调或改本地状态，唯一对外副作用是可选剪贴板写入，没有服务端写入。
+
 ## `frontend/components/history-navigation-notice.tsx`（2）
 
 App 外层挂载：[source:frontend/app.tsx]。无 fault 时返回 null；故障消息和重试按钮是同一故障状态的两个源码候选，不是两个业务功能。
@@ -67,6 +119,14 @@ App 外层挂载：[source:frontend/app.tsx]。无 fault 时返回 null；故障
 | --- | --- | --- | --- |
 | `frontend/components/history-navigation-notice.tsx:11:10` | app-boundary | 已登录 App 挂载且 history fault 非空 | role=alert 呈现历史导航故障；无写接口。 |
 | `frontend/components/history-navigation-notice.tsx:13:5` | app-boundary | 同上且 retrying 为 false 时点击 | retryWorkspaceHistory；等待期间禁用按钮，finally 清除 pending；失败仍不视为导航完成。 |
+
+## `frontend/components/motion/alert.tsx`（1）
+
+beUI 告警的落地副本。`components/ui/alert.tsx` 把它适配成应用唯一 Alert：适配器在自身 `Alert` 内直接引用 `AlertIcon`/`AlertClose`（按 `child.type` 分流）并渲染 `AlertContent`，这三类候选随 25 处调用点归属各自路由；`AlertAction` 只在适配器里被 `export`，从未被渲染，因此仍为未归属。本文件不发起网络写入，关闭/动作按钮的行为由调用方传入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/alert.tsx:219:10` | unmounted-ui | 仅当调用方渲染 `AlertAction` 并传入 children/props 时出现；当前 25 处 `<Alert>` 调用点无一使用该部件 | 渲染调用方 children/props 的 `flex-wrap` 容器（`pt-2`），供放置按钮或链接；自身不渲染按钮、不发请求，注释也声明不嵌套按钮。 |
 
 ## `frontend/components/motion/animated-toast-stack.tsx`（4）
 
@@ -79,9 +139,34 @@ beUI 通知栈的落地副本，由 `frontend/lib/use-toast.tsx` 的 `ToastProvi
 | `frontend/components/motion/animated-toast-stack.tsx:480:17` | app-boundary | 通知带 action 且用户点击该按钮 | 调用调用方传入的 `action.onClick(toast)`；组件自身不执行写入。 |
 | `frontend/components/motion/animated-toast-stack.tsx:494:15` | app-boundary | canDismiss 为真且用户点击关闭 | 调用 `onDismiss(toast.id)`；`aria-label` 由调用方以本地化文案传入（`COMMON_DISMISS`）。 |
 
+## `frontend/components/motion/button/stateful.tsx`（1）
+
+beUI 状态按钮的落地副本。[source:frontend/components/ui/button.tsx] 只把它**纯再导出**（`export { StatefulButton, type ButtonState, type StatefulButtonProps } from "../motion/button/stateful"`，没有本地包装或 JSX 使用），而静态图不沿纯再导出追到声明处，因此声明侧候选仍未归属；唯一调用点是登录页的验证码提交按钮（`frontend/pages/login-page.tsx` 的 `<StatefulButton type="submit" state={pending ? "loading" : "idle"}>`，该调用点候选已归属登录页）。组件只渲染状态文案/图标并转发按钮 props，提交行为由调用方 `type="submit"`/`onClick` 决定。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/button/stateful.tsx:209:5` | app-boundary | 调用方渲染 `StatefulButton` 并传入 state、children、loadingText/successText/errorText、icon 与其余按钮 props | 渲染 beUI `Button`：`disabled` 与 loading 合并、`aria-busy` 反映 state（`whileHover` 置空）、其余 props 透传；文案与图标随本地 state 切换，组件自身不发请求（提交/导航由调用方的按钮语义触发）。 |
+
+## `frontend/components/motion/card.tsx`（10）
+
+beUI 卡片的落地副本，经 [source:frontend/components/ui/card.tsx] 纯再导出成为应用唯一 Card（24 个文件从该适配器 import，`CardHeader` 28 处、`CardContent` 35 处、`CardTitle` 28 处、`CardDescription` 2 处使用）；静态图不沿纯再导出追到声明处，故本文件声明侧候选仍未归属，而页面内调用点候选已归属各自路由。`interactive`、`size="compact"` 当前无调用点传入，`CardAction`/`CardFooter` 也无调用点。全部部件只转发调用方 props/children，另加本地按压反馈，不发请求。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/card.tsx:107:5` | unmounted-ui | 仅在调用方传 `interactive`、未 reduce-motion、按下未在进行中时注册（当前无调用点传 interactive） | window pointerup 监听：结束按压并摘下自身与另两个临时监听器，回弹 scale。 |
+| `frontend/components/motion/card.tsx:108:5` | unmounted-ui | 同上（pointercancel 分支） | window pointercancel 监听：取消按压并回弹 scale；与 pointerup 同一 release。 |
+| `frontend/components/motion/card.tsx:109:5` | unmounted-ui | 同上（pointermove 分支） | window pointermove 监听：motion 拖拽已接管（isDragActive）时立即结束按压，把外层拖拽让给 sheet/可滑行。 |
+| `frontend/components/motion/card.tsx:116:7` | app-boundary | 调用方（经 `components/ui/card.tsx`）渲染 `<Card>` | 渲染调用方 children 与 props 的 motion.div，附 data-slot/variant/selected、按压反馈与选中样式；仅 interactive 时携带 scale，无网络写入。 |
+| `frontend/components/motion/card.tsx:146:5` | app-boundary | 调用方渲染 `<CardHeader>` | 转发 props/children 到 div，按数据槽位排布标题/描述与 CardAction；不写业务状态。 |
+| `frontend/components/motion/card.tsx:166:5` | app-boundary | 调用方渲染 `<CardTitle>`（默认 h3，可按 `as` 换标题层级） | 转发 props/children 到对应标题标签；仅有本地类名与 data-slot。 |
+| `frontend/components/motion/card.tsx:178:5` | app-boundary | 调用方渲染 `<CardDescription>` | 转发 props/children 到 p，使用次要文本样式；不写业务状态。 |
+| `frontend/components/motion/card.tsx:193:5` | unmounted-ui | 仅当调用方渲染 `CardAction` 时出现（当前 0 处调用点） | 转发 props/children 到栅格定位容器，供 CardHeader 右上角放置操作；自身无动作。 |
+| `frontend/components/motion/card.tsx:208:10` | app-boundary | 调用方渲染 `<CardContent>` | 转发 props/children 到 div，padding 取自 CardSizeContext；不写业务状态。 |
+| `frontend/components/motion/card.tsx:216:5` | unmounted-ui | 仅当调用方渲染 `<CardFooter>` 时出现（当前 0 处调用点） | 转发 props/children 到 div，footer padding 取自 CardSizeContext；自身无动作。 |
+
 ## `frontend/components/motion/center-morph-modal.tsx`（4）
 
-beUI center-morph 模态的落地副本，`frontend/` 第一方源码当前没有 import 或渲染点；与 tabs/card 同类，下列条件均为假设调用者接线之后，不是当前可见界面。面板用 clip-path 从中心展开，全程没有网络写入。
+beUI center-morph 模态的落地副本，`frontend/` 第一方源码当前没有 import 或渲染点；与 tabs 同类，下列条件均为假设调用者接线之后，不是当前可见界面。面板用 clip-path 从中心展开，全程没有网络写入。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
@@ -89,6 +174,21 @@ beUI center-morph 模态的落地副本，`frontend/` 第一方源码当前没�
 | `frontend/components/motion/center-morph-modal.tsx:259:15` | unmounted-ui | 若挂载且 context.open 为真 | 全屏 backdrop 按钮，tabIndex 为 -1，dismissible 为假时 disabled；点击 setOpen(false)，不发起请求。 |
 | `frontend/components/motion/center-morph-modal.tsx:289:19` | unmounted-ui | 若挂载且 context.open 为真 | role=dialog 面板，id 取 context.contentId，渲染 children；展开/收起只改 clip-path，不改业务状态。 |
 | `frontend/components/motion/center-morph-modal.tsx:331:23` | unmounted-ui | 若挂载、open 且 showCloseButton 为真 | 面板右上角关闭按钮，点击 setOpen(false)；文案由 closeButtonLabel 传入。 |
+
+## `frontend/components/motion/context-menu.tsx`（8）
+
+beUI 右键菜单的落地副本，`frontend/` 第一方源码零 import——`components/ui/dropdown-menu.tsx` 的注释记录了为何不采用：它是 pointer-origin/长按菜单且始终 portal（`:486`），角色虽对（`role="menu"`）但不适合点击锚定的 shell 菜单。因此下列条件均为假设调用者接线之后，不是当前可见界面。选中的动作全部经调用方 `onSelect`/`onCheckedChange`/`onValueChange` 回传，组件自身不写业务状态。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/context-menu.tsx:159:5` | unmounted-ui | 若挂载且 open 为真时注册 | window pointerdown：指针落在内容区外即 setOpen(false)，不触碰业务数据。 |
+| `frontend/components/motion/context-menu.tsx:160:5` | unmounted-ui | 同上（resize 分支） | window resize：视口变化即 setOpen(false)，菜单重新定位由调用方重新触发。 |
+| `frontend/components/motion/context-menu.tsx:161:5` | unmounted-ui | 同上（scroll 分支） | window scroll：滚动即 setOpen(false)，避免菜单与锚点脱节。 |
+| `frontend/components/motion/context-menu.tsx:497:7` | unmounted-ui | 若挂载且 portal 就绪（mounted）后渲染 | role=menu 的 motion.div（portal 到 body）：处理 keydown 菜单键循环，并吞掉内部 contextmenu 以阻止浏览器原生菜单；开合仍由调用方 context 决定。 |
+| `frontend/components/motion/context-menu.tsx:577:5` | unmounted-ui | 渲染菜单项后点击（disabled 直接返回） | 调用调用方 `onSelect`，并按 closeOnSelect 关闭菜单；focus/pointermove 只维护本地高亮，不写持久化。 |
+| `frontend/components/motion/context-menu.tsx:623:10` | unmounted-ui | 调用方渲染 `ContextMenuItem` | 透传 props/children 到 ContextMenuItemBase（role=menuitem）；自身无动作。 |
+| `frontend/components/motion/context-menu.tsx:640:5` | unmounted-ui | 调用方渲染 `ContextMenuCheckboxItem` 并点击 | 调用调用方 `onCheckedChange(!checked)`；勾选标记是本地动画，不写持久化。 |
+| `frontend/components/motion/context-menu.tsx:716:5` | unmounted-ui | 调用方在 `ContextMenuRadioGroup` 内渲染 `ContextMenuRadioItem` 并点击 | 调用调用方 `group.onValueChange(value)`；选中态来自 group，不写持久化。 |
 
 ## `frontend/components/motion/loader.tsx`（0，2026-10-15 归属落地页）
 
@@ -103,6 +203,26 @@ beUI center-morph 模态的落地副本，`frontend/` 第一方源码当前没�
 | `frontend/components/motion/not-found/shared.tsx:55:7` | app-boundary | 路由 fallback 渲染 404；homeHref 默认 `/` | motion.a 指向 homeHref；whileTap/whileHover 受 reduced-motion 与 hover 能力门控。 |
 | `frontend/components/motion/not-found/shared.tsx:65:9` | unmounted-ui | 仅当调用方传入 browseHref 时渲染 | 第二 CTA 当前没有调用点传 browseHref，因此不出现在工作台界面中。 |
 
+## `frontend/components/motion/popover.tsx`（2）
+
+beUI goo 弹层的落地副本，`frontend/` 第一方源码零 import；`components/ui/dropdown-menu.tsx` 的注释记录了不采用的原因——它把 `aria-haspopup="dialog"` 硬编码到克隆的触发器上（`:489`）、面板固定为 `role="dialog"`（`:689`）且无条件 portal，只接受 `children`/`className`，菜单语义无处可落。下列条件均为假设调用者接线之后，不是当前可见界面；面板开合与 hover 时序由调用方 props 与本地几何计算驱动，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/popover.tsx:395:7` | unmounted-ui | 若挂载且 trigger 为 `"hover"` 时才附带 hoverHandlers | 渲染相对定位根 div 并转发调用方 children（hover 进入/离开经 rootHover/openHover/scheduleClose 驱动的本地开合）；组件自身不发请求。 |
+| `frontend/components/motion/popover.tsx:686:11` | unmounted-ui | 若挂载且 portal 就绪（portalReady）后渲染内容 | role=dialog 的内容面：转发调用方 children/props 与 hoverHandlers，用 clip-path/transform 做本地展开动画；不写业务状态。 |
+
+## `frontend/components/motion/preview-rail.tsx`（4）
+
+beUI 预览轨的落地副本，唯一 import 来自 `components/agents/message-scroller.tsx:462`，而该处只在 `navigation === "rail"` 时渲染；当前没有调用点传 `navigation="rail"`，所以本文件不出现于产品界面，下列条件均为假设调用者接线之后。tick 状态（hover/focus/pinned/active）全部是本地状态，点击才调用调用方 `onItemSelect`/`onActiveChange`，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/preview-rail.tsx:133:5` | unmounted-ui | 若挂载即渲染根 motion.div（layoutRoot） | onBlur：焦点离开根节点时清空 focusedId/pinnedId，避免卡片被悬空钉住；仅本地状态。 |
+| `frontend/components/motion/preview-rail.tsx:152:7` | unmounted-ui | 若挂载且指针离开 nav | onPointerLeave：`hover.leave(event)` 为真（非触摸抬起）时清空 hoveredId；触摸抬起不清理，交由外部点击处理。 |
+| `frontend/components/motion/preview-rail.tsx:250:13` | unmounted-ui | items 中带 href 的条目被渲染（repeat 逐项） | `<a href={item.href} target rel>`：指针/焦点维护 tick，`handleSelect` 按 tap 语义处理（触摸首击 preventDefault 只钉住卡片，第二击才跟随链接），再 selectItem + 调用方 onItemSelect；组件自身不写业务状态，跳转由 href 决定。 |
+| `frontend/components/motion/preview-rail.tsx:273:13` | unmounted-ui | items 中不带 href 的条目被渲染 | type=button 条目：相同的按下/聚焦/点击处理，`handleSelect` → selectItem（未受控时改本地 activeId，否则回调 onActiveChange）+ 调用方 onItemSelect；不发请求。 |
+
 ## `frontend/components/motion/switch.tsx`（0，2026-10-16 归属管理端菜单编辑器）
 
 管理端菜单编辑器的布尔可见性字段改为使用该组件（`menu-editor.tsx`），因此本文件的候选归属管理端，不再计入未归属项。
@@ -113,20 +233,16 @@ beUI center-morph 模态的落地副本，`frontend/` 第一方源码当前没�
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/components/shell/context-rail.tsx:33:7` | unmounted-ui | 若组件挂载，共用 rail content 展示关闭控件 | onClose 回调；父组件负责 collapsed 状态。 |
-| `frontend/components/shell/context-rail.tsx:36:32` | unmounted-ui | 若组件挂载，按可见 modules 循环 | go(event,module.entryPath)；使用传入 onNavigate 或浏览器链接。 |
-| `frontend/components/shell/context-rail.tsx:38:296` | unmounted-ui | 若挂载且未折叠，children 非空 | 对每个子路由执行 go(event,route.path)。 |
-| `frontend/components/shell/context-rail.tsx:39:37` | unmounted-ui | 若挂载且未折叠，currentModule 存在 | go(event,currentModule.entryPath) 打开当前模块。 |
-| `frontend/components/shell/context-rail.tsx:46:60` | unmounted-ui | 若挂载，移动触发器可见时点击 | setMobileOpen(true)，打开 Sheet。 |
-| `frontend/components/shell/context-rail.tsx:47:5` | unmounted-ui | 若挂载，Sheet 的打开状态改变 | setMobileOpen；关闭/焦点行为需真实组件旅程验收。 |
+| `frontend/components/shell/context-rail.tsx:34:7` | unmounted-ui | 若组件挂载，共用 rail content 展示关闭控件 | onClose 回调；父组件负责 collapsed 状态。 |
+| `frontend/components/shell/context-rail.tsx:37:32` | unmounted-ui | 若组件挂载，按可见 modules 循环 | go(event,module.entryPath)；使用传入 onNavigate 或浏览器链接。 |
+| `frontend/components/shell/context-rail.tsx:39:296` | unmounted-ui | 若挂载且未折叠，children 非空 | 对每个子路由执行 go(event,route.path)。 |
+| `frontend/components/shell/context-rail.tsx:40:37` | unmounted-ui | 若挂载且未折叠，currentModule 存在 | go(event,currentModule.entryPath) 打开当前模块。 |
+| `frontend/components/shell/context-rail.tsx:47:60` | unmounted-ui | 若挂载，移动触发器可见时点击 | setMobileOpen(true)，打开 Sheet。 |
+| `frontend/components/shell/context-rail.tsx:48:5` | unmounted-ui | 若挂载，Sheet 的打开状态改变 | setMobileOpen；关闭/焦点行为需真实组件旅程验收。 |
 
-## `frontend/components/ui/card.tsx`（1）
+## `frontend/components/ui/card.tsx`（0，2026-10-17 改为 `motion/card` 的纯再导出）
 
-Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅 CardFooter 候选未归属；检查当前 frontend 未发现其消费。
-
-| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
-| --- | --- | --- | --- |
-| `frontend/components/ui/card.tsx:13:85` | unmounted-ui | 若未来挂载 CardFooter 并传入 div props | 通用容器转发 props/children；不能因为 spread 就计为独立用户动作。 |
+本文件不再定义 Card 部件，只 `export { CARD_TARGET_CLASS, Card, CardTitle… } from "../motion/card"`（Card、六个部件、三个类型与 `CardSize`/`CardVariant`），作为应用唯一 Card 的适配器，全部 24 处 import 都经它。原先记在本文件的 `13:85`（CardFooter 转发 div props）随实现移到 `frontend/components/motion/card.tsx:216:5`，因此本文件不再持有未归属候选；它仍作为消费 `motion/card` 的 caller 证据保留指纹。
 
 ## `frontend/components/ui/checkbox.tsx`（0，2026-10-16 随 admin-role-detail 能力根归属）
 
@@ -192,29 +308,29 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/features/environments/files/asset-import-panel.tsx:24:37` | vm-runtime-unshipped | canUpload 为真且未 busy，用户确认原文件 | setUploadAck；仅修改明确上传确认状态。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:25:7` | vm-runtime-unshipped | canUpload、已 uploadAck、未 busy 且无 storage 错误 | model.upload，重试固定同一文件/意图；不自动解析。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:30:7` | vm-runtime-unshipped | flow.intent 存在且未 busy | model.refresh 回读服务端状态，不重放写入。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:32:9` | vm-runtime-unshipped | job 为 queued 或 failed_retryable 且未 busy | model.parse 显式启动/重试解析。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:33:9` | vm-runtime-unshipped | job 为 queued 或 failed_retryable 且未 busy | model.cancel 请求取消服务端待处理资产。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:35:33` | vm-runtime-unshipped | job 为 failed_terminal 且未 busy | releaseFailed 解除失败本地意图，保留服务端资产。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:36:36` | vm-runtime-unshipped | job 为 succeeded、尚无 review 且未 busy | previewParsed 回读已解析内容。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:39:9` | vm-runtime-unshipped | review 已锁定且未 busy | retrySubmission 重试原审核载荷，不使用当前编辑字段。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:42:20` | vm-runtime-unshipped | state.parsed 存在 | 可聚焦 pre 显示字面解析 Markdown；不是执行 HTML 或提交动作。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:44:58` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新本地审核标题。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:45:99` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新 requestedSpaceId；服务端仍需校验目标权限。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:46:68` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新本地 shared/admin_only 请求范围。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:46:180` | vm-runtime-unshipped | 审核范围 Select 可编辑 | shared 选项；最终范围仍受服务端审核约束。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:46:230` | vm-runtime-unshipped | 审核范围 Select 可编辑 | admin_only 选项；不代表已发布或权限提升。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:47:37` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新明确审核确认 reviewAck。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:48:7` | vm-runtime-unshipped | editable、reviewAck、标题/空间非空且未 busy | model.submit 固定目标与 acknowledged；请求审核而非发布。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:50:34` | vm-runtime-unshipped | state.error 或 flow.error 非空 | role=alert 显示错误与未确认结果；对象存储不可用时不上传，也不退化为直接发布。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:51:32` | vm-runtime-unshipped | flow.kind 为 submitted | role=status 显示 submissionId；不当作发布完成。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:52:31` | vm-runtime-unshipped | flow.kind 为 canceled | role=status 显示服务端取消已确认；不同于停止本地等待。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:53:31` | vm-runtime-unshipped | flow.kind 为 released | role=status 显示失败本地意图已解除，服务端资产仍保留。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:54:5` | vm-runtime-unshipped | 非 idle 的资产面板内点击我的提交 | href=/my-submissions 导航；读取结果与权限仍由目标页面负责。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:55:12` | vm-runtime-unshipped | busy 时用户点击停止等待 | model.stop；只停止本地等待，不宣称撤销服务端处理。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:56:5` | vm-runtime-unshipped | 非 idle 且未 busy，用户关闭 | model.close；保留成员未决恢复元数据。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:25:37` | vm-runtime-unshipped | canUpload 为真且未 busy，用户确认原文件 | setUploadAck；仅修改明确上传确认状态。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:26:7` | vm-runtime-unshipped | canUpload、已 uploadAck、未 busy 且无 storage 错误 | model.upload，重试固定同一文件/意图；不自动解析。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:31:7` | vm-runtime-unshipped | flow.intent 存在且未 busy | model.refresh 回读服务端状态，不重放写入。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:33:9` | vm-runtime-unshipped | job 为 queued 或 failed_retryable 且未 busy | model.parse 显式启动/重试解析。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:34:9` | vm-runtime-unshipped | job 为 queued 或 failed_retryable 且未 busy | model.cancel 请求取消服务端待处理资产。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:36:33` | vm-runtime-unshipped | job 为 failed_terminal 且未 busy | releaseFailed 解除失败本地意图，保留服务端资产。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:37:36` | vm-runtime-unshipped | job 为 succeeded、尚无 review 且未 busy | previewParsed 回读已解析内容。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:40:9` | vm-runtime-unshipped | review 已锁定且未 busy | retrySubmission 重试原审核载荷，不使用当前编辑字段。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:43:20` | vm-runtime-unshipped | state.parsed 存在 | 可聚焦 pre 显示字面解析 Markdown；不是执行 HTML 或提交动作。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:45:58` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新本地审核标题。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:46:99` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新 requestedSpaceId；服务端仍需校验目标权限。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:47:68` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新本地 shared/admin_only 请求范围。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:47:180` | vm-runtime-unshipped | 审核范围 Select 可编辑 | shared 选项；最终范围仍受服务端审核约束。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:47:230` | vm-runtime-unshipped | 审核范围 Select 可编辑 | admin_only 选项；不代表已发布或权限提升。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:48:37` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新明确审核确认 reviewAck。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:49:7` | vm-runtime-unshipped | editable、reviewAck、标题/空间非空且未 busy | model.submit 固定目标与 acknowledged；请求审核而非发布。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:51:34` | vm-runtime-unshipped | state.error 或 flow.error 非空 | role=alert 显示错误与未确认结果；对象存储不可用时不上传，也不退化为直接发布。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:52:32` | vm-runtime-unshipped | flow.kind 为 submitted | role=status 显示 submissionId；不当作发布完成。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:53:31` | vm-runtime-unshipped | flow.kind 为 canceled | role=status 显示服务端取消已确认；不同于停止本地等待。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:54:31` | vm-runtime-unshipped | flow.kind 为 released | role=status 显示失败本地意图已解除，服务端资产仍保留。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:55:5` | vm-runtime-unshipped | 非 idle 的资产面板内点击我的提交 | href=/my-submissions 导航；读取结果与权限仍由目标页面负责。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:56:12` | vm-runtime-unshipped | busy 时用户点击停止等待 | model.stop；只停止本地等待，不宣称撤销服务端处理。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:57:5` | vm-runtime-unshipped | 非 idle 且未 busy，用户关闭 | model.close；保留成员未决恢复元数据。 |
 
 ## `frontend/features/environments/files/files-panel.tsx`（34）
 
@@ -263,20 +379,20 @@ Card 的其他导出有正式消费者，不代表 CardFooter 有消费者。仅
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:18:12` | vm-runtime-unshipped | kind 为 reading 或 sending | role=status 显示等待回执，不是提交成功。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:21:7` | vm-runtime-unshipped | state.preview 存在 | 可聚焦 pre 呈现冻结文件的字面内容，不随之后 VM 编辑改变。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:22:49` | vm-runtime-unshipped | preview 存在且 editable | 更新本地标题；unknown/sending 状态不可改写原意图。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:23:99` | vm-runtime-unshipped | preview 存在且 editable | 更新请求空间 ID；服务端决定是否允许。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:24:98` | vm-runtime-unshipped | preview 存在且 editable | 更新请求可见范围；不是已发布范围。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:24:215` | vm-runtime-unshipped | preview 内的范围 Select 可编辑 | shared 选项，继承父 Select 禁用状态。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:24:265` | vm-runtime-unshipped | preview 内的范围 Select 可编辑 | admin_only 选项，继承父 Select 禁用状态。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:25:49` | vm-runtime-unshipped | preview 存在且 editable | 用户确认内容/目标/无密钥，更新 ack。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:26:18` | vm-runtime-unshipped | editable 且 ack、标题和空间非空 | model.confirm 冻结 draft/target/key 并提交审核。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:28:19` | vm-runtime-unshipped | state.error 存在 | role=alert 显示未知/格式/校验错误，不自动重放。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:29:30` | vm-runtime-unshipped | kind 为 unknown，用户显式点击 | model.retry 使用原键和原载荷。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:30:32` | vm-runtime-unshipped | kind 为 submitted | role=status 显示 receipt.id 及查看审核状态提示；不是发布成功。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:31:58` | vm-runtime-unshipped | kind 为 unknown 或 submitted | href=/my-submissions 查询提交；不是精确操作编号查询的替代证明。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:32:37` | vm-runtime-unshipped | 非 busy 且 kind 非 unknown | model.close；unknown 状态不提供丢弃原意图的关闭按钮。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:19:12` | vm-runtime-unshipped | kind 为 reading 或 sending | role=status 显示等待回执，不是提交成功。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:22:7` | vm-runtime-unshipped | state.preview 存在 | 可聚焦 pre 呈现冻结文件的字面内容，不随之后 VM 编辑改变。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:23:49` | vm-runtime-unshipped | preview 存在且 editable | 更新本地标题；unknown/sending 状态不可改写原意图。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:24:99` | vm-runtime-unshipped | preview 存在且 editable | 更新请求空间 ID；服务端决定是否允许。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:25:98` | vm-runtime-unshipped | preview 存在且 editable | 更新请求可见范围；不是已发布范围。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:25:215` | vm-runtime-unshipped | preview 内的范围 Select 可编辑 | shared 选项，继承父 Select 禁用状态。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:25:265` | vm-runtime-unshipped | preview 内的范围 Select 可编辑 | admin_only 选项，继承父 Select 禁用状态。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:26:49` | vm-runtime-unshipped | preview 存在且 editable | 用户确认内容/目标/无密钥，更新 ack。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:27:18` | vm-runtime-unshipped | editable 且 ack、标题和空间非空 | model.confirm 冻结 draft/target/key 并提交审核。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:29:19` | vm-runtime-unshipped | state.error 存在 | role=alert 显示未知/格式/校验错误，不自动重放。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:30:30` | vm-runtime-unshipped | kind 为 unknown，用户显式点击 | model.retry 使用原键和原载荷。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:31:32` | vm-runtime-unshipped | kind 为 submitted | role=status 显示 receipt.id 及查看审核状态提示；不是发布成功。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:32:58` | vm-runtime-unshipped | kind 为 unknown 或 submitted | href=/my-submissions 查询提交；不是精确操作编号查询的替代证明。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:33:37` | vm-runtime-unshipped | 非 busy 且 kind 非 unknown | model.close；unknown 状态不提供丢弃原意图的关闭按钮。 |
 
 ## `frontend/features/environments/files/stream-download.mjs`（2）
 
@@ -378,16 +494,26 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `4d87d932b76bbc15e62b03537a6bd31f525f85a0d12343c26777ce4d79aaa7c4`
-- `frontend/components/agent/answer-panel.tsx`: `63e54eadda8bf814a2302b8f4a2e99f39fb51a752e2d8678322dbf02e83fb807`
+- `frontend/app.tsx`: `cf8e813f24d191ba5ef035471e65048c4671726167b536026c310f3396e089b6`
+- `frontend/components/agent/answer-panel.tsx`: `d604801b674d21ef059a70f79cc367326ceccf60ba5e400c4d3480eca1e63586`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
+- `frontend/components/agents/message-bubble.tsx`: `0fe1347583c44eee1d69e84aae80e2ea2097334ddc55a29469775616e0b7b43d`
+- `frontend/components/agents/message-scroller.tsx`: `5b4a0a7b02b5f51ebe7c864d5c92b82d6737cb85421d799c22f7f267e53220c6`
+- `frontend/components/agents/message.tsx`: `0237fddf4107844721c6977552aa02a84a71aa201fe9d525d206e83affb3aea4`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
+- `frontend/components/motion/alert.tsx`: `c511618208d401fb4473a5bb1162f7f3268a6e2fb4cc28f3ad8b71298517bb97`
 - `frontend/components/motion/animated-toast-stack.tsx`: `bbfe97a6aa83e2acb5ea270fdf93bc3541764a7bbf80bc9e514e02566a6342e9`
+- `frontend/components/motion/button/stateful.tsx`: `ef3ae73bbcc434a1bbdeaf06a891c44720f3d88d3f94a8aafe574d80a1c2e728`
+- `frontend/components/motion/card.tsx`: `b9214ef617d7e77111f0e14dede7b411fe388b4eb3faf0f5475fb51a4eba126d`
+- `frontend/components/motion/context-menu.tsx`: `a2b35b09002a9498784029f22d612d12b657bf507b895916bcc59f2d47fa7591`
 - `frontend/components/motion/scroll-reveal.tsx`: `7853c47a57dc1ac4c9b41d744a2421c9473d0597555300e4a84d1e54407abc97`
 - `frontend/components/motion/not-found/glitch.tsx`: `f63ed5577881f978c331ffd4552241abc90c71c14cd2bb5e2eafa2ed2556ef03`
 - `frontend/components/motion/not-found/shared.tsx`: `f98d45223967f45277bf89b659b308e63c784397d4da9c2830565b9bcfc508da`
-- `frontend/components/shell/context-rail.tsx`: `99da1cfcc11d4ff7e9adb18e38b2d9d286759e2ab3826315b3ba25d1a05ae5e0`
-- `frontend/components/ui/card.tsx`: `6de765c3d44b584bccdd7619816718d0500fdcd20428fcaa98a74c31f0614923`
+- `frontend/components/motion/popover.tsx`: `315d6ef3311a4ecc58d8b912f9afc5fb14994b44d97e42635ea08f4d89a620e4`
+- `frontend/components/motion/preview-rail.tsx`: `2b7e72b05d16a7a6e887175310dae523321e55be1ff79c7c01593b16469c4e4c`
+- `frontend/components/shell/context-rail.tsx`: `9dcaa79e710f0b871c977e2251a71a4571124a861b4e9c9591bfa113398b184d`
+- `frontend/components/ui/button.tsx`: `13861f82b8222d50039381ec724df08c53d8c0c426b822027b54735463274d58`
+- `frontend/components/ui/card.tsx`: `972713b38d5e780ff782072f1a57f10e0b7aa07b0aff8e89b42fbdf7a7353b0c`
 - `frontend/components/ui/tabs.tsx`: `11da49213cc5fb1635dbe9c3b35af924189133976ef38b54e437a858d196db6c`
 - `frontend/features/environments/account-network-boundary.tsx`: `9835f50b5387cc2173e47a5dd4c4f85e0f64ec419d88926578b262bf971716b2`
 - `frontend/features/environments/account-network-owner.mjs`: `06943c97426e9b8df13e267ff0f668bbc2e3c80445905d2ac3a76591593f735f`
@@ -398,11 +524,11 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/features/environments/environment-files-surface.tsx`: `f24df6c74cbe83f85a7536bd9a9d2015df21634c1ccbea0fb3643449a70025ed`
 - `frontend/features/environments/environment-vm-composition.ts`: `b26be9b74c008c4bbddbc04e11c6bb0bf9853bc8aa9a0157a7175cd48abd47e7`
 - `frontend/features/environments/environments-page.tsx`: `cd0e9ea56b8ae8fd0386d3a8811ed6d6e42ba1967ce4c2d9f563636170ff36d2`
-- `frontend/features/environments/files/asset-import-panel.tsx`: `fa1b0d986a523eed4773a51f4ede44a882d1730ac17178273b7cefeb43b168c0`
+- `frontend/features/environments/files/asset-import-panel.tsx`: `27e56d8ac0eb52b336bace709dbe383ad1b8197695d6b1bee3c199ccd725b8dd`
 - `frontend/features/environments/files/asset-import.ts`: `a825ff94a287acd8bc61cd517f27fe92d1ee32cd999948fb9e6f7d3def217338`
 - `frontend/features/environments/files/file-manager.mjs`: `2721e8e7abecd3dda95765eecb055f7bf3272942f1933807a07bba83a7df5ea6`
 - `frontend/features/environments/files/files-panel.tsx`: `e0a5072b60577a35ab42baea628be67e695fe65bd0def4bf363bd3bfc0668dd9`
-- `frontend/features/environments/files/knowledge-import-panel.tsx`: `6722421e98b118c7462324b5536b913bc478025b7d119e35c56671cf94010aab`
+- `frontend/features/environments/files/knowledge-import-panel.tsx`: `0b85767dfa44343e7f69ce60120f1be8db217fe34ed4055b3b23bf395cf9ff99`
 - `frontend/features/environments/files/knowledge-import.ts`: `bce2bebe39eb4f17650b35b4a020f51f757ba5594b6e178a4a44f98b45028abd`
 - `frontend/features/environments/files/stream-download.mjs`: `b491973525cb44aefce8a265490471e947931c2380b605d15b37226ca7295943`
 - `frontend/features/environments/network-lifecycle.mjs`: `0e40ef5fc54547a8eb8769598176d1bdae454d99a4e62a143981b7f545d89e06`
@@ -496,3 +622,13 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - 两处判断需显式记录：`account-vm-runtime.mjs` / `authenticated-vm-runtime.ts` 原属“未消费组合”，现由页面挂载创建，故不留在 `vm-not-mounted`；`stream-download.mjs` 虽被归入“未挂载”一组，但其真实调用链为 `files-panel.tsx` → `file-manager.mjs#createFileManager` → `writeFileDownload`，随文件面同一延迟 chunk 加载，因此同样归入新分类。
 - 行集与坐标：`frontend/app.tsx` 两条外层候选因新增导入下移至 231:106、258:39（行为与前置条件逐字不变）。行数不变：app-boundary 13、public-dynamic 5、background 3、unmounted-ui 17、vm-runtime-unshipped 77、vm-not-mounted 6，合计 121。新增 `environment-files-surface.tsx` 与 `environment-vm-composition.ts` 两条 caller 指纹。
 - 本段只做源码对账与状态分类：不改变 A01、A02、A05、D04 的开放状态，也不把 `vm-runtime-unshipped` 读成“未接线”或“按需修复的缺陷”——它是本轮的发布决策状态，引擎发布决策改变后自然翻转。
+
+### 2026-10-17 beUI 全量采用（Wave 1）新源码候选补行后重新对账
+
+- 本批把 UI 原语换成 beUI 源码落地副本：新增 `frontend/components/motion/{alert,card,context-menu,popover,preview-rail}.tsx`、`motion/button/stateful.tsx` 与 `frontend/components/agents/{agent-activity/activity-row.tsx,agent-activity/index.tsx,loading-states/reasoning-text.tsx,message.tsx,message-bubble.tsx,message-scroller.tsx,streaming-response.tsx}`，并把 `components/ui/alert.tsx`、`components/ui/button.tsx` 改为本地包装式适配器、`components/ui/card.tsx` 改为纯再导出。索引重生成后为 399 文件 / 1660 候选 / **159** 未归属。
+- 新增 39 行（净）：`motion/card.tsx` 10、`motion/context-menu.tsx` 8、`agents/message-bubble.tsx` 5、`agents/message.tsx` 4（另 4 个部件随 `agent-page` 接入归属）、`agents/message-scroller.tsx` 4、`motion/preview-rail.tsx` 4、`motion/popover.tsx` 2、`motion/alert.tsx:219:10`、`motion/button/stateful.tsx:209:5`。移除 1 行：`frontend/components/ui/card.tsx:13:85`（该文件改为纯再导出，CardFooter 候选随实现落到 `motion/card.tsx:216:5`）。
+- 分类原则按 handler 而非按文件：(1) 只渲染调用方 props/children 的边界（`StatefulButton`、Card 根与 CardHeader/CardTitle/CardDescription/CardContent）记 `app-boundary`；(2) 当前无调用点或整模块零 import 的（`motion/context-menu.tsx`、`motion/popover.tsx` 的两条、`agents/message-bubble.tsx` 的三个折叠部件、`agents/message-scroller.tsx:462` 的 rail 分支、`agents/message.tsx` 的四个部件、`motion/preview-rail.tsx`、`AlertAction`、`CardAction`、`CardFooter`、card 的 interactive 按压路径）记 `unmounted-ui`；(3) 由 `frontend/app.tsx` 经 `components/agent/agent-transcript.tsx` 实际渲染、但声明侧不在 root 图内的 `MessageBubble`/`MessageBubbleContent`/`MessageScroller` 视口三条记 `app-boundary`，不谎称“未挂载”。
+- 需要显式记录两类判断。其一，`motion/card.tsx` 与 `motion/button/stateful.tsx` 的候选未归属**不是**因为未挂载：Card 经 `components/ui/card.tsx` 纯再导出被 24 个文件消费（`CardHeader` 28 处、`CardContent` 35 处、`CardTitle` 28 处、`CardDescription` 2 处），`StatefulButton` 由登录页验证码提交按钮消费；原因是静态图不沿 `export … from` 纯再导出追到声明处，而页面内调用点候选已归属各自路由。其二，同一文件内分 handler 处置，例如 card 根与四个被使用的部件记 `app-boundary`，而同文件的 `CardAction`/`CardFooter` 与 interactive 按压监听器记 `unmounted-ui`。
+- 坐标位移：`frontend/features/environments/files/asset-import-panel.tsx`（23 行）与 `.../knowledge-import-panel.tsx`（14 行）各因顶部新增一行 `Checkbox` 导入整体下移 1 行，`frontend/components/shell/context-rail.tsx`（6 行）与 `frontend/app.tsx`（2 行）同样整体下移 1 行；四组均逐项按 handler 配对后重记坐标（例如 parse 32:9→33:9、cancel 33:9→34:9，context-rail 关闭控件 33:7→34:7，app.tsx 外层 234:106→235:106、261:39→262:39），触发/行为措辞逐字不变。
+- 指纹：新增 10 条（`motion/{alert,card,context-menu,popover,preview-rail}.tsx`、`motion/button/stateful.tsx`、`agents/{message,message-bubble,message-scroller}.tsx`，以及作为 `StatefulButton` caller 证据的 `components/ui/button.tsx`），`components/ui/card.tsx` 作为 Card 适配器保留；刷新 6 条（`app.tsx`、`agent/answer-panel.tsx`、`components/ui/card.tsx`、`shell/context-rail.tsx`、`files/{asset,knowledge}-import-panel.tsx`）。核对期间曾为 `agents/{streaming-response,agent-activity/*,loading-states/reasoning-text}.tsx` 补加的 4 条指纹随这批文件归属路由一并移除，`motion/collapsible.tsx` 因候选全部归属未入表；其余 fingerprint 字节未变。
+- 本轮只做源码对账：不修改任何产品行为、不 push/部署/迁移、不读密钥，也不改变 A01、A02、A05、D04 的开放状态。注意本轮期间仍有并行 slice 在同一工作树新增源码（例如 `motion/collapsible.tsx`、`agents/streaming-response.tsx` 在核对过程中出现），索引与本文档需在该批落定后重跑一次 `node --test scripts/frontend-operation-inventory.test.mjs` 确认。

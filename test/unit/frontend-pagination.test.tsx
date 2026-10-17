@@ -2,6 +2,7 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { Button } from "../../frontend/components/ui/button";
 import { DataPagination, type DataPaginationProps } from "../../frontend/components/data-pagination";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, type PaginationLabels, visiblePageTokens } from "../../frontend/components/ui/pagination";
 import { Select } from "../../frontend/components/ui/select";
@@ -133,7 +134,9 @@ describe("frontend pagination", () => {
     expect(onPageChange).toHaveBeenLastCalledWith(2);
 
     const tree = DataPagination(localizedDataPaginationProps({ page: 4, pageSize: 20, total: 21, totalPages: 2, onPageChange, onPageSizeChange: vi.fn() }));
-    const mobilePrevious = findElementsByType(tree, "button").find((element) => element.props["aria-label"] === "Previous page")!;
+    // Every pager control is the shared button surface now, so the structural walk
+    // looks for that adapter rather than a bare `button` element.
+    const mobilePrevious = findElementsByType(tree, Button).find((element) => element.props["aria-label"] === "Previous page")!;
     mobilePrevious.props.onClick();
     expect(onPageChange).toHaveBeenLastCalledWith(2);
   });

@@ -1,13 +1,25 @@
-import * as React from "react";
-import { cn } from "../../lib/utils";
-
-export const Card = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
-  ({ className, ...props }, ref) => <div ref={ref} className={cn("rounded-lg border text-card-foreground material-surface", className)} {...props} />,
-);
-Card.displayName = "Card";
-
-export const CardHeader = ({ className, ...props }: React.ComponentProps<"div">) => <div className={cn("flex flex-col space-y-1.5 p-6", className)} {...props} />;
-export const CardTitle = ({ className, ...props }: React.ComponentProps<"h3">) => <h3 className={cn("text-lg font-semibold leading-none tracking-tight", className)} {...props} />;
-export const CardDescription = ({ className, ...props }: React.ComponentProps<"p">) => <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
-export const CardContent = ({ className, ...props }: React.ComponentProps<"div">) => <div className={cn("p-6 pt-0", className)} {...props} />;
-export const CardFooter = ({ className, ...props }: React.ComponentProps<"div">) => <div className={cn("flex items-center p-6 pt-0", className)} {...props} />;
+// The app's single Card, rendered by beUI's `motion/card`, so one surface and
+// one radius carry every panel in the product. The part names, the part props
+// and the padding contract are unchanged, which keeps all importers untouched:
+// the beUI source owns the variant/size/interactive API, the data-slots and the
+// press feedback, and the adapter is a plain re-export because this surface adds
+// no guarantee on top of it.
+export {
+  CARD_TARGET_CLASS,
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  type CardActionProps,
+  type CardContentProps,
+  type CardDescriptionProps,
+  type CardFooterProps,
+  type CardHeaderProps,
+  type CardProps,
+  type CardSize,
+  type CardTitleProps,
+  type CardVariant,
+} from "../motion/card";

@@ -7,6 +7,7 @@ import { routeAccessAllowed } from "../../lib/route-access";
 import { moduleForPath, WORKBENCH_MODULES } from "../../../shared/workbench-modules";
 import { WORKSPACE_ROUTE_CAPABILITIES } from "../../../shared/workspace-route-capabilities";
 import { Button } from "../ui/button";
+import { ButtonLink } from "../motion/button/base";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 import { cn } from "../../lib/utils";
 
@@ -36,7 +37,7 @@ export function ContextRail({ pathname, locale, collapsed = false, onClose, onNa
       {modules.map((module) => <a key={module.key} href={module.entryPath} onClick={(event) => go(event, module.entryPath)} aria-current={currentModule?.key === module.key ? "page" : undefined} title={collapsed ? frontendText(locale, module.labelKey) : undefined} className={cn("flex items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground", currentModule?.key === module.key && "bg-accent font-medium text-accent-foreground", collapsed && "justify-center px-0")}><span className="size-1.5 rounded-full bg-current" aria-hidden="true" />{!collapsed && frontendText(locale, module.labelKey)}</a>)}
     </nav>
     {!collapsed && children.length > 0 && <div><p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{frontendText(locale, "SHELL_CONTEXT_ACTIONS")}</p><nav aria-label={frontendText(locale, "SHELL_CONTEXT_ACTIONS")} className="space-y-1">{children.map((route) => <a key={route.id} href={route.path} onClick={(event) => go(event, route.path)} aria-current={pathname === route.path ? "page" : undefined} className="block rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground">{frontendText(locale, route.labelKey)}</a>)}</nav></div>}
-    {!collapsed && currentModule && <a href={currentModule.entryPath} onClick={(event) => go(event, currentModule.entryPath)} className="mt-auto flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "SHELL_OPEN_MODULE")}<CaretRight size={14} aria-hidden="true" /></a>}
+    {!collapsed && currentModule && <ButtonLink href={currentModule.entryPath} onClick={(event) => go(event, currentModule.entryPath)} variant="outline" size="md" className="mt-auto w-full justify-between gap-2">{frontendText(locale, "SHELL_OPEN_MODULE")}<CaretRight size={14} aria-hidden="true" /></ButtonLink>}
   </div>;
 
   return <>

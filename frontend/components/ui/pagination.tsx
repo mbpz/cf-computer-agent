@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Button } from "./button";
 import { cn } from "../../lib/utils";
 
 export type PageToken = number | "ellipsis";
@@ -32,6 +33,14 @@ export interface PaginationProps extends React.HTMLAttributes<HTMLElement> {
   maxPage?: number;
 }
 
+/**
+ * The pager chip: beUI's button surface (via `ui/button`) at the square the footer
+ * needs, so the pager, the page-size field and every other button share one look.
+ * `size-9` is the design lock's `--radius`-scaled square, not a new scale.
+ */
+const PAGE_LINK_CLASS = "size-9 shrink-0 rounded-lg px-0 text-sm";
+const PAGE_LINK_ACTIVE_CLASS = "border-primary bg-accent font-semibold";
+
 export const PaginationContent = React.forwardRef<HTMLOListElement, React.OlHTMLAttributes<HTMLOListElement>>(({ className, ...props }, ref) => <ol ref={ref} role="list" className={cn("flex items-center gap-1", className)} {...props} />);
 PaginationContent.displayName = "PaginationContent";
 
@@ -39,7 +48,7 @@ export const PaginationItem = React.forwardRef<HTMLLIElement, React.LiHTMLAttrib
 PaginationItem.displayName = "PaginationItem";
 
 export interface PaginationLinkProps extends React.ButtonHTMLAttributes<HTMLButtonElement> { isActive?: boolean; }
-export const PaginationLink = React.forwardRef<HTMLButtonElement, PaginationLinkProps>(({ className, type = "button", isActive = false, "aria-current": _ariaCurrent, ...props }, ref) => <button ref={ref} type={type} {...props} aria-current={isActive ? "page" : undefined} className={cn("inline-flex size-9 items-center justify-center rounded-md border border-input bg-background text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 aria-[current=page]:border-primary aria-[current=page]:bg-accent aria-[current=page]:font-semibold", className)} />);
+export const PaginationLink = React.forwardRef<HTMLButtonElement, PaginationLinkProps>(({ className, type = "button", isActive = false, "aria-current": _ariaCurrent, ...props }, ref) => <Button ref={ref} type={type} variant="outline" size="icon" aria-current={isActive ? "page" : undefined} className={cn(PAGE_LINK_CLASS, isActive && PAGE_LINK_ACTIVE_CLASS, className)} {...props} />);
 PaginationLink.displayName = "PaginationLink";
 
 export const PaginationEllipsis = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} aria-hidden="true" className={cn("flex size-9 items-center justify-center text-sm text-muted-foreground", className)}>…</span>;

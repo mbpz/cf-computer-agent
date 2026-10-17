@@ -1,4 +1,5 @@
 "use client";
+// beui.dev/components/motion/checkbox
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useId } from "react";

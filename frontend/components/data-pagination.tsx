@@ -2,6 +2,7 @@ import * as React from "react";
 import { frontendPaginationLabels, type DataPaginationLocalization } from "../lib/i18n";
 import { cn } from "../lib/utils";
 import type { SupportedPageSize } from "../lib/numbered-page";
+import { Button } from "./ui/button";
 import { Pagination } from "./ui/pagination";
 import { Select, SelectOption } from "./ui/select";
 
@@ -42,9 +43,9 @@ export function DataPagination({ className, page: rawPage, pageSize: rawPageSize
       <label className="flex items-center gap-2 text-sm text-muted-foreground"><span className="hidden lg:inline">{labels.pageSizeLabel}</span><Select aria-label={labels.pageSizeLabel} className="w-[4.75rem]" disabled={pending} value={String(pageSize)} onChange={(event) => onPageSizeChange(Number(event.currentTarget.value) as SupportedPageSize)}>{pageSizes.map((size) => <SelectOption key={size} value={size}>{size}</SelectOption>)}</Select></label>
       <div data-pagination-desktop="true" className="hidden sm:flex"><Pagination currentPage={page} pageCount={totalPages} maxPage={maxPage} disabled={pending} onPageChange={onPageChange} labels={labels} /></div>
       <div data-pagination-mobile="true" className="flex items-center gap-2 sm:hidden">
-        <button type="button" aria-label={labels.previousLabel} disabled={pending || page <= 1} onClick={() => onPageChange(previousPage)} className="inline-flex size-9 items-center justify-center rounded-md border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"><span aria-hidden="true">‹</span></button>
+        <Button type="button" variant="outline" size="icon" aria-label={labels.previousLabel} disabled={pending || page <= 1} onClick={() => onPageChange(previousPage)} className="size-11 shrink-0 rounded-lg px-0"><span aria-hidden="true">‹</span></Button>
         <span aria-live="polite" className="min-w-14 text-center text-sm text-muted-foreground">{labels.mobileSummary(totalPages === 0 ? 0 : page, totalPages)}</span>
-        <button type="button" aria-label={labels.nextLabel} disabled={pending || totalPages === 0 || page >= lastAllowedPage} onClick={() => onPageChange(page + 1)} className="inline-flex size-9 items-center justify-center rounded-md border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"><span aria-hidden="true">›</span></button>
+        <Button type="button" variant="outline" size="icon" aria-label={labels.nextLabel} disabled={pending || totalPages === 0 || page >= lastAllowedPage} onClick={() => onPageChange(page + 1)} className="size-11 shrink-0 rounded-lg px-0"><span aria-hidden="true">›</span></Button>
       </div>
     </div>
   </div>;

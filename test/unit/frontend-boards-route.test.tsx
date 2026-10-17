@@ -1095,7 +1095,10 @@ describe("task-backed boards route", () => {
   }
 
   function columnTotal(status: string): string | null {
-    return column(status).querySelector("div.bg-secondary")?.textContent ?? null;
+    // The column header carries the total as an explicit hook value, so the
+    // assertion no longer depends on the Badge's styling or on which animated
+    // label layer happens to be in the DOM during a swap.
+    return column(status).querySelector("[data-board-column-total]")?.getAttribute("data-board-column-total") ?? null;
   }
 
   async function scrollToEnd(status: string) {

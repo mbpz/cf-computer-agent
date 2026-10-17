@@ -3,6 +3,7 @@ import { Alert, AlertDescription } from "../ui/alert";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Checkbox } from "../ui/checkbox";
 import { PageState } from "../ui/page-state";
 import { FilterSelect } from "../ui/filter-select";
 import { TypedConfirmAction } from "../ui/typed-confirm-action";
@@ -217,8 +218,8 @@ export function AssetHygienePanel({ locale, memberId, requester = fetch }: { loc
           </p>
           {scan.page.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "ADMIN_ASSET_ORPHAN_EMPTY")} /> : <ul className="divide-y rounded-md border">
             {scan.page.items.map((item) => <li key={item.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm" data-orphan-row={item.key}>
-              <label className="flex min-w-0 items-center gap-2">
-                <input type="checkbox" checked={selected.includes(item.key)} disabled={pending}
+              <label className="flex min-w-0 items-center gap-2 max-lg:min-h-11">
+                <Checkbox checked={selected.includes(item.key)} disabled={pending}
                   aria-label={`${frontendText(locale, "ADMIN_ASSET_ORPHAN_SELECT")} ${item.key}`}
                   onChange={() => toggle(item.key)} />
                 <span className="truncate">{item.key}</span>

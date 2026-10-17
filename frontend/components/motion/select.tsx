@@ -260,7 +260,9 @@ export function SelectTrigger({ className, children }: SelectTriggerProps) {
       }}
       className={cn(
         "relative z-10 flex w-full items-center justify-between gap-2 border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors",
-        "hover:border-(--color-border-strong) focus-visible:ring-2 focus-visible:ring-foreground/20",
+        // `--color-border-strong` is not a token in this theme: the field hover uses
+        // the same existing border token the native fields use for focus.
+        "hover:border-foreground/40 focus-visible:ring-2 focus-visible:ring-foreground/20",
         "disabled:pointer-events-none disabled:opacity-50",
         // Every picker is a thumb target below the shell's `lg` edge, where
         // `ui/input.tsx` already stands 44px tall. On desktop the row keeps the

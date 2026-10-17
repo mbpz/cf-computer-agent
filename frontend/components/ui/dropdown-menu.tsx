@@ -5,6 +5,30 @@ import { menuKeyAction } from "../../lib/menu-keyboard";
 type CloseReason = "trigger" | "outside" | "escape" | "selection";
 const ENABLED_MENU_ITEM_SELECTOR = "[role^='menuitem']:not([aria-disabled='true']):not([disabled])";
 
+/**
+ * The menu primitive: roles, roving focus and dismissal live here, with the
+ * panel inline in the caller's own DOM. No beUI payload in the registry can
+ * carry that shape, so this file keeps its surface:
+ *
+ * - `motion/popover.tsx` is the decorative goo panel. It hardcodes
+ *   `aria-haspopup="dialog"` onto the trigger it clones (`:489`), renders the
+ *   panel as `role="dialog"` (`:689`) inside an unconditional portal (`:603`)
+ *   and takes only `children`/`className` for the panel (`:507`) — so
+ *   `role="menu"`, `data-menu-id` and the shell's `data-account-menu` have
+ *   nowhere to land, and every menu would leave the container the suites query.
+ * - `motion/context-menu.tsx` has the right roles (`aria-haspopup="menu"`
+ *   `:303`, `role="menu"` `:500`) but is a pointer-origin, long-press menu that
+ *   also portals (`:486`). It is the source for row-level right-click actions,
+ *   not for the click-anchored shell menus this file renders.
+ *
+ * The contract is asserted by name and cannot be traded away: `aria-haspopup="menu"`
+ * and `role="menu"` in static markup (`test/unit/frontend-a11y.test.tsx:47-54`),
+ * outside-pointer and Escape dismissal with focus return, `Escape` reaching the
+ * document even when focus never entered the menu, and roving item focus
+ * (`test/unit/frontend-menu-keyboard.test.tsx`), plus the `data-*` hooks
+ * `frontend/components/shell/app-shell.tsx` selects on.
+ */
+
 interface DropdownMenuContextValue {
   open: boolean;
   triggerRef: React.RefObject<HTMLElement | null>;

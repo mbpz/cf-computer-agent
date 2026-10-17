@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { LinkSimpleIcon, ListBulletsIcon } from "@phosphor-icons/react";
 import { ExpandableTabs } from "../components/ui/expandable-tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleIndicator, CollapsibleTrigger, useCollapsible } from "../components/motion/collapsible";
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { Button } from "../components/ui/button";
@@ -149,6 +150,45 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
   </div>
 }
 
+/** One beUI `collapsible` carries every reader section, so disclosure geometry and
+ * keyboard behaviour are not written twice. The card keeps its slot, its `data-*`
+ * hook and its `CardTitle` heading: the trigger lives in the card's action slot
+ * rather than around the heading, which a `<button>` cannot contain. Sections
+ * start open — the reader keeps exactly the content it showed before, and a
+ * citation anchor (`#reader-research-panel`) never lands on a sealed panel. */
+function ReaderSection({ locale, title, description, action, contentClassName, children, ...cardProps }: Omit<ComponentProps<typeof Card>, "children"> & {
+  locale?: LocaleRuntime;
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  contentClassName?: string;
+  children: ReactNode;
+}) {
+  return <Card {...cardProps}>
+    <Collapsible defaultOpen>
+      <CardHeader>
+        <div>
+          <CardTitle className="text-base">{title}</CardTitle>
+          {description}
+        </div>
+        <CardAction>{action}<ReaderSectionToggle locale={locale} title={title} /></CardAction>
+      </CardHeader>
+      <CardContent><CollapsibleContent className={contentClassName}>{children}</CollapsibleContent></CardContent>
+    </Collapsible>
+  </Card>;
+}
+
+/** The payload's `render` slot hands the trigger to the product `Button`, so the
+ * action keeps one button surface and one mobile target size. Its name says which
+ * section it controls; its expanded state is the trigger's own `aria-expanded`. */
+function ReaderSectionToggle({ locale, title }: { locale?: LocaleRuntime; title: string }) {
+  const { open } = useCollapsible();
+  return <CollapsibleTrigger
+    render={<Button type="button" size="icon" variant="ghost" className="max-lg:h-11 max-lg:w-11" />}
+    aria-label={`${title} · ${frontendText(locale, open ? "COMMON_COLLAPSE" : "COMMON_EXPAND")}`}
+  ><CollapsibleIndicator /></CollapsibleTrigger>;
+}
+
 function ReaderNotePanel({ discardError, sharing, locale, knowledgeItemId, access, title, body, status, onTitleChange, onBodyChange, onSave, locked, phase, onCheck, onRetryLoad }: { discardError: boolean; sharing: ReturnType<typeof useReaderNoteShares>; locked: boolean; phase: string; onCheck: () => void; onRetryLoad: () => void; locale?: LocaleRuntime; knowledgeItemId: string; access: "owner" | "shared"; title: string; body: string; status: "idle" | "saved" | "saving" | "unsaved" | "error"; onTitleChange: (value: string) => void; onBodyChange: (value: string) => void; onSave: () => void }) {
   const { members, shares, recipient: recipientMemberId } = sharing;
   const statusLabel = status === "saved" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVED") : status === "saving" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVING") : status === "unsaved" ? frontendText(locale, "KNOWLEDGE_NOTE_UNSAVED") : status === "error" ? frontendText(locale, "KNOWLEDGE_NOTE_ERROR") : "";
@@ -161,21 +201,31 @@ function ReaderOutlinePanel({ locale, revision, selectedChunkId, onSelectChunk }
     id: chunk.id,
     label: chunk.headingPath.join(" / ").trim(),
   })).filter((item, index, items) => item.label && items.findIndex((candidate) => candidate.label === item.label) === index);
-  return <Card data-reader-outline-card><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_READER_OUTLINE")}</CardTitle></CardHeader><CardContent>{headings.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_OUTLINE_EMPTY")}</p> : <nav aria-label={frontendText(locale, "KNOWLEDGE_READER_OUTLINE")}><ol className="space-y-1">{headings.map((heading) => <li key={heading.id}><button type="button" aria-current={selectedChunkId === heading.id ? "location" : undefined} onClick={() => onSelectChunk(heading.id)} className="w-full rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground aria-[current=location]:bg-accent aria-[current=location]:font-medium aria-[current=location]:text-foreground">{heading.label}</button></li>)}</ol></nav>}</CardContent></Card>;
+  return <ReaderSection locale={locale} title={frontendText(locale, "KNOWLEDGE_READER_OUTLINE")} data-reader-outline-card="true">{headings.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_OUTLINE_EMPTY")}</p> : <nav aria-label={frontendText(locale, "KNOWLEDGE_READER_OUTLINE")}><ol className="space-y-1">{headings.map((heading) => <li key={heading.id}><button type="button" aria-current={selectedChunkId === heading.id ? "location" : undefined} onClick={() => onSelectChunk(heading.id)} className="w-full rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground aria-[current=location]:bg-accent aria-[current=location]:font-medium aria-[current=location]:text-foreground">{heading.label}</button></li>)}</ol></nav>}</ReaderSection>;
 }
 
 function RelatedKnowledgePanel({ locale, state, onRetry }: { locale?: LocaleRuntime; state: RelatedState; onRetry?: () => void }) {
-  if (state.kind === "loading") return <Card data-related-knowledge="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_RELATED_TITLE")}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_LOADING")}</CardContent></Card>;
-  if (state.kind === "error") return <Card data-related-knowledge="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_RELATED_TITLE")}</CardTitle></CardHeader><CardContent><p role="alert" className="text-sm text-destructive">{frontendText(locale, "KNOWLEDGE_RELATED_UNREAD")}</p>{onRetry && <Button className="mt-3" size="sm" variant="outline" onClick={onRetry}>{frontendText(locale, "KNOWLEDGE_RELATED_RETRY")}</Button>}</CardContent></Card>;
   if (state.kind === "idle") return null;
-  return <Card data-related-knowledge="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_RELATED_TITLE")}</CardTitle></CardHeader><CardContent>{state.items.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_EMPTY")}</p> : <div className="grid gap-2">{state.items.map((item) => { const reasons = item.reasonFields.map((field) => relatedFieldLabel(field, locale)).join(", "); return <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span>{reasons && <span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_MATCHED")} {reasons}</span>}</a>; })}</div>}</CardContent></Card>;
+  const body = state.kind === "loading"
+    ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_LOADING")}</p>
+    : state.kind === "error"
+      ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "KNOWLEDGE_RELATED_UNREAD")}</p>{onRetry && <Button className="mt-3" size="sm" variant="outline" onClick={onRetry}>{frontendText(locale, "KNOWLEDGE_RELATED_RETRY")}</Button>}</>
+      : state.items.length === 0
+        ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_EMPTY")}</p>
+        : <div className="grid gap-2">{state.items.map((item) => { const reasons = item.reasonFields.map((field) => relatedFieldLabel(field, locale)).join(", "); return <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span>{reasons && <span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_MATCHED")} {reasons}</span>}</a>; })}</div>;
+  return <ReaderSection locale={locale} title={frontendText(locale, "KNOWLEDGE_RELATED_TITLE")} data-related-knowledge="true">{body}</ReaderSection>;
 }
 
 function BacklinkPanel({ locale, state, onRetry }: { locale?: LocaleRuntime; state: BacklinkState; onRetry?: () => void }) {
-  if (state.kind === "loading") return <Card data-backlinks="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_BACKLINKS_TITLE")}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_LOADING")}</CardContent></Card>;
-  if (state.kind === "error") return <Card data-backlinks="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_BACKLINKS_TITLE")}</CardTitle></CardHeader><CardContent><p role="alert" className="text-sm text-destructive">{frontendText(locale, "KNOWLEDGE_BACKLINKS_UNREAD")}</p>{onRetry && <Button className="mt-3" size="sm" variant="outline" onClick={onRetry}>{frontendText(locale, "KNOWLEDGE_BACKLINKS_RETRY")}</Button>}</CardContent></Card>;
   if (state.kind === "idle") return null;
-  return <Card data-backlinks="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_BACKLINKS_TITLE")}</CardTitle></CardHeader><CardContent>{state.items.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_EMPTY")}</p> : <div className="grid gap-2">{state.items.map((item) => <a key={item.id} href={"/knowledge/" + encodeURIComponent(item.id)} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span><span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_LINES")} {item.startLine}–{item.endLine}</span></a>)}</div>}</CardContent></Card>;
+  const body = state.kind === "loading"
+    ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_LOADING")}</p>
+    : state.kind === "error"
+      ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "KNOWLEDGE_BACKLINKS_UNREAD")}</p>{onRetry && <Button className="mt-3" size="sm" variant="outline" onClick={onRetry}>{frontendText(locale, "KNOWLEDGE_BACKLINKS_RETRY")}</Button>}</>
+      : state.items.length === 0
+        ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_EMPTY")}</p>
+        : <div className="grid gap-2">{state.items.map((item) => <a key={item.id} href={"/knowledge/" + encodeURIComponent(item.id)} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span><span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_LINES")} {item.startLine}–{item.endLine}</span></a>)}</div>;
+  return <ReaderSection locale={locale} title={frontendText(locale, "KNOWLEDGE_BACKLINKS_TITLE")} data-backlinks="true">{body}</ReaderSection>;
 }
 
 function relatedFieldLabel(field: string, locale?: LocaleRuntime): string {
@@ -191,7 +241,14 @@ function SourcePanel({ locale, revision, selectedChunkId, selectedChunk, onSelec
   const sourceId = revision.sourceVersionId || frontendText(locale, "COMMON_VALUE_UNAVAILABLE");
   const parser = revision.parserSchemaVersion || frontendText(locale, "COMMON_VALUE_UNAVAILABLE");
   const downloadHref = revision.knowledgeItemId && revision.id ? `/api/knowledge/${encodeURIComponent(revision.knowledgeItemId)}/revisions/${encodeURIComponent(revision.id)}/download` : null;
-  return <Card data-source-panel="true"><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_READER_SOURCES")}</CardTitle><p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_SOURCE_VERSION")} {revision.sourceVersionOrdinal === null ? "—" : `#${revision.sourceVersionOrdinal}`} · {sourceId}</p><p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_PARSE_STATUS")} {parser} · {revision.indexStatus}</p></div>{downloadHref && <a href={downloadHref} download className="text-xs font-medium text-primary hover:underline">{frontendText(locale, "KNOWLEDGE_READER_DOWNLOAD")}</a>}</div></CardHeader><CardContent className="space-y-3">{revision.chunks.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_SOURCES_EMPTY")}</p> : <div role="list" aria-label={frontendText(locale, "KNOWLEDGE_READER_SOURCES")} className="grid gap-2">{revision.chunks.map((chunk) => <button key={chunk.id} type="button" role="listitem" aria-pressed={selectedChunkId === chunk.id} data-source-selected={selectedChunkId === chunk.id ? "true" : "false"} onClick={() => onSelectChunk(chunk.id)} className="rounded-md border p-3 text-left text-sm transition hover:bg-accent aria-pressed:border-primary aria-pressed:bg-accent"><span className="font-medium">{frontendText(locale, "KNOWLEDGE_READER_SOURCE_CHUNK")} {chunk.ordinal + 1}</span><span className="ml-2 text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_SOURCE_LINES")} {chunk.startLine}–{chunk.endLine}</span><span className="mt-1 block text-xs text-muted-foreground">{locationLabel(chunk.location, locale) || chunk.headingPath.join(" / ") || frontendText(locale, "COMMON_VALUE_UNAVAILABLE")}</span></button>)}</div>}{selectedChunk && <div role="status" className="rounded-md bg-muted/40 p-3 text-sm"><p className="font-medium">{frontendText(locale, "KNOWLEDGE_READER_SOURCE_SELECTED")}</p><p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{selectedChunk.text.slice(0, 240)}{selectedChunk.text.length > 240 ? "…" : ""}</p></div>}</CardContent></Card>;
+  return <ReaderSection
+    locale={locale}
+    title={frontendText(locale, "KNOWLEDGE_READER_SOURCES")}
+    description={<><p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_SOURCE_VERSION")} {revision.sourceVersionOrdinal === null ? "—" : `#${revision.sourceVersionOrdinal}`} · {sourceId}</p><p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_PARSE_STATUS")} {parser} · {revision.indexStatus}</p></>}
+    action={downloadHref && <a href={downloadHref} download className="text-xs font-medium text-primary hover:underline">{frontendText(locale, "KNOWLEDGE_READER_DOWNLOAD")}</a>}
+    contentClassName="space-y-3"
+    data-source-panel="true"
+  >{revision.chunks.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_SOURCES_EMPTY")}</p> : <div role="list" aria-label={frontendText(locale, "KNOWLEDGE_READER_SOURCES")} className="grid gap-2">{revision.chunks.map((chunk) => <button key={chunk.id} type="button" role="listitem" aria-pressed={selectedChunkId === chunk.id} data-source-selected={selectedChunkId === chunk.id ? "true" : "false"} onClick={() => onSelectChunk(chunk.id)} className="rounded-md border p-3 text-left text-sm transition hover:bg-accent aria-pressed:border-primary aria-pressed:bg-accent"><span className="font-medium">{frontendText(locale, "KNOWLEDGE_READER_SOURCE_CHUNK")} {chunk.ordinal + 1}</span><span className="ml-2 text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_SOURCE_LINES")} {chunk.startLine}–{chunk.endLine}</span><span className="mt-1 block text-xs text-muted-foreground">{locationLabel(chunk.location, locale) || chunk.headingPath.join(" / ") || frontendText(locale, "COMMON_VALUE_UNAVAILABLE")}</span></button>)}</div>}{selectedChunk && <div role="status" className="rounded-md bg-muted/40 p-3 text-sm"><p className="font-medium">{frontendText(locale, "KNOWLEDGE_READER_SOURCE_SELECTED")}</p><p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{selectedChunk.text.slice(0, 240)}{selectedChunk.text.length > 240 ? "…" : ""}</p></div>}</ReaderSection>;
 }
 
 function locationLabel(location: KnowledgeSourceLocation | undefined, locale?: LocaleRuntime): string {

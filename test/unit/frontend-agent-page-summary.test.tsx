@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentHistoryList } from "../../frontend/components/agent/agent-history-list";
+import { AgentTranscript } from "../../frontend/components/agent/agent-transcript";
 import { AgentPage } from "../../frontend/pages/agent-page";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 
@@ -125,6 +126,43 @@ describe("agent page summary row", () => {
     const region = history.querySelector<HTMLElement>(":scope > div")!;
     expect(region.querySelector('[role="alert"]')).toBeTruthy();
     expect([...region.querySelectorAll("button")].map((button) => button.textContent)).toContain(frontendText(language, "AGENT_LIST_RETRY"));
+  });
+
+  it("draws the pending turn as beUI conversation parts in the active locale", async () => {
+    const chinese = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    await mount(<AgentPage locale={chinese} scope="all" question="证据在哪里？" stage="evidence" state={{ kind: "loading" }} />);
+    const pending = container.querySelector<HTMLElement>('[data-page-state="loading"][aria-busy="true"]')!;
+    expect(pending.querySelector('[data-state="streaming"]')).toBeTruthy();
+    expect(pending.querySelector('[data-content="step"]')).toBeTruthy();
+    expect(pending.textContent).toContain(frontendText(chinese, "AGENT_STAGE_EVIDENCE"));
+    expect(pending.textContent).toContain(frontendText(chinese, "AGENT_STAGE_VALIDATING"));
+    // The activity component's own English defaults must never reach the DOM.
+    expect(pending.textContent).not.toContain("Thinking");
+    expect(pending.textContent).not.toContain("Searching the web");
+    expect(container.textContent).not.toContain(frontendText(language, "AGENT_STOP"));
+  });
+
+  it("names restored transcript rows in the active locale and keeps their citations", async () => {
+    const chinese = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    await mount(<AgentTranscript locale={chinese} messages={[
+      { role: "user", content: "旧问题", citations: [] },
+      { role: "assistant", content: "旧回答", citations: [{ id: "cite-1", href: "/knowledge/k1#cite-1", title: "条目" }] },
+    ]} />);
+    const transcript = container.querySelector<HTMLElement>(`section[aria-label="${frontendText(chinese, "AGENT_HISTORY")}"]`)!;
+    const rows = [...transcript.querySelectorAll<HTMLElement>('[data-slot="message"]')];
+    expect(rows.map((row) => row.getAttribute("data-from"))).toEqual(["user", "assistant"]);
+    expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([frontendText(chinese, "AGENT_QUESTION_LABEL"), frontendText(chinese, "AGENT_HISTORY_ANSWER")]);
+    expect(transcript.querySelector('[aria-label="user message"]')).toBeNull();
+    expect(transcript.querySelector('[aria-label="assistant message"]')).toBeNull();
+    const log = transcript.querySelector<HTMLElement>('[role="log"]')!;
+    expect(log.textContent).toContain("旧问题");
+    expect(log.textContent).toContain("旧回答");
+    expect(transcript.querySelector('a[href="/knowledge/k1#cite-1"]')!.textContent).toBe("条目");
+    // The transcript scrolls inside its own bounded viewport, not the page.
+    const viewport = log.parentElement!;
+    expect(viewport.className).toContain("h-80");
+    expect(viewport.className).toContain("lg:h-96");
+    expect(viewport.className).not.toContain("h-full");
   });
 
   async function mount(element: React.ReactNode) { await act(async () => root.render(element)); await flush(); }

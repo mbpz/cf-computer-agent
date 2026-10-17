@@ -183,14 +183,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             viewBox="0 0 24 24"
             fill="none"
             className={cn(
-              "absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-(--color-success)",
+              // The success tick uses the app's primary token: this theme defines no
+              // separate success colour, and the design lock adds no new token.
+              "absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-primary",
               classNames?.successIcon,
             )}
           >
             <motion.path
               d="M5 12.5l4.5 4.5L19 7.5"
               stroke="currentColor"
-              
+              strokeWidth={2.5}
               strokeLinecap="round"
               strokeLinejoin="round"
               initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}

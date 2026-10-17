@@ -6,7 +6,8 @@ import { cn } from "../../lib/utils";
  * The app's single Button, rendered by beUI's `motion/button/base`, so dialogs,
  * tables and pages share one button surface. The historical variant and size names
  * map onto beUI's, which keeps all importers unchanged; link-shaped buttons use
- * beUI's `ButtonLink` directly.
+ * beUI's `ButtonLink` directly. A write that reports its own progress uses
+ * `StatefulButton` (beUI `button-stateful`) from this same module.
  */
 const VARIANT = {
   default: "primary",
@@ -22,6 +23,12 @@ const SIZE = { default: "md", md: "md", sm: "sm", lg: "lg", icon: "icon" } as co
 
 export type ButtonVariantName = keyof typeof VARIANT;
 export type ButtonSizeName = keyof typeof SIZE;
+
+export {
+  StatefulButton,
+  type ButtonState,
+  type StatefulButtonProps,
+} from "../motion/button/stateful";
 
 export interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "style" | "onAnimationStart" | "onDragStart" | "onDragEnd" | "onDrag"> {
   variant?: ButtonVariantName;

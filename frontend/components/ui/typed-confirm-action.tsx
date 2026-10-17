@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "./button";
 import { Dialog, DialogContent, DialogTitle } from "./dialog";
+import { Input } from "./input";
 
 /**
  * Confirmation for an irreversible administrator action that requires the
@@ -41,9 +42,10 @@ export function TypedConfirmAction({ open, title, description, expectLabel, expe
       <p id={descriptionId} className="mt-3 break-words text-sm text-muted-foreground">{description}</p>
       <label className="mt-4 block text-sm font-medium" htmlFor={inputId}>{inputLabel}</label>
       <p className="mt-1 break-words text-sm text-muted-foreground">{expectLabel}</p>
-      <input id={inputId} data-typed-confirm-input value={typed} disabled={pending} autoComplete="off" spellCheck={false}
-        onChange={(event) => setTyped(event.target.value)}
-        className="mt-2 w-full rounded-md border bg-background px-3 py-2 text-sm" />
+      {/* The shared field primitive, so the typed confirmation cannot drift into a
+          second input surface: same beUI field language as every other text field. */}
+      <Input id={inputId} data-typed-confirm-input value={typed} disabled={pending} autoComplete="off" spellCheck={false}
+        onChange={(event) => setTyped(event.target.value)} className="mt-2" />
       <div className="mt-6 flex flex-wrap justify-end gap-2">
         <Button data-cancel-action variant="outline" disabled={pending} onClick={onCancel}>{cancelLabel}</Button>
         <Button data-confirm-action variant={destructive ? "destructive" : "default"} disabled={!matches || pending} onClick={() => { if (matches && !pending) onConfirm(); }}>
