@@ -35,6 +35,8 @@
 
 2026-10-17 成员页双页签与 `ui/tabs` 改为组合 `motion/tabs` 后重新对账：`components/ui/tabs.tsx` 由自绘改为在已安装载荷 `motion/tabs.tsx` 外做适配器（导出名不变；§17 的两处 attribute-passthrough 补丁把 rest props 透到布局根、把 `hidden`/`data-state`/rest 透到面板），并由 `frontend/pages/admin/members-page.tsx:8` 渲染成「成员 / 授权记录」两页签。于是本文件原先 4 条未归属候选（`35:93`/`40:10`/`66:10`/`74:10`）随该路由归属，坐标变为 `67:5`/`73:10`/`103:10`/`121:10`，本节改写为“0，已归属”并撤下指纹；`motion/tabs.tsx` 的 8 条候选与 `members-page.tsx` 的重排都不产生未归属项。同一轮里 `components/ui/dropdown-menu.tsx` 作为死代码被删除（Wave 4 已记录它失去唯一消费者），其 7 条 `unmounted-ui` 行与指纹随之撤回。未归属候选 192 → **181**，分类计数按行实测改为 app-boundary 30、unmounted-ui 60（上轮表格里的 71 是早期估算，未随行数校正）。不扩大本记录的运行验收结论。
 
+2026-10-17 成员页页签写入 URL 后重新对账：`AdminMembersRoute` 在 `frontend/app.tsx` 增加 `changeTab`、挂载/搜索条件归一化 effect 与一条 `subscribeWorkspaceLocation` 分支，并新增纯派生助手 `frontend/lib/admin-members-query.ts`（`isAdminMembersTab`/`parseAdminMembersTab`/`writeAdminMembersTab`/`normalizeAdminMembersTab`）。本文件的两个未归属外层候选（AppShell 的 navigate/logout 转发、SettingsPage 的 props 透传）属性、回调与前置条件均未变，仅因新增一行下移至 **236:106 / 263:39**，逐字重记；新助手没有任何 JSX/监听器候选（解析、写串、归一化都无副作用），`members-page.tsx` 的 25 条候选全在该路由 root 内，故未归属候选仍为 **181**。同步 `app.tsx` 与 `lib/workspace-location.ts` 指纹（后者仅一行编辑，其 `63:3` 候选未动）。不扩大本记录的运行验收结论。
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
@@ -56,8 +58,8 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 181 项，但 A01 
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:235:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:262:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:236:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:263:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
 
 ## `frontend/components/agents/agent-activity/activity-row.tsx`（0，2026-10-17 随 agent-page 接入归属）
 
@@ -596,7 +598,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `2c927d5fed7d61bfa38f9ad99684dc11c3f845fa5e8b19eedbbac6bed853edf1`
+- `frontend/app.tsx`: `b7fa7cbff7b69b484566986792c3b546eaae80a07a4e770c83f3c93954c96e85`
 - `frontend/components/agent/answer-panel.tsx`: `d604801b674d21ef059a70f79cc367326ceccf60ba5e400c4d3480eca1e63586`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/agents/message-bubble.tsx`: `0fe1347583c44eee1d69e84aae80e2ea2097334ddc55a29469775616e0b7b43d`
@@ -645,7 +647,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/features/environments/network-lifecycle.mjs`: `0e40ef5fc54547a8eb8769598176d1bdae454d99a4e62a143981b7f545d89e06`
 - `frontend/features/environments/storage/checkpoints.mjs`: `0f3e6fdf0a47455748cc139f7b811ca87be00a144c8a3c25433c26647c085722`
 - `frontend/lib/use-toast.tsx`: `0b4f788931e28f9eb5d87d8d84414568187c35736094130452ad272891b950a8`
-- `frontend/lib/workspace-location.ts`: `b77ff862964645fe25610e09f79b8409740f72a85a5685d934adc7e0ff60b92d`
+- `frontend/lib/workspace-location.ts`: `8e5fd84e7f611784f46a05016808cb6c2a5a7b507d4be306ae490afcac31bd35`
 - `frontend/main.tsx`: `9ba6f443d0f7da037015cb7f1d1b3444777989588c66429d3630a0c5fb500391`
 - `frontend/pages/workbench-landing/public-workbench-page.tsx`: `797896e7a11327b89eebdf03c802c55872bf2017517ebd94410f714793974866`
 - `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `19b47d756dd823d4934eacd11d364bb3602b7f8fa09e74e4e5db588affdd761b`
@@ -772,3 +774,11 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/components/ui/dropdown-menu.tsx`：作为死代码删除（Wave 4 已判定它失去唯一消费者，是否删除当时留作单独决定；本轮已执行删除，工作树不再有该文件）。上一轮为它记的 7 条 `unmounted-ui` 行与指纹撤回，原因是**源码不存在**，不是被接线。
 - 指纹：撤下 2 条（`ui/tabs.tsx` 已归属、`ui/dropdown-menu.tsx` 已删除），本轮无新增、无刷新——`app-shell.tsx`、`members-page.tsx` 等参与接入的文件本身没有候选，不在指纹范围。行数与计数已按行实测对齐：app-boundary 30、public-dynamic 5、background 3、unmounted-ui 60、vm-runtime-unshipped 77、vm-not-mounted 6，合计 181。
 - 门禁：`node --test scripts/frontend-operation-inventory.test.mjs` 10/10 通过（含索引新鲜度），本轮仍只做源码对账，不改变 A01、A02、A05、D04 的开放状态。
+
+### 2026-10-17 成员页页签写入 URL（`?tab=invitations`）后重新对账
+
+- 触发变化：`AdminMembersRoute`（`frontend/app.tsx`）接管页签状态，新增 `changeTab`、挂载与搜索变化的归一化 effect，以及一条 `subscribeWorkspaceLocation` 分支，把当前页签写回 `?tab=` 并响应外部导航；新增助手 `frontend/lib/admin-members-query.ts` 只做纯派生（`ADMIN_MEMBERS_TABS`、`isAdminMembersTab`、`parseAdminMembersTab`、`writeAdminMembersTab`、`normalizeAdminMembersTab`）。未归属候选仍为 **181**，文件集合与分类均未变。
+- 重锚 2 条（措辞逐字不变）：`frontend/app.tsx` 的 `235:106 → 236:106`（AppShell 的 `onNavigate`/`onLogout` 转发）与 `262:39 → 263:39`（`SettingsPage` 的 locale/member 透传）。两条候选的属性、回调与前置条件没有变化——新逻辑都在 `AdminMembersRoute` 内部，坐标只随顶部新增的一行导入下移，因此仍记 `app-boundary`。
+- 无新增行：`frontend/lib/admin-members-query.ts` 没有任何控件、监听器或 spread 候选（解析/写串/归一化都是无副作用的字符串函数），按“有候选才登记”的规则不入表和指纹；`frontend/pages/admin/members-page.tsx` 改为受控页签后仍有 25 条候选，全部已随 `workbench-admin-members` 路由 root 归属，其坐标变化不影响本记录。`subscribeWorkspaceLocation` 本身在 `lib/workspace-location.ts:112:3` 已归属（App 侧使用），新的调用点不会把它变回未归属。
+- 指纹：刷新 2 条——`frontend/app.tsx`（新增导入与路由分支）与 `frontend/lib/workspace-location.ts`（一行编辑；其唯一未归属候选 `63:3` 的 `subscribeWorkspaceHistoryFault` 坐标与语义未变）。无新增、无删除。
+- 门禁：`node --test scripts/frontend-operation-inventory.test.mjs` 10/10 通过（含索引新鲜度）；本轮仍是源码对账，不改变 A01、A02、A05、D04 的开放状态。

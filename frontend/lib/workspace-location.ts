@@ -20,7 +20,7 @@ const PRIMARY_QUERY_KEYS: Readonly<Record<string, readonly string[]>> = {
   "/admin/submissions": NUMBERED_PAGE_QUERY_KEYS,
   "/admin/duplicates": NUMBERED_PAGE_QUERY_KEYS,
   "/admin/assets": [...NUMBERED_PAGE_QUERY_KEYS, "status"],
-  "/admin/members": [...NUMBERED_PAGE_QUERY_KEYS, "status"],
+  "/admin/members": [...NUMBERED_PAGE_QUERY_KEYS, "status", "tab"],
   "/admin/audit": [...NUMBERED_PAGE_QUERY_KEYS, "action"],
   "/admin/analytics": [...NUMBERED_PAGE_QUERY_KEYS, "days"],
 };

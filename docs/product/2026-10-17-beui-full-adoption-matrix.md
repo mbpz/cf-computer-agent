@@ -1104,3 +1104,37 @@ i18n：未新增键。标签「成员」用 `ADMIN_MEMBERS_TITLE`；「授权记
 - 指定套件 **5 文件 / 43 测试全绿**：`frontend-tabs`、`frontend-admin-invitations`、`frontend-admin-member-confirmation`、`frontend-admin-member-identity`、`frontend-admin-member-refresh`。
 - 连带复核：`frontend-admin-pages`、`frontend-admin-pagination-routes`、`frontend-workbench-landing-scene`、`frontend-workbench-landing-page`、`frontend-a11y` **5 文件 / 138 测试全绿**（着陆页仍消费载荷 `Tabs`，未改其调用点）。
 - 未新增 i18n 键、未改 `frontend/lib/*`、未动 ledger 与 operation inventory。
+
+
+## 27. Wave 4 · 成员管理标签页持久化到 URL（MembersTabs 后续，2026-10-17）
+
+用户要求把 `/admin/members` 的活动标签写入 URL：刷新与深链保持当前页，切页不产生历史条目。
+
+### 27.1 契约（`frontend/lib/admin-members-query.ts`）
+
+- 参数 `tab`，取值 `members` | `invitations`；默认 `members` 是规范形，**不出现在 URL**（`?tab=members` 会被归一化移除）。
+- `parseAdminMembersTab(search)`：缺失/重复（`tab` 出现多次）/未知值（`bogus`、空值）一律解析为 `members`（与 `parseCalendarSearch` 对重复/非法参数的处理同源）。
+- `writeAdminMembersTab(search, tab)`：先 `delete("tab")` 再按需 `set`，其余参数（`status`、`page`、`pageSize` …）原样保留；返回 `""` 或 `?…`。
+- `normalizeAdminMembersTab(search)`：URL 携带非规范 `tab` 时返回规范 search（用于 replace 归一化），规范时返回 `null`。
+- 契约测试 `test/unit/frontend-admin-members-query.test.ts`（3 条）：默认回落、默认省略且保留其它参数、仅非规范值归一化。
+
+### 27.2 路由与页面接线
+
+- `frontend/app.tsx` 的 `AdminMembersRoute` 新增 `tab` 状态，用 `useState(() => parseAdminMembersTab(search))` **在首帧前解析**（与 `status` 同一模式），因此 `?tab=invitations` 深链不会先渲染成员页；页面在加载态只渲染 `PageState`，加载完成后首次出现即为目标标签。
+- `changeTab(next)`：`writeAdminMembersTab(readWorkspaceLocation().search, next)` 后以 **`replace`** 写入（与 `changeStatusFilter` 的 `push` 相对）；`ownedQueryNavigation` 只包住这次只读查询写入（既有 leave-guard 语义：进行中的 PATCH 会拒绝切页，未决写入不会误触离开拦截）。切页不新增历史条目，Back 不会在标签间回放。
+- 归一化 effect：`normalizeAdminMembersTab(search)` 非 `null` 时 `replace` 到规范 URL（未知/多余/显式默认值），不做历史条目。
+- `subscribeWorkspaceLocation` 同时同步 `tab` 与 `status`，且**标签变化不触发成员列表重取**（只有 status 变化才 `invalidateQuery`）。
+- 页面 `MembersPage` 新增可选受控 props `tab` / `onTabChange`：路由传入时由 URL 驱动；直接渲染（既有测试）走内部 `useState`，仍可点击切换。页面不读 `window.location`。`admin-members-query` 的 `AdminMembersTab` 类型由页面与路由共用。
+- `frontend/lib/workspace-location.ts` 的 `/admin/members` 主键表增补 `tab`，使 `contentScrollKey` 反映标签变化（标签切换同时复位内容滚动）。
+
+### 27.3 测试（既有断言未改）
+
+新增 `test/unit/frontend-admin-members-tab.test.tsx`（4 条）：深链直达授权记录页（选中态、面板 `hidden`、URL 不变）、切页以 `replace` 写 URL 且保留 `status`/`page`/`pageSize`、历史条目数不变、未知值回落并归一化、显式默认值被移除。既有成员/邀请套件零改动即通过（`openInvitationsTab` 仍是原来的寻址）；`frontend-tabs`、`frontend-a11y` 不变。
+
+### 27.4 门禁
+
+- `npm run typecheck`（worker + frontend）干净。
+- 成员/邀请/路由/基元 **10 文件 / 128 测试全绿**：`frontend-admin-members-query`、`frontend-admin-members-tab`、`frontend-admin-invitations`、`frontend-admin-member-confirmation`、`frontend-admin-member-identity`、`frontend-admin-member-refresh`、`frontend-admin-pages`、`frontend-admin-pagination-routes`、`frontend-tabs`、`frontend-a11y`。
+- 契约冒烟 **30 测试全绿**：`frontend-app-contract`、`wcag-contract`、`i18n-contract`、`paged-list-contract`。
+- `workspace-shell` 单跑 **31 测试全绿**；并行批量运行时其 command-palette 聚焦断言偶发失败（`document.activeElement` 时序），与本切片改动无关（本次未改外壳/命令面板），隔离复跑通过。
+- 未新增 i18n 键、未改 `frontend/lib/i18n.ts`、未动 ledger 与 operation inventory。

@@ -14,6 +14,7 @@ import { Input } from "../../components/motion/input";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminMemberInvitation, AdminMemberInvitationStatus } from "../../lib/admin-member-invitations-data";
+import { isAdminMembersTab, type AdminMembersTab } from "../../lib/admin-members-query";
 import type { FrontendPageMetadata, SupportedPageSize } from "../../lib/numbered-page";
 
 const invitationStatusKeys: Record<AdminMemberInvitationStatus, string> = {
@@ -26,7 +27,7 @@ function withPlaceholder(text: string, placeholder: string, value: string): stri
   return text.replace(`{${placeholder}}`, value);
 }
 
-export function MembersPage({ onLoadRetry, members, pagination, status = "", pendingIds = [], loading = false, forbidden = false, readRequired = false, pending = false, error, pageError, actionError, statusRecordBlocked = false, onDiscardStatusRecord, onStatusFilterChange, onPageChange, onPageSizeChange, onLoadMore, onStatusChange, invitations = [], invitationsPending = false, invitationWritePending = false, invitationError, invitationsError, issuedInvitation, onIssueInvitation, onRevokeInvitation, onLoadInvitationsRetry, locale }: { onLoadRetry?: () => void; members: readonly { id: string; email?: string; role?: string; status?: string }[]; pagination?: FrontendPageMetadata; status?: "" | "active" | "disabled"; pendingIds?: readonly string[]; loading?: boolean; forbidden?: boolean; readRequired?: boolean; pending?: boolean; error?: string; pageError?: string; actionError?: string; statusRecordBlocked?: boolean; onDiscardStatusRecord?: () => void; onStatusFilterChange?: (status: "" | "active" | "disabled") => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void; onLoadMore?: () => void; onStatusChange?: (id: string, status: "active" | "disabled") => void; invitations?: readonly AdminMemberInvitation[]; invitationsPending?: boolean; invitationWritePending?: boolean; invitationError?: string; invitationsError?: string; issuedInvitation?: { email: string; code: string; expiresAt: string } | null; onIssueInvitation?: (email: string) => void; onRevokeInvitation?: (id: string) => void; onLoadInvitationsRetry?: () => void; locale: LocaleRuntime }) {
+export function MembersPage({ onLoadRetry, members, pagination, status = "", pendingIds = [], loading = false, forbidden = false, readRequired = false, pending = false, error, pageError, actionError, statusRecordBlocked = false, onDiscardStatusRecord, onStatusFilterChange, onPageChange, onPageSizeChange, onLoadMore, onStatusChange, invitations = [], invitationsPending = false, invitationWritePending = false, invitationError, invitationsError, issuedInvitation, onIssueInvitation, onRevokeInvitation, onLoadInvitationsRetry, tab, onTabChange, locale }: { onLoadRetry?: () => void; members: readonly { id: string; email?: string; role?: string; status?: string }[]; pagination?: FrontendPageMetadata; status?: "" | "active" | "disabled"; pendingIds?: readonly string[]; loading?: boolean; forbidden?: boolean; readRequired?: boolean; pending?: boolean; error?: string; pageError?: string; actionError?: string; statusRecordBlocked?: boolean; onDiscardStatusRecord?: () => void; onStatusFilterChange?: (status: "" | "active" | "disabled") => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void; onLoadMore?: () => void; onStatusChange?: (id: string, status: "active" | "disabled") => void; invitations?: readonly AdminMemberInvitation[]; invitationsPending?: boolean; invitationWritePending?: boolean; invitationError?: string; invitationsError?: string; issuedInvitation?: { email: string; code: string; expiresAt: string } | null; onIssueInvitation?: (email: string) => void; onRevokeInvitation?: (id: string) => void; onLoadInvitationsRetry?: () => void; tab?: AdminMembersTab; onTabChange?: (tab: AdminMembersTab) => void; locale: LocaleRuntime }) {
   type StatusConfirmation = {
     kind: "status"; id: string; email?: string; previousStatus: string; nextStatus: "active" | "disabled";
     list: typeof members; filter: typeof status; page?: number; pageSize?: number;
@@ -40,6 +41,14 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  // The route owns the tab (URL-backed); a direct render stays switchable.
+  const [internalTab, setInternalTab] = useState<AdminMembersTab>("members");
+  const activeTab = tab ?? internalTab;
+  const changeTab = (next: string) => {
+    if (!isAdminMembersTab(next)) return;
+    if (tab === undefined) setInternalTab(next);
+    onTabChange?.(next);
+  };
   const addTitleId = useId();
   const addDescriptionId = useId();
   // The action confirmation must be explicitly resolved, never discarded by navigation.
@@ -134,7 +143,7 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
       : <>
     {statusRecordBlocked && <div role="alert" data-member-status-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardStatusRecord}>{frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD")}</Button></div>}
     {(actionError || pageError || readRequired) && <div role="alert" className="space-y-2 text-sm text-destructive">{(actionError || pageError) && <p>{actionError || pageError}</p>}{readRequired && <p>{frontendText(locale, "ADMIN_MEMBER_READ_REQUIRED")}</p>}{onLoadRetry && <Button type="button" variant="outline" disabled={pending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</div>}
-    <Tabs defaultValue="members" className="flex flex-col lg:min-h-0 lg:flex-1">
+    <Tabs value={activeTab} onValueChange={changeTab} className="flex flex-col lg:min-h-0 lg:flex-1">
       <TabsList wrapperClassName="shrink-0">
         <TabsTrigger value="members">{frontendText(locale, "ADMIN_MEMBERS_TITLE")}</TabsTrigger>
         <TabsTrigger value="invitations">{frontendText(locale, "ADMIN_INVITATION_LIST_TITLE")}</TabsTrigger>

@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：442；操作/转发候选：1792。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：443；操作/转发候选：1793。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -244,6 +244,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/lib/admin-member-invitations-data.ts | 0 |
 | frontend/lib/admin-member-status-intent.ts | 0 |
 | frontend/lib/admin-members-data.ts | 0 |
+| frontend/lib/admin-members-query.ts | 0 |
 | frontend/lib/admin-menu-draft.ts | 0 |
 | frontend/lib/admin-menu-write-intent.ts | 0 |
 | frontend/lib/admin-menus-data.ts | 0 |
@@ -399,7 +400,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/admin/duplicate-queue-page.tsx | 8 |
 | frontend/pages/admin/knowledge-item-page.tsx | 11 |
 | frontend/pages/admin/knowledge-item-route.tsx | 2 |
-| frontend/pages/admin/members-page.tsx | 24 |
+| frontend/pages/admin/members-page.tsx | 25 |
 | frontend/pages/admin/menu-editor.tsx | 11 |
 | frontend/pages/admin/menus-page.tsx | 16 |
 | frontend/pages/admin/recycle-bin-page.tsx | 14 |
@@ -483,7 +484,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /admin/submissions | frontend/app.tsx#ReviewQueueRoute | 142 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/duplicates | frontend/app.tsx#AdminDuplicateRoute; frontend/lib/admin-duplicates-data.ts#* | 106 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /admin/assets | frontend/app.tsx#AdminAssetsRoute; frontend/lib/admin-assets-data.ts#* | 134 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /admin/members | frontend/app.tsx#AdminMembersRoute; frontend/lib/admin-members-data.ts#* | 140 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /admin/members | frontend/app.tsx#AdminMembersRoute; frontend/lib/admin-members-data.ts#* | 141 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /admin/roles | frontend/app.tsx#AdminRolesRoute; frontend/lib/admin-roles-data.ts#* | 77 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /admin/menus | frontend/app.tsx#AdminMenusRoute; frontend/lib/admin-menus-data.ts#* | 86 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/spaces | frontend/app.tsx#AdminSpacesRoute; frontend/lib/admin-spaces-data.ts#* | 104 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
@@ -509,94 +510,94 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 235:106 App | AppShell page | onNavigate=navigate; onLogout=() =&gt; logout(owner) | earlier return: sessionError; earlier return: anonymous && pathname === "/"; earlier return: anonymous; earlier return: !session |
-| 262:39 renderPage | SettingsPage  |  | {"kind":"branch","expression":"session","branch":"true"} |
-| 361:10 HomeRoute | HomePage  | onLoadMoreRecent=loadMoreRecent; onRetry=() =&gt; { if (pending.current) return; pending.current = true; setState({ kind: "loading" }); setRetry(value =&gt; … |  |
-| 434:10 AdminAnalyticsRoute | AdminAnalyticsPage  | onDaysChange=changeDays; onLoadMore=() =&gt; { if (state.kind === "ready" && state.data.recentVisitors.pagination.page &lt; state.data.recentVisitors.paginat… |  |
-| 470:10 AdminRolesRoute | AdminRolesPage  | onLoadRetry=controller.retryRead |  |
-| 476:10 AdminRoleNewRoute | AdminRoleCreatePage  | onCreate=controller.createRole; onCreated=back; onCancel=back; onDiscardRecord=controller.discardRecord; onRetryWrite=controller.retryWrite; onLoadRetry=cont… |  |
-| 485:10 AdminRoleDetailRoute | AdminRoleDetailPage  | onBack=() =&gt; writeWorkspaceHistory("push", "/admin/roles"); onLoadRetry=controller.retryRead; onSave=controller.recordBlocked ? undefined : (role, allowBi… |  |
-| 520:5 AdminMenusRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 612:10 AdminMenusRoute | AdminMenusPage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onCreate=recordBlocked ? undefined : (input) =&gt; mutate({ op: "create", input }, () =&gt; createAdmin… |  |
-| 667:5 KnowledgeReaderSession | owner.addEventListener  | "beforeunload", warn |  |
-| 801:5 KnowledgeReaderSession | window.addEventListener  | "storage", onStorage |  |
-| 829:14 KnowledgeReaderSession | KnowledgeReaderPage  | onRetry=() =&gt; setRetry((value) =&gt; value + 1) | {"kind":"branch","expression":"state.kind !== \"ready\"","branch":"true"} |
-| 888:10 KnowledgeReaderSession | KnowledgeReaderPage  | onCompare=showDiff; onRetryRelated=retryRelated; onRetryBacklinks=retryBacklinks; onCheckFavorite=checkFavorite; onToggleFavorite=toggleFavorite | earlier return: state.kind !== "ready" |
-| 896:10 KnowledgeRoute | MemberKnowledgeRoute  |  | spread: props |
-| 1077:10 MemberKnowledgeRoute | KnowledgePage  | onFilterChange=(next) =&gt; writeWorkspaceHistory("push", &#96;/knowledge${writeKnowledgeFilters(readWorkspaceLocation().search, next)}&#96;); onRetry=() =&g… |  |
-| 1142:5 MemberSearchRoute | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
-| 1228:10 MemberSearchRoute | SearchPage  | onFilterChange=(next) =&gt; { const nextSearch = writeSearchFilters(readWorkspaceLocation().search, next); writeWorkspaceHistory("push", &#96;/search${nextSe… |  |
-| 1234:88 AgentRoute | a frontendText(locale, "AGENT_NEW_CONVERSATION") | href="/agent" |  |
-| 1301:5 AgentConversationRoute | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
-| 1415:183 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_ABANDON") | onClick=abandon | {"kind":"branch","expression":"storageBlocked","branch":"true"} |
-| 1416:558 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_RETRY") | onClick=() =&gt; submit(intentRef.current!.question) | {"kind":"branch","expression":"unconfirmed && intentRef.current","branch":"true"}; earlier return: storageBlocked |
-| 1416:671 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_ABANDON") | onClick=abandon | {"kind":"branch","expression":"unconfirmed && intentRef.current","branch":"true"}; earlier return: storageBlocked |
-| 1418:181 AgentConversationRoute | Button frontendText(locale, "AGENT_RETRY") | onClick=() =&gt; setRecoveryVersion((value) =&gt; value + 1) | {"kind":"branch","expression":"recovery === \"error\"","branch":"true"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
-| 1418:292 AgentConversationRoute | a frontendText(locale, "AGENT_NEW_CONVERSATION") | href="/agent" | {"kind":"branch","expression":"recovery === \"error\"","branch":"true"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
-| 1421:27 AgentConversationRoute | div  |  | {"kind":"logical","expression":"composerBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier … |
-| 1421:187 AgentConversationRoute | Button frontendText(locale, "AGENT_COMPOSER_RECORD_DISCARD") | onClick=discardComposer; type="button" | {"kind":"logical","expression":"composerBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier … |
-| 1422:26 AgentConversationRoute | p composerNotice |  | {"kind":"logical","expression":"composerNotice","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier r… |
-| 1423:33 AgentConversationRoute | div  |  | {"kind":"logical","expression":"feedbackRecordBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
-| 1423:200 AgentConversationRoute | Button frontendText(locale, "AGENT_FEEDBACK_RECORD_DISCARD") | onClick=discardFeedback; type="button" | {"kind":"logical","expression":"feedbackRecordBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
-| 1424:83 AgentConversationRoute | div  |  | {"kind":"logical","expression":"feedbackIntent && visibleConversation !== feedbackIntent.conversationId","operator":"&&"}; earlier return: storageBlocked; ea… |
-| 1424:250 AgentConversationRoute | Button frontendText(locale, "AGENT_FEEDBACK_RETRY") | onClick=retryFeedback; type="button" | {"kind":"logical","expression":"feedbackIntent && visibleConversation !== feedbackIntent.conversationId","operator":"&&"}; earlier return: storageBlocked; ea… |
-| 1426:37 AgentConversationRoute | a frontendText(locale, "AGENT_RESTORE_LINK") | href=&#96;/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}&#96; | {"kind":"logical","expression":"conversationIdRef.current","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current… |
-| 1427:7 AgentConversationRoute | AgentPage  | onQuestionChange=value =&gt; questionDraft.edit("question", value); onSubmit=() =&gt; submit(); onCancel=cancel; onRetry=() =&gt; submit(lastQuestion); onSta… | earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier return: recovery === "loading" && state.kind !== "loading"; earlier… |
-| 1664:41 MemberSubmitForm | SubmitPage  | onDraftChange=changeDraft; onSubmit=() =&gt; submit(draftRef.current); onDraftRetry=() =&gt; { if (draftWrites.state.reason === "unknown" &#124;&#124; draftW… | spread: (resubmitView ? { resubmit: resubmitView, onResubmitRestart: restartResubmit, onResubmitLeave: leaveResubmit, onResubmitStatusRetry: () =&gt; { if (r… |
-| 1744:10 MySubmissionsRoute | MySubmissionsPage  | onResubmit=memberId ? startResubmit : undefined; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onPageChange=(next) =&gt; load(next); onPageSizeC… |  |
-| 1795:5 TasksRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 1952:27 TasksRoute | Button frontendText(locale, "TASKS_WRITE_RECORD_DISCARD") | onClick=discardRecord | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 1956:7 TasksRoute | Button frontendText(locale, "TASKS_CHECK_WRITE") | onClick=() =&gt; void resolveListUnknown("check") | disabled=listRecovering; {"kind":"logical","expression":"listUnknown","operator":"&&"} |
-| 1957:7 TasksRoute | Button frontendText(locale, "TASKS_RETRY_WRITE") | onClick=() =&gt; void resolveListUnknown("retry") | disabled=listRecovering; {"kind":"logical","expression":"listUnknown","operator":"&&"} |
-| 1959:29 TasksRoute | p actionNotice |  | {"kind":"logical","expression":"actionNotice","operator":"&&"} |
-| 1959:90 TasksRoute | TasksPage  | onCreate=() =&gt; setEditor({ taskId: null }); onOpen=(taskId) =&gt; setEditor({ taskId }); onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onFilt… |  |
-| 1959:1381 TasksRoute | TaskEditor  | onClose=() =&gt; setEditor(null); onChanged=() =&gt; setRetryVersion((value) =&gt; value + 1); onDenied=clearDeniedTasks | {"kind":"logical","expression":"editor","operator":"&&"}; spread: (editor.restored ? { restored: editor.restored } : {}) |
-| 1985:5 InboxRoute | owner.addEventListener  | "beforeunload", warn | earlier return: !taskTarget?.restored &#124;&#124; taskAccessReady |
-| 2103:27 InboxRoute | Button frontendText(locale, "TASKS_WRITE_RECORD_DISCARD") | onClick=() =&gt; { if (memberId && discardBlockedTaskWrite(memberId)) setTaskRecordBlocked(false); } | {"kind":"logical","expression":"taskRecordBlocked","operator":"&&"} |
-| 2106:27 InboxRoute | Button frontendText(locale, "NAV_TASKS") | onClick=() =&gt; writeWorkspaceHistory("push", "/tasks") | {"kind":"logical","expression":"taskCreatePending && taskAccessReady","operator":"&&"} |
-| 2107:12 InboxRoute | PlanningWriteRecovery  | onDenied=clearDenied; onReadFailure=clearReadFailure |  |
-| 2107:198 InboxRoute | InboxPage  | onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onCreateLock=locked =&gt; { captureLockedRef.current = locked; setCaptureLocked(locked); }; onCreate… |  |
-| 2141:73 InboxRoute | TaskEditor  | onClose=() =&gt; setTaskTarget(null); onChanged=() =&gt; setRetryVersion(value =&gt; value + 1); onDenied=error =&gt; { if (clearDenied(error)) setTaskTarget… | {"kind":"logical","expression":"taskTarget && taskAccessReady","operator":"&&"}; spread: (taskTarget.restored ? { restored: taskTarget.restored } : {}) |
-| 2255:12 GoalsRoute | PlanningWriteRecovery  | onDenied=clearDeniedGoals |  |
-| 2255:160 GoalsRoute | GoalsPage  | onManageTasks=(goal) =&gt; { if (pendingRef.current &#124;&#124; createLockedRef.current &#124;&#124; writeRecovery.locked &#124;&#124; relationGoalRef.curre… |  |
-| 2268:22 GoalsRoute | GoalTasksEditor  | onDenied=clearDeniedGoals; onReadFailure=relationReadFailed; onClose=() =&gt; void closeRelations(); onBeginWrite=writeRecovery.begin; onFinishWrite=writeRec… | {"kind":"logical","expression":"relationGoal","operator":"&&"} |
-| 2422:12 ProjectsRoute | PlanningWriteRecovery  | onDenied=clearDeniedProjects |  |
-| 2422:166 ProjectsRoute | ProjectsPage  | onManageRelations=openRelations; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRetrySummary=(project) =&gt; void retrySummary(project); onCrea… |  |
-| 2424:40 ProjectsRoute | ProjectRelationsEditor  | onSummary=updateRelationSummary; onDenied=clearDeniedProjects; onClose=closeRelations; onBeginWrite=writeRecovery.begin; onFinishWrite=writeRecovery.finish | {"kind":"logical","expression":"relationProject","operator":"&&"} |
-| 2548:12 ProjectTimelineRoute | PlanningWriteRecovery  | onDenied=clearDenied |  |
-| 2548:165 ProjectTimelineRoute | ProjectTimelinePage  | onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onBack=() =&gt; writeWorkspaceHistory("push", "/projects"); onCreate=async input =&gt; { if (pending… |  |
-| 2657:12 CalendarRoute | PlanningWriteRecovery  | onDenied=clearDenied; onReadFailure=clearReadFailure |  |
-| 2657:198 CalendarRoute | CalendarPage  | onRangeChange=changeRange; onPageChange=(next) =&gt; void load(next); onPageSizeChange=(size) =&gt; setPageSize(size); onLoadMore=() =&gt; { if (state.kind =… |  |
-| 2699:51 TodayRoute | TodayPage  | onOpen=setTarget; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1) |  |
-| 2699:184 TodayRoute | TodayTargetDetail  | onClose=() =&gt; setTarget(null); onDenied=clearDenied | {"kind":"logical","expression":"target","operator":"&&"} |
-| 2724:5 FocusRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 2875:5 FocusRoute | p frontendText(locale, transitionRecovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_TRANSITION_UNCERTAIN") |  | {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"} |
-| 2876:5 FocusRoute | Button frontendText(locale, "FOCUS_RETRY") | onClick=() =&gt; setRetryVersion(value =&gt; value + 1) | disabled=pending; {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"} |
-| 2877:81 FocusRoute | Button frontendText(locale, "FOCUS_RETRY_TRANSITION") | onClick=() =&gt; void mutate(epoch =&gt; sendTransition(epoch, transitionRecovery.intent, true)) | disabled=pending; {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; {"kind":"logical","expr… |
-| 2881:5 FocusRoute | p frontendText(locale, recovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_START_UNCERTAIN") |  | {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; earlier return: transitionRecovery.kind !== "empty"… |
-| 2882:5 FocusRoute | Button frontendText(locale, "FOCUS_RETRY") | onClick=() =&gt; setRetryVersion(value =&gt; value + 1) | disabled=pending; {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; earlier return: transitionRecover… |
-| 2883:61 FocusRoute | Button frontendText(locale, "FOCUS_RETRY_START") | onClick=() =&gt; void mutate(epoch =&gt; sendStart(epoch, recovery.intent, recovery.intent), true) | disabled=pending; {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; {"kind":"logical","expression":"r… |
-| 2885:10 FocusRoute | FocusPage  | onDenied=clearDenied; onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onStart=input =&gt; void mutate(epoch =&gt; sendStart(epoch, input)); onTransi… | earlier return: transitionRecovery.kind !== "empty" && state.kind === "ready"; earlier return: recovery.kind !== "empty" && state.kind === "ready" |
-| 2927:51 WorkbenchReviewRoute | WorkbenchReviewPage  | onOpen=setTarget; onPeriodChange=changePeriod; onRetry=() =&gt; { setState({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onDiscardPeriod… |  |
-| 2927:366 WorkbenchReviewRoute | SnapshotTargetDetail  | onClose=() =&gt; setTarget(null); onDenied=clearDenied | {"kind":"logical","expression":"target","operator":"&&"} |
-| 3056:5 NotificationsRoute | window.addEventListener  | "beforeunload", warn |  |
-| 3117:10 NotificationsRoute | NotificationsPage  | onRetry=() =&gt; { setRevokedTarget(false); invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onFilterChange=(next: Notif… |  |
-| 3217:10 MessagesRoute | MessagesPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page: query.page + 1, limit: query.limit, cursor }); onPrevious=(… |  |
-| 3318:10 MemberDiscussionThreadRoute | ThreadPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRefresh=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page… |  |
-| 3403:5 BoardsRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 3555:10 BoardsRoute | BoardsPage  | onDiscardRecord=() =&gt; { if (!memberId &#124;&#124; !discardBlockedBoardMove(memberId)) { setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK"));… |  |
-| 3732:94 ReviewQueueRoute | ReviewQueueSession  |  | spread: props |
-| 3760:5 ReviewQueueSession | owner.addEventListener  | "beforeunload", warn |  |
-| 3889:10 ReviewQueueSession | ReviewQueuePage  | onOpenDetail=(id) =&gt; writeWorkspaceHistory("push", &#96;/admin/submissions/${encodeURIComponent(id)}&#96;); onDiscardDecisionRecord=discardRecord; onRetry… |  |
-| 3932:5 AdminDuplicateRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 4040:10 AdminDuplicateRoute | DuplicateQueuePage  | onLoadRetry=retryRead; onDiscardDecisionRecord=discardRecord; onDecision=recordBlocked ? undefined : (id, decision) =&gt; void decide(id, decision); onPageCh… |  |
-| 4080:5 AdminMembersRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 4284:10 AdminMembersRoute | MembersPage  | onLoadRetry=retryRead; onDiscardStatusRecord=discardRecord; onPageChange=(next) =&gt; { const controller = controllerRef.current; if (controller && state.kin… |  |
-| 4310:5 AdminSpacesRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 4418:10 AdminSpacesRoute | SpacesPage  | onLoadRetry=() =&gt; void read(); onLoadMore=() =&gt; void read("spaces"); onLoadCollections=id =&gt; void read("collections", id); onDiscardRecord=discardRe… |  |
-| 4486:10 AdminAuditRoute | AuditPage  | onRetry=retry; onActionChange=changeFilter; onPageChange=(next) =&gt; load(next); onPageSizeChange=(size) =&gt; setPageSize(size); onLoadMore=() =&gt; { if (… |  |
-| 4529:7 AdminAssetsRoute | owner.addEventListener  | "beforeunload", warn | {"kind":"branch","expression":"locked && !leaveGuardRef.current","branch":"true"} |
-| 4677:10 AdminAssetsRoute | AssetQueuePage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onRetry=recordBlocked ? undefined : (id) =&gt; void retry(id); onPreview=(id) =&gt; void showPreview(id… |  |
+| 236:106 App | AppShell page | onNavigate=navigate; onLogout=() =&gt; logout(owner) | earlier return: sessionError; earlier return: anonymous && pathname === "/"; earlier return: anonymous; earlier return: !session |
+| 263:39 renderPage | SettingsPage  |  | {"kind":"branch","expression":"session","branch":"true"} |
+| 362:10 HomeRoute | HomePage  | onLoadMoreRecent=loadMoreRecent; onRetry=() =&gt; { if (pending.current) return; pending.current = true; setState({ kind: "loading" }); setRetry(value =&gt; … |  |
+| 435:10 AdminAnalyticsRoute | AdminAnalyticsPage  | onDaysChange=changeDays; onLoadMore=() =&gt; { if (state.kind === "ready" && state.data.recentVisitors.pagination.page &lt; state.data.recentVisitors.paginat… |  |
+| 471:10 AdminRolesRoute | AdminRolesPage  | onLoadRetry=controller.retryRead |  |
+| 477:10 AdminRoleNewRoute | AdminRoleCreatePage  | onCreate=controller.createRole; onCreated=back; onCancel=back; onDiscardRecord=controller.discardRecord; onRetryWrite=controller.retryWrite; onLoadRetry=cont… |  |
+| 486:10 AdminRoleDetailRoute | AdminRoleDetailPage  | onBack=() =&gt; writeWorkspaceHistory("push", "/admin/roles"); onLoadRetry=controller.retryRead; onSave=controller.recordBlocked ? undefined : (role, allowBi… |  |
+| 521:5 AdminMenusRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 613:10 AdminMenusRoute | AdminMenusPage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onCreate=recordBlocked ? undefined : (input) =&gt; mutate({ op: "create", input }, () =&gt; createAdmin… |  |
+| 668:5 KnowledgeReaderSession | owner.addEventListener  | "beforeunload", warn |  |
+| 802:5 KnowledgeReaderSession | window.addEventListener  | "storage", onStorage |  |
+| 830:14 KnowledgeReaderSession | KnowledgeReaderPage  | onRetry=() =&gt; setRetry((value) =&gt; value + 1) | {"kind":"branch","expression":"state.kind !== \"ready\"","branch":"true"} |
+| 889:10 KnowledgeReaderSession | KnowledgeReaderPage  | onCompare=showDiff; onRetryRelated=retryRelated; onRetryBacklinks=retryBacklinks; onCheckFavorite=checkFavorite; onToggleFavorite=toggleFavorite | earlier return: state.kind !== "ready" |
+| 897:10 KnowledgeRoute | MemberKnowledgeRoute  |  | spread: props |
+| 1078:10 MemberKnowledgeRoute | KnowledgePage  | onFilterChange=(next) =&gt; writeWorkspaceHistory("push", &#96;/knowledge${writeKnowledgeFilters(readWorkspaceLocation().search, next)}&#96;); onRetry=() =&g… |  |
+| 1143:5 MemberSearchRoute | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
+| 1229:10 MemberSearchRoute | SearchPage  | onFilterChange=(next) =&gt; { const nextSearch = writeSearchFilters(readWorkspaceLocation().search, next); writeWorkspaceHistory("push", &#96;/search${nextSe… |  |
+| 1235:88 AgentRoute | a frontendText(locale, "AGENT_NEW_CONVERSATION") | href="/agent" |  |
+| 1302:5 AgentConversationRoute | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
+| 1416:183 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_ABANDON") | onClick=abandon | {"kind":"branch","expression":"storageBlocked","branch":"true"} |
+| 1417:558 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_RETRY") | onClick=() =&gt; submit(intentRef.current!.question) | {"kind":"branch","expression":"unconfirmed && intentRef.current","branch":"true"}; earlier return: storageBlocked |
+| 1417:671 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_ABANDON") | onClick=abandon | {"kind":"branch","expression":"unconfirmed && intentRef.current","branch":"true"}; earlier return: storageBlocked |
+| 1419:181 AgentConversationRoute | Button frontendText(locale, "AGENT_RETRY") | onClick=() =&gt; setRecoveryVersion((value) =&gt; value + 1) | {"kind":"branch","expression":"recovery === \"error\"","branch":"true"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
+| 1419:292 AgentConversationRoute | a frontendText(locale, "AGENT_NEW_CONVERSATION") | href="/agent" | {"kind":"branch","expression":"recovery === \"error\"","branch":"true"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
+| 1422:27 AgentConversationRoute | div  |  | {"kind":"logical","expression":"composerBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier … |
+| 1422:187 AgentConversationRoute | Button frontendText(locale, "AGENT_COMPOSER_RECORD_DISCARD") | onClick=discardComposer; type="button" | {"kind":"logical","expression":"composerBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier … |
+| 1423:26 AgentConversationRoute | p composerNotice |  | {"kind":"logical","expression":"composerNotice","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier r… |
+| 1424:33 AgentConversationRoute | div  |  | {"kind":"logical","expression":"feedbackRecordBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
+| 1424:200 AgentConversationRoute | Button frontendText(locale, "AGENT_FEEDBACK_RECORD_DISCARD") | onClick=discardFeedback; type="button" | {"kind":"logical","expression":"feedbackRecordBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
+| 1425:83 AgentConversationRoute | div  |  | {"kind":"logical","expression":"feedbackIntent && visibleConversation !== feedbackIntent.conversationId","operator":"&&"}; earlier return: storageBlocked; ea… |
+| 1425:250 AgentConversationRoute | Button frontendText(locale, "AGENT_FEEDBACK_RETRY") | onClick=retryFeedback; type="button" | {"kind":"logical","expression":"feedbackIntent && visibleConversation !== feedbackIntent.conversationId","operator":"&&"}; earlier return: storageBlocked; ea… |
+| 1427:37 AgentConversationRoute | a frontendText(locale, "AGENT_RESTORE_LINK") | href=&#96;/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}&#96; | {"kind":"logical","expression":"conversationIdRef.current","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current… |
+| 1428:7 AgentConversationRoute | AgentPage  | onQuestionChange=value =&gt; questionDraft.edit("question", value); onSubmit=() =&gt; submit(); onCancel=cancel; onRetry=() =&gt; submit(lastQuestion); onSta… | earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier return: recovery === "loading" && state.kind !== "loading"; earlier… |
+| 1665:41 MemberSubmitForm | SubmitPage  | onDraftChange=changeDraft; onSubmit=() =&gt; submit(draftRef.current); onDraftRetry=() =&gt; { if (draftWrites.state.reason === "unknown" &#124;&#124; draftW… | spread: (resubmitView ? { resubmit: resubmitView, onResubmitRestart: restartResubmit, onResubmitLeave: leaveResubmit, onResubmitStatusRetry: () =&gt; { if (r… |
+| 1745:10 MySubmissionsRoute | MySubmissionsPage  | onResubmit=memberId ? startResubmit : undefined; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onPageChange=(next) =&gt; load(next); onPageSizeC… |  |
+| 1796:5 TasksRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 1953:27 TasksRoute | Button frontendText(locale, "TASKS_WRITE_RECORD_DISCARD") | onClick=discardRecord | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 1957:7 TasksRoute | Button frontendText(locale, "TASKS_CHECK_WRITE") | onClick=() =&gt; void resolveListUnknown("check") | disabled=listRecovering; {"kind":"logical","expression":"listUnknown","operator":"&&"} |
+| 1958:7 TasksRoute | Button frontendText(locale, "TASKS_RETRY_WRITE") | onClick=() =&gt; void resolveListUnknown("retry") | disabled=listRecovering; {"kind":"logical","expression":"listUnknown","operator":"&&"} |
+| 1960:29 TasksRoute | p actionNotice |  | {"kind":"logical","expression":"actionNotice","operator":"&&"} |
+| 1960:90 TasksRoute | TasksPage  | onCreate=() =&gt; setEditor({ taskId: null }); onOpen=(taskId) =&gt; setEditor({ taskId }); onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onFilt… |  |
+| 1960:1381 TasksRoute | TaskEditor  | onClose=() =&gt; setEditor(null); onChanged=() =&gt; setRetryVersion((value) =&gt; value + 1); onDenied=clearDeniedTasks | {"kind":"logical","expression":"editor","operator":"&&"}; spread: (editor.restored ? { restored: editor.restored } : {}) |
+| 1986:5 InboxRoute | owner.addEventListener  | "beforeunload", warn | earlier return: !taskTarget?.restored &#124;&#124; taskAccessReady |
+| 2104:27 InboxRoute | Button frontendText(locale, "TASKS_WRITE_RECORD_DISCARD") | onClick=() =&gt; { if (memberId && discardBlockedTaskWrite(memberId)) setTaskRecordBlocked(false); } | {"kind":"logical","expression":"taskRecordBlocked","operator":"&&"} |
+| 2107:27 InboxRoute | Button frontendText(locale, "NAV_TASKS") | onClick=() =&gt; writeWorkspaceHistory("push", "/tasks") | {"kind":"logical","expression":"taskCreatePending && taskAccessReady","operator":"&&"} |
+| 2108:12 InboxRoute | PlanningWriteRecovery  | onDenied=clearDenied; onReadFailure=clearReadFailure |  |
+| 2108:198 InboxRoute | InboxPage  | onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onCreateLock=locked =&gt; { captureLockedRef.current = locked; setCaptureLocked(locked); }; onCreate… |  |
+| 2142:73 InboxRoute | TaskEditor  | onClose=() =&gt; setTaskTarget(null); onChanged=() =&gt; setRetryVersion(value =&gt; value + 1); onDenied=error =&gt; { if (clearDenied(error)) setTaskTarget… | {"kind":"logical","expression":"taskTarget && taskAccessReady","operator":"&&"}; spread: (taskTarget.restored ? { restored: taskTarget.restored } : {}) |
+| 2256:12 GoalsRoute | PlanningWriteRecovery  | onDenied=clearDeniedGoals |  |
+| 2256:160 GoalsRoute | GoalsPage  | onManageTasks=(goal) =&gt; { if (pendingRef.current &#124;&#124; createLockedRef.current &#124;&#124; writeRecovery.locked &#124;&#124; relationGoalRef.curre… |  |
+| 2269:22 GoalsRoute | GoalTasksEditor  | onDenied=clearDeniedGoals; onReadFailure=relationReadFailed; onClose=() =&gt; void closeRelations(); onBeginWrite=writeRecovery.begin; onFinishWrite=writeRec… | {"kind":"logical","expression":"relationGoal","operator":"&&"} |
+| 2423:12 ProjectsRoute | PlanningWriteRecovery  | onDenied=clearDeniedProjects |  |
+| 2423:166 ProjectsRoute | ProjectsPage  | onManageRelations=openRelations; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRetrySummary=(project) =&gt; void retrySummary(project); onCrea… |  |
+| 2425:40 ProjectsRoute | ProjectRelationsEditor  | onSummary=updateRelationSummary; onDenied=clearDeniedProjects; onClose=closeRelations; onBeginWrite=writeRecovery.begin; onFinishWrite=writeRecovery.finish | {"kind":"logical","expression":"relationProject","operator":"&&"} |
+| 2549:12 ProjectTimelineRoute | PlanningWriteRecovery  | onDenied=clearDenied |  |
+| 2549:165 ProjectTimelineRoute | ProjectTimelinePage  | onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onBack=() =&gt; writeWorkspaceHistory("push", "/projects"); onCreate=async input =&gt; { if (pending… |  |
+| 2658:12 CalendarRoute | PlanningWriteRecovery  | onDenied=clearDenied; onReadFailure=clearReadFailure |  |
+| 2658:198 CalendarRoute | CalendarPage  | onRangeChange=changeRange; onPageChange=(next) =&gt; void load(next); onPageSizeChange=(size) =&gt; setPageSize(size); onLoadMore=() =&gt; { if (state.kind =… |  |
+| 2700:51 TodayRoute | TodayPage  | onOpen=setTarget; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1) |  |
+| 2700:184 TodayRoute | TodayTargetDetail  | onClose=() =&gt; setTarget(null); onDenied=clearDenied | {"kind":"logical","expression":"target","operator":"&&"} |
+| 2725:5 FocusRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 2876:5 FocusRoute | p frontendText(locale, transitionRecovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_TRANSITION_UNCERTAIN") |  | {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"} |
+| 2877:5 FocusRoute | Button frontendText(locale, "FOCUS_RETRY") | onClick=() =&gt; setRetryVersion(value =&gt; value + 1) | disabled=pending; {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"} |
+| 2878:81 FocusRoute | Button frontendText(locale, "FOCUS_RETRY_TRANSITION") | onClick=() =&gt; void mutate(epoch =&gt; sendTransition(epoch, transitionRecovery.intent, true)) | disabled=pending; {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; {"kind":"logical","expr… |
+| 2882:5 FocusRoute | p frontendText(locale, recovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_START_UNCERTAIN") |  | {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; earlier return: transitionRecovery.kind !== "empty"… |
+| 2883:5 FocusRoute | Button frontendText(locale, "FOCUS_RETRY") | onClick=() =&gt; setRetryVersion(value =&gt; value + 1) | disabled=pending; {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; earlier return: transitionRecover… |
+| 2884:61 FocusRoute | Button frontendText(locale, "FOCUS_RETRY_START") | onClick=() =&gt; void mutate(epoch =&gt; sendStart(epoch, recovery.intent, recovery.intent), true) | disabled=pending; {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; {"kind":"logical","expression":"r… |
+| 2886:10 FocusRoute | FocusPage  | onDenied=clearDenied; onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onStart=input =&gt; void mutate(epoch =&gt; sendStart(epoch, input)); onTransi… | earlier return: transitionRecovery.kind !== "empty" && state.kind === "ready"; earlier return: recovery.kind !== "empty" && state.kind === "ready" |
+| 2928:51 WorkbenchReviewRoute | WorkbenchReviewPage  | onOpen=setTarget; onPeriodChange=changePeriod; onRetry=() =&gt; { setState({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onDiscardPeriod… |  |
+| 2928:366 WorkbenchReviewRoute | SnapshotTargetDetail  | onClose=() =&gt; setTarget(null); onDenied=clearDenied | {"kind":"logical","expression":"target","operator":"&&"} |
+| 3057:5 NotificationsRoute | window.addEventListener  | "beforeunload", warn |  |
+| 3118:10 NotificationsRoute | NotificationsPage  | onRetry=() =&gt; { setRevokedTarget(false); invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onFilterChange=(next: Notif… |  |
+| 3218:10 MessagesRoute | MessagesPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page: query.page + 1, limit: query.limit, cursor }); onPrevious=(… |  |
+| 3319:10 MemberDiscussionThreadRoute | ThreadPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRefresh=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page… |  |
+| 3404:5 BoardsRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 3556:10 BoardsRoute | BoardsPage  | onDiscardRecord=() =&gt; { if (!memberId &#124;&#124; !discardBlockedBoardMove(memberId)) { setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK"));… |  |
+| 3733:94 ReviewQueueRoute | ReviewQueueSession  |  | spread: props |
+| 3761:5 ReviewQueueSession | owner.addEventListener  | "beforeunload", warn |  |
+| 3890:10 ReviewQueueSession | ReviewQueuePage  | onOpenDetail=(id) =&gt; writeWorkspaceHistory("push", &#96;/admin/submissions/${encodeURIComponent(id)}&#96;); onDiscardDecisionRecord=discardRecord; onRetry… |  |
+| 3933:5 AdminDuplicateRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 4041:10 AdminDuplicateRoute | DuplicateQueuePage  | onLoadRetry=retryRead; onDiscardDecisionRecord=discardRecord; onDecision=recordBlocked ? undefined : (id, decision) =&gt; void decide(id, decision); onPageCh… |  |
+| 4085:5 AdminMembersRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 4306:10 AdminMembersRoute | MembersPage  | onLoadRetry=retryRead; onTabChange=changeTab; onDiscardStatusRecord=discardRecord; onPageChange=(next) =&gt; { const controller = controllerRef.current; if (… |  |
+| 4332:5 AdminSpacesRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 4440:10 AdminSpacesRoute | SpacesPage  | onLoadRetry=() =&gt; void read(); onLoadMore=() =&gt; void read("spaces"); onLoadCollections=id =&gt; void read("collections", id); onDiscardRecord=discardRe… |  |
+| 4508:10 AdminAuditRoute | AuditPage  | onRetry=retry; onActionChange=changeFilter; onPageChange=(next) =&gt; load(next); onPageSizeChange=(size) =&gt; setPageSize(size); onLoadMore=() =&gt; { if (… |  |
+| 4551:7 AdminAssetsRoute | owner.addEventListener  | "beforeunload", warn | {"kind":"branch","expression":"locked && !leaveGuardRef.current","branch":"true"} |
+| 4699:10 AdminAssetsRoute | AssetQueuePage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onRetry=recordBlocked ? undefined : (id) =&gt; void retry(id); onPreview=(id) =&gt; void showPreview(id… |  |
 
 ## frontend/components/admin/maintenance-status-panel.tsx
 
@@ -2583,30 +2584,31 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 125:16 MembersPage | FilterSelect  | onChange=(value) =&gt; onStatusFilterChange?.(value as "" &#124; "active" &#124; "disabled") | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}} |
-| 126:5 MembersPage | AppliedFilters  | onClear=() =&gt; onStatusFilterChange?.("") | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}} |
-| 133:159 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 135:29 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 135:195 MembersPage | Button frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD") | onClick=onDiscardStatusRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 136:52 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 136:275 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":… |
-| 139:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_MEMBERS_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 140:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_INVITATION_LIST_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 143:9 MembersPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 162:534 MembersPage | Button actionLabel | onClick=() =&gt; requestStatusConfirmation(member) | disabled=itemPending &#124;&#124; forbidden &#124;&#124; !onStatusChange; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation … |
-| 173:13 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_ADD") | onClick=() =&gt; setAddOpen(true); type="button" | aria-expanded=addOpen; disabled=pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","tag"… |
-| 175:31 MembersPage | p invitationError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 178:170 MembersPage | Button frontendText(locale, copied ? "ADMIN_INVITATION_CODE_COPIED" : "ADMIN_INVITATION_CODE_COPY") | onClick=() =&gt; void copyCode(issuedInvitation.code); type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 179:28 MembersPage | p frontendText(locale, "ADMIN_INVITATION_CODE_COPY_FAILED") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 184:15 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 184:132 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadInvitationsRetry; type="button" | disabled=invitationWritePending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefin… |
-| 186:487 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_REVOKE") | onClick=() =&gt; requestRevokeConfirmation(invitation) | disabled=invitationWritePending &#124;&#124; pending &#124;&#124; forbidden &#124;&#124; !onRevokeInvitation; {"kind":"container","tag":"section","attributes… |
-| 194:5 MembersPage | Dialog  | onOpenChange=(next) =&gt; { if (!next) setAddOpen(false); } | open=addOpen |
-| 195:7 MembersPage | DialogContent  |  | {"kind":"container","tag":"Dialog","attributes":{"open":"addOpen"}} |
-| 199:11 MembersPage | Input  | onChange=(value) =&gt; setEmail(value); type="email" | disabled=pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","tag":"Dialog","attributes":… |
-| 202:11 MembersPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setAddOpen(false); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"addOpen"}} |
-| 203:11 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_GENERATE") | onClick=requestInviteConfirmation; type="button" | disabled=!email.trim() &#124;&#124; pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","… |
-| 207:5 MembersPage | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=confirmAction | open=validConfirmation |
+| 134:16 MembersPage | FilterSelect  | onChange=(value) =&gt; onStatusFilterChange?.(value as "" &#124; "active" &#124; "disabled") | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}} |
+| 135:5 MembersPage | AppliedFilters  | onClear=() =&gt; onStatusFilterChange?.("") | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}} |
+| 142:159 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 144:29 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 144:195 MembersPage | Button frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD") | onClick=onDiscardStatusRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 145:52 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 145:275 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":… |
+| 146:5 MembersPage | Tabs  | onValueChange=changeTab | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 148:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_MEMBERS_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 149:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_INVITATION_LIST_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 152:9 MembersPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 171:534 MembersPage | Button actionLabel | onClick=() =&gt; requestStatusConfirmation(member) | disabled=itemPending &#124;&#124; forbidden &#124;&#124; !onStatusChange; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation … |
+| 182:13 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_ADD") | onClick=() =&gt; setAddOpen(true); type="button" | aria-expanded=addOpen; disabled=pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","tag"… |
+| 184:31 MembersPage | p invitationError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 187:170 MembersPage | Button frontendText(locale, copied ? "ADMIN_INVITATION_CODE_COPIED" : "ADMIN_INVITATION_CODE_COPY") | onClick=() =&gt; void copyCode(issuedInvitation.code); type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 188:28 MembersPage | p frontendText(locale, "ADMIN_INVITATION_CODE_COPY_FAILED") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 193:15 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 193:132 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadInvitationsRetry; type="button" | disabled=invitationWritePending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefin… |
+| 195:487 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_REVOKE") | onClick=() =&gt; requestRevokeConfirmation(invitation) | disabled=invitationWritePending &#124;&#124; pending &#124;&#124; forbidden &#124;&#124; !onRevokeInvitation; {"kind":"container","tag":"section","attributes… |
+| 203:5 MembersPage | Dialog  | onOpenChange=(next) =&gt; { if (!next) setAddOpen(false); } | open=addOpen |
+| 204:7 MembersPage | DialogContent  |  | {"kind":"container","tag":"Dialog","attributes":{"open":"addOpen"}} |
+| 208:11 MembersPage | Input  | onChange=(value) =&gt; setEmail(value); type="email" | disabled=pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","tag":"Dialog","attributes":… |
+| 211:11 MembersPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setAddOpen(false); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"addOpen"}} |
+| 212:11 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_GENERATE") | onClick=requestInviteConfirmation; type="button" | disabled=!email.trim() &#124;&#124; pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","… |
+| 216:5 MembersPage | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=confirmAction | open=validConfirmation |
 
 ## frontend/pages/admin/menu-editor.tsx
 
