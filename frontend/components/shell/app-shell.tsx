@@ -1,5 +1,5 @@
 import { useNotificationSummary } from "../../lib/use-notification-summary";
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Bell, BookOpen, CalendarBlank, CaretDown, ChartLine, ChatCircle, Check, Checks, DotsThree, Files, FolderSimple, GearSix, House, Kanban, MagnifyingGlass, Moon, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, Sun, Target, Timer, Trash, UploadSimple, UsersThree } from "@phosphor-icons/react";
 import { ROUTES } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
@@ -26,6 +26,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { useHoverCapable } from "../../lib/hooks/use-hover-capable";
 import { menuKeyAction } from "../../lib/menu-keyboard";
 import { EASE_OUT, SPRING_LAYOUT, SPRING_PRESS } from "../../lib/ease";
+import { ExpandableActionBar, type ExpandableActionBarItem } from "../motion/expandable-action-bar";
 
 interface LocaleRuntime {
   readonly locale: FrontendLocale;
@@ -105,6 +106,31 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
     return next;
   };
   const access = resolveFrontendAccess({ session, route: matchRoute(pathname) });
+  const notificationsLinkVisible = collaborationLinks.some((link) => link.path === "/notifications");
+  // The topbar strip is beUI's `expandable-action-bar` (picker: "Icon actions
+  // with labels"). Its items carry the strip's whole contract: a real `href`,
+  // the `data-route-id` hook, the localized `title`/`aria-label`, the active
+  // `aria-current`, the SPA click, and the unread badge in its `afterLabel`
+  // slot. The active state is the payload's own static highlight — the shell's
+  // old `layoutId="shell-collab-active"` glide is gone (see the matrix, §24).
+  const collaborationItems: ExpandableActionBarItem[] = collaborationLinks.map((link) => {
+    const label = locale.t(link.labelKey);
+    const active = isCollaborationActive(pathname, link.activePrefix);
+    return {
+      id: link.path,
+      href: link.path,
+      label,
+      icon: <NavIcon path={link.icon} />,
+      active,
+      ariaLabel: label,
+      ariaCurrent: active ? "page" : undefined,
+      dataAttributes: { "data-route-id": routeCapability(link.path)?.id },
+      onClick: (event) => { event.preventDefault(); navigate(link.path); },
+      afterLabel: link.path === "/notifications"
+        ? <span data-notification-summary data-state={unreadState.kind} role="status" aria-live="polite" aria-label={unreadLabel} title={unreadLabel} className="rounded bg-muted px-1 text-xs tabular-nums">{unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—"}</span>
+        : undefined,
+    };
+  });
 
   return (
     <div data-shell-root className="min-h-screen bg-background text-foreground lg:h-dvh lg:overflow-hidden">
@@ -146,9 +172,19 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
           <div className="hidden min-w-0 items-center gap-3 lg:flex"><Breadcrumb pathname={pathname} locale={locale} onNavigate={navigate} /></div>
           <div data-shell-topbar-actions className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
             <CommandPalette session={session} locale={locale} onNavigate={navigate} onToggleTheme={toggleTheme} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} />
-            <motion.nav layoutRoot data-shell-collaboration-navigation aria-label={locale.t("SHELL_COLLABORATION_NAVIGATION")} className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
-              {collaborationLinks.map((link) => <Fragment key={link.path}><motion.a data-route-id={routeCapability(link.path)?.id} href={link.path} title={locale.t(link.labelKey)} aria-label={locale.t(link.labelKey)} aria-current={isCollaborationActive(pathname, link.activePrefix) ? "page" : undefined} onClick={(event) => { event.preventDefault(); navigate(link.path); }} whileTap={reduceMotion ? undefined : { scale: 0.97 }} transition={SPRING_PRESS} className={cn("relative flex min-h-10 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs transition-colors sm:text-sm", isCollaborationActive(pathname, link.activePrefix) ? "font-medium text-accent-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground")}>{isCollaborationActive(pathname, link.activePrefix) && <motion.span aria-hidden="true" layoutId="shell-collab-active" transition={SPRING_LAYOUT} className="absolute inset-0 rounded-md bg-accent" />}<NavIcon path={link.icon} className="relative z-10" /><span className="relative z-10 hidden sm:inline sm:max-w-28 sm:truncate lg:max-w-none">{locale.t(link.labelKey)}</span>{link.path === "/notifications" && <span data-notification-summary data-state={unreadState.kind} role="status" aria-live="polite" aria-label={unreadLabel} title={unreadLabel} className="relative z-10 rounded bg-muted px-1 text-xs tabular-nums">{unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—"}</span>}</motion.a>{link.path === "/notifications" && unreadState.kind === "error" && <Button data-notification-summary-retry variant="ghost" size="sm" aria-label={locale.t("SHELL_UNREAD_RETRY")} onClick={notificationSummary.retry}>{locale.t("COMMON_RETRY")}</Button>}</Fragment>)}
-            </motion.nav>
+            <nav data-shell-collaboration-navigation aria-label={locale.t("SHELL_COLLABORATION_NAVIGATION")} className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
+              <ExpandableActionBar
+                items={collaborationItems}
+                size="md"
+                classNames={{
+                  item: "min-h-10 max-lg:min-h-11 text-xs sm:text-sm",
+                  label: "max-sm:hidden sm:max-w-28 sm:truncate lg:max-w-none",
+                  activeItem: "font-medium text-accent-foreground",
+                  icon: "h-[18px] w-[18px]",
+                }}
+              />
+              {notificationsLinkVisible && unreadState.kind === "error" && <Button data-notification-summary-retry variant="ghost" size="sm" aria-label={locale.t("SHELL_UNREAD_RETRY")} onClick={notificationSummary.retry}>{locale.t("COMMON_RETRY")}</Button>}
+            </nav>
             <Popover open={activeMenu === "language"} onOpenChange={(open) => setActiveMenu(open ? "language" : null)} side="bottom" align="end">
               <PopoverTrigger ariaHaspopup="menu">
                 <Button type="button" variant="ghost" size="icon" aria-label={locale.t("SHELL_LANGUAGE_LABEL")} className="rounded-md"><span aria-hidden="true">{locale.locale === "zh-CN" ? "中" : "EN"}</span></Button>

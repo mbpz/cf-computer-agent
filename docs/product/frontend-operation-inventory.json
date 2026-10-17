@@ -88,6 +88,7 @@
     "frontend/components/motion/date-range-picker/types.ts",
     "frontend/components/motion/date-range-picker/use-date-range-picker.ts",
     "frontend/components/motion/drawer.tsx",
+    "frontend/components/motion/expandable-action-bar.tsx",
     "frontend/components/motion/feedback-widget.tsx",
     "frontend/components/motion/file-tree.tsx",
     "frontend/components/motion/file-upload.tsx",
@@ -5352,6 +5353,9 @@
         "frontend/components/motion/drawer.tsx:41:5",
         "frontend/components/motion/drawer.tsx:62:13",
         "frontend/components/motion/drawer.tsx:83:13",
+        "frontend/components/motion/expandable-action-bar.tsx:273:7",
+        "frontend/components/motion/expandable-action-bar.tsx:459:15",
+        "frontend/components/motion/expandable-action-bar.tsx:468:15",
         "frontend/components/motion/popover-morph.tsx:137:5",
         "frontend/components/motion/popover-morph.tsx:138:5",
         "frontend/components/motion/popover-morph.tsx:247:20",
@@ -5388,75 +5392,74 @@
         "frontend/components/motion/tooltip/use-position.ts:220:5",
         "frontend/components/motion/tooltip/use-position.ts:221:5",
         "frontend/components/motion/tooltip/use-position.ts:222:5",
-        "frontend/components/shell/app-shell.tsx:111:7",
-        "frontend/components/shell/app-shell.tsx:112:7",
-        "frontend/components/shell/app-shell.tsx:132:13",
-        "frontend/components/shell/app-shell.tsx:137:13",
-        "frontend/components/shell/app-shell.tsx:138:40",
-        "frontend/components/shell/app-shell.tsx:141:93",
-        "frontend/components/shell/app-shell.tsx:142:81",
-        "frontend/components/shell/app-shell.tsx:146:70",
-        "frontend/components/shell/app-shell.tsx:148:13",
-        "frontend/components/shell/app-shell.tsx:150:75",
-        "frontend/components/shell/app-shell.tsx:150:1147",
-        "frontend/components/shell/app-shell.tsx:150:1538",
-        "frontend/components/shell/app-shell.tsx:152:13",
-        "frontend/components/shell/app-shell.tsx:154:17",
-        "frontend/components/shell/app-shell.tsx:156:45",
-        "frontend/components/shell/app-shell.tsx:157:17",
-        "frontend/components/shell/app-shell.tsx:158:17",
-        "frontend/components/shell/app-shell.tsx:163:148",
-        "frontend/components/shell/app-shell.tsx:180:36",
-        "frontend/components/shell/app-shell.tsx:201:29",
-        "frontend/components/shell/app-shell.tsx:205:9",
-        "frontend/components/shell/app-shell.tsx:206:9",
-        "frontend/components/shell/app-shell.tsx:207:10",
-        "frontend/components/shell/app-shell.tsx:210:45",
-        "frontend/components/shell/app-shell.tsx:212:111",
-        "frontend/components/shell/app-shell.tsx:275:23",
-        "frontend/components/shell/app-shell.tsx:283:33",
-        "frontend/components/shell/app-shell.tsx:284:34",
-        "frontend/components/shell/app-shell.tsx:285:41",
-        "frontend/components/shell/app-shell.tsx:286:36",
-        "frontend/components/shell/app-shell.tsx:287:33",
-        "frontend/components/shell/app-shell.tsx:288:28",
-        "frontend/components/shell/app-shell.tsx:289:37",
-        "frontend/components/shell/app-shell.tsx:290:34",
-        "frontend/components/shell/app-shell.tsx:291:34",
-        "frontend/components/shell/app-shell.tsx:292:33",
-        "frontend/components/shell/app-shell.tsx:293:42",
-        "frontend/components/shell/app-shell.tsx:294:33",
-        "frontend/components/shell/app-shell.tsx:295:36",
-        "frontend/components/shell/app-shell.tsx:296:36",
-        "frontend/components/shell/app-shell.tsx:297:33",
-        "frontend/components/shell/app-shell.tsx:298:33",
-        "frontend/components/shell/app-shell.tsx:299:34",
-        "frontend/components/shell/app-shell.tsx:300:33",
-        "frontend/components/shell/app-shell.tsx:301:45",
-        "frontend/components/shell/app-shell.tsx:302:40",
-        "frontend/components/shell/app-shell.tsx:303:49",
-        "frontend/components/shell/app-shell.tsx:304:41",
-        "frontend/components/shell/app-shell.tsx:305:39",
-        "frontend/components/shell/app-shell.tsx:306:39",
-        "frontend/components/shell/app-shell.tsx:307:40",
-        "frontend/components/shell/app-shell.tsx:308:39",
-        "frontend/components/shell/app-shell.tsx:309:43",
-        "frontend/components/shell/app-shell.tsx:310:10",
-        "frontend/components/shell/app-shell.tsx:364:10",
-        "frontend/components/shell/app-shell.tsx:366:7",
-        "frontend/components/shell/app-shell.tsx:376:14",
-        "frontend/components/shell/app-shell.tsx:378:7",
-        "frontend/components/shell/app-shell.tsx:381:9",
-        "frontend/components/shell/app-shell.tsx:382:9",
-        "frontend/components/shell/app-shell.tsx:383:9",
-        "frontend/components/shell/app-shell.tsx:385:23",
-        "frontend/components/shell/app-shell.tsx:386:7",
-        "frontend/components/shell/app-shell.tsx:395:10",
-        "frontend/components/shell/app-shell.tsx:395:52",
-        "frontend/components/shell/app-shell.tsx:395:102",
-        "frontend/components/shell/app-shell.tsx:395:953",
-        "frontend/components/shell/app-shell.tsx:395:1464",
-        "frontend/components/shell/app-shell.tsx:395:2356",
+        "frontend/components/shell/app-shell.tsx:130:11",
+        "frontend/components/shell/app-shell.tsx:137:7",
+        "frontend/components/shell/app-shell.tsx:138:7",
+        "frontend/components/shell/app-shell.tsx:158:13",
+        "frontend/components/shell/app-shell.tsx:163:13",
+        "frontend/components/shell/app-shell.tsx:164:40",
+        "frontend/components/shell/app-shell.tsx:167:93",
+        "frontend/components/shell/app-shell.tsx:168:81",
+        "frontend/components/shell/app-shell.tsx:172:70",
+        "frontend/components/shell/app-shell.tsx:174:13",
+        "frontend/components/shell/app-shell.tsx:186:76",
+        "frontend/components/shell/app-shell.tsx:188:13",
+        "frontend/components/shell/app-shell.tsx:190:17",
+        "frontend/components/shell/app-shell.tsx:192:45",
+        "frontend/components/shell/app-shell.tsx:193:17",
+        "frontend/components/shell/app-shell.tsx:194:17",
+        "frontend/components/shell/app-shell.tsx:199:148",
+        "frontend/components/shell/app-shell.tsx:216:36",
+        "frontend/components/shell/app-shell.tsx:237:29",
+        "frontend/components/shell/app-shell.tsx:241:9",
+        "frontend/components/shell/app-shell.tsx:242:9",
+        "frontend/components/shell/app-shell.tsx:243:10",
+        "frontend/components/shell/app-shell.tsx:246:45",
+        "frontend/components/shell/app-shell.tsx:248:111",
+        "frontend/components/shell/app-shell.tsx:311:23",
+        "frontend/components/shell/app-shell.tsx:319:33",
+        "frontend/components/shell/app-shell.tsx:320:34",
+        "frontend/components/shell/app-shell.tsx:321:41",
+        "frontend/components/shell/app-shell.tsx:322:36",
+        "frontend/components/shell/app-shell.tsx:323:33",
+        "frontend/components/shell/app-shell.tsx:324:28",
+        "frontend/components/shell/app-shell.tsx:325:37",
+        "frontend/components/shell/app-shell.tsx:326:34",
+        "frontend/components/shell/app-shell.tsx:327:34",
+        "frontend/components/shell/app-shell.tsx:328:33",
+        "frontend/components/shell/app-shell.tsx:329:42",
+        "frontend/components/shell/app-shell.tsx:330:33",
+        "frontend/components/shell/app-shell.tsx:331:36",
+        "frontend/components/shell/app-shell.tsx:332:36",
+        "frontend/components/shell/app-shell.tsx:333:33",
+        "frontend/components/shell/app-shell.tsx:334:33",
+        "frontend/components/shell/app-shell.tsx:335:34",
+        "frontend/components/shell/app-shell.tsx:336:33",
+        "frontend/components/shell/app-shell.tsx:337:45",
+        "frontend/components/shell/app-shell.tsx:338:40",
+        "frontend/components/shell/app-shell.tsx:339:49",
+        "frontend/components/shell/app-shell.tsx:340:41",
+        "frontend/components/shell/app-shell.tsx:341:39",
+        "frontend/components/shell/app-shell.tsx:342:39",
+        "frontend/components/shell/app-shell.tsx:343:40",
+        "frontend/components/shell/app-shell.tsx:344:39",
+        "frontend/components/shell/app-shell.tsx:345:43",
+        "frontend/components/shell/app-shell.tsx:346:10",
+        "frontend/components/shell/app-shell.tsx:400:10",
+        "frontend/components/shell/app-shell.tsx:402:7",
+        "frontend/components/shell/app-shell.tsx:412:14",
+        "frontend/components/shell/app-shell.tsx:414:7",
+        "frontend/components/shell/app-shell.tsx:417:9",
+        "frontend/components/shell/app-shell.tsx:418:9",
+        "frontend/components/shell/app-shell.tsx:419:9",
+        "frontend/components/shell/app-shell.tsx:421:23",
+        "frontend/components/shell/app-shell.tsx:422:7",
+        "frontend/components/shell/app-shell.tsx:431:10",
+        "frontend/components/shell/app-shell.tsx:431:52",
+        "frontend/components/shell/app-shell.tsx:431:102",
+        "frontend/components/shell/app-shell.tsx:431:953",
+        "frontend/components/shell/app-shell.tsx:431:1464",
+        "frontend/components/shell/app-shell.tsx:431:2356",
         "frontend/components/shell/command-palette.tsx:92:5",
         "frontend/components/shell/command-palette.tsx:96:5",
         "frontend/components/shell/command-palette.tsx:97:5",
@@ -20569,6 +20572,101 @@
       "earlyReturns": []
     },
     {
+      "id": "frontend/components/motion/expandable-action-bar.tsx:273:7",
+      "path": "frontend/components/motion/expandable-action-bar.tsx",
+      "owner": "ExpandableActionBar",
+      "line": 273,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "motion.div",
+      "attributes": {
+        "layout": "\"size\"",
+        "onPointerEnter": "onRootPointerEnter",
+        "onPointerLeave": "onRootPointerLeave",
+        "onFocus": "onRootFocus",
+        "onBlur": "onRootBlur",
+        "transition": "ITEM_TRANSITION",
+        "className": "cn(\"inline-flex max-w-full\", classNames?.root, className)"
+      },
+      "handlers": {
+        "onPointerEnter": "onRootPointerEnter",
+        "onPointerLeave": "onRootPointerLeave",
+        "onFocus": "onRootFocus",
+        "onBlur": "onRootBlur"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/expandable-action-bar.tsx:459:15",
+      "path": "frontend/components/motion/expandable-action-bar.tsx",
+      "owner": "ExpandableActionBar",
+      "line": 459,
+      "column": 15,
+      "kind": "jsx",
+      "tag": "motion.a",
+      "attributes": {
+        "key": "item.id",
+        "href": "item.href"
+      },
+      "handlers": {},
+      "spreads": [
+        "shared",
+        "item.dataAttributes"
+      ],
+      "labels": [
+        "content"
+      ],
+      "context": [
+        {
+          "kind": "repeat",
+          "expression": "items"
+        },
+        {
+          "kind": "branch",
+          "expression": "item.href",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/expandable-action-bar.tsx:468:15",
+      "path": "frontend/components/motion/expandable-action-bar.tsx",
+      "owner": "ExpandableActionBar",
+      "line": 468,
+      "column": 15,
+      "kind": "jsx",
+      "tag": "motion.button",
+      "attributes": {
+        "key": "item.id",
+        "type": "\"button\"",
+        "disabled": "item.disabled"
+      },
+      "handlers": {},
+      "spreads": [
+        "shared",
+        "item.dataAttributes"
+      ],
+      "labels": [
+        "content"
+      ],
+      "context": [
+        {
+          "kind": "repeat",
+          "expression": "items"
+        },
+        {
+          "kind": "branch",
+          "expression": "item.href",
+          "branch": "false"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
       "id": "frontend/components/motion/feedback-widget.tsx:195:5",
       "path": "frontend/components/motion/feedback-widget.tsx",
       "owner": "FeedbackWidget",
@@ -27514,10 +27612,45 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:111:7",
+      "id": "frontend/components/shell/app-shell.tsx:130:11",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 111,
+      "line": 130,
+      "column": 11,
+      "kind": "jsx",
+      "tag": "span",
+      "attributes": {
+        "data-notification-summary": "true",
+        "data-state": "unreadState.kind",
+        "role": "\"status\"",
+        "aria-live": "\"polite\"",
+        "aria-label": "unreadLabel",
+        "title": "unreadLabel",
+        "className": "\"rounded bg-muted px-1 text-xs tabular-nums\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "unreadState.kind === \"ready\" ? unreadState.unread : unreadState.kind === \"loading\" ? \"…\" : \"—\""
+      ],
+      "context": [
+        {
+          "kind": "repeat",
+          "expression": "collaborationLinks"
+        },
+        {
+          "kind": "branch",
+          "expression": "link.path === \"/notifications\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/shell/app-shell.tsx:137:7",
+      "path": "frontend/components/shell/app-shell.tsx",
+      "owner": "AppShell",
+      "line": 137,
       "column": 7,
       "kind": "jsx",
       "tag": "a",
@@ -27534,10 +27667,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:112:7",
+      "id": "frontend/components/shell/app-shell.tsx:138:7",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 112,
+      "line": 138,
       "column": 7,
       "kind": "jsx",
       "tag": "AnimatedSidebarProvider",
@@ -27558,10 +27691,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:132:13",
+      "id": "frontend/components/shell/app-shell.tsx:158:13",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 132,
+      "line": 158,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -27593,10 +27726,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:137:13",
+      "id": "frontend/components/shell/app-shell.tsx:163:13",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 137,
+      "line": 163,
       "column": 13,
       "kind": "jsx",
       "tag": "NavGroup",
@@ -27629,10 +27762,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:138:40",
+      "id": "frontend/components/shell/app-shell.tsx:164:40",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 138,
+      "line": 164,
       "column": 40,
       "kind": "jsx",
       "tag": "NavGroup",
@@ -27670,10 +27803,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:141:93",
+      "id": "frontend/components/shell/app-shell.tsx:167:93",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 141,
+      "line": 167,
       "column": 93,
       "kind": "jsx",
       "tag": "AccountMenu",
@@ -27716,10 +27849,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:142:81",
+      "id": "frontend/components/shell/app-shell.tsx:168:81",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 142,
+      "line": 168,
       "column": 81,
       "kind": "jsx",
       "tag": "AccountMenu",
@@ -27762,10 +27895,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:146:70",
+      "id": "frontend/components/shell/app-shell.tsx:172:70",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 146,
+      "line": 172,
       "column": 70,
       "kind": "jsx",
       "tag": "Breadcrumb",
@@ -27791,10 +27924,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:148:13",
+      "id": "frontend/components/shell/app-shell.tsx:174:13",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 148,
+      "line": 174,
       "column": 13,
       "kind": "jsx",
       "tag": "CommandPalette",
@@ -27826,92 +27959,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:150:75",
+      "id": "frontend/components/shell/app-shell.tsx:186:76",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 150,
-      "column": 75,
-      "kind": "jsx",
-      "tag": "motion.a",
-      "attributes": {
-        "data-route-id": "routeCapability(link.path)?.id",
-        "href": "link.path",
-        "title": "locale.t(link.labelKey)",
-        "aria-label": "locale.t(link.labelKey)",
-        "aria-current": "isCollaborationActive(pathname, link.activePrefix) ? \"page\" : undefined",
-        "onClick": "(event) => { event.preventDefault(); navigate(link.path); }",
-        "whileTap": "reduceMotion ? undefined : { scale: 0.97 }",
-        "transition": "SPRING_PRESS",
-        "className": "cn(\"relative flex min-h-10 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs transition-colors sm:text-sm\", isCollaborationActive(pathname, link.activePrefix) ? \"font-medium text-accent-foreground\" : \"text-muted-foreground hover:bg-accent hover:text-accent-foreground\")"
-      },
-      "handlers": {
-        "onClick": "(event) => { event.preventDefault(); navigate(link.path); }"
-      },
-      "spreads": [],
-      "labels": [],
-      "context": [
-        {
-          "kind": "container",
-          "tag": "AnimatedSidebarProvider",
-          "attributes": {
-            "open": "!collapsed"
-          }
-        },
-        {
-          "kind": "repeat",
-          "expression": "collaborationLinks"
-        }
-      ],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/components/shell/app-shell.tsx:150:1147",
-      "path": "frontend/components/shell/app-shell.tsx",
-      "owner": "AppShell",
-      "line": 150,
-      "column": 1147,
-      "kind": "jsx",
-      "tag": "span",
-      "attributes": {
-        "data-notification-summary": "true",
-        "data-state": "unreadState.kind",
-        "role": "\"status\"",
-        "aria-live": "\"polite\"",
-        "aria-label": "unreadLabel",
-        "title": "unreadLabel",
-        "className": "\"relative z-10 rounded bg-muted px-1 text-xs tabular-nums\""
-      },
-      "handlers": {},
-      "spreads": [],
-      "labels": [
-        "unreadState.kind === \"ready\" ? unreadState.unread : unreadState.kind === \"loading\" ? \"…\" : \"—\""
-      ],
-      "context": [
-        {
-          "kind": "container",
-          "tag": "AnimatedSidebarProvider",
-          "attributes": {
-            "open": "!collapsed"
-          }
-        },
-        {
-          "kind": "repeat",
-          "expression": "collaborationLinks"
-        },
-        {
-          "kind": "logical",
-          "expression": "link.path === \"/notifications\"",
-          "operator": "&&"
-        }
-      ],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/components/shell/app-shell.tsx:150:1538",
-      "path": "frontend/components/shell/app-shell.tsx",
-      "owner": "AppShell",
-      "line": 150,
-      "column": 1538,
+      "line": 186,
+      "column": 76,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -27937,22 +27989,18 @@
           }
         },
         {
-          "kind": "repeat",
-          "expression": "collaborationLinks"
-        },
-        {
           "kind": "logical",
-          "expression": "link.path === \"/notifications\" && unreadState.kind === \"error\"",
+          "expression": "notificationsLinkVisible && unreadState.kind === \"error\"",
           "operator": "&&"
         }
       ],
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:152:13",
+      "id": "frontend/components/shell/app-shell.tsx:188:13",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 152,
+      "line": 188,
       "column": 13,
       "kind": "jsx",
       "tag": "Popover",
@@ -27979,10 +28027,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:154:17",
+      "id": "frontend/components/shell/app-shell.tsx:190:17",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 154,
+      "line": 190,
       "column": 17,
       "kind": "jsx",
       "tag": "Button",
@@ -28015,10 +28063,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:156:45",
+      "id": "frontend/components/shell/app-shell.tsx:192:45",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 156,
+      "line": 192,
       "column": 45,
       "kind": "jsx",
       "tag": "PopoverContent",
@@ -28054,10 +28102,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:157:17",
+      "id": "frontend/components/shell/app-shell.tsx:193:17",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 157,
+      "line": 193,
       "column": 17,
       "kind": "jsx",
       "tag": "button",
@@ -28099,10 +28147,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:158:17",
+      "id": "frontend/components/shell/app-shell.tsx:194:17",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 158,
+      "line": 194,
       "column": 17,
       "kind": "jsx",
       "tag": "button",
@@ -28144,10 +28192,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:163:148",
+      "id": "frontend/components/shell/app-shell.tsx:199:148",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AppShell",
-      "line": 163,
+      "line": 199,
       "column": 148,
       "kind": "jsx",
       "tag": "MobileNavigation",
@@ -28186,10 +28234,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:180:36",
+      "id": "frontend/components/shell/app-shell.tsx:216:36",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavGroup",
-      "line": 180,
+      "line": 216,
       "column": 36,
       "kind": "jsx",
       "tag": "NavNode",
@@ -28220,10 +28268,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:201:29",
+      "id": "frontend/components/shell/app-shell.tsx:237:29",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavNode",
-      "line": 201,
+      "line": 237,
       "column": 29,
       "kind": "jsx",
       "tag": "Button",
@@ -28244,10 +28292,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:205:9",
+      "id": "frontend/components/shell/app-shell.tsx:241:9",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavNode",
-      "line": 205,
+      "line": 241,
       "column": 9,
       "kind": "jsx",
       "tag": "AnimatedSidebarMenuButton",
@@ -28282,10 +28330,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:206:9",
+      "id": "frontend/components/shell/app-shell.tsx:242:9",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavNode",
-      "line": 206,
+      "line": 242,
       "column": 9,
       "kind": "jsx",
       "tag": "AnimatedSidebarMenuButton",
@@ -28317,10 +28365,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:207:10",
+      "id": "frontend/components/shell/app-shell.tsx:243:10",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavNode",
-      "line": 207,
+      "line": 243,
       "column": 10,
       "kind": "jsx",
       "tag": "AnimatedSidebarMenuItem",
@@ -28336,10 +28384,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:210:45",
+      "id": "frontend/components/shell/app-shell.tsx:246:45",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavNode",
-      "line": 210,
+      "line": 246,
       "column": 45,
       "kind": "jsx",
       "tag": "Button",
@@ -28367,10 +28415,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:212:111",
+      "id": "frontend/components/shell/app-shell.tsx:248:111",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavNode",
-      "line": 212,
+      "line": 248,
       "column": 111,
       "kind": "jsx",
       "tag": "NavNode",
@@ -28413,10 +28461,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:275:23",
+      "id": "frontend/components/shell/app-shell.tsx:311:23",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "Breadcrumb",
-      "line": 275,
+      "line": 311,
       "column": 23,
       "kind": "jsx",
       "tag": "BreadcrumbLink",
@@ -28435,10 +28483,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:283:33",
+      "id": "frontend/components/shell/app-shell.tsx:319:33",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 283,
+      "line": 319,
       "column": 33,
       "kind": "jsx",
       "tag": "Checks",
@@ -28458,10 +28506,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:284:34",
+      "id": "frontend/components/shell/app-shell.tsx:320:34",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 284,
+      "line": 320,
       "column": 34,
       "kind": "jsx",
       "tag": "Kanban",
@@ -28486,10 +28534,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:285:41",
+      "id": "frontend/components/shell/app-shell.tsx:321:41",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 285,
+      "line": 321,
       "column": 41,
       "kind": "jsx",
       "tag": "Bell",
@@ -28518,10 +28566,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:286:36",
+      "id": "frontend/components/shell/app-shell.tsx:322:36",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 286,
+      "line": 322,
       "column": 36,
       "kind": "jsx",
       "tag": "ChatCircle",
@@ -28554,10 +28602,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:287:33",
+      "id": "frontend/components/shell/app-shell.tsx:323:33",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 287,
+      "line": 323,
       "column": 33,
       "kind": "jsx",
       "tag": "ChartLine",
@@ -28594,10 +28642,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:288:28",
+      "id": "frontend/components/shell/app-shell.tsx:324:28",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 288,
+      "line": 324,
       "column": 28,
       "kind": "jsx",
       "tag": "House",
@@ -28638,10 +28686,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:289:37",
+      "id": "frontend/components/shell/app-shell.tsx:325:37",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 289,
+      "line": 325,
       "column": 37,
       "kind": "jsx",
       "tag": "BookOpen",
@@ -28686,10 +28734,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:290:34",
+      "id": "frontend/components/shell/app-shell.tsx:326:34",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 290,
+      "line": 326,
       "column": 34,
       "kind": "jsx",
       "tag": "UploadSimple",
@@ -28738,10 +28786,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:291:34",
+      "id": "frontend/components/shell/app-shell.tsx:327:34",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 291,
+      "line": 327,
       "column": 34,
       "kind": "jsx",
       "tag": "MagnifyingGlass",
@@ -28794,10 +28842,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:292:33",
+      "id": "frontend/components/shell/app-shell.tsx:328:33",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 292,
+      "line": 328,
       "column": 33,
       "kind": "jsx",
       "tag": "Sparkle",
@@ -28854,10 +28902,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:293:42",
+      "id": "frontend/components/shell/app-shell.tsx:329:42",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 293,
+      "line": 329,
       "column": 42,
       "kind": "jsx",
       "tag": "Files",
@@ -28918,10 +28966,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:294:33",
+      "id": "frontend/components/shell/app-shell.tsx:330:33",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 294,
+      "line": 330,
       "column": 33,
       "kind": "jsx",
       "tag": "Target",
@@ -28986,10 +29034,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:295:36",
+      "id": "frontend/components/shell/app-shell.tsx:331:36",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 295,
+      "line": 331,
       "column": 36,
       "kind": "jsx",
       "tag": "FolderSimple",
@@ -29058,10 +29106,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:296:36",
+      "id": "frontend/components/shell/app-shell.tsx:332:36",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 296,
+      "line": 332,
       "column": 36,
       "kind": "jsx",
       "tag": "CalendarBlank",
@@ -29134,10 +29182,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:297:33",
+      "id": "frontend/components/shell/app-shell.tsx:333:33",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 297,
+      "line": 333,
       "column": 33,
       "kind": "jsx",
       "tag": "CalendarBlank",
@@ -29214,10 +29262,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:298:33",
+      "id": "frontend/components/shell/app-shell.tsx:334:33",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 298,
+      "line": 334,
       "column": 33,
       "kind": "jsx",
       "tag": "Timer",
@@ -29298,10 +29346,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:299:34",
+      "id": "frontend/components/shell/app-shell.tsx:335:34",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 299,
+      "line": 335,
       "column": 34,
       "kind": "jsx",
       "tag": "Check",
@@ -29386,10 +29434,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:300:33",
+      "id": "frontend/components/shell/app-shell.tsx:336:33",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 300,
+      "line": 336,
       "column": 33,
       "kind": "jsx",
       "tag": "ShieldCheck",
@@ -29478,10 +29526,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:301:45",
+      "id": "frontend/components/shell/app-shell.tsx:337:45",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 301,
+      "line": 337,
       "column": 45,
       "kind": "jsx",
       "tag": "NotePencil",
@@ -29574,10 +29622,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:302:40",
+      "id": "frontend/components/shell/app-shell.tsx:338:40",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 302,
+      "line": 338,
       "column": 40,
       "kind": "jsx",
       "tag": "Stack",
@@ -29674,10 +29722,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:303:49",
+      "id": "frontend/components/shell/app-shell.tsx:339:49",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 303,
+      "line": 339,
       "column": 49,
       "kind": "jsx",
       "tag": "Trash",
@@ -29778,10 +29826,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:304:41",
+      "id": "frontend/components/shell/app-shell.tsx:340:41",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 304,
+      "line": 340,
       "column": 41,
       "kind": "jsx",
       "tag": "UsersThree",
@@ -29886,10 +29934,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:305:39",
+      "id": "frontend/components/shell/app-shell.tsx:341:39",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 305,
+      "line": 341,
       "column": 39,
       "kind": "jsx",
       "tag": "ShieldCheck",
@@ -29998,10 +30046,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:306:39",
+      "id": "frontend/components/shell/app-shell.tsx:342:39",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 306,
+      "line": 342,
       "column": 39,
       "kind": "jsx",
       "tag": "DotsThree",
@@ -30114,10 +30162,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:307:40",
+      "id": "frontend/components/shell/app-shell.tsx:343:40",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 307,
+      "line": 343,
       "column": 40,
       "kind": "jsx",
       "tag": "Stack",
@@ -30234,10 +30282,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:308:39",
+      "id": "frontend/components/shell/app-shell.tsx:344:39",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 308,
+      "line": 344,
       "column": 39,
       "kind": "jsx",
       "tag": "Scroll",
@@ -30358,10 +30406,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:309:43",
+      "id": "frontend/components/shell/app-shell.tsx:345:43",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 309,
+      "line": 345,
       "column": 43,
       "kind": "jsx",
       "tag": "ChartLine",
@@ -30486,10 +30534,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:310:10",
+      "id": "frontend/components/shell/app-shell.tsx:346:10",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "NavIcon",
-      "line": 310,
+      "line": 346,
       "column": 10,
       "kind": "jsx",
       "tag": "DotsThree",
@@ -30612,10 +30660,10 @@
       ]
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:364:10",
+      "id": "frontend/components/shell/app-shell.tsx:400:10",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AccountMenu",
-      "line": 364,
+      "line": 400,
       "column": 10,
       "kind": "jsx",
       "tag": "Popover",
@@ -30635,10 +30683,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:366:7",
+      "id": "frontend/components/shell/app-shell.tsx:402:7",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AccountMenu",
-      "line": 366,
+      "line": 402,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -30670,10 +30718,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:376:14",
+      "id": "frontend/components/shell/app-shell.tsx:412:14",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AccountMenu",
-      "line": 376,
+      "line": 412,
       "column": 14,
       "kind": "jsx",
       "tag": "PopoverContent",
@@ -30706,10 +30754,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:378:7",
+      "id": "frontend/components/shell/app-shell.tsx:414:7",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AccountMenu",
-      "line": 378,
+      "line": 414,
       "column": 7,
       "kind": "jsx",
       "tag": "button",
@@ -30745,10 +30793,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:381:9",
+      "id": "frontend/components/shell/app-shell.tsx:417:9",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AccountMenu",
-      "line": 381,
+      "line": 417,
       "column": 9,
       "kind": "jsx",
       "tag": "button",
@@ -30785,10 +30833,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:382:9",
+      "id": "frontend/components/shell/app-shell.tsx:418:9",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AccountMenu",
-      "line": 382,
+      "line": 418,
       "column": 9,
       "kind": "jsx",
       "tag": "button",
@@ -30825,10 +30873,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:383:9",
+      "id": "frontend/components/shell/app-shell.tsx:419:9",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AccountMenu",
-      "line": 383,
+      "line": 419,
       "column": 9,
       "kind": "jsx",
       "tag": "button",
@@ -30865,10 +30913,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:385:23",
+      "id": "frontend/components/shell/app-shell.tsx:421:23",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AccountMenu",
-      "line": 385,
+      "line": 421,
       "column": 23,
       "kind": "jsx",
       "tag": "p",
@@ -30903,10 +30951,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:386:7",
+      "id": "frontend/components/shell/app-shell.tsx:422:7",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "AccountMenu",
-      "line": 386,
+      "line": 422,
       "column": 7,
       "kind": "jsx",
       "tag": "button",
@@ -30942,10 +30990,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:395:10",
+      "id": "frontend/components/shell/app-shell.tsx:431:10",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "MobileNavigation",
-      "line": 395,
+      "line": 431,
       "column": 10,
       "kind": "jsx",
       "tag": "Sheet",
@@ -30962,10 +31010,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:395:52",
+      "id": "frontend/components/shell/app-shell.tsx:431:52",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "MobileNavigation",
-      "line": 395,
+      "line": 431,
       "column": 52,
       "kind": "jsx",
       "tag": "details",
@@ -30988,10 +31036,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:395:102",
+      "id": "frontend/components/shell/app-shell.tsx:431:102",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "MobileNavigation",
-      "line": 395,
+      "line": 431,
       "column": 102,
       "kind": "jsx",
       "tag": "summary",
@@ -31025,10 +31073,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:395:953",
+      "id": "frontend/components/shell/app-shell.tsx:431:953",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "MobileNavigation",
-      "line": 395,
+      "line": 431,
       "column": 953,
       "kind": "jsx",
       "tag": "Button",
@@ -31074,10 +31122,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:395:1464",
+      "id": "frontend/components/shell/app-shell.tsx:431:1464",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "MobileNavigation",
-      "line": 395,
+      "line": 431,
       "column": 1464,
       "kind": "jsx",
       "tag": "motion.a",
@@ -31126,10 +31174,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/shell/app-shell.tsx:395:2356",
+      "id": "frontend/components/shell/app-shell.tsx:431:2356",
       "path": "frontend/components/shell/app-shell.tsx",
       "owner": "MobileNavigation",
-      "line": 395,
+      "line": 431,
       "column": 2356,
       "kind": "jsx",
       "tag": "AccountMenu",

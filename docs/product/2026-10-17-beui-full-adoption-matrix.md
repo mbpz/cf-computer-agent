@@ -1004,3 +1004,54 @@ payload `https://beui.dev/r/range-slider.json`（5 个文件，逐行核对）�
 Wave 1–3 的前后对比已按 §16 完成（同一 10 页、同一视口、`before` / `after` 两组截图）。**Wave 4 的最终一组截图未取得**：relay 要求被接管的标签必须是当前可见标签，而采集时用户的浏览器已切到别的标签，截图被拒绝（`The attached browser tab is not visible`）。我没有为此反复驱动用户的标签，句柄已直接释放、未做任何导航。
 
 因此 Wave 4 的证据为：逐件补丁清单（§18–§20、§22）、`npm run typecheck`、单元 **405 文件 / 5627 测试**、worker **78 / 1304**、smoke 88/14/30、operation inventory 重生成、复核台账 **10/10**（192+ 行）。若要补 Wave 4 的视觉对照，在浏览器可见标签停在产品页时再跑一次同样的采集即可。
+
+## 24. Wave 4 · 顶栏协作条（CollabStrip 切片：`expandable-action-bar`，2026-10-17）
+
+**结论：采用。** 顶栏协作区由手写 `motion.nav` + `motion.a` + `layoutId="shell-collab-active"` 药丸改为 beUI `expandable-action-bar`（picker：Icon actions with labels），仅按 §17 四类补丁落地。用户已接受其代价：原活动项 `layoutId` 滑动高亮消失，活动态改由载荷自身的静态高亮背景表达（`frontend/components/motion/expandable-action-bar.tsx:364-476`；`bg-muted/80` 的 `layoutId="action-bar-highlight"` 只在指针悬停时随悬停项移动，指针离开即回到活动项）。
+
+### 24.1 落盘（手工，未新增依赖）
+
+`frontend/components/motion/expandable-action-bar.tsx`（payload 413 行 → 本地化 498 行），源 payload：live registry `https://beui.dev/r/expandable-action-bar.json` 的 `components/motion/expandable-action-bar.tsx`。改写只做仓库一致性：`@/lib/hooks/*`、`@/lib/utils` → 相对路径（`../../lib/...`）；载荷不含 lucide 图标，故无图标翻译；无 `process.env` 引用。载荷 registry `dependencies` 为 `clsx`、`motion`、`tailwind-merge`（均已在 `package.json`）；随载荷附带的 `lib/hooks/{use-dismiss,use-hover-gesture,use-tap-gesture}.ts`、`lib/utils.ts`、`lib/touch.ts` **仓库已存在且未覆盖**（由 §9 切片落盘，签名与载荷调用一致）。
+
+### 24.2 补丁清单（文件头 `expandable-action-bar.tsx:1-39` 逐条写明 slug 与守住的原契约）
+
+1. **属性透传**：item 新增 `href`/`dataAttributes`/`ariaLabel`/`ariaCurrent`（`:68-74`），`href` 存在时动作渲染为 `motion.a`（`:459-476`），`data-*` 以 `{...item.dataAttributes}` 落在同一元素（`:463,473`）。守住的契约：`data-route-id`、真实 `href`、`title`、本地化 `aria-label`、活动项 `aria-current="page"`（`frontend/components/shell/app-shell.tsx:116-133`；`test/unit/workspace-shell.test.tsx:197-205,215-228,244-246`；静态标记断言按 `<a … href>` 与 `min-h-10` 计数）。
+2. **插槽扩展**：item 新增 `afterLabel`（`:76`），在图标/标签之后、不参与标签的宽度/模糊动画地渲染（`:416-421`）。守住的契约：未读徽标仍然是链接的子节点（`closest("a")`），`data-notification-summary`/`data-state`/`role="status"`/`aria-live="polite"`/`aria-label`/`title` 与 `…`/`—` 两态原样（`app-shell.tsx:130`；`test/unit/frontend-shell-notifications.test.tsx:38-46`）。
+3. **回调扩展**：`onClick` 收到点击事件（`:79`），载荷在 `item.onClick?.(event)` 处传给它（`:339`）。守住的契约：SPA 导航仍是 `event.preventDefault(); navigate(path)`（`app-shell.tsx:125`；`test/unit/workspace-shell.test.tsx:226-228,251-255,258-268`）。忽略参数的既有调用点不受影响。
+4. **文案本地化**：载荷无硬编码英文无障碍串（`title` 由 label 字符串派生），因此无需替换默认文案；`ariaLabel`/`ariaCurrent` 属"把命名权交还调用方"的同一类增量接口。
+
+载荷的 `LayoutGroup`、指针/悬停/点按手势、`h-8`/`rounded-full` 几何、标签宽度与 `filter: blur` 动画、外部点击消隐（`consume`）全部未改。
+
+### 24.3 外壳接线（`frontend/components/shell/app-shell.tsx`）
+
+- `:116-133` 由 `collaborationLinks` 生成 items：`id`/`href` = 路径，`label`/`ariaLabel` = `locale.t(labelKey)`，`icon` = 既有 `NavIcon`（Phosphor，18px），`active`/`ariaCurrent` = `isCollaborationActive(...)`，`dataAttributes["data-route-id"] = routeCapability(path)?.id`，`afterLabel` = 通知链接的未读徽标。
+- `:175-187`：`data-shell-collaboration-navigation` 与 `aria-label="SHELL_COLLABORATION_NAVIGATION"` 落在普通 `<nav>`（载荷根是 `div`，nav 语义由外壳组合，未改载荷结构），保留 `flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap`；`ExpandableActionBar` 用 `size="md"`，`classNames.item = "min-h-10 max-lg:min-h-11 text-xs sm:text-sm"`（桌面 `min-h-10`、移动 44px 下限），`classNames.label = "max-sm:hidden sm:max-w-28 sm:truncate lg:max-w-none"`（`sm` 以下隐藏标签），`classNames.activeItem = "font-medium text-accent-foreground"`、`classNames.icon = "h-[18px] w-[18px]"`。错误态重试按钮仍是 `data-notification-summary-retry` 的 `Button`（`:186`，无障碍名 `SHELL_UNREAD_RETRY`），作为 nav 内同级节点。
+- 删除 `Fragment` 导入；`SPRING_LAYOUT`/`SPRING_PRESS` 因移动抽屉仍使用而保留；`main` 内应用级路由过渡 `motion.div`（`:431` 区域）与移动抽屉的 `layoutId="shell-mobile-active"` **未触碰**（后者不属本切片）。
+
+### 24.4 顶栏协作条最终钩子/无障碍清单
+
+| 元素 | 钩子与语义 |
+| --- | --- |
+| `<nav>` | `data-shell-collaboration-navigation`、`aria-label`=SHELL_COLLABORATION_NAVIGATION、`overflow-x-auto` 滚动轨 |
+| 每条协作链接（`<a>`） | `href`=规范路径、`data-route-id`=routeCapability id、`title` 与 `aria-label`=本地化标签、活动项 `aria-current="page"`、`class` 含 `shrink-0 min-h-10 max-lg:min-h-11 text-xs sm:text-sm`、点击 `preventDefault()`+`navigate(path)` |
+| 通知链接内的未读徽标 | `data-notification-summary`、`data-state`=`loading`/`ready`/`error`/`forbidden`、`role="status"`、`aria-live="polite"`、`aria-label`/`title`（`NOTIFICATIONS_UNREAD_COUNT`+数量，或 `SHELL_UNREAD_LOADING`/`NOTIFICATIONS_FORBIDDEN`/`SHELL_UNREAD_ERROR`），文本 = 数量 / `…`（loading）/ `—`（其余非 ready） |
+| 错误态重试 | `data-notification-summary-retry`、`aria-label`=SHELL_UNREAD_RETRY、点击 `notificationSummary.retry` |
+| 载荷内部 | 活动/悬停高亮 `layoutId="action-bar-highlight"`；标签 `aria-hidden={!expanded}`（链接名由 `aria-label` 决定）；`useReducedMotion` 关闭 `whileTap` 并把标签动画降为 0 时长 |
+
+### 24.5 门禁
+
+- `npm run typecheck`（worker + frontend）干净。
+- 指定套件 **5 文件 / 67 测试全绿**：`workspace-shell`、`frontend-shell`、`frontend-shell-notifications`、`frontend-a11y`、`frontend-responsive`。
+- 顺带复核其它按该钩子寻址的套件（不作为本切片门禁）：`frontend-boards-route`、`frontend-discussion-route`、`frontend-notifications-route` **3 文件 / 151 测试全绿**。
+- **测试寻址调整：无**。所有断言（`<a href>` 列表、`min-h-10` 计数、`aria-current`、`aria-label`、`closest("a")`、`data-state`、重试按钮）一字未改；未新增 i18n 键、未改 `frontend/lib/*`、未动 ledger 与 operation inventory。
+
+
+## 25. 最后一处非 beUI 动效收口（顶栏协作导航条，用户已接受取舍）
+
+用户接受"失去滑行高亮"的取舍后，顶栏协作导航条改用 beUI `expandable-action-bar`（picker："Icon actions with labels"），手工落盘 `frontend/components/motion/expandable-action-bar.tsx`（payload 413 行；无需 lucide/`process.env` 转换，`lib/hooks/*` 与 `lib/{utils,touch}` 复用既有、未覆盖）。
+
+三条 §17 补丁（文件头已记录）：**属性透传**（item 增加 `href`/`dataAttributes`/`ariaLabel`/`ariaCurrent`，随 `href` 渲染为 `motion.a`，`data-route-id`/`href`/`title`/`aria-label`/`aria-current` 落在同一元素）、**插槽**（`afterLabel` 承载未读徽标，仍是链接子节点，`closest("a")` 成立）、**回调**（`onClick` 收到事件，SPA 导航仍是 `preventDefault(); navigate(path)`）。
+
+外壳侧保留：`data-shell-collaboration-navigation`、逐链 `data-route-id`、`aria-current="page"`、未读徽标全套（`data-notification-summary`/`data-state`/`role="status"`/`aria-live`/`aria-label`/`title`/`…`/`—`）与错误时的 `data-notification-summary-retry`；`min-h-10` 桌面几何 + `max-lg:min-h-11` 44px 下限；`sm` 以下隐藏标签；减少动效由载荷自身处理。活动态改为载荷的静态高亮（`bg-muted/80`），旧的 `shell-collab-active` 滑行不再存在；`main` 里的路由过渡 `motion.div` 属应用级、保留。
+
+至此 `frontend/` 内**所有交互面均来自 beUI 源**（适配层内为 beUI 源 + §17 四类增量补丁）；页面上不再有手写 `motion/react`，唯一允许的应用级动效是 `main` 的路由过渡与移动抽屉所经的 `sheet.tsx` 适配层。

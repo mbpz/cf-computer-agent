@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：441；操作/转发候选：1785。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：442；操作/转发候选：1787。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -97,6 +97,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/motion/date-range-picker/types.ts | 0 |
 | frontend/components/motion/date-range-picker/use-date-range-picker.ts | 0 |
 | frontend/components/motion/drawer.tsx | 3 |
+| frontend/components/motion/expandable-action-bar.tsx | 3 |
 | frontend/components/motion/feedback-widget.tsx | 11 |
 | frontend/components/motion/file-tree.tsx | 2 |
 | frontend/components/motion/file-upload.tsx | 7 |
@@ -159,7 +160,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/review/review-detail-model.ts | 0 |
 | frontend/components/review/review-drafts.tsx | 3 |
 | frontend/components/review/review-source-panel.tsx | 9 |
-| frontend/components/shell/app-shell.tsx | 69 |
+| frontend/components/shell/app-shell.tsx | 68 |
 | frontend/components/shell/command-palette.tsx | 3 |
 | frontend/components/shell/context-rail.tsx | 6 |
 | frontend/components/shell/navigation-policy.ts | 0 |
@@ -498,7 +499,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 86 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 86 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /admin/knowledge/:id | frontend/pages/admin/knowledge-item-route.tsx#AdminKnowledgeItemRoute | 35 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 182 | 无（不代表动态边界已核对） |
+| &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 184 | 无（不代表动态边界已核对） |
 | &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 60 | frontend/components/ui/card.tsx#Card |
 | &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 13 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 
@@ -1304,6 +1305,14 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 62:13 Drawer | motion.button  | onClick=() =&gt; dismissable && onOpenChange(false); type="button" | {"kind":"branch","expression":"open","branch":"true"}; spread: gate |
 | 83:13 Drawer | motion.aside children |  | {"kind":"branch","expression":"open","branch":"true"}; spread: gate |
 
+## frontend/components/motion/expandable-action-bar.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 273:7 ExpandableActionBar | motion.div  | onPointerEnter=onRootPointerEnter; onPointerLeave=onRootPointerLeave; onFocus=onRootFocus; onBlur=onRootBlur |  |
+| 459:15 ExpandableActionBar | motion.a content | href=item.href | {"kind":"repeat","expression":"items"}; {"kind":"branch","expression":"item.href","branch":"true"}; spread: shared; spread: item.dataAttributes |
+| 468:15 ExpandableActionBar | motion.button content | type="button" | disabled=item.disabled; {"kind":"repeat","expression":"items"}; {"kind":"branch","expression":"item.href","branch":"false"}; spread: shared; spread: item.dat… |
+
 ## frontend/components/motion/feedback-widget.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
@@ -1758,75 +1767,74 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 111:7 AppShell | a locale.t("SHELL_SKIP_MAIN") | href="#main-content" |  |
-| 112:7 AppShell | AnimatedSidebarProvider  | onOpenChange=(next) =&gt; setCollapsed(!next) | open=!collapsed |
-| 132:13 AppShell | Button  | onClick=() =&gt; setCollapsed((value) =&gt; !value); type="button" | aria-expanded=!collapsed; {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 137:13 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 138:40 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"logical","expression":"adminRoutes.length &gt; 0","operator… |
-| 141:93 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"branch","expression":"collapsed","branch":"true"} |
-| 142:81 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"branch","expression":"collapsed","branch":"false"} |
-| 146:70 AppShell | Breadcrumb  | onNavigate=navigate | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 148:13 AppShell | CommandPalette  | onNavigate=navigate; onToggleTheme=toggleTheme; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 150:75 AppShell | motion.a  | onClick=(event) =&gt; { event.preventDefault(); navigate(link.path); }; href=link.path | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"repeat","expression":"collaborationLinks"} |
-| 150:1147 AppShell | span unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—" |  | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"repeat","expression":"collaborationLinks"}; {"kind":"logica… |
-| 150:1538 AppShell | Button locale.t("COMMON_RETRY") | onClick=notificationSummary.retry | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"repeat","expression":"collaborationLinks"}; {"kind":"logica… |
-| 152:13 AppShell | Popover  | onOpenChange=(open) =&gt; setActiveMenu(open ? "language" : null) | open=activeMenu === "language"; {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 154:17 AppShell | Button  | type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
-| 156:45 AppShell | PopoverContent  |  | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
-| 157:17 AppShell | button locale.t("SHELL_LANGUAGE_EN") | onClick=() =&gt; { locale.setLocale("en"); setActiveMenu(null); }; type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
-| 158:17 AppShell | button locale.t("SHELL_LANGUAGE_ZH_CN") | onClick=() =&gt; { locale.setLocale("zh-CN"); setActiveMenu(null); }; type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
-| 163:148 AppShell | MobileNavigation  | onNavigate=navigate; onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 180:36 NavGroup | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"repeat","expression":"nodes"} |
-| 201:29 NavNode | Button  | onClick=(event) =&gt; event.preventDefault(); type="button" | aria-disabled="true" |
-| 205:9 NavNode | AnimatedSidebarMenuButton label | onSelect=(event) =&gt; { event.preventDefault(); onNavigate(path); }; href=path | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"true"} |
-| 206:9 NavNode | AnimatedSidebarMenuButton label | onSelect=() =&gt; onToggle(node.id) | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"false"} |
-| 207:10 NavNode | AnimatedSidebarMenuItem  |  |  |
-| 210:45 NavNode | Button  | onClick=() =&gt; onToggle(node.id); type="button" | aria-expanded=expanded[node.id] ?? false; {"kind":"logical","expression":"hasChildren && path && !collapsed","operator":"&&"} |
-| 212:111 NavNode | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"logical","expression":"hasChildren && open","operator":"&&"}; {"kind":"container","tag":"AnimatedSidebarMenuSub","attributes":{"open":"true"}}; {"ki… |
-| 275:23 Breadcrumb | BreadcrumbLink locale.t("NAV_HOME") | onClick=(event) =&gt; { event.preventDefault(); onNavigate?.("/"); }; href="/" |  |
-| 283:33 NavIcon | Checks  |  | {"kind":"branch","expression":"path === \"/tasks\"","branch":"true"}; spread: props |
-| 284:34 NavIcon | Kanban  |  | {"kind":"branch","expression":"path === \"/boards\"","branch":"true"}; earlier return: path === "/tasks"; spread: props |
-| 285:41 NavIcon | Bell  |  | {"kind":"branch","expression":"path === \"/notifications\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; spread: … |
-| 286:36 NavIcon | ChatCircle  |  | {"kind":"branch","expression":"path === \"/messages\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
-| 287:33 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/graph\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 288:28 NavIcon | House  |  | {"kind":"branch","expression":"path === \"/\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path … |
-| 289:37 NavIcon | BookOpen  |  | {"kind":"branch","expression":"path === \"/knowledge\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retu… |
-| 290:34 NavIcon | UploadSimple  |  | {"kind":"branch","expression":"path === \"/submit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
-| 291:34 NavIcon | MagnifyingGlass  |  | {"kind":"branch","expression":"path === \"/search\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
-| 292:33 NavIcon | Sparkle  |  | {"kind":"branch","expression":"path === \"/agent\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 293:42 NavIcon | Files  |  | {"kind":"branch","expression":"path === \"/my-submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier… |
-| 294:33 NavIcon | Target  |  | {"kind":"branch","expression":"path === \"/goals\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 295:36 NavIcon | FolderSimple  |  | {"kind":"branch","expression":"path === \"/projects\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
-| 296:36 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/calendar\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
-| 297:33 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/today\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 298:33 NavIcon | Timer  |  | {"kind":"branch","expression":"path === \"/focus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 299:34 NavIcon | Check  |  | {"kind":"branch","expression":"path === \"/review\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
-| 300:33 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 301:45 NavIcon | NotePencil  |  | {"kind":"branch","expression":"path === \"/admin/submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earl… |
-| 302:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/assets\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
-| 303:49 NavIcon | Trash  |  | {"kind":"branch","expression":"path === \"/admin/knowledge/trash\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; … |
-| 304:41 NavIcon | UsersThree  |  | {"kind":"branch","expression":"path === \"/admin/members\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier … |
-| 305:39 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin/roles\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
-| 306:39 NavIcon | DotsThree  |  | {"kind":"branch","expression":"path === \"/admin/menus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
-| 307:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/spaces\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
-| 308:39 NavIcon | Scroll  |  | {"kind":"branch","expression":"path === \"/admin/audit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
-| 309:43 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/admin/analytics\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlie… |
-| 310:10 NavIcon | DotsThree  |  | earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path === "/notifications"; earlier return: path === "/messages"; earli… |
-| 364:10 AccountMenu | Popover  | onOpenChange=(next) =&gt; onActiveMenuChange(next ? menuId : null) | open=open |
-| 366:7 AccountMenu | Button  | onKeyDown=(event) =&gt; { if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return; event.preventDefault(); focusOnOpen.current = event.key === "Arro… | {"kind":"container","tag":"Popover","attributes":{"open":"open"}} |
-| 376:14 AccountMenu | PopoverContent  | onKeyDown=onMenuKeyDown | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 378:7 AccountMenu | button locale.t("SHELL_SETTINGS") | onClick=selectSettings; type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 381:9 AccountMenu | button locale.t("SHELL_THEME_LIGHT") / selectedThemeIndicator("light") | onClick=() =&gt; selectTheme("light"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 382:9 AccountMenu | button locale.t("SHELL_THEME_DARK") / selectedThemeIndicator("dark") | onClick=() =&gt; selectTheme("dark"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 383:9 AccountMenu | button locale.t("SHELL_THEME_SYSTEM") / selectedThemeIndicator("system") | onClick=() =&gt; selectTheme("system"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 385:23 AccountMenu | p logoutError |  | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"}; {"kind":"logical","expression":"lo… |
-| 386:7 AccountMenu | button logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT") | onClick=onLogout; type="button" | disabled=logoutPending; {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 395:10 MobileNavigation | Sheet  | onOpenChange=setOpen | open=open |
-| 395:52 MobileNavigation | details  |  | open=open; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}} |
-| 395:102 MobileNavigation | summary locale.t("SHELL_OPEN_NAVIGATION") | onClick=(event) =&gt; { event.preventDefault(); setOpen((current) =&gt; !current); } | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}} |
-| 395:953 MobileNavigation | Button  | type="button" | disabled=true; aria-disabled="true"; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open… |
-| 395:1464 MobileNavigation | motion.a  | onClick=(event) =&gt; { event.preventDefault(); setOpen(false); onNavigate(path); }; href=path | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}}; {"kind":"repeat","express… |
-| 395:2356 MobileNavigation | AccountMenu  | onActiveMenuChange=onActiveMenuChange; onThemeChange=onThemeChange; onNavigate=(path) =&gt; { setOpen(false); onNavigate(path); }; onLogout=onLogout | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}} |
+| 130:11 AppShell | span unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—" |  | {"kind":"repeat","expression":"collaborationLinks"}; {"kind":"branch","expression":"link.path === \"/notifications\"","branch":"true"} |
+| 137:7 AppShell | a locale.t("SHELL_SKIP_MAIN") | href="#main-content" |  |
+| 138:7 AppShell | AnimatedSidebarProvider  | onOpenChange=(next) =&gt; setCollapsed(!next) | open=!collapsed |
+| 158:13 AppShell | Button  | onClick=() =&gt; setCollapsed((value) =&gt; !value); type="button" | aria-expanded=!collapsed; {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 163:13 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 164:40 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"logical","expression":"adminRoutes.length &gt; 0","operator… |
+| 167:93 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"branch","expression":"collapsed","branch":"true"} |
+| 168:81 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"branch","expression":"collapsed","branch":"false"} |
+| 172:70 AppShell | Breadcrumb  | onNavigate=navigate | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 174:13 AppShell | CommandPalette  | onNavigate=navigate; onToggleTheme=toggleTheme; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 186:76 AppShell | Button locale.t("COMMON_RETRY") | onClick=notificationSummary.retry | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"logical","expression":"notificationsLinkVisible && unreadSt… |
+| 188:13 AppShell | Popover  | onOpenChange=(open) =&gt; setActiveMenu(open ? "language" : null) | open=activeMenu === "language"; {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 190:17 AppShell | Button  | type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
+| 192:45 AppShell | PopoverContent  |  | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
+| 193:17 AppShell | button locale.t("SHELL_LANGUAGE_EN") | onClick=() =&gt; { locale.setLocale("en"); setActiveMenu(null); }; type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
+| 194:17 AppShell | button locale.t("SHELL_LANGUAGE_ZH_CN") | onClick=() =&gt; { locale.setLocale("zh-CN"); setActiveMenu(null); }; type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
+| 199:148 AppShell | MobileNavigation  | onNavigate=navigate; onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 216:36 NavGroup | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"repeat","expression":"nodes"} |
+| 237:29 NavNode | Button  | onClick=(event) =&gt; event.preventDefault(); type="button" | aria-disabled="true" |
+| 241:9 NavNode | AnimatedSidebarMenuButton label | onSelect=(event) =&gt; { event.preventDefault(); onNavigate(path); }; href=path | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"true"} |
+| 242:9 NavNode | AnimatedSidebarMenuButton label | onSelect=() =&gt; onToggle(node.id) | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"false"} |
+| 243:10 NavNode | AnimatedSidebarMenuItem  |  |  |
+| 246:45 NavNode | Button  | onClick=() =&gt; onToggle(node.id); type="button" | aria-expanded=expanded[node.id] ?? false; {"kind":"logical","expression":"hasChildren && path && !collapsed","operator":"&&"} |
+| 248:111 NavNode | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"logical","expression":"hasChildren && open","operator":"&&"}; {"kind":"container","tag":"AnimatedSidebarMenuSub","attributes":{"open":"true"}}; {"ki… |
+| 311:23 Breadcrumb | BreadcrumbLink locale.t("NAV_HOME") | onClick=(event) =&gt; { event.preventDefault(); onNavigate?.("/"); }; href="/" |  |
+| 319:33 NavIcon | Checks  |  | {"kind":"branch","expression":"path === \"/tasks\"","branch":"true"}; spread: props |
+| 320:34 NavIcon | Kanban  |  | {"kind":"branch","expression":"path === \"/boards\"","branch":"true"}; earlier return: path === "/tasks"; spread: props |
+| 321:41 NavIcon | Bell  |  | {"kind":"branch","expression":"path === \"/notifications\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; spread: … |
+| 322:36 NavIcon | ChatCircle  |  | {"kind":"branch","expression":"path === \"/messages\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
+| 323:33 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/graph\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 324:28 NavIcon | House  |  | {"kind":"branch","expression":"path === \"/\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path … |
+| 325:37 NavIcon | BookOpen  |  | {"kind":"branch","expression":"path === \"/knowledge\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retu… |
+| 326:34 NavIcon | UploadSimple  |  | {"kind":"branch","expression":"path === \"/submit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
+| 327:34 NavIcon | MagnifyingGlass  |  | {"kind":"branch","expression":"path === \"/search\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
+| 328:33 NavIcon | Sparkle  |  | {"kind":"branch","expression":"path === \"/agent\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 329:42 NavIcon | Files  |  | {"kind":"branch","expression":"path === \"/my-submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier… |
+| 330:33 NavIcon | Target  |  | {"kind":"branch","expression":"path === \"/goals\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 331:36 NavIcon | FolderSimple  |  | {"kind":"branch","expression":"path === \"/projects\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
+| 332:36 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/calendar\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
+| 333:33 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/today\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 334:33 NavIcon | Timer  |  | {"kind":"branch","expression":"path === \"/focus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 335:34 NavIcon | Check  |  | {"kind":"branch","expression":"path === \"/review\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
+| 336:33 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 337:45 NavIcon | NotePencil  |  | {"kind":"branch","expression":"path === \"/admin/submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earl… |
+| 338:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/assets\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
+| 339:49 NavIcon | Trash  |  | {"kind":"branch","expression":"path === \"/admin/knowledge/trash\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; … |
+| 340:41 NavIcon | UsersThree  |  | {"kind":"branch","expression":"path === \"/admin/members\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier … |
+| 341:39 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin/roles\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
+| 342:39 NavIcon | DotsThree  |  | {"kind":"branch","expression":"path === \"/admin/menus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
+| 343:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/spaces\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
+| 344:39 NavIcon | Scroll  |  | {"kind":"branch","expression":"path === \"/admin/audit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
+| 345:43 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/admin/analytics\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlie… |
+| 346:10 NavIcon | DotsThree  |  | earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path === "/notifications"; earlier return: path === "/messages"; earli… |
+| 400:10 AccountMenu | Popover  | onOpenChange=(next) =&gt; onActiveMenuChange(next ? menuId : null) | open=open |
+| 402:7 AccountMenu | Button  | onKeyDown=(event) =&gt; { if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return; event.preventDefault(); focusOnOpen.current = event.key === "Arro… | {"kind":"container","tag":"Popover","attributes":{"open":"open"}} |
+| 412:14 AccountMenu | PopoverContent  | onKeyDown=onMenuKeyDown | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 414:7 AccountMenu | button locale.t("SHELL_SETTINGS") | onClick=selectSettings; type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 417:9 AccountMenu | button locale.t("SHELL_THEME_LIGHT") / selectedThemeIndicator("light") | onClick=() =&gt; selectTheme("light"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 418:9 AccountMenu | button locale.t("SHELL_THEME_DARK") / selectedThemeIndicator("dark") | onClick=() =&gt; selectTheme("dark"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 419:9 AccountMenu | button locale.t("SHELL_THEME_SYSTEM") / selectedThemeIndicator("system") | onClick=() =&gt; selectTheme("system"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 421:23 AccountMenu | p logoutError |  | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"}; {"kind":"logical","expression":"lo… |
+| 422:7 AccountMenu | button logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT") | onClick=onLogout; type="button" | disabled=logoutPending; {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 431:10 MobileNavigation | Sheet  | onOpenChange=setOpen | open=open |
+| 431:52 MobileNavigation | details  |  | open=open; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}} |
+| 431:102 MobileNavigation | summary locale.t("SHELL_OPEN_NAVIGATION") | onClick=(event) =&gt; { event.preventDefault(); setOpen((current) =&gt; !current); } | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}} |
+| 431:953 MobileNavigation | Button  | type="button" | disabled=true; aria-disabled="true"; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open… |
+| 431:1464 MobileNavigation | motion.a  | onClick=(event) =&gt; { event.preventDefault(); setOpen(false); onNavigate(path); }; href=path | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}}; {"kind":"repeat","express… |
+| 431:2356 MobileNavigation | AccountMenu  | onActiveMenuChange=onActiveMenuChange; onThemeChange=onThemeChange; onNavigate=(path) =&gt; { setOpen(false); onNavigate(path); }; onLogout=onLogout | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"container","tag":"details","attributes":{"open":"open"}} |
 
 ## frontend/components/shell/command-palette.tsx
 
