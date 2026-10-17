@@ -352,7 +352,7 @@ describe("private tasks route", () => {
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" />)); await flush();
     await clickButton("Delete: Same (second-id)"); expect(writes).toEqual([]); await clickButton("Cancel"); expect(writes).toEqual([]);
-    await clickButton("Delete: Same (second-id)"); const confirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await clickButton("Delete: Same (second-id)"); const confirm = document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await act(async () => { confirm.click(); confirm.click(); });
     // The confirmed row's own version is the precondition: an old confirmation cannot delete a newer task.
     expect(writes).toEqual([{ url: "/api/tasks/second-id", body: JSON.stringify({ expectedUpdatedAt: items[1]!.updatedAt }) }]);
@@ -371,7 +371,7 @@ describe("private tasks route", () => {
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Delete: Alpha (task-alpha)"); expect(deletes).toBe(0); await clickButton("Delete permanently"); await flush();
     expect(deletes).toBe(1); expect(container.textContent).not.toContain("Alpha"); expect(container.textContent).not.toContain("private server detail");
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull(); await clickButton("Try search again"); await flush();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull(); await clickButton("Try search again"); await flush();
     expect(deletes).toBe(1); expect(container.textContent).toContain("Alpha");
   });
 
@@ -382,13 +382,13 @@ describe("private tasks route", () => {
       return ++gets === 1 ? taskPage(String(input)) : new Promise<Response>(resolve => { finish = resolve; });
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    await clickButton("Delete: Alpha (task-alpha)"); const old = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await clickButton("Delete: Alpha (task-alpha)"); const old = document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     // Same condition set: this is a refresh read, so the rows stay with their controls disabled.
     await act(async () => { browser.history.pushState({}, "", "/tasks?status=doing&page=1"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect((container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect((container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(true);
     await act(async () => old.click()); expect(deletes).toBe(0);
     await act(async () => finish(taskPage("/api/tasks?status=doing&page=1"))); await flush();
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect(deletes).toBe(0);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect(deletes).toBe(0);
   });
 
   it("blocks stale deletion after a successful delete whose list read fails until explicit GET recovery", async () => {
@@ -400,7 +400,7 @@ describe("private tasks route", () => {
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Delete: Alpha (task-alpha)"); await clickButton("Delete permanently"); await flush();
     const stale = container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement; expect(stale.disabled).toBe(true);
-    await act(async () => stale.click()); expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect(deletes).toBe(1);
+    await act(async () => stale.click()); expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect(deletes).toBe(1);
     await clickButton("Try search again"); await flush(); expect(gets).toBe(3); expect(deletes).toBe(1);
     expect((container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(false);
   });
@@ -412,7 +412,7 @@ describe("private tasks route", () => {
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Delete: Alpha (task-alpha)"); await clickButton("Delete permanently"); await flush();
-    expect(deletes).toBe(1); expect(container.textContent).toContain("Unable to update the task."); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(deletes).toBe(1); expect(container.textContent).toContain("Unable to update the task."); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     await clickButton("Delete: Alpha (task-alpha)"); expect(deletes).toBe(1); await clickButton("Cancel"); expect(deletes).toBe(1);
   });
 
@@ -550,7 +550,7 @@ describe("private tasks route", () => {
   });
 
   async function clickButton(name: string) {
-    const button = [...container.querySelectorAll("button")].find((candidate) => candidate.getAttribute("aria-label") === name || candidate.textContent === name) as HTMLButtonElement;
+    const button = [...document.querySelectorAll("button")].find((candidate) => candidate.getAttribute("aria-label") === name || candidate.textContent === name) as HTMLButtonElement;
     expect(button).toBeTruthy(); await act(async () => button.click());
   }
 
@@ -570,7 +570,8 @@ describe("private tasks route", () => {
   }
 
   async function scrollToEnd() {
-    const scroller = container.querySelector("div.overflow-auto") as HTMLElement;
+    // The append feed scrolls the beUI todo list's viewport.
+    const scroller = container.querySelector("[data-todo-list-viewport]") as HTMLElement;
     await act(async () => {
       scroller.scrollTop = scroller.scrollHeight;
       scroller.dispatchEvent(new browser.Event("scroll", { bubbles: true }));

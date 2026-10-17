@@ -1,14 +1,17 @@
 import { Bell } from "@phosphor-icons/react";
+import { useEffect, useRef, type UIEvent } from "react";
 import { Alert, AlertTitle } from "../../components/ui/alert";
 import { AppliedFilters, type AppliedFilter } from "../../components/ui/applied-filters";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { DataTable } from "../../components/data-table";
+import { DataPagination } from "../../components/data-pagination";
+import { NotificationStack } from "../../components/motion/notification-stack";
 import { FilterSelect } from "../../components/ui/filter-select";
 import { FilterDisclosure } from "../../components/ui/filter-disclosure";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
+import { useListMode } from "../../lib/list-mode";
 import { NOTIFICATION_EVENT_TYPES, type NotificationEventType, type NotificationFilters, type NotificationItem, type NotificationSummary } from "../../lib/notifications-data";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 import { notificationEventKey, notificationTargetHref } from "./notification-model";
@@ -45,6 +48,27 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   const ready = state.kind === "ready";
   const visibleUnreadIds = ready ? state.items.filter((item) => item.readAt === null).map((item) => item.id).slice(0, 100) : [];
   const actionsDisabled = pending || actionPending || recordBlocked;
+  // The beUI stack is the list surface in both shapes: the desktop footer
+  // carries the 20/50/100 pager, while narrow viewports keep appending from
+  // the scroll container. The route owns both request paths.
+  const desktop = useListMode() === "desktop";
+  const hasMore = ready && state.pagination.page < state.pagination.totalPages;
+  const feedEndReached = useRef(false);
+  useEffect(() => { if (!pending) feedEndReached.current = false; }, [pending, state.kind]);
+  const onFeedScroll = (event: UIEvent<HTMLDivElement>) => {
+    if (desktop || !onLoadMore || pending || !hasMore || feedEndReached.current) return;
+    const node = event.currentTarget;
+    if (node.scrollHeight - node.scrollTop - node.clientHeight < 160) {
+      feedEndReached.current = true;
+      onLoadMore();
+    }
+  };
+  // Only mounted while it has something to announce; the pager is desktop-only,
+  // so the feed copy belongs to the narrow surface.
+  const statusText = !ready ? ""
+    : desktop ? ""
+      : pending && state.items.length > 0 ? frontendText(locale, "LIST_LOADING_MORE")
+        : !hasMore && state.items.length > 0 ? frontendText(locale, "LIST_END_OF_LIST") : "";
   const readOptions = [
     { value: "", label: frontendText(locale, "NOTIFICATIONS_FILTER_ALL") },
     { value: "unread", label: frontendText(locale, "NOTIFICATIONS_FILTER_UNREAD") },
@@ -93,36 +117,43 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
     {state.kind === "recovery" && <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ACTION_FAILED")} description={frontendText(locale, "NOTIFICATIONS_RECOVERY_DESCRIPTION")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>}
     {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>}
     {state.kind === "forbidden" && <PageState kind="forbidden" title={frontendText(locale, "NOTIFICATIONS_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>}
-    {state.kind === "ready" && <DataTable
-      locale={locale}
-      rows={state.items}
-      rowId={(item: NotificationItem) => item.id}
-      ariaLabel={frontendText(locale, "NOTIFICATIONS_TITLE")}
-      emptyState={<PageState kind="empty" title={frontendText(locale, "NOTIFICATIONS_EMPTY")} />}
-      loading={pending}
-      pagination={state.pagination}
-      onPageChange={onPageChange}
-      onPageSizeChange={onPageSizeChange}
-      hasMore={state.pagination.page < state.pagination.totalPages}
-      onLoadMore={onLoadMore}
-      fill
-      rowHeight={72}
-      columns={[
-        { key: "notification", header: frontendText(locale, "NOTIFICATIONS_COLUMN_NOTIFICATION"), cellClassName: "whitespace-normal", cell: (item: NotificationItem) => <div data-notification-id={item.id} data-read={item.readAt === null ? "false" : "true"} className="min-w-0 space-y-1 py-1">
-          <p className="line-clamp-1 font-medium">{(typeof item.payload.title === "string" ? item.payload.title.trim() : "") || frontendText(locale, notificationEventKey(item.eventType))}</p>
-          <p className="line-clamp-1 text-sm text-muted-foreground">{frontendText(locale, notificationEventKey(item.eventType))}</p>
-        </div> },
-        { key: "createdAt", header: frontendText(locale, "NOTIFICATIONS_COLUMN_TIME"), width: "200px", cellClassName: "whitespace-normal", cell: (item: NotificationItem) => <time className="line-clamp-1 text-xs text-muted-foreground" dateTime={item.createdAt}>{item.createdAt}</time> },
-        { key: "status", header: frontendText(locale, "NOTIFICATIONS_COLUMN_STATUS"), width: "120px", cell: (item: NotificationItem) => <Badge variant={item.readAt === null ? "default" : "outline"}>{frontendText(locale, item.readAt === null ? "NOTIFICATIONS_UNREAD" : "NOTIFICATIONS_READ")}</Badge> },
-        { key: "actions", header: frontendText(locale, "NOTIFICATIONS_COLUMN_ACTIONS"), width: "260px", cellClassName: "whitespace-normal", cell: (item: NotificationItem) => {
-          const href = notificationTargetHref(item);
-          return <div className="flex flex-wrap items-center gap-2 py-1">
-            {href ? <Button variant="outline" disabled={actionsDisabled} onClick={() => onOpen(item.id)}>{frontendText(locale, "NOTIFICATIONS_OPEN")}</Button> : <p className="text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")}</p>}
-            {item.readAt === null && <Button variant="outline" disabled={actionsDisabled} onClick={() => onMarkRead(item.id)}>{frontendText(locale, "NOTIFICATIONS_MARK_READ")}</Button>}
-          </div>;
-        } },
-      ]}
-    />}
+    {state.kind === "ready" && (state.items.length === 0
+      ? <PageState kind="empty" title={frontendText(locale, "NOTIFICATIONS_EMPTY")} />
+      : <div data-list-mode={desktop ? "desktop" : "mobile"} className={desktop ? "flex h-full min-h-0 flex-1 flex-col" : "space-y-2"}>
+        <div data-notification-feed="" className={desktop ? "min-h-0 flex-1 overflow-auto" : "overflow-auto"} onScroll={onFeedScroll}>
+          <NotificationStack
+            items={state.items.map((item: NotificationItem) => {
+              const href = notificationTargetHref(item);
+              return {
+                id: item.id,
+                title: (typeof item.payload.title === "string" ? item.payload.title.trim() : "") || frontendText(locale, notificationEventKey(item.eventType)),
+                description: frontendText(locale, notificationEventKey(item.eventType)),
+                trailing: <span className="flex flex-col items-end gap-1">
+                  <time className="line-clamp-1 text-xs text-muted-foreground" dateTime={item.createdAt}>{item.createdAt}</time>
+                  <Badge variant={item.readAt === null ? "default" : "outline"}>{frontendText(locale, item.readAt === null ? "NOTIFICATIONS_UNREAD" : "NOTIFICATIONS_READ")}</Badge>
+                </span>,
+                data: { "data-notification-id": item.id, "data-read": item.readAt === null ? "false" : "true" },
+                actions: <div className="flex flex-wrap items-center gap-2">
+                  {href ? <Button variant="outline" disabled={actionsDisabled} onClick={() => onOpen(item.id)}>{frontendText(locale, "NOTIFICATIONS_OPEN")}</Button> : <p className="text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")}</p>}
+                  {item.readAt === null && <Button variant="outline" disabled={actionsDisabled} onClick={() => onMarkRead(item.id)}>{frontendText(locale, "NOTIFICATIONS_MARK_READ")}</Button>}
+                </div>,
+              };
+            })}
+            interactive={false}
+            ariaLabel={frontendText(locale, "NOTIFICATIONS_TITLE")}
+            labels={{
+              expanded: (count) => `${frontendText(locale, "NOTIFICATIONS_TITLE")} · ${count}`,
+              collapsed: (count) => `${frontendText(locale, "NOTIFICATIONS_TITLE")} · ${count}`,
+            }}
+            footer={desktop && onPageChange && onPageSizeChange ? <DataPagination locale={locale} {...state.pagination} visibleCount={state.items.length} pending={pending} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} /> : undefined}
+            collapsedLabel={frontendText(locale, "NOTIFICATIONS_TITLE")}
+            expandedLabel={frontendText(locale, "NOTIFICATIONS_TITLE")}
+            emptyLabel={frontendText(locale, "NOTIFICATIONS_EMPTY")}
+          />
+        </div>
+        {statusText ? <p role="status" className="sr-only">{statusText}</p> : null}
+      </div>
+    )}
   </section>;
 }
 

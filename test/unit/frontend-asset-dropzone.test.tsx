@@ -39,7 +39,7 @@ afterEach(async () => {
 function drop(files: File[]) {
   const event = new browser.Event("drop", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "dataTransfer", { value: { files } });
-  act(() => host.querySelector("section")!.dispatchEvent(event as unknown as Event));
+  act(() => host.querySelector("[data-drop-target=\"asset\"]")!.dispatchEvent(event as unknown as Event));
 }
 async function waitForUpload() {
   for (let attempt = 0; attempt < 40; attempt++) {

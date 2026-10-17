@@ -123,7 +123,7 @@ describe("project summary per-row recovery", () => {
     await act(async () => retry("a").click());
     await act(async () => ([...card("b").querySelectorAll("button")].find((button) => button.textContent === "Complete") as HTMLButtonElement).click());
     expect(mutated).toBe(false);
-    const dialog = main().querySelector('[role="alertdialog"]')!;
+    const dialog = document.querySelector('[role="alertdialog"]')!;
     expect(dialog.textContent).toContain("Project b (b)");
     await act(async () => ([...dialog.querySelectorAll("button")].find(button => button.textContent === "Complete") as HTMLButtonElement).click());
     await waitForApp(() => card("a").textContent?.includes("2/9") === true);

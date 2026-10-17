@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
+import { localCalendarTime } from "../../frontend/lib/calendar-query";
 import { CalendarPage } from "../../frontend/pages/calendar-page";
 
 const vmContexts = new WeakSet<object>();
@@ -60,9 +61,11 @@ describe("Calendar page", () => {
       expect(html).toContain(`>${title}</h1>`);
       // The leading glyph stays outside the heading so the page exposes one clean name.
       expect(html.indexOf('data-icon="calendar"')).toBeLessThan(html.indexOf("<h1"));
-      // The page-level create action and the existing range filter survive the read state.
+      // The page-level create action and the existing range filter survive the read state. The
+      // range fields live in the popover's portal, so the trigger is what static markup can address.
       expect(html).toContain("data-calendar-create-open");
-      expect(html).toContain(`aria-label="${frontendText(locale, "CALENDAR_RANGE_FROM")}"`);
+      expect(html).toContain("data-calendar-range-trigger");
+      expect(html).toContain('aria-haspopup="dialog"');
       expect(html).not.toContain("<select");
     }
   });
@@ -82,10 +85,10 @@ describe("Calendar create dialog", () => {
     root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
-  const dialog = () => container.querySelector("[data-calendar-create-dialog]");
+  const dialog = () => document.querySelector("[data-calendar-create-dialog]");
   const trigger = () => container.querySelector<HTMLButtonElement>("[data-calendar-create-open]")!;
-  const field = (label: string) => container.querySelector<HTMLInputElement>(`input[aria-label="${frontendText(locale, label)}"]`)!;
-  const submit = () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === frontendText(locale, "CALENDAR_CREATE"))!;
+  const field = (label: string) => document.querySelector<HTMLInputElement>(`input[aria-label="${frontendText(locale, label)}"]`)!;
+  const submit = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === frontendText(locale, "CALENDAR_CREATE"))!;
   async function mount(props: Record<string, unknown> = {}) { await act(async () => root.render(<CalendarPage locale={locale} state={ready} createMemberId="alice" {...props} />)); }
   async function click(node: HTMLElement) { await act(async () => node.click()); }
   async function type(label: string, value: string) {
@@ -101,7 +104,7 @@ describe("Calendar create dialog", () => {
     expect(dialog()?.getAttribute("role")).toBe("dialog");
     expect(dialog()?.textContent).toContain(frontendText(locale, "CALENDAR_CREATE_TITLE"));
     expect(field("CALENDAR_TITLE_FIELD")).not.toBeNull(); expect(open.getAttribute("aria-expanded")).toBe("true");
-    await click(container.querySelector<HTMLButtonElement>("[data-calendar-create-cancel]")!);
+    await click(document.querySelector<HTMLButtonElement>("[data-calendar-create-cancel]")!);
     expect(dialog()).toBeNull();
     await click(trigger());
     expect(dialog()).not.toBeNull(); expect(field("CALENDAR_TITLE_FIELD")).not.toBeNull();
@@ -114,11 +117,50 @@ describe("Calendar create dialog", () => {
     await mount({ onCreate: create, onCreateReadback: async () => true });
     expect(dialog()).not.toBeNull();
     expect(field("CALENDAR_TITLE_FIELD").disabled).toBe(true);
-    await click(container.querySelector<HTMLButtonElement>("[data-create-retry]")!);
+    await click(document.querySelector<HTMLButtonElement>("[data-create-retry]")!);
     await act(async () => { await vi.waitFor(() => expect(dialog()).toBeNull()); });
     expect(create).toHaveBeenCalledTimes(1);
     expect(browser.sessionStorage.getItem(intentKey)).toBeNull();
     expect(dialog()).toBeNull();
+  });
+  it("opens the range popover, keeps local-time validation and applies the exact instants", async () => {
+    const change = vi.fn();
+    const range = { from: "2026-09-01T00:00:00.000Z", to: "2026-09-08T00:00:00.000Z" };
+    await mount({ range, onRangeChange: change });
+    const open = container.querySelector<HTMLButtonElement>("[data-calendar-range-trigger]")!;
+    expect(open.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(open.getAttribute("aria-expanded")).toBe("false");
+    await click(open);
+    expect(document.querySelector("[data-calendar-range-panel]")?.getAttribute("role")).toBe("dialog");
+    expect(document.querySelector("[data-calendar-range-panel]")?.getAttribute("aria-labelledby")).toBe(open.id);
+    expect(document.querySelector("[data-calendar-range-filter]")?.textContent).toContain(frontendText(locale, "CALENDAR_RANGE_HINT"));
+    expect(document.querySelector("[data-calendar-range-filter]")?.textContent).toContain(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(field("CALENDAR_RANGE_FROM").type).toBe("datetime-local");
+    expect(field("CALENDAR_RANGE_TO").type).toBe("datetime-local");
+    expect(field("CALENDAR_RANGE_FROM").value).toBe(localCalendarTime(range.from));
+    // Equal instants are not a range: the shared copy appears and Apply is blocked.
+    await type("CALENDAR_RANGE_TO", localCalendarTime(range.from));
+    expect(document.querySelector('[data-calendar-range-panel] [role="alert"]')?.textContent).toBe(frontendText(locale, "CALENDAR_RANGE_INVALID"));
+    expect(document.querySelector<HTMLButtonElement>("[data-calendar-range-apply]")!.disabled).toBe(true);
+    // More than 31 days is the same refusal.
+    await type("CALENDAR_RANGE_TO", localCalendarTime(new Date(Date.parse(range.from) + 32 * 86_400_000).toISOString()));
+    expect(document.querySelector('[data-calendar-range-panel] [role="alert"]')).not.toBeNull();
+    expect(document.querySelector<HTMLButtonElement>("[data-calendar-range-apply]")!.disabled).toBe(true);
+    // A local-time draft inside the cap applies as the canonical instants.
+    const applied = new Date(Date.parse(range.from) + 3_600_000).toISOString();
+    await type("CALENDAR_RANGE_TO", localCalendarTime(applied));
+    expect(document.querySelector('[data-calendar-range-panel] [role="alert"]')).toBeNull();
+    expect(document.querySelector<HTMLButtonElement>("[data-calendar-range-apply]")!.disabled).toBe(false);
+    await click(document.querySelector<HTMLButtonElement>("[data-calendar-range-apply]")!);
+    expect(change).toHaveBeenCalledWith({ from: range.from, to: applied });
+    expect(document.querySelector("[data-calendar-range-panel]")).toBeNull();
+    expect(open.getAttribute("aria-expanded")).toBe("false");
+    // Escape closes the portalled panel too.
+    await click(open);
+    expect(document.querySelector("[data-calendar-range-panel]")).not.toBeNull();
+    await act(async () => { document.querySelector("[data-calendar-range-panel]")!.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as Event); });
+    expect(document.querySelector("[data-calendar-range-panel]")).toBeNull();
+    expect(open.getAttribute("aria-expanded")).toBe("false");
   });
   it("posts exactly one create from inside the dialog and closes it on success", async () => {
     const create = vi.fn().mockResolvedValue({});

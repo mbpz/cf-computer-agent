@@ -93,8 +93,7 @@ export function InboxPage({ locale, state, pending = false, actionError, onRetry
     />}
   </section>
   {state.kind === "ready" && <><Dialog open={captureOpen} onOpenChange={next => { if (!next) setCaptureOpen(false); }}>
-    {captureOpen && <div className="fixed inset-0 z-50 bg-black/50" aria-hidden="true" onClick={() => setCaptureOpen(false)} />}
-    <DialogContent role="dialog" data-inbox-capture-dialog aria-labelledby={captureTitleId} aria-describedby={captureDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
+    <DialogContent role="dialog" data-inbox-capture-dialog dismissLabel={frontendText(locale, "COMMON_DISMISS")} aria-labelledby={captureTitleId} aria-describedby={captureDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
       <DialogTitle id={captureTitleId}>{frontendText(locale, "INBOX_CAPTURE_TITLE")}</DialogTitle>
       <p id={captureDescriptionId} className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "INBOX_DESCRIPTION")}</p>
       <div className="mt-4"><InboxCreateForm locale={locale} createMemberId={createMemberId} pending={(capturePending ?? pending) || confirmation.open} isSubmitBlocked={confirmation.isOpen} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={locked => { setCaptureLocked(locked); onCreateLock?.(locked); }} onCreated={() => setCaptureOpen(false)} /></div>

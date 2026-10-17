@@ -5,6 +5,7 @@ import { DataTable } from "../../components/data-table";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { Select, SelectOption } from "../../components/ui/select";
+import { SortableList, SortableListGroup, SortableListItem } from "../../components/motion/sortable-list";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { TaskItem } from "../../lib/tasks-data";
@@ -47,9 +48,25 @@ export function BoardsPage({ locale, columns, actionError, actionNotice, actionP
     </Alert>}
     {actionError && <Alert variant="destructive"><AlertTitle>{actionError}</AlertTitle></Alert>}
     {actionNotice && <p role="status" className="text-sm">{actionNotice}</p>}
-    <div data-board-columns="" className="flex snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 lg:min-h-0 lg:flex-1 lg:items-stretch xl:grid xl:grid-cols-4 xl:overflow-visible">
-      {BOARD_STATUSES.map((status) => <BoardColumn key={status} status={status} state={columns[status]} locale={locale} actionPendingId={actionPendingId} movesLocked={movesLocked} onRetry={onRetry} onLoadMore={onLoadMore} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} onStatusChange={onStatusChange} />)}
-    </div>
+    {/* The columns are a beUI sortable stack with reordering switched off: the workflow
+        order is the fixed `BOARD_STATUSES` tuple, every move goes through the status API
+        receipt, and no handle is rendered, so nothing can start a drag. Each row is the
+        column itself (`data-board-column` rides the row), which is why the row keeps the
+        column's own geometry. */}
+    <SortableList
+      items={BOARD_STATUSES.map((status) => ({ id: status }))}
+      getItemLabel={(item) => frontendText(locale, taskStatusKey(item.id))}
+      label={frontendText(locale, "BOARDS_TITLE")}
+      instructions={null}
+      labels={{ handle: "{label}", undo: frontendText(locale, "BOARDS_TITLE"), movedToPosition: "{label}", previousOrderRestored: "" }}
+      disabled
+      showUndo={false}
+      className="w-full max-w-none lg:min-h-0 lg:flex-1"
+    >
+      <SortableListGroup data-board-columns="" className="flex snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 space-y-0 lg:min-h-0 lg:flex-1 lg:items-stretch xl:grid xl:grid-cols-4 xl:overflow-visible">
+        {BOARD_STATUSES.map((status) => <BoardColumn key={status} status={status} state={columns[status]} locale={locale} actionPendingId={actionPendingId} movesLocked={movesLocked} onRetry={onRetry} onLoadMore={onLoadMore} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} onStatusChange={onStatusChange} />)}
+      </SortableListGroup>
+    </SortableList>
   </section>;
 }
 
@@ -66,12 +83,12 @@ function BoardColumn({ status, state, locale, actionPendingId, movesLocked, onRe
   onStatusChange: (task: TaskItem, status: BoardTargetStatus) => void;
 }) {
   const heading = frontendText(locale, taskStatusKey(status));
-  return <article data-board-column={status} className="flex w-72 shrink-0 snap-start flex-col space-y-3 rounded-lg border bg-muted/20 p-3 lg:min-h-0 xl:w-auto xl:min-w-0">
+  return <SortableListItem id={status} data-board-column={status} className="flex w-72 shrink-0 snap-start flex-col items-stretch gap-3 rounded-lg border bg-muted/20 p-3 lg:min-h-0 xl:w-auto xl:min-w-0">
     <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{heading}</h2>{state.kind === "ready" && <Badge variant="secondary" data-board-column-total={String(state.pagination.total)}>{state.pagination.total}</Badge>}</div>
     {state.kind === "loading" && <div><span className="sr-only">{frontendText(locale, "BOARDS_COLUMN_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "BOARDS_COLUMN_LOADING")} /></div>}
     {state.kind === "error" && <PageState kind="error" title={frontendText(locale, "BOARDS_COLUMN_ERROR")}><Button className="mt-3" variant="outline" onClick={() => onRetry(status)}>{frontendText(locale, "BOARDS_RETRY")}</Button></PageState>}
     {state.kind === "ready" && <ReadyColumn status={status} state={state} locale={locale} actionPendingId={actionPendingId} movesLocked={movesLocked} onRetry={onRetry} onLoadMore={onLoadMore} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} onStatusChange={onStatusChange} />}
-  </article>;
+  </SortableListItem>;
 }
 
 function ReadyColumn({ status, state, locale, actionPendingId, movesLocked, onRetry, onLoadMore, onPageChange, onPageSizeChange, onStatusChange }: {

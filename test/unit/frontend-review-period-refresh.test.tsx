@@ -32,20 +32,29 @@ describe("review period refresh", () => {
 
   const knowledgeKey = "memory-garden:review-period:v1:knowledge:member-a";
   const workbenchKey = "memory-garden:review-period:v1:workbench:member-a";
-  const periodTrigger = () => container.querySelector("[data-knowledge-review] button[aria-haspopup='listbox']") as HTMLButtonElement;
-  const selectedPeriod = () => periodTrigger().textContent?.includes(frontendText(locale(), "KNOWLEDGE_REVIEW_WEEKLY")) ? "weekly" : "daily";
+  // The period is a beUI radio group: each choice is a `role="radio"` control and its
+  // visible label sits beside it in the same row, so the selection is read from
+  // `aria-checked` rather than from a listbox trigger's text.
+  const periodTrigger = () => container.querySelector("[data-knowledge-review] [role='radiogroup']") as HTMLElement;
+  const periodRadio = (value: "daily" | "weekly") => periodTrigger().querySelector(`[data-review-period="${value}"]`) as HTMLButtonElement;
+  const selectedPeriod = () => periodRadio("weekly").getAttribute("aria-checked") === "true" ? "weekly" : "daily";
   async function renderKnowledge() { await act(async () => root.render(<KnowledgeRoute locale={locale()} search="" memberId="member-a" />)); await flush(); }
   async function renderReview() { browser.history.replaceState({}, "", "/review"); await act(async () => root.render(<WorkbenchReviewRoute locale={locale()} memberId="member-a" />)); await flush(); }
   async function remount(render: () => Promise<void>) { await act(async () => root.unmount()); const { createRoot } = await import("react-dom/client"); root = createRoot(container); reviews = []; await render(); }
   async function choose(value: "daily" | "weekly") {
-    await act(async () => periodTrigger().click());
+    const radio = periodRadio(value);
     const label = frontendText(locale(), value === "weekly" ? "KNOWLEDGE_REVIEW_WEEKLY" : "KNOWLEDGE_REVIEW_DAILY");
-    const option = [...container.querySelectorAll<HTMLButtonElement>("[role='option']")].find((node) => node.textContent === label);
-    expect(option).toBeTruthy();
-    await act(async () => option!.click());
+    expect(radio.closest("label")?.textContent).toBe(label);
+    await act(async () => radio.click());
     await flush();
   }
-  async function click(label: string) { const target = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; await act(async () => target.click()); await flush(); }
+  /** The workbench period choices are radios whose label sits beside the control. */
+  async function click(label: string) {
+    const target = ([...container.querySelectorAll("button")].find((item) => item.textContent === label)
+      ?? [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find((item) => item.closest("label")?.textContent === label)) as HTMLButtonElement;
+    await act(async () => target.click());
+    await flush();
+  }
 
   it("reads the daily knowledge review again after returning from weekly", async () => {
     await renderKnowledge();
@@ -127,8 +136,8 @@ describe("review period refresh", () => {
     expect(browser.sessionStorage.getItem(workbenchKey)).toContain("weekly");
     expect(reviews.at(-1)).toContain("period=weekly");
     await remount(renderReview);
-    const weekly = [...container.querySelectorAll("button")].find((item) => item.textContent === "Weekly") as HTMLButtonElement;
-    expect(weekly.getAttribute("aria-pressed")).toBe("true");
+    const weekly = container.querySelector('[data-review-period="weekly"]') as HTMLButtonElement;
+    expect(weekly.getAttribute("aria-checked")).toBe("true");
     expect(reviews.some((url) => url.includes("period=weekly"))).toBe(true);
     expect(writeWorkspaceHistory("push", "/home")).toBe("committed");
   });

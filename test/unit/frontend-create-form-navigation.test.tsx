@@ -47,19 +47,19 @@ describe.each(variants)("%s create form navigation", variant => {
       }
     });
   }
-  function submitButton() { return [...container.querySelectorAll<HTMLButtonElement>('button')].find(b => !b.hasAttribute('data-cancel-action') && !b.hasAttribute('data-confirm-action'))!; }
+  function submitButton() { return [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => !b.hasAttribute('data-cancel-action') && !b.hasAttribute('data-confirm-action'))!; }
   async function nav(expected: string) { await act(async () => expect(writeWorkspaceHistory("push", "/target")).toBe(expected)); }
   it("protects same-event input and cancels without changing URL or draft", async () => {
     await mount();
     await act(async () => { change(input(), "Unsaved private draft"); expect(writeWorkspaceHistory("push", "/target")).toBe("deferred"); });
     expect(browser.location.pathname).toBe("/source");
     expect(browser.document.activeElement?.textContent).toBe("Keep editing");
-    await act(async () => container.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
     expect(input().value).toBe("Unsaved private draft"); expect(writes).toHaveLength(0);
   });
   it("discards only after a single admitted commit", async () => {
     await mount(); await fill(); await nav("deferred");
-    const confirm = container.querySelector<HTMLButtonElement>('[data-confirm-action]')!;
+    const confirm = document.querySelector<HTMLButtonElement>('[data-confirm-action]')!;
     await act(async () => { confirm.click(); confirm.click(); });
     expect(browser.location.pathname).toBe("/target"); expect(browser.history.length).toBe(2);
     expect(input().value).toBe(""); expect(writes).toHaveLength(0);
@@ -67,20 +67,20 @@ describe.each(variants)("%s create form navigation", variant => {
   it("keeps draft when a second guard blocks final admission", async () => {
     await mount(); await fill(); let blocked = false;
     const unregister = registerWorkspaceLeaveGuard(() => ({ kind: blocked ? "block" : "allow" }));
-    try { await nav("deferred"); blocked = true; await act(async () => container.querySelector<HTMLButtonElement>('[data-confirm-action]')!.click());
+    try { await nav("deferred"); blocked = true; await act(async () => document.querySelector<HTMLButtonElement>('[data-confirm-action]')!.click());
       expect(browser.location.pathname).toBe("/source"); expect(input().value).toBe("Unsaved private draft");
     } finally { unregister(); }
   });
   it("warns on dirty document departure and removes warning after committed discard", async () => {
     await mount(); await fill(); const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); expect(event.defaultPrevented).toBe(true);
-    await nav("deferred"); await act(async () => container.querySelector<HTMLButtonElement>('[data-confirm-action]')!.click());
+    await nav("deferred"); await act(async () => document.querySelector<HTMLButtonElement>('[data-confirm-action]')!.click());
     const clean = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(clean); expect(clean.defaultPrevented).toBe(false);
   });
   it("blocks pending and unknown writes without offering discard or repeating POST", async () => {
     let reject!: (cause: unknown) => void; respond = () => new Promise((_yes, no) => { reject = no; });
     await mount(); await fill();
     await act(async () => { submitButton().click(); expect(writeWorkspaceHistory("push", "/target")).toBe("blocked"); });
-    expect(writes).toHaveLength(1); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(writes).toHaveLength(1); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     await act(async () => reject(new TypeError("offline"))); await nav("blocked");
     expect(browser.location.pathname).toBe("/source"); expect(writes).toHaveLength(1);
   });
@@ -99,7 +99,7 @@ describe.each(variants)("%s create form navigation", variant => {
       change(input(), "Must not replace the confirmed draft");
     });
     expect(input().value).toBe("Unsaved private draft"); expect(writes).toHaveLength(0);
-    await act(async () => container.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
     expect(input().disabled).toBe(false);
   });
   it("submits the freshest same-event draft exactly once", async () => {
@@ -117,11 +117,11 @@ describe.each(variants)("%s create form navigation", variant => {
       const select = container.querySelector('select')!;
       await act(async () => change(select as any, "link"));
       await nav("deferred");
-      await act(async () => container.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
+      await act(async () => document.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
       const link = container.querySelector<HTMLInputElement>('input')!;
       await act(async () => change(link, "https://example.test/draft"));
       await nav("deferred");
-      await act(async () => container.querySelector<HTMLButtonElement>('[data-confirm-action]')!.click());
+      await act(async () => document.querySelector<HTMLButtonElement>('[data-confirm-action]')!.click());
     }
     const controls = [...container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select')];
     for (const node of controls) {
@@ -129,7 +129,7 @@ describe.each(variants)("%s create form navigation", variant => {
       const value = node.tagName === "SELECT" ? [...(node as HTMLSelectElement).options].find(option => option.value !== baseline)!.value
         : node.type === "datetime-local" ? "2026-10-03T09:00" : "Field-only draft";
       await act(async () => change(node as any, value)); await nav("deferred");
-      await act(async () => container.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
+      await act(async () => document.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
       await act(async () => change(node as any, baseline));
       const clean = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(clean);
       expect(clean.defaultPrevented).toBe(false);
@@ -141,7 +141,7 @@ describe.each(variants)("%s create form navigation", variant => {
     await mount(); await fill(); await act(async () => submitButton().click());
     await mount("remount"); await nav("blocked");
     expect(input().value).toBe("Unsaved private draft"); expect(writes).toHaveLength(1);
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("blocks failed readback after remount and unlocks only after explicit successful read retry", async () => {
     readback = async () => false;
@@ -153,7 +153,7 @@ describe.each(variants)("%s create form navigation", variant => {
   });
   it("invalidates captured confirmation and removes unload warnings when unmounted", async () => {
     await mount(); await fill(); await nav("deferred");
-    const button = container.querySelector<HTMLButtonElement>('[data-confirm-action]')!;
+    const button = document.querySelector<HTMLButtonElement>('[data-confirm-action]')!;
     const key = Object.keys(button).find(k => k.startsWith("__reactProps$"))!;
     const confirm = (button as any)[key].onClick;
     await act(async () => root.render(<div>New member scope</div>));

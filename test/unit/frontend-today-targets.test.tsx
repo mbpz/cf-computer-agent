@@ -17,7 +17,7 @@ describe("Today traceable targets through App", () => {
   const main = () => app!.container.querySelector("main")!;
   const click = async (node: HTMLElement) => act(async () => node.click());
   const target = (kind: string) => main().querySelector<HTMLButtonElement>(`[data-today-target="${kind}"]`)!;
-  const button = (text: string) => [...main().querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
+  const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
   async function mount() {
     app = await mountAuthenticatedApp({url: "https://app.test/today", role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
@@ -74,23 +74,23 @@ describe("Today traceable targets through App", () => {
     expect(url.searchParams.get("page")).toBe("1"); expect(request.method).toBe("GET");
   });
   it.each(["task", "calendar"])("reads authorized %s detail instead of showing cached snapshot content", async kind => {
-    await mount(); await click(target(kind)); await waitForApp(() => !!main().querySelector('[role="dialog"]')?.textContent?.includes(kind === "task" ? "Authorized task" : "Authorized event"));
-    const dialog = main().querySelector('[role="dialog"]')!;
+    await mount(); await click(target(kind)); await waitForApp(() => !!document.querySelector('[role="dialog"]')?.textContent?.includes(kind === "task" ? "Authorized task" : "Authorized event"));
+    const dialog = document.querySelector('[role="dialog"]')!;
     expect(dialog.textContent).toContain(kind === "task" ? "Fresh notes" : "Fresh event description");
     expect(calls.filter(call => call.path.startsWith(kind === "task" ? "/api/tasks/" : "/api/calendar/events/")).map(call => call.method)).toEqual(["GET"]);
   });
   it.each([401,403])("clears the private snapshot and detail on target denial %i", async status => {
     await mount(); deny = status; await click(target("task")); await waitForApp(() => main().textContent!.includes("Unable to load"));
-    expect(main().textContent).not.toContain("Snapshot task"); expect(main().querySelector('[role="dialog"]')).toBeNull();
+    expect(main().textContent).not.toContain("Snapshot task"); expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
   it.each(["task", "calendar"])("does not fall back to cached %s detail for deleted or foreign targets", async kind => {
-    await mount(); deny = 404; await click(target(kind)); await waitForApp(() => !!main().querySelector('[role="dialog"]')?.textContent?.includes("Unable to load"));
-    expect(main().querySelector('[role="dialog"]')!.textContent).not.toContain("Snapshot");
-    deny = 0; await click(button("Retry detail")); await waitForApp(() => !!main().querySelector('[role="dialog"]')?.textContent?.includes("Authorized"));
+    await mount(); deny = 404; await click(target(kind)); await waitForApp(() => !!document.querySelector('[role="dialog"]')?.textContent?.includes("Unable to load"));
+    expect(document.querySelector('[role="dialog"]')!.textContent).not.toContain("Snapshot");
+    deny = 0; await click(button("Retry detail")); await waitForApp(() => !!document.querySelector('[role="dialog"]')?.textContent?.includes("Authorized"));
   });
   it.each(["task", "calendar"])("rejects a mismatched %s target receipt", async kind => {
-    await mount(); wrongId = true; await click(target(kind)); await waitForApp(() => !!main().querySelector('[role="dialog"]')?.textContent?.includes("Unable to load"));
-    expect(main().querySelector('[role="dialog"]')!.textContent).not.toContain("Authorized");
+    await mount(); wrongId = true; await click(target(kind)); await waitForApp(() => !!document.querySelector('[role="dialog"]')?.textContent?.includes("Unable to load"));
+    expect(document.querySelector('[role="dialog"]')!.textContent).not.toContain("Authorized");
   });
   it("aborts a closed detail and ignores its late response", async () => {
     let resolve!: (response: Response) => void;
@@ -99,6 +99,6 @@ describe("Today traceable targets through App", () => {
     const request = calls.find(call => call.path === "/api/tasks/task-1")!;
     await click(button("Close detail")); expect(request.signal?.aborted).toBe(true);
     await act(async () => resolve(Response.json({task: {...task, title: "Late private title"}, tags: [], links: []})));
-    expect(main().querySelector('[role="dialog"]')).toBeNull(); expect(main().textContent).not.toContain("Late private title");
+    expect(document.querySelector('[role="dialog"]')).toBeNull(); expect(main().textContent).not.toContain("Late private title");
   });
 });

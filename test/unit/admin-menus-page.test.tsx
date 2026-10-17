@@ -47,8 +47,8 @@ describe("AdminMenusPage", () => {
     async function mount(menus: readonly AdminMenu[]): Promise<void> {
       await act(async () => root.render(<AdminMenusPage state={{ kind: "ready", menus }} locale={locale} onUpdate={vi.fn()} onDelete={onDelete} onCreate={vi.fn()} />));
     }
-    const dialog = () => container.querySelector('[role="alertdialog"]');
-    const deleteButtons = () => [...container.querySelectorAll("button")].filter((item) => item.textContent === "Delete");
+    const dialog = () => document.querySelector('[role="alertdialog"]');
+    const deleteButtons = () => [...document.querySelectorAll("button")].filter((item) => item.textContent === "Delete");
     /** The action button in the row whose treeitem label contains `rowText`. The
      * treeitem role sits on the row's own button, so row actions live on its wrapper. */
     function rowButton(rowText: string, label: string): HTMLButtonElement {

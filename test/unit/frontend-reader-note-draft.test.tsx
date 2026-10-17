@@ -28,12 +28,12 @@ describe("private reader note draft ownership", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith("/note") ? handler(init) : Response.json(String(input).endsWith("/shares") ? { shares: [] } : { items: [] }));
     await render();
   }
-  function title() { return container.querySelector("#reader-note-title") as HTMLInputElement; }
-  function body() { return container.querySelector("#reader-note-body") as HTMLTextAreaElement; }
+  function title() { return document.querySelector("#reader-note-title") as HTMLInputElement; }
+  function body() { return document.querySelector("#reader-note-body") as HTMLTextAreaElement; }
   function edit(name: "title" | "body", value: string) { props<{onChange: (event: unknown) => void}>(name === "title" ? title() : body()).onChange({ currentTarget: { value } }); }
-  function save() { return Array.from(container.querySelectorAll<HTMLButtonElement>("[data-reader-note] button")).find(button => /^(Save note|Saving)/.test(button.textContent ?? ""))!; }
+  function save() { return Array.from(document.querySelectorAll<HTMLButtonElement>("[data-reader-note] button")).find(button => /^(Save note|Saving)/.test(button.textContent ?? ""))!; }
   function unloadWarns() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
-  async function click(selector: string) { await act(async () => { (container.querySelector(selector) as HTMLButtonElement).click(); }); await settle(); }
+  async function click(selector: string) { await act(async () => { (document.querySelector(selector) as HTMLButtonElement).click(); }); await settle(); }
   async function remount() { await act(async () => root.unmount()); root = createRoot(container); await render(); }
   it("recovers an unresolved save after remount without replaying PUT", async () => {
     let writes = 0; let applied = false;
@@ -42,7 +42,7 @@ describe("private reader note draft ownership", () => {
     await remount(); expect(body().value).toBe("Body"); expect(save().disabled).toBe(true); expect(unloadWarns()).toBe(true);
     await click("[data-note-check]"); expect(save().disabled).toBe(true); expect(writes).toBe(1);
     applied = true; await click("[data-note-check]"); expect(save().disabled).toBe(false); expect(writes).toBe(1);
-    await remount(); expect(container.querySelector("[data-note-check]")).toBeNull();
+    await remount(); expect(document.querySelector("[data-note-check]")).toBeNull();
   });
   it.each(["throw", "ignore"])("sends no save when intent persistence %s fails", async mode => {
     let writes = 0; await mount(async init => { if (init?.method === "PUT") writes++; return Response.json({ note: null }); });
@@ -93,20 +93,20 @@ describe("private reader note draft ownership", () => {
     const setItem = browser.sessionStorage.setItem.bind(browser.sessionStorage); let get: ReturnType<typeof vi.spyOn> | undefined;
     const set = vi.spyOn(browser.sessionStorage, "setItem").mockImplementation((key, value) => { setItem(key, value); get = vi.spyOn(browser.sessionStorage, "getItem").mockImplementation(() => { throw new Error("denied"); }); });
     await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle(); set.mockRestore(); get?.mockRestore();
-    await click("[data-note-storage-retry]"); expect(container.querySelector("[data-note-check]")).not.toBeNull(); expect(save().disabled).toBe(true); expect(writes).toBe(0);
+    await click("[data-note-storage-retry]"); expect(document.querySelector("[data-note-check]")).not.toBeNull(); expect(save().disabled).toBe(true); expect(writes).toBe(0);
   });
   it("blocks corrupt recovery without deleting it or exposing stored private input", async () => {
     await mount(async init => { if (init?.method === "PUT") throw new Error("lost"); return Response.json({ note: null }); });
     await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
     const key = browser.sessionStorage.key(0)!; browser.sessionStorage.setItem(key, "{"); await remount();
-    expect(container.querySelector("[data-note-storage-error]")).not.toBeNull(); expect(save().disabled).toBe(true); expect(body().value).toBe(""); expect(browser.sessionStorage.getItem(key)).toBe("{");
+    expect(document.querySelector("[data-note-storage-error]")).not.toBeNull(); expect(save().disabled).toBe(true); expect(body().value).toBe(""); expect(browser.sessionStorage.getItem(key)).toBe("{");
   });
   it("ignores an old receipt after remount without clearing the recovered intent", async () => {
     let finish!: (response: Response) => void;
     await mount(init => init?.method === "PUT" ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(Response.json({ note: null })));
     await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle(); await remount();
     await act(async () => finish(Response.json({ note: receipt() }))); await settle();
-    expect(save().disabled).toBe(true); expect(container.querySelector("[data-note-check]")).not.toBeNull(); expect(browser.sessionStorage.length).toBe(1);
+    expect(save().disabled).toBe(true); expect(document.querySelector("[data-note-check]")).not.toBeNull(); expect(browser.sessionStorage.length).toBe(1);
   });
   it("guards recovered pending intent while the permission read is still pending", async () => {
     let recovering = false; let finish!: (response: Response) => void;
@@ -143,7 +143,7 @@ describe("private reader note draft ownership", () => {
   it("protects dirty notes and only discards after final navigation admission", async () => {
     await mount(); await act(async () => edit("body", "unsaved")); expect(unloadWarns()).toBe(true);
     await act(async () => { writeWorkspaceHistory("push", "/tasks"); });
-    expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+    expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
     await click("[data-cancel-action]"); expect(body().value).toBe("unsaved");
     await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await click("[data-confirm-action]");
     expect(browser.location.pathname).toBe("/tasks"); expect(body().value).toBe(""); expect(unloadWarns()).toBe(false);
@@ -162,14 +162,14 @@ describe("private reader note draft ownership", () => {
     let reads = 0; let writes = 0;
     await mount(async init => { if (init?.method === "PUT") { writes++; throw new TypeError("Failed to fetch"); } reads++; return Response.json({ note: reads === 1 ? null : receipt({ body: reads === 2 ? "different" : "Body" }) }); });
     await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
-    expect(container.querySelector("[data-note-check]")).not.toBeNull(); expect(unloadWarns()).toBe(true);
+    expect(document.querySelector("[data-note-check]")).not.toBeNull(); expect(unloadWarns()).toBe(true);
     await click("[data-note-check]"); await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); expect(body().value).toBe("Body");
     await click("[data-note-check]"); expect(unloadWarns()).toBe(false); expect(writes).toBe(1);
   });
   it.each([{ ownerId: "member-b" }, { knowledgeItemId: "knowledge-b" }, { body: "wrong" }, { citations: [] }, { access: "shared" }])("rejects mismatched save receipts %j", async extra => {
     await mount(async init => Response.json({ note: init?.method === "PUT" ? receipt(extra) : null }));
     await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
-    expect(container.querySelector("[data-note-check]")).not.toBeNull(); expect(unloadWarns()).toBe(true); expect(body().value).toBe("Body");
+    expect(document.querySelector("[data-note-check]")).not.toBeNull(); expect(unloadWarns()).toBe(true); expect(body().value).toBe("Body");
   });
   it("invalidates old member callbacks and draft state on member changes", async () => {
     let writes = 0; await mount(async init => { if (init?.method === "PUT") writes++; return Response.json({ note: null }); });
@@ -203,7 +203,7 @@ describe("private reader note draft ownership", () => {
     const remove = vi.spyOn(browser.localStorage, "removeItem").mockImplementation(() => { if (mode === "throws") throw new Error("Storage unavailable"); });
     await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await click("[data-confirm-action]");
     expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); expect(body().value).toBe("Body"); expect(unloadWarns()).toBe(true);
-    expect(container.querySelector("[data-note-discard-error]")?.textContent).toContain("cache");
+    expect(document.querySelector("[data-note-discard-error]")?.textContent).toContain("cache");
     remove.mockRestore();
     await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await click("[data-confirm-action]");
     expect(browser.location.pathname).toBe("/tasks"); expect(body().value).toBe(""); expect(unloadWarns()).toBe(false);
@@ -235,7 +235,7 @@ describe("private reader note draft ownership", () => {
     await mount(async init => { if (init?.method === "PUT") { writes++; return writes === 1 ? Response.json({ error: { code: "PRIVATE_NOTE_INVALID", message: "Invalid", retryable: false } }, { status: 400 }) : Response.json({ note: receipt() }); } return Response.json({ note: writes > 1 ? receipt() : null }); });
     await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
     const remove = vi.spyOn(browser.localStorage, "removeItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
-    await act(async () => { save().click(); }); await settle(); expect(unloadWarns()).toBe(true); expect(container.querySelector("[data-note-check]")).not.toBeNull();
+    await act(async () => { save().click(); }); await settle(); expect(unloadWarns()).toBe(true); expect(document.querySelector("[data-note-check]")).not.toBeNull();
     remove.mockRestore(); await click("[data-note-check]"); expect(unloadWarns()).toBe(false); expect(writes).toBe(2);
   });
   it("keeps shared notes read-only even when an old callback is invoked", async () => {
@@ -255,7 +255,7 @@ describe("private reader note draft ownership", () => {
   });
   it.each([202, 204])("does not accept HTTP %i as a completed save", async status => {
     await mount(async init => init?.method === "PUT" ? status === 204 ? new Response(null, { status }) : Response.json({ note: receipt() }, { status }) : Response.json({ note: null }));
-    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle(); expect(unloadWarns()).toBe(true); expect(container.querySelector("[data-note-check]")).not.toBeNull();
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle(); expect(unloadWarns()).toBe(true); expect(document.querySelector("[data-note-check]")).not.toBeNull();
   });
 
   it("wires the member identity through the real reader route and aborts a previous member's pending note load", async () => {
@@ -283,7 +283,7 @@ describe("private reader note draft ownership", () => {
     await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); });
     await render("member-a", "knowledge-b");
     await act(async () => { oldEdit({ currentTarget: { value: "leak" } }); finish(Response.json({ note: receipt() })); }); await settle();
-    expect(body().value).toBe(""); expect(unloadWarns()).toBe(false); expect(container.querySelector("[data-reader-note] [role=status]")?.textContent).not.toBe("Saved");
+    expect(body().value).toBe(""); expect(unloadWarns()).toBe(false); expect(document.querySelector("[data-reader-note] [role=status]")?.textContent).not.toBe("Saved");
   });
 
 });

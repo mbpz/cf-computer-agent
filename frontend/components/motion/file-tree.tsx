@@ -1,5 +1,14 @@
 "use client";
 // beui.dev/components/motion/file-tree
+//
+// §17 localization-fork patch (docs/product/2026-10-17-beui-full-adoption-matrix.md §17):
+//   2. attribute passthrough — `FileTreeFile`/`FileTreeFolder` accept `rowProps`, spread onto
+//      the row `button` after the payload's own semantics, so a caller's `aria-current`,
+//      `data-*` and `role` reach the row the tree actually renders.
+//
+// Contract preserved: the reader outline is one control per heading with
+// `aria-current="location"` on the selected chunk (frontend/pages/knowledge-reader-page.tsx:206;
+// test/unit/frontend-reader-content-headings.test.tsx:116-124; test/unit/frontend-reader-section-disclosure.test.tsx:152).
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CaretRight, File, Folder, FolderOpen } from "@phosphor-icons/react";
@@ -11,6 +20,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentPropsWithoutRef,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
@@ -28,6 +38,8 @@ type FileTreeItem = {
   className?: string;
   /** Trailing controls rendered beside the row button, never inside it. */
   action?: ReactNode;
+  /** Attributes for the row button itself (`aria-current`, `data-*`, `role`). */
+  rowProps?: ComponentPropsWithoutRef<"button">;
 };
 
 export interface FileTreeFolderProps {
@@ -38,6 +50,7 @@ export interface FileTreeFolderProps {
   children?: ReactNode;
   className?: string;
   action?: ReactNode;
+  rowProps?: ComponentPropsWithoutRef<"button">;
 }
 
 export interface FileTreeFileProps {
@@ -47,6 +60,7 @@ export interface FileTreeFileProps {
   disabled?: boolean;
   className?: string;
   action?: ReactNode;
+  rowProps?: ComponentPropsWithoutRef<"button">;
 }
 
 export type FileTreeClassNames = {
@@ -143,6 +157,7 @@ function itemsFromChildren(children: ReactNode): FileTreeItem[] {
         disabled: props.disabled,
         className: props.className,
         action: props.action,
+        rowProps: props.rowProps,
         children: itemsFromChildren(props.children),
       });
       return;
@@ -158,6 +173,7 @@ function itemsFromChildren(children: ReactNode): FileTreeItem[] {
         disabled: props.disabled,
         className: props.className,
         action: props.action,
+        rowProps: props.rowProps,
       });
     }
   });
@@ -361,6 +377,7 @@ export function FileTree({
                 aria-selected={isSelected}
                 aria-expanded={isFolder ? isOpen : undefined}
                 aria-disabled={row.item.disabled || undefined}
+                {...row.item.rowProps}
                 tabIndex={focusedRow === row.item.value ? 0 : -1}
                 onFocus={() => setFocusedId(row.item.value)}
                 onKeyDown={(event) => handleKeyDown(event, row)}

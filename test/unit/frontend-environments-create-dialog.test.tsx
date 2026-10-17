@@ -65,10 +65,10 @@ describe("environment creation dialog", () => {
     await waitForApp(() => !!trigger());
   }
 
-  const main = () => app!.container.querySelector("main")!;
+  const main = () => app!.browser.document.querySelector("main")!;
   const trigger = () => main().querySelector<HTMLButtonElement>("[data-environment-create-open]");
-  const dialog = () => main().querySelector<HTMLElement>("[data-environment-create-dialog]");
-  const form = () => main().querySelector<HTMLFormElement>("[data-environment-create]");
+  const dialog = () => document.querySelector<HTMLElement>("[data-environment-create-dialog]");
+  const form = () => document.querySelector<HTMLFormElement>("[data-environment-create]");
 
   it("keeps the create form out of the page until the add control opens its dialog", async () => {
     await mount();
@@ -90,14 +90,14 @@ describe("environment creation dialog", () => {
   it("closes on the dialog cancel control and on the shared backdrop", async () => {
     await mount();
     await click(trigger());
-    await click(main().querySelector<HTMLButtonElement>("[data-environment-create-cancel]"));
+    await click(document.querySelector<HTMLButtonElement>("[data-environment-create-cancel]"));
     expect(dialog()).toBeNull();
     expect(form()).toBeNull();
     expect(trigger()!.getAttribute("aria-expanded")).toBe("false");
 
     await click(trigger());
     expect(dialog()).not.toBeNull();
-    await click(main().querySelector<HTMLElement>("[data-dialog-backdrop]"));
+    await click(document.querySelector<HTMLElement>("[data-dialog-backdrop]"));
     expect(dialog()).toBeNull();
   });
 

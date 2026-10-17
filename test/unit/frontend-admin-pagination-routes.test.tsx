@@ -264,34 +264,34 @@ describe("numbered admin routes", () => {
     requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
     await waitFor(() => container.querySelector('button[aria-label="Disable m1@example.test"]') !== null);
     expect(requests.map(request => request.method)).toEqual(["GET", "PATCH", "GET"]);
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
   it("requires canceling an unconfirmed member action before query navigation", async () => {
     const requests = memberRequests(); await renderMember(requests);
     await click('button[aria-label="Enable m1@example.test"]');
-    const oldConfirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    const oldConfirm = document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await locationChange("?status=active");
-    expect(container.querySelector('[role="alertdialog"]')).not.toBeNull(); expect(requests).toHaveLength(1);
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull(); expect(requests).toHaveLength(1);
     expect(browser.location.search).toBe("");
     await click('[data-cancel-action]'); await locationChange("?status=active");
     await act(async () => oldConfirm.click());
     expect(requests.map(request => request.method)).toEqual(["GET", "GET"]);
     requests[1]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
     await waitFor(() => container.querySelector('button[aria-label="Disable m1@example.test"]') !== null);
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
   it("does not carry unconfirmed actions across route unmount and remount", async () => {
     const requests = memberRequests(); await renderMember(requests);
     await click('button[aria-label="Enable m1@example.test"]');
-    const oldConfirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    const oldConfirm = document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await act(async () => root.render(<div>Signed out</div>));
     await act(async () => oldConfirm.click());
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search="" />));
     requests[1]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "disabled")])));
     await waitFor(() => container.querySelector('button[aria-label="Enable m1@example.test"]') !== null);
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(requests.map(request => request.method)).toEqual(["GET", "GET"]);
   });
 
@@ -302,7 +302,7 @@ describe("numbered admin routes", () => {
     const button = container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement;
     await act(async () => { button.click(); button.click(); });
     expect(requests.map((request) => request.method)).toEqual(["GET"]);
-    const confirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    const confirm = document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await act(async () => { confirm.click(); confirm.click(); });
     expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH"]);
     expect(requests[1]!.url).toBe("/api/admin/members/m1/status");
@@ -512,7 +512,7 @@ describe("numbered admin routes", () => {
     expect(historyDriver.requests).toHaveLength(1); expect(historyDriver.requests[0]!.index).toBe(1);
     await act(async () => { historyDriver.arrive(1); historyDriver.requests[0]!.resolve(); });
     expect(browser.location.pathname).toBe("/admin/members"); expect(requests).toHaveLength(2);
-    expect(unloadWarns()).toBe(true); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(unloadWarns()).toBe(true); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("does not let owned recovery queries bypass another guard or erase an uncertain write", async () => {
     const requests = memberRequests(); await renderMember(requests);
@@ -537,7 +537,7 @@ describe("numbered admin routes", () => {
   it("keeps pending PATCH synchronous navigation locked but releases on its validated receipt", async () => {
     const requests = memberRequests(); await renderMember(requests);
     await click('button[aria-label="Enable m1@example.test"]');
-    await act(async () => { (container.querySelector('[data-confirm-action]') as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
+    await act(async () => { (document.querySelector('[data-confirm-action]') as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
     expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
     await applyMemberFilter("Active"); expect(requests).toHaveLength(2);
     requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") }));
@@ -612,12 +612,12 @@ describe("numbered admin routes", () => {
   }
 
   async function confirmMemberChange(selector: string) {
-    await click(selector); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+    await click(selector); expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
     await click('[data-confirm-action]');
   }
   /** The DataTable body is the scroll container; near-bottom is always satisfied under happy-dom. */
   async function scrollToEnd() { const scroller = container.querySelector("div.overflow-auto") as HTMLElement; await act(async () => { scroller.dispatchEvent(new browser.Event("scroll") as unknown as Event); }); await flush(); }
-  async function click(selector: string) { const element = container.querySelector(selector) as HTMLButtonElement; await act(async () => element.click()); }
+  async function click(selector: string) { const element = document.querySelector(selector) as HTMLButtonElement; await act(async () => element.click()); }
   /** The audit filter is a beUI listbox; open the trigger and pick the option by its label. */
   async function applyAuditFilter(value: string) {
     const trigger = container.querySelector('[aria-haspopup="listbox"]') as HTMLButtonElement | null;

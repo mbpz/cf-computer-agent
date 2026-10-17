@@ -118,7 +118,8 @@ describe("tasks page paging surface", () => {
     await act(async () => root.render(<TasksPage locale={en} filters={{}} state={readyState(1, 12)} onPageChange={onPageChange} onPageSizeChange={vi.fn()} onLoadMore={onLoadMore} />));
     expect(container.querySelector("[data-pagination-desktop]")).toBeNull();
     expect(container.querySelector("[data-pagination-mobile]")).toBeNull();
-    const scroller = container.querySelector("table")!.parentElement as HTMLElement;
+    // The append feed lives in the beUI todo list's own viewport, not a table body.
+    const scroller = container.querySelector("[data-todo-list-viewport]") as HTMLElement;
     await act(async () => scroller.dispatchEvent(new browser.Event("scroll") as unknown as Event));
     expect(onLoadMore).toHaveBeenCalledTimes(1);
     expect(onPageChange).not.toHaveBeenCalled();

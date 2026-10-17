@@ -27,9 +27,9 @@ describe("focus terminal action confirmation", () => {
   async function mount(extra: Record<string, unknown> = {}) {
     await act(async () => root.render(<FocusPage locale={locale} state={ready} memberId="alice" onDenied={deny} onTransition={write} {...extra} />));
   }
-  function action(label: string) { const button = [...container.querySelectorAll("button")].find(node => node.textContent === label); expect(button, label).toBeDefined(); return button!; }
-  const dialog = () => container.querySelector('[role="alertdialog"]');
-  const confirm = () => container.querySelector<HTMLButtonElement>('[data-confirm-action]')!;
+  function action(label: string) { const button = [...document.querySelectorAll("button")].find(node => node.textContent === label); expect(button, label).toBeDefined(); return button!; }
+  const dialog = () => document.querySelector('[role="alertdialog"]');
+  const confirm = () => document.querySelector<HTMLButtonElement>('[data-confirm-action]')!;
   async function click(button: HTMLButtonElement) { await act(async () => button.click()); }
   it.each(["Complete", "Abandon"])("confirms %s once with exact session and linked calendar impact", async name => {
     await mount(); const trigger=action(name);trigger.focus();await click(trigger);expect(write).not.toHaveBeenCalled();
@@ -43,7 +43,7 @@ describe("focus terminal action confirmation", () => {
     await mount();const trigger=action("Abandon");trigger.focus();await click(trigger);expect(write).not.toHaveBeenCalled();
     if(mode==="cancel") await click(action("Cancel"));
     else if(mode==="escape") await act(async()=>dialog()!.dispatchEvent(new browser.KeyboardEvent("keydown",{key:"Escape",bubbles:true}) as unknown as Event));
-    else await click(container.querySelector('[data-dialog-open="true"] > [aria-hidden="true"]') as HTMLButtonElement);
+    else await click(document.querySelector('[data-dialog-backdrop]') as HTMLButtonElement);
     expect(write).not.toHaveBeenCalled();expect(dialog()).toBeNull();expect(browser.document.activeElement).toBe(trigger);
   });
   it.each(["session", "version", "task", "calendar", "status", "empty", "loading", "error", "member", "selection", "pending", "handler"])("revokes stale %s and does not revive",async change=>{

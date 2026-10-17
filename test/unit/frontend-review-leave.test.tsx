@@ -27,9 +27,9 @@ describe("review decision confirmation and draft protection", () => {
   });
   afterEach(async () => {await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals();});
   async function mount(props: Partial<React.ComponentProps<typeof ReviewDetailPage>> = {}) {await act(async () => root.render(<ReviewDetailPage state={{kind:"ready",detail}} locale={locale} onDecision={onDecision} {...props}/>));}
-  function button(label:string) {const el = [...container.querySelectorAll("button")].find(el => el.textContent === label); expect(el,label).toBeTruthy(); return el as HTMLButtonElement;}
+  function button(label:string) {const el = [...document.querySelectorAll("button")].find(el => el.textContent === label); expect(el,label).toBeTruthy(); return el as HTMLButtonElement;}
   async function click(label:string) {await act(async () => button(label).click());}
-  const dialog = () => container.querySelector('[role="alertdialog"]');
+  const dialog = () => document.querySelector('[role="alertdialog"]');
   const note = () => container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement;
   async function typeNote(value:string) {await act(async () => {Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype,"value")!.set!.call(note(),value);note().dispatchEvent(new browser.Event("input",{bubbles:true}));note().dispatchEvent(new browser.Event("change",{bubbles:true}));});}
   async function confirm() {const el=dialog()?.querySelector("[data-confirm-action]") as HTMLButtonElement;expect(el).toBeTruthy();await act(async () => {el.focus();el.click();el.click();});}

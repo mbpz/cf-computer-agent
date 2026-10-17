@@ -5,6 +5,7 @@ import { Badge } from "../../components/ui/badge";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { FileTree, FileTreeFile, FileTreeFolder } from "../../components/motion/file-tree";
+import { OverflowActions, type OverflowActionItem } from "../../components/motion/overflow-actions";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { menuSnapshot } from "../../../shared/admin-menu-fields";
 import { ConfirmAction } from "../../components/ui/confirm-action";
@@ -173,5 +174,39 @@ function MenuNodeActions({ menu, positionAttempts, locale, positionFor, onPositi
   }, [menu, attempt]);
   const position = Number(rowDraft.fields.position);
   const update = (input: AdminMenuUpdate) => { if (!busy && !rowDraft.isConfirming()) onUpdate?.(menu, input); };
-  return <>{menu.isSystem && <Badge variant="outline">{frontendText(locale, "ADMIN_MENUS_SYSTEM")}</Badge>}<Badge variant={menu.status === "active" ? "secondary" : "outline"}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_ACTIVE") : frontendText(locale, "ADMIN_MENUS_DISABLED")}</Badge>{onEdit && !menu.isSystem && <Button type="button" data-menu-edit-open aria-haspopup="dialog" aria-expanded={editingMenuId === menu.id} size="sm" variant="outline" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onEdit(menu); }}>{frontendText(locale, "ADMIN_MENUS_EDIT")}</Button>}<label className="flex items-center gap-1 text-xs"><span className="sr-only">{frontendText(locale, "ADMIN_MENUS_POSITION")}</span><input className="h-8 w-16 rounded-md border bg-background px-2 text-sm" type="number" min={0} value={rowDraft.fields.position} disabled={menu.isSystem || busy} onChange={(event) => rowDraft.edit("position", event.target.value)} /></label><Button type="button" size="sm" variant="outline" disabled={menu.isSystem || busy || position === menu.position || !rowDraft.fields.position.trim() || !Number.isSafeInteger(position) || position < 0 || position > 10000} onClick={() => { const value = rowDraft.current.current.position; const position = Number(value); if (value.trim() && Number.isSafeInteger(position) && position >= 0 && position <= 10000) update({ position, expected: menuSnapshot(menu) }); }}>{frontendText(locale, "ADMIN_MENUS_SAVE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ status: menu.status === "active" ? "disabled" : "active", expected: menuSnapshot(menu) })}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_DISABLE") : frontendText(locale, "ADMIN_MENUS_ENABLE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ visible: !menu.visible, expected: menuSnapshot(menu) })}>{frontendText(locale, menu.visible ? "ADMIN_MENUS_HIDE" : "ADMIN_MENUS_SHOW")}</Button>{removableSubtree(menu) && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onDelete?.(menu); }}>{frontendText(locale, "ADMIN_MENUS_DELETE")}</Button>}{rowDraft.confirmation}</>;
+  // The row's actions live on one beUI rail (slug: overflow-actions). Every
+  // control stays a primary action: the suites address `Enable`/`Disable`,
+  // `Show`/`Hide` and `Delete` by their visible name, and the row is short
+  // enough that a disclosure would only add a click. The position input and
+  // Save stay outside the rail — they are one form, not row actions. The
+  // Delete item keeps `tone="destructive"` so the destructive control is not
+  // flattened into the same weight as status toggles.
+  const actions: OverflowActionItem[] = [];
+  if (onEdit && !menu.isSystem) actions.push({
+    id: "edit",
+    label: frontendText(locale, "ADMIN_MENUS_EDIT"),
+    disabled: busy,
+    attributes: { "data-menu-edit-open": "", "aria-haspopup": "dialog", "aria-expanded": editingMenuId === menu.id },
+    onClick: () => { if (!busy && !rowDraft.isConfirming()) onEdit(menu); },
+  });
+  if (!menu.isSystem) actions.push({
+    id: "status",
+    label: menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_DISABLE") : frontendText(locale, "ADMIN_MENUS_ENABLE"),
+    disabled: busy,
+    onClick: () => update({ status: menu.status === "active" ? "disabled" : "active", expected: menuSnapshot(menu) }),
+  });
+  if (!menu.isSystem) actions.push({
+    id: "visibility",
+    label: frontendText(locale, menu.visible ? "ADMIN_MENUS_HIDE" : "ADMIN_MENUS_SHOW"),
+    disabled: busy,
+    onClick: () => update({ visible: !menu.visible, expected: menuSnapshot(menu) }),
+  });
+  if (removableSubtree(menu)) actions.push({
+    id: "delete",
+    label: frontendText(locale, "ADMIN_MENUS_DELETE"),
+    tone: "destructive",
+    disabled: busy,
+    onClick: () => { if (!busy && !rowDraft.isConfirming()) onDelete?.(menu); },
+  });
+  return <>{menu.isSystem && <Badge variant="outline">{frontendText(locale, "ADMIN_MENUS_SYSTEM")}</Badge>}<Badge variant={menu.status === "active" ? "secondary" : "outline"}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_ACTIVE") : frontendText(locale, "ADMIN_MENUS_DISABLED")}</Badge>{actions.length > 0 && <OverflowActions size="sm" primaryActions={actions} openLabel={frontendText(locale, "COMMON_MORE_ACTIONS")} closeLabel={frontendText(locale, "COMMON_FEWER_ACTIONS")} />}<label className="flex items-center gap-1 text-xs"><span className="sr-only">{frontendText(locale, "ADMIN_MENUS_POSITION")}</span><input className="h-8 w-16 rounded-md border bg-background px-2 text-sm" type="number" min={0} value={rowDraft.fields.position} disabled={menu.isSystem || busy} onChange={(event) => rowDraft.edit("position", event.target.value)} /></label><Button type="button" size="sm" variant="outline" disabled={menu.isSystem || busy || position === menu.position || !rowDraft.fields.position.trim() || !Number.isSafeInteger(position) || position < 0 || position > 10000} onClick={() => { const value = rowDraft.current.current.position; const position = Number(value); if (value.trim() && Number.isSafeInteger(position) && position >= 0 && position <= 10000) update({ position, expected: menuSnapshot(menu) }); }}>{frontendText(locale, "ADMIN_MENUS_SAVE")}</Button>{rowDraft.confirmation}</>;
 }

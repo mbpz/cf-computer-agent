@@ -175,7 +175,7 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
       </>}
   </section>
     <Dialog open={addOpen} onOpenChange={(next) => { if (!next) setAddOpen(false); }}>
-      <DialogContent role="dialog" data-member-add-dialog aria-labelledby={addTitleId} aria-describedby={addDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
+      <DialogContent role="dialog" data-member-add-dialog dismissLabel={frontendText(locale, "COMMON_DISMISS")} aria-labelledby={addTitleId} aria-describedby={addDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
         <DialogTitle id={addTitleId}>{frontendText(locale, "ADMIN_INVITATION_SECTION_TITLE")}</DialogTitle>
         <p id={addDescriptionId} className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_SECTION_DESCRIPTION")}</p>
         <div className="mt-4">

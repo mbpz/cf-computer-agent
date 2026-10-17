@@ -122,7 +122,7 @@ describe("inbox scrolling list through App", () => {
     await mount(); fail = status;
     await changeStatus("Archived"); await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().querySelectorAll("time")).toHaveLength(0);
-    fail = undefined; const retry = [...main().querySelectorAll("button")].find(node => node.textContent === "Try again")!;
+    fail = undefined; const retry = [...document.querySelectorAll("button")].find(node => node.textContent === "Try again")!;
     await click(retry); await waitForApp(() => main().textContent!.includes("Private row 0"));
     expect(requests.at(-1)?.searchParams.get("status")).toBe("archived");
   });
@@ -140,7 +140,7 @@ describe("inbox scrolling list through App", () => {
 
   it("locks writes synchronously when an append starts", async () => {
     await mount();
-    const complete = [...main().querySelectorAll("button")].find(node => node.textContent === "Archive")!;
+    const complete = [...document.querySelectorAll("button")].find(node => node.textContent === "Archive")!;
     await act(async () => { const scroller = main().querySelector("div.overflow-auto") as HTMLElement; scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new app!.browser.Event("scroll", { bubbles: true })); complete.click(); });
     await waitForApp(() => main().textContent!.includes("Private row 20"));
     expect(methods.every(method => method === "GET")).toBe(true);
@@ -208,9 +208,9 @@ describe("inbox scrolling list through App", () => {
 
   it("refreshes the exact filter after archive, never appending", async () => {
     await mount("?status=inbox");
-    await click([...main().querySelectorAll("button")].find(node => node.textContent === "Archive")!);
+    await click([...document.querySelectorAll("button")].find(node => node.textContent === "Archive")!);
     expect(methods.filter(method => method === "PATCH")).toHaveLength(0);
-    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    await click(document.querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     await waitForApp(() => methods.length === 4 && main().textContent!.includes("Private row 19"));
     expect(methods).toEqual(["GET", "PATCH", "GET", "GET"]);
     expect(requests[3]!.search).toBe(requests[0]!.search);
@@ -219,19 +219,19 @@ describe("inbox scrolling list through App", () => {
 
   it("denied readback removes private rows after a successful write", async () => {
     await mount(); failReadAfterWrite = true;
-    await click([...main().querySelectorAll("button")].find(node => node.textContent === "Archive")!);
+    await click([...document.querySelectorAll("button")].find(node => node.textContent === "Archive")!);
     expect(methods.filter(method => method === "PATCH")).toHaveLength(0);
-    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    await click(document.querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().textContent).not.toContain("Private row");
   });
 
   it("blocks navigation while writing and ignores late writes after forced teardown", async () => {
     await mount(); delayWrite = true;
-    const archive = [...main().querySelectorAll("button")].find(node => node.textContent === "Archive")!;
+    const archive = [...document.querySelectorAll("button")].find(node => node.textContent === "Archive")!;
     await act(async () => { archive.click(); archive.click(); });
     expect(methods.filter(method => method === "PATCH")).toHaveLength(0);
-    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    const confirm = document.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await act(async () => { confirm.click(); confirm.click(); });
     await waitForApp(() => !!resolveWrite);
     await act(async () => expect(writeWorkspaceHistory("push", "/inbox?page=3")).toBe("blocked"));

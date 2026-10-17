@@ -1,11 +1,12 @@
 import { useNotificationSummary } from "../../lib/use-notification-summary";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Bell, BookOpen, CalendarBlank, CaretDown, ChartLine, ChatCircle, Check, Checks, DotsThree, Files, FolderSimple, GearSix, House, Kanban, MagnifyingGlass, Moon, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, Sun, Target, Timer, Trash, UploadSimple, UsersThree } from "@phosphor-icons/react";
 import { ROUTES } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
 import type { FrontendLocale } from "../../lib/i18n";
 import { Button } from "../ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
+import { AnimatedSidebar, AnimatedSidebarMenu, AnimatedSidebarMenuButton, AnimatedSidebarMenuItem, AnimatedSidebarMenuSub, AnimatedSidebarProvider } from "../motion/animated-sidebar";
+import { Popover, PopoverContent, PopoverTrigger } from "../motion/popover";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 import { cn } from "../../lib/utils";
 import { resolveFrontendAccess } from "../../lib/auth-boundary";
@@ -23,6 +24,7 @@ import { collaborationQuickLinks, isCollaborationPath } from "./navigation-polic
 import { CommandPalette } from "./command-palette";
 import { motion, useReducedMotion } from "motion/react";
 import { useHoverCapable } from "../../lib/hooks/use-hover-capable";
+import { menuKeyAction } from "../../lib/menu-keyboard";
 import { EASE_OUT, SPRING_LAYOUT, SPRING_PRESS } from "../../lib/ease";
 
 interface LocaleRuntime {
@@ -107,8 +109,24 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
   return (
     <div data-shell-root className="min-h-screen bg-background text-foreground lg:h-dvh lg:overflow-hidden">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2">{locale.t("SHELL_SKIP_MAIN")}</a>
-      <aside data-shell-sidebar data-shell-sidebar-state={collapsed ? "collapsed" : "expanded"} className={cn("fixed inset-y-0 left-0 z-40 hidden border-r material-chrome transition-[width] duration-200 ease-[var(--ease-out)] lg:block", collapsed ? "w-16" : "w-64")}>
-        <div className="flex h-full min-h-0 flex-col p-3">
+      <AnimatedSidebarProvider
+        open={!collapsed}
+        onOpenChange={(next) => setCollapsed(!next)}
+        breakpoint="lg"
+        keyboardShortcut={false}
+        style={{ "--sidebar-width": "16rem", "--sidebar-width-icon": "4rem" }}
+        className="min-h-screen lg:h-full lg:min-h-0"
+      >
+        <AnimatedSidebar
+          data-shell-sidebar
+          data-shell-sidebar-state={collapsed ? "collapsed" : "expanded"}
+          ariaLabel={locale.t("SHELL_WORKSPACE_NAVIGATION")}
+          mobilePanel={false}
+          mobileCloseLabel={locale.t("SHELL_CLOSE_NAVIGATION")}
+          collapsible="icon"
+          className="fixed inset-y-0 left-0 z-40 h-full border-r material-chrome"
+          panelClassName="min-h-0 bg-transparent border-r-0 p-3"
+        >
           <div className={cn("mb-4 flex min-h-12 shrink-0 items-center gap-2", collapsed ? "justify-center" : "justify-between") }>
             <div className={cn("min-w-0 px-2", collapsed && "sr-only")}><p className="truncate text-sm font-semibold">{locale.t("APP_BRAND_EYEBROW")}</p><p className="mt-1 truncate text-xs text-muted-foreground">{locale.t("NAV_KNOWLEDGE_BASE")}</p></div>
             <Button type="button" variant="ghost" size="icon" className="shrink-0" data-shell-collapse-toggle aria-expanded={!collapsed} title={locale.t(collapsed ? "SHELL_EXPAND_SIDEBAR" : "SHELL_COLLAPSE_SIDEBAR")} aria-label={locale.t(collapsed ? "SHELL_EXPAND_SIDEBAR" : "SHELL_COLLAPSE_SIDEBAR")} onClick={() => setCollapsed((value) => !value)}>
@@ -122,9 +140,8 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
           {collapsed
             ? <div data-shell-collapsed-account-controls className="shrink-0 border-t pt-3"><AccountMenu variant="collapsed" memberLabel={memberLabel} session={session} locale={locale} theme={theme} activeMenu={activeMenu} onActiveMenuChange={setActiveMenu} onThemeChange={changeTheme} onNavigate={navigate} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>
             : <div data-shell-account-footer className="shrink-0 border-t pt-3"><AccountMenu variant="expanded" memberLabel={memberLabel} session={session} locale={locale} theme={theme} activeMenu={activeMenu} onActiveMenuChange={setActiveMenu} onThemeChange={changeTheme} onNavigate={navigate} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>}
-        </div>
-      </aside>
-      <div className={cn("transition-[padding] duration-200 ease-[var(--ease-out)] lg:flex lg:h-dvh lg:min-h-0 lg:flex-col", collapsed ? "lg:pl-16" : "lg:pl-64")}>
+        </AnimatedSidebar>
+        <div className={cn("min-w-0 flex-1 transition-[padding] duration-200 ease-[var(--ease-out)] lg:flex lg:h-dvh lg:min-h-0 lg:flex-col", collapsed ? "lg:pl-16" : "lg:pl-64")}>
         <header data-shell-topbar className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b material-chrome px-4 lg:px-6">
           <div className="hidden min-w-0 items-center gap-3 lg:flex"><Breadcrumb pathname={pathname} locale={locale} onNavigate={navigate} /></div>
           <div data-shell-topbar-actions className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
@@ -132,20 +149,23 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
             <motion.nav layoutRoot data-shell-collaboration-navigation aria-label={locale.t("SHELL_COLLABORATION_NAVIGATION")} className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
               {collaborationLinks.map((link) => <Fragment key={link.path}><motion.a data-route-id={routeCapability(link.path)?.id} href={link.path} title={locale.t(link.labelKey)} aria-label={locale.t(link.labelKey)} aria-current={isCollaborationActive(pathname, link.activePrefix) ? "page" : undefined} onClick={(event) => { event.preventDefault(); navigate(link.path); }} whileTap={reduceMotion ? undefined : { scale: 0.97 }} transition={SPRING_PRESS} className={cn("relative flex min-h-10 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs transition-colors sm:text-sm", isCollaborationActive(pathname, link.activePrefix) ? "font-medium text-accent-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground")}>{isCollaborationActive(pathname, link.activePrefix) && <motion.span aria-hidden="true" layoutId="shell-collab-active" transition={SPRING_LAYOUT} className="absolute inset-0 rounded-md bg-accent" />}<NavIcon path={link.icon} className="relative z-10" /><span className="relative z-10 hidden sm:inline sm:max-w-28 sm:truncate lg:max-w-none">{locale.t(link.labelKey)}</span>{link.path === "/notifications" && <span data-notification-summary data-state={unreadState.kind} role="status" aria-live="polite" aria-label={unreadLabel} title={unreadLabel} className="relative z-10 rounded bg-muted px-1 text-xs tabular-nums">{unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—"}</span>}</motion.a>{link.path === "/notifications" && unreadState.kind === "error" && <Button data-notification-summary-retry variant="ghost" size="sm" aria-label={locale.t("SHELL_UNREAD_RETRY")} onClick={notificationSummary.retry}>{locale.t("COMMON_RETRY")}</Button>}</Fragment>)}
             </motion.nav>
-            <DropdownMenu menuId="language" open={activeMenu === "language"} onOpenChange={(open) => setActiveMenu(open ? "language" : null)}>
-              <DropdownMenuTrigger aria-label={locale.t("SHELL_LANGUAGE_LABEL")}><span aria-hidden="true">{locale.locale === "zh-CN" ? "中" : "EN"}</span></DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem role="menuitemradio" aria-checked={locale.locale === "en"} onClick={() => locale.setLocale("en")}>{locale.t("SHELL_LANGUAGE_EN")}{locale.locale === "en" && <Check size={16} className="ml-auto" aria-hidden="true" />}</DropdownMenuItem>
-                <DropdownMenuItem role="menuitemradio" aria-checked={locale.locale === "zh-CN"} onClick={() => locale.setLocale("zh-CN")}>{locale.t("SHELL_LANGUAGE_ZH_CN")}{locale.locale === "zh-CN" && <Check size={16} className="ml-auto" aria-hidden="true" />}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Popover open={activeMenu === "language"} onOpenChange={(open) => setActiveMenu(open ? "language" : null)} side="bottom" align="end">
+              <PopoverTrigger ariaHaspopup="menu">
+                <Button type="button" variant="ghost" size="icon" aria-label={locale.t("SHELL_LANGUAGE_LABEL")} className="rounded-md"><span aria-hidden="true">{locale.locale === "zh-CN" ? "中" : "EN"}</span></Button>
+              </PopoverTrigger>
+              {activeMenu === "language" && <PopoverContent role="menu" data-menu-id="language" className="w-48 p-1">
+                <button type="button" role="menuitemradio" aria-checked={locale.locale === "en"} onClick={() => { locale.setLocale("en"); setActiveMenu(null); }} className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent max-lg:min-h-11">{locale.t("SHELL_LANGUAGE_EN")}{locale.locale === "en" && <Check size={16} className="ml-auto" aria-hidden="true" />}</button>
+                <button type="button" role="menuitemradio" aria-checked={locale.locale === "zh-CN"} onClick={() => { locale.setLocale("zh-CN"); setActiveMenu(null); }} className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent max-lg:min-h-11">{locale.t("SHELL_LANGUAGE_ZH_CN")}{locale.locale === "zh-CN" && <Check size={16} className="ml-auto" aria-hidden="true" />}</button>
+              </PopoverContent>}
+            </Popover>
           </div>
         </header>
         <div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...sidebarWorkspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} memberLabel={memberLabel} session={session} theme={theme} activeMenu={activeMenu} onActiveMenuChange={setActiveMenu} onThemeChange={changeTheme} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>
         <div className="flex min-h-0 flex-1">
           <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] scroll-p-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain min-w-0 flex-1"><div className="mx-auto w-full max-w-[1440px] p-4 lg:h-full lg:px-6 lg:py-5">{access.kind === "forbidden" ? <AdminForbiddenPage title={locale.t("PAGE_FORBIDDEN_TITLE")} description={locale.t("PAGE_FORBIDDEN_DESCRIPTION")} /> : <motion.div key={pathname} className="lg:h-full" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE_OUT }}>{children}</motion.div>}</div></main>
         </div>
-      </div>
+        </div>
+      </AnimatedSidebarProvider>
     </div>
   );
 }
@@ -157,36 +177,41 @@ function menuAvailability(path: string) {
 }
 
 function NavGroup({ title, nodes, pathname, locale, onNavigate, collapsed, expanded, onToggle, canHover }: { title: string; nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void; canHover: boolean }) {
-  return <div data-nav-group><p className={cn("mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground", collapsed && "sr-only")}>{title}</p><div className="space-y-1">{nodes.map((node) => <NavNode key={node.id} node={node} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} canHover={canHover} depth={1} />)}</div></div>;
+  const rows = nodes.map((node) => <NavNode key={node.id} node={node} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} canHover={canHover} depth={1} />);
+  return <div data-nav-group><p className={cn("mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground", collapsed && "sr-only")}>{title}</p>
+    {/* The payload's shared-layout hover pill is mouse polish, so it is only
+        mounted where a real hover exists (`useHoverCapable`). Touch keeps the
+        same rows without a pill that would stick after a tap. */}
+    {canHover ? <AnimatedSidebarMenu className="space-y-1">{rows}</AnimatedSidebarMenu> : <ul className="space-y-1">{rows}</ul>}
+  </div>;
 }
 
 function NavNode({ node, pathname, locale, onNavigate, collapsed, expanded, onToggle, canHover, depth }: { node: NavigationNode; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void; canHover: boolean; depth: number }) {
   const label = locale.t(node.labelKey);
-  const reduce = useReducedMotion();
-  const [hovered, setHovered] = useState(false);
   const path = node.path ?? node.route?.path ?? null;
   const unavailable = node.availability === "coming_soon";
   const unavailableLabel = `${label}（${locale.t("NAV_COMING_SOON")}）`;
-  const active = Boolean(path && (pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))) || Boolean(node.children?.some((child) => isNodeActive(child, pathname)));
-  // One pill is shared by every row, so it glides between them on hover the same
-  // way the active indicator does. Touch devices never fire a real hover, so the
-  // state stays off unless the pointer can actually hover, and the active row
-  // keeps its own accent pill instead.
-  const hoverPill = canHover && hovered && !active ? <motion.span aria-hidden="true" layoutId="shell-nav-hover" transition={reduce ? { duration: 0 } : SPRING_LAYOUT} className="absolute inset-0 rounded-md bg-muted/70" /> : null;
   const hasChildren = Boolean(node.children?.length);
+  const open = Boolean((expanded[node.id] ?? false) && !collapsed && depth < 4);
+  const rowClass = cn("min-h-9 min-w-0 flex-1 rounded-md px-2.5 py-2 text-sm", pathname === path && "text-accent-foreground", collapsed && "justify-center px-0");
   // A destination the registry marks `coming_soon` stays in the tab order (its
   // tooltip and `aria-disabled` contract need it there), so it is a real row
-  // drawn by the app's one Button: the ghost fill is suppressed because the
-  // shared layout pill is this rail's only hover affordance.
+  // drawn by the app's one Button; the payload row's `disabled` would drop it
+  // out of the tab order.
   const unavailableButton = <Button type="button" variant="ghost" size="md" aria-disabled="true" onClick={(event) => event.preventDefault()} className={cn("h-9 min-w-0 flex-1 cursor-not-allowed justify-start gap-3 rounded-md px-2.5 py-2 text-left font-normal hover:bg-transparent hover:text-muted-foreground", collapsed && "justify-center px-0")}><NavIcon path={path} /><span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>{label}</span>{!collapsed && <Badge variant="outline" className="shrink-0 text-[10px]">{locale.t("NAV_COMING_SOON")}</Badge>}</Button>;
-  const content = path && unavailable
+  const row = path && unavailable
     ? collapsed ? <Tooltip><TooltipTrigger asChild>{unavailableButton}</TooltipTrigger><TooltipContent>{unavailableLabel}</TooltipContent></Tooltip> : unavailableButton
-    : path ? <motion.a data-route-id={routeCapability(path)?.id} href={path} aria-current={pathname === path ? "page" : undefined} title={collapsed ? label : undefined} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onClick={(event) => { event.preventDefault(); onNavigate(path); }} whileTap={reduce ? undefined : { scale: 0.985 }} transition={SPRING_PRESS} className={cn("relative flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors", pathname === path ? "font-medium text-accent-foreground" : "text-muted-foreground hover:text-accent-foreground", collapsed && "justify-center px-0")}>{hoverPill}{pathname === path && <motion.span aria-hidden="true" layoutId="shell-nav-active" transition={SPRING_LAYOUT} className="absolute inset-0 rounded-md bg-accent" />}<NavIcon path={path} className="relative z-10" /><span className={cn("relative z-10 truncate", collapsed && "sr-only")}>{label}</span></motion.a>
-      : <Button type="button" variant="ghost" size="md" aria-expanded={expanded[node.id] ?? false} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onClick={() => onToggle(node.id)} title={collapsed ? label : undefined} className={cn("relative h-9 min-w-0 flex-1 justify-start gap-3 rounded-md px-2.5 py-2 text-left font-normal hover:bg-transparent hover:text-accent-foreground", active && "text-foreground", collapsed && "justify-center px-0")}>{hoverPill}<NavIcon path={path} className="relative z-10" /><span className={cn("relative z-10 truncate", collapsed && "sr-only")}>{label}</span></Button>;
-  return <div data-nav-node data-nav-depth={depth} data-nav-availability={node.availability}><div className="flex items-center">{content}{hasChildren && !collapsed && <Button type="button" variant="ghost" size="icon" className="mr-1" aria-label={`${label} ${expanded[node.id] ? "collapse" : "expand"}`} aria-expanded={expanded[node.id] ?? false} onClick={() => onToggle(node.id)}><CaretDown size={14} className={cn("transition-transform", !expanded[node.id] && "-rotate-90")} aria-hidden="true" /></Button>}</div>{hasChildren && (expanded[node.id] ?? false) && !collapsed && depth < 4 && <div className="ml-4 space-y-1 border-l pl-2">{node.children!.map((child) => <NavNode key={child.id} node={child} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} canHover={canHover} depth={depth + 1} />)}</div>}</div>;
+    : path
+      ? <AnimatedSidebarMenuButton data-route-id={routeCapability(path)?.id} href={path} isActive={pathname === path} icon={<NavIcon path={path} />} onSelect={(event) => { event.preventDefault(); onNavigate(path); }} title={collapsed ? label : undefined} className={rowClass}>{label}</AnimatedSidebarMenuButton>
+      : <AnimatedSidebarMenuButton ariaExpanded={expanded[node.id] ?? false} icon={<NavIcon path={path} />} onSelect={() => onToggle(node.id)} className={rowClass}>{label}</AnimatedSidebarMenuButton>;
+  return <AnimatedSidebarMenuItem data-nav-node data-nav-depth={depth} data-nav-availability={node.availability}>
+    <div className="flex items-center">
+      {row}
+      {hasChildren && path && !collapsed && <Button type="button" variant="ghost" size="icon" className="mr-1" aria-label={`${label} ${expanded[node.id] ? "collapse" : "expand"}`} aria-expanded={expanded[node.id] ?? false} onClick={() => onToggle(node.id)}><CaretDown size={14} className={cn("transition-transform", !expanded[node.id] && "-rotate-90")} aria-hidden="true" /></Button>}
+    </div>
+    {hasChildren && open && <AnimatedSidebarMenuSub open className="ml-4 pl-2">{node.children!.map((child) => <NavNode key={child.id} node={child} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} canHover={canHover} depth={depth + 1} />)}</AnimatedSidebarMenuSub>}
+  </AnimatedSidebarMenuItem>;
 }
-
-function isNodeActive(node: NavigationNode, pathname: string): boolean { const path = node.path ?? node.route?.path; return Boolean(path && (pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))) || Boolean(node.children?.some((child) => isNodeActive(child, pathname))); }
 
 function withoutCollaborationRoutes(nodes: NavigationNode[]): NavigationNode[] {
   return nodes.filter((node) => !isCollaborationPath(node.path ?? node.route?.path)).map((node) => ({ ...node, children: node.children ? withoutCollaborationRoutes(node.children) : undefined }));
@@ -289,7 +314,25 @@ function AccountMenu({ variant, memberLabel, session, locale, theme, activeMenu,
   const roleLabel = session.member.role === "admin" ? locale.t("SHELL_ADMIN_ROLE") : locale.t("SHELL_MEMBER_ROLE");
   const compact = variant === "collapsed";
   const menuId = variant === "mobile" ? "account-mobile" : "account-desktop";
-  const close = () => onActiveMenuChange(null);
+  const open = activeMenu === menuId;
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // ArrowDown/ArrowUp on the trigger opens the menu and lands on the first/last
+  // row, the contract the previous menu adapter had.
+  const focusOnOpen = useRef<"first" | "last" | null>(null);
+  useEffect(() => {
+    if (!open || !focusOnOpen.current) return;
+    const mode = focusOnOpen.current;
+    focusOnOpen.current = null;
+    const frame = requestAnimationFrame(() => {
+      const items = Array.from(document.querySelectorAll<HTMLElement>(`[data-menu-id="${menuId}"] [role^="menuitem"]:not([aria-disabled="true"]):not([disabled])`));
+      (mode === "last" ? items.at(-1) : items[0])?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, menuId]);
+  // Closing from a row unmounts that row under the focus, so the trigger takes
+  // focus back the way the previous menu adapter did; the payload's own close
+  // (Escape / outside pointer) already restores it.
+  const close = () => { onActiveMenuChange(null); triggerRef.current?.focus(); };
   const selectTheme = (mode: ThemeMode) => { onThemeChange(mode); close(); };
   const selectSettings = () => { close(); onNavigate("/settings"); };
   const triggerLabel = `${locale.t("SHELL_ACCOUNT_MENU_WITH_MEMBER")}${memberLabel}`;
@@ -299,9 +342,50 @@ function AccountMenu({ variant, memberLabel, session, locale, theme, activeMenu,
     ? "grid size-10 place-items-center rounded-full bg-primary p-0 text-sm font-semibold text-primary-foreground"
     : "flex min-w-0 w-full items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-accent";
   const contentClass = compact
-    ? "bottom-0 left-full right-auto z-50 ml-3 w-[min(18rem,calc(100vw-5rem))] max-w-[calc(100vw-5rem)] p-2"
-    : "bottom-full left-0 right-auto w-[min(18rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] p-2";
-  return <DropdownMenu menuId={menuId} open={activeMenu === menuId} onOpenChange={(open) => onActiveMenuChange(open ? menuId : null)}><DropdownMenuTrigger data-account-trigger data-account-trigger-variant={variant} aria-label={triggerLabel} tabIndex={0} className={triggerClass}><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"><span aria-hidden="true">{initials(memberLabel)}</span></span>{!compact && <span className="min-w-0"><span className="block truncate text-sm font-medium">{memberLabel}</span><span className="block text-xs text-muted-foreground">{roleLabel}</span></span>}</DropdownMenuTrigger><DropdownMenuContent data-account-menu className={contentClass}><div data-account-summary className="mb-2 flex min-w-0 items-center gap-3 border-b px-2 pb-3 pt-1"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{initials(memberLabel)}</span><div className="min-w-0"><p className="truncate text-sm font-medium">{memberLabel}</p><p className="text-xs text-muted-foreground">{roleLabel}</p></div></div><DropdownMenuItem data-account-settings data-route-id="settings" onClick={selectSettings}><GearSix size={16} aria-hidden="true" />{locale.t("SHELL_SETTINGS")}</DropdownMenuItem><div className="my-2 border-t pt-2"><p className="mb-1 px-2 text-xs font-medium text-muted-foreground">{locale.t("SHELL_THEME")}</p><DropdownMenuItem data-theme-option="light" role="menuitemradio" aria-checked={theme === "light"} className={themeClass("light")} onClick={() => selectTheme("light")}><Sun size={16} aria-hidden="true" />{locale.t("SHELL_THEME_LIGHT")}{selectedThemeIndicator("light")}</DropdownMenuItem><DropdownMenuItem data-theme-option="dark" role="menuitemradio" aria-checked={theme === "dark"} className={themeClass("dark")} onClick={() => selectTheme("dark")}><Moon size={16} aria-hidden="true" />{locale.t("SHELL_THEME_DARK")}{selectedThemeIndicator("dark")}</DropdownMenuItem><DropdownMenuItem data-theme-option="system" role="menuitemradio" aria-checked={theme === "system"} className={themeClass("system")} onClick={() => selectTheme("system")}>{locale.t("SHELL_THEME_SYSTEM")}{selectedThemeIndicator("system")}</DropdownMenuItem></div>{logoutError && <p role="alert" className="px-2 py-1 text-xs text-destructive">{logoutError}</p>}<DropdownMenuItem data-account-logout closeOnSelect={false} disabled={logoutPending} onClick={onLogout} className="mt-1 min-h-10 text-destructive hover:bg-destructive/10">{logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
+    ? "w-[min(18rem,calc(100vw-5rem))] max-w-[calc(100vw-5rem)] p-2"
+    : "w-[min(18rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] p-2";
+  const itemClass = "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent max-lg:min-h-11";
+  // The menu's roving focus lives at the shell (the payload owns dismissal and
+  // returns focus on Escape); `menuKeyAction` is the same map the rest of the
+  // app's menus use, so Home/End/arrows behave identically here.
+  const onMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const action = menuKeyAction(event.key);
+    if (action === null || action === "close") return;
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("[role^='menuitem']:not([aria-disabled='true']):not([disabled])"));
+    if (!items.length) return;
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    const next = action === "first" ? 0
+      : action === "last" ? items.length - 1
+        : action === "next" ? Math.min(current + 1, items.length - 1)
+          : Math.max(current - 1, 0);
+    event.preventDefault();
+    items[next]?.focus();
+  };
+  return <Popover open={open} onOpenChange={(next) => onActiveMenuChange(next ? menuId : null)} side="top" align="start" className={compact ? "w-auto" : "w-full"}>
+    <PopoverTrigger ariaHaspopup="menu">
+      <Button ref={triggerRef} type="button" variant="ghost" data-account-trigger data-account-trigger-variant={variant} aria-label={triggerLabel} tabIndex={0} className={triggerClass} onKeyDown={(event) => {
+        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+        event.preventDefault();
+        focusOnOpen.current = event.key === "ArrowDown" ? "first" : "last";
+        if (!open) { onActiveMenuChange(menuId); return; }
+        const items = Array.from(document.querySelectorAll<HTMLElement>(`[data-menu-id="${menuId}"] [role^="menuitem"]:not([aria-disabled="true"]):not([disabled])`));
+        (focusOnOpen.current === "last" ? items.at(-1) : items[0])?.focus();
+        focusOnOpen.current = null;
+      }}><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"><span aria-hidden="true">{initials(memberLabel)}</span></span>{!compact && <span className="min-w-0"><span className="block truncate text-sm font-medium">{memberLabel}</span><span className="block text-xs text-muted-foreground">{roleLabel}</span></span>}</Button>
+    </PopoverTrigger>
+    {open && <PopoverContent role="menu" data-account-menu data-menu-id={menuId} className={contentClass} onKeyDown={onMenuKeyDown}>
+      <div data-account-summary className="mb-2 flex min-w-0 items-center gap-3 border-b px-2 pb-3 pt-1"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{initials(memberLabel)}</span><div className="min-w-0"><p className="truncate text-sm font-medium">{memberLabel}</p><p className="text-xs text-muted-foreground">{roleLabel}</p></div></div>
+      <button type="button" role="menuitem" data-account-settings data-route-id="settings" onClick={selectSettings} className={itemClass}><GearSix size={16} aria-hidden="true" />{locale.t("SHELL_SETTINGS")}</button>
+      <div className="my-2 border-t pt-2">
+        <p className="mb-1 px-2 text-xs font-medium text-muted-foreground">{locale.t("SHELL_THEME")}</p>
+        <button type="button" role="menuitemradio" aria-checked={theme === "light"} data-theme-option="light" className={cn(itemClass, themeClass("light"))} onClick={() => selectTheme("light")}><Sun size={16} aria-hidden="true" />{locale.t("SHELL_THEME_LIGHT")}{selectedThemeIndicator("light")}</button>
+        <button type="button" role="menuitemradio" aria-checked={theme === "dark"} data-theme-option="dark" className={cn(itemClass, themeClass("dark"))} onClick={() => selectTheme("dark")}><Moon size={16} aria-hidden="true" />{locale.t("SHELL_THEME_DARK")}{selectedThemeIndicator("dark")}</button>
+        <button type="button" role="menuitemradio" aria-checked={theme === "system"} data-theme-option="system" className={cn(itemClass, themeClass("system"))} onClick={() => selectTheme("system")}>{locale.t("SHELL_THEME_SYSTEM")}{selectedThemeIndicator("system")}</button>
+      </div>
+      {logoutError && <p role="alert" className="px-2 py-1 text-xs text-destructive">{logoutError}</p>}
+      <button type="button" role="menuitem" data-account-logout disabled={logoutPending} onClick={onLogout} className={cn(itemClass, "mt-1 min-h-10 text-destructive hover:bg-destructive/10 disabled:opacity-50")}>{logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT")}</button>
+    </PopoverContent>}
+  </Popover>;
 }
 
 function MobileNavigation({ nodes, pathname, locale, onNavigate, memberLabel, session, theme, activeMenu, onActiveMenuChange, onThemeChange, onLogout, logoutPending, logoutError }: { nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; memberLabel: string; session: SessionSnapshot; theme: ThemeMode; activeMenu: ShellMenuId; onActiveMenuChange: (menu: ShellMenuId) => void; onThemeChange: (mode: ThemeMode) => void; onLogout?: () => void; logoutPending: boolean; logoutError: string | null }) {

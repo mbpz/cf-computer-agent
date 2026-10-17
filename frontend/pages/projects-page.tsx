@@ -8,6 +8,7 @@ import type { LocaleRuntime } from "../lib/i18n";
 import { frontendText } from "../lib/i18n";
 import type { Project, ProjectStatus, ProjectSummary } from "../lib/projects-data";
 import { DataTable } from "../components/data-table";
+import { OverflowActions, type OverflowActionItem } from "../components/motion/overflow-actions";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
@@ -42,7 +43,7 @@ export function ProjectsPage({ locale, state, pending = false, actionError, onRe
   const changePage = (page: number) => { if (listBlocked) return; onPageChange?.(page); };
   const changePageSize = (pageSize: SupportedPageSize) => { if (listBlocked) return; onPageSizeChange?.(pageSize); };
   return <>{state.kind === "ready" && <>{statusConfirmation.dialog}<Dialog open={createOpen} onOpenChange={next => { if (!next) setCreateOpen(false); }}>
-    <DialogContent role="dialog" data-projects-create-dialog aria-labelledby={createTitleId} aria-describedby={createDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
+    <DialogContent variant="morph" role="dialog" data-projects-create-dialog dismissLabel={frontendText(locale, "COMMON_DISMISS")} aria-labelledby={createTitleId} aria-describedby={createDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
       <DialogTitle id={createTitleId}>{frontendText(locale, "PROJECTS_CREATE_TITLE")}</DialogTitle>
       <p id={createDescriptionId} className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "PROJECTS_DESCRIPTION")}</p>
       <div className="mt-4"><PlanningCreateForm isSubmitBlocked={statusConfirmation.isOpen} createMemberId={createMemberId} kind="PROJECTS" locale={locale} pending={pending || !!relationProjectId || statusConfirmation.open} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={locked => { setCreateComposerLocked(locked); onCreateLock?.(locked); }} onCreated={() => setCreateOpen(false)} /></div>
@@ -89,13 +90,22 @@ export function ProjectsPage({ locale, state, pending = false, actionError, onRe
             {summary ? <><div className="grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-md bg-muted/60 p-2"><div className="font-semibold">{summary.goalCount}</div><div className="text-muted-foreground">{frontendText(locale, "PROJECTS_GOALS")}</div></div><div className="rounded-md bg-muted/60 p-2"><div className="font-semibold">{summary.taskCount}</div><div className="text-muted-foreground">{frontendText(locale, "PROJECTS_TASKS")}</div></div><div className="rounded-md bg-muted/60 p-2"><div className="font-semibold">{summary.completedTaskCount}/{summary.taskCount}</div><div className="text-muted-foreground">{frontendText(locale, "PROJECTS_DONE")}</div></div></div>{summary.goals.length > 0 && <p className="line-clamp-1 text-xs text-muted-foreground">{frontendText(locale, "PROJECTS_LINKED_GOAL")}: {summary.goals.map((goal) => goal.title).join(" · ")}</p>}</> : <div role="alert" className="space-y-2 text-sm text-muted-foreground"><p>{frontendText(locale, "PROJECTS_SUMMARY_FAILED")}</p><Button type="button" variant="outline" size="sm" data-summary-retry disabled={listBlocked || summaryPending.includes(project.id)} onClick={() => onRetrySummary?.(project)}>{frontendText(locale, "PROJECTS_SUMMARY_RETRY")}</Button></div>}
           </div>;
         } },
-        { key: "actions", header: frontendText(locale, "PROJECTS_COLUMN_ACTIONS"), width: "340px", cellClassName: "whitespace-normal", cell: (project) => <div className="flex flex-wrap gap-2 py-1">
-          <Button type="button" size="sm" variant="outline" id={`manage-relations-${project.id}`} aria-expanded={relationProjectId === project.id} aria-controls={relationProjectId === project.id ? "project-relations-editor" : undefined} disabled={listBlocked} onClick={() => onManageRelations?.(project)}>{frontendText(locale, "RELATIONS_MANAGE")}</Button>
-          <Button type="button" size="sm" variant="outline" disabled={listBlocked} onClick={() => onOpenTimeline?.(project)}><ArrowRight size={14} className="mr-1" />{frontendText(locale, "PROJECTS_TIMELINE")}</Button>
-          {project.status !== "completed" && project.status !== "archived" && <Button type="button" size="sm" disabled={statusConfirmation.unavailable || listBlocked} onClick={() => statusConfirmation.request(project, "completed")}><CheckCircle size={14} className="mr-1" />{frontendText(locale, "PROJECTS_COMPLETE")}</Button>}
-          {project.status !== "archived" && <Button type="button" size="sm" variant="outline" disabled={statusConfirmation.unavailable || listBlocked} onClick={() => statusConfirmation.request(project, "archived")}><Archive size={14} className="mr-1" />{frontendText(locale, "PROJECTS_ARCHIVE")}</Button>}
-          {project.status === "archived" && <Button type="button" size="sm" variant="outline" disabled={statusConfirmation.unavailable || listBlocked} onClick={() => statusConfirmation.request(project, "active")}>{frontendText(locale, "PROJECTS_RESTORE")}</Button>}
-        </div> },
+        { key: "actions", header: frontendText(locale, "PROJECTS_COLUMN_ACTIONS"), width: "420px", cellClassName: "whitespace-normal", cell: (project) => {
+          // One beUI rail (slug: overflow-actions) per row. All four (or five)
+          // controls stay primary: the project suites address each by its
+          // visible name and read its `disabled`/`aria-expanded` state, and a
+          // disclosure would change that interaction model. Archive keeps
+          // `tone="destructive"`; the relation toggle keeps its `id`, its
+          // `aria-expanded` and its `aria-controls` hook.
+          const actions: OverflowActionItem[] = [
+            { id: "relations", label: frontendText(locale, "RELATIONS_MANAGE"), disabled: listBlocked, attributes: { id: `manage-relations-${project.id}`, "aria-expanded": relationProjectId === project.id, "aria-controls": relationProjectId === project.id ? "project-relations-editor" : undefined }, onClick: () => onManageRelations?.(project) },
+            { id: "timeline", label: frontendText(locale, "PROJECTS_TIMELINE"), icon: <ArrowRight size={14} />, disabled: listBlocked, onClick: () => onOpenTimeline?.(project) },
+          ];
+          if (project.status !== "completed" && project.status !== "archived") actions.push({ id: "complete", label: frontendText(locale, "PROJECTS_COMPLETE"), icon: <CheckCircle size={14} />, disabled: statusConfirmation.unavailable || listBlocked, onClick: () => statusConfirmation.request(project, "completed") });
+          if (project.status !== "archived") actions.push({ id: "archive", label: frontendText(locale, "PROJECTS_ARCHIVE"), icon: <Archive size={14} />, tone: "destructive", disabled: statusConfirmation.unavailable || listBlocked, onClick: () => statusConfirmation.request(project, "archived") });
+          if (project.status === "archived") actions.push({ id: "restore", label: frontendText(locale, "PROJECTS_RESTORE"), disabled: statusConfirmation.unavailable || listBlocked, onClick: () => statusConfirmation.request(project, "active") });
+          return <div className="py-1"><OverflowActions size="sm" primaryActions={actions} openLabel={frontendText(locale, "COMMON_MORE_ACTIONS")} closeLabel={frontendText(locale, "COMMON_FEWER_ACTIONS")} /></div>;
+        } },
       ]}
     />}
   </section></>;

@@ -60,14 +60,14 @@ describe("home summary real route", () => {
     try {
       writeWorkspaceHistory("push", "/settings", oldCommit);
       await act(async () => (container.querySelector('[data-account-trigger]') as HTMLButtonElement).click());
-      await act(async () => (container.querySelector('[data-account-logout]') as HTMLButtonElement).click()); await flush();
+      await act(async () => (document.querySelector('[data-account-logout]') as HTMLButtonElement).click()); await flush();
       expect(vi.mocked(fetch).mock.calls.some(([path, init]) => path === "/auth/logout" && init?.method === "POST")).toBe(true);
       if (confirmed) {
         expect(container.textContent).not.toContain("Private guide"); expect(container.textContent).not.toContain("one@test.example");
         expect(requests.slice(0, 3).every(r => r.signal?.aborted)).toBe(true); expect(dismiss).toHaveBeenCalledOnce();
         await act(async () => decision.accept()); expect(oldCommit).not.toHaveBeenCalled(); expect(browser.location.pathname).toBe("/");
       } else {
-        expect(container.textContent).toContain("Private guide"); expect(container.textContent).toContain("Sign out failed"); expect(dismiss).not.toHaveBeenCalled();
+        expect(container.textContent).toContain("Private guide"); expect(document.body.textContent).toContain("Sign out failed"); expect(dismiss).not.toHaveBeenCalled();
         await act(async () => decision.cancel()); expect(browser.location.pathname).toBe("/"); expect(oldCommit).not.toHaveBeenCalled();
       }
     } finally { unregister(); }
@@ -76,8 +76,8 @@ describe("home summary real route", () => {
   it("reserves logout synchronously across duplicate clicks and permits an explicit retry only after failure", async () => {
     await render(); await answer(0, taskSummary); await answer(1, knowledge); await answer(2, { items: [] });
     const signOut = async () => {
-      if (!container.querySelector('[data-account-logout]')) await act(async () => (container.querySelector('[data-account-trigger]') as HTMLButtonElement).click());
-      const button = container.querySelector('[data-account-logout]') as HTMLButtonElement;
+      if (!document.querySelector('[data-account-logout]')) await act(async () => (container.querySelector('[data-account-trigger]') as HTMLButtonElement).click());
+      const button = document.querySelector('[data-account-logout]') as HTMLButtonElement;
       expect(button).not.toBeNull();
       await act(async () => { button.click(); button.click(); });
     };
@@ -85,7 +85,7 @@ describe("home summary real route", () => {
     expect(requests.filter(r => r.path === "/auth/logout")).toHaveLength(1);
     expect(container.textContent).toContain("Private guide");
     await answer(3, { error: { code: "UNAVAILABLE", message: "Unavailable" } }, 503);
-    expect(container.textContent).toContain("Sign out failed");
+    expect(document.body.textContent).toContain("Sign out failed");
     await signOut();
     expect(requests.filter(r => r.path === "/auth/logout")).toHaveLength(2);
     const baseFetch = vi.mocked(fetch).getMockImplementation()!;
@@ -107,12 +107,12 @@ describe("home summary real route", () => {
     vi.mocked(fetch).mockImplementation((input, init) => String(input) === "/api/session"
       ? new Promise<Response>(resolve => { finishCheck = resolve; }) : baseFetch(input, init));
     await act(async () => (container.querySelector('[data-account-trigger]') as HTMLButtonElement).click());
-    const button = container.querySelector('[data-account-logout]') as HTMLButtonElement;
+    const button = document.querySelector('[data-account-logout]') as HTMLButtonElement;
     await act(async () => button.click());
     await act(async () => requests[3].resolve(new Response(null, { status: 204 }))); await flush();
     expect(finishCheck).toBeTypeOf("function");
     expect(container.textContent).toContain("Private guide");
-    expect((container.querySelector('[data-account-logout]') as HTMLButtonElement).disabled).toBe(true);
+    expect((document.querySelector('[data-account-logout]') as HTMLButtonElement).disabled).toBe(true);
     expect(requests.filter(r => r.path === "/auth/logout")).toHaveLength(1);
     await act(async () => finishCheck(Response.json({ error: { code: "AUTH_REQUIRED", message: "Signed out", retryable: false } }, { status: 401 }))); await flush();
     expect(container.textContent).not.toContain("Private guide");
@@ -169,7 +169,7 @@ describe("home summary real route", () => {
     expect(container.textContent).not.toContain("Private guide");
     expect(requests.every(r => r.signal?.aborted)).toBe(true);
     expect(container.querySelector("#workbench-title")).toBeNull();
-    expect(Array.from(container.querySelectorAll("button")).some(b => b.textContent === "Try again")).toBe(false);
+    expect(Array.from(document.querySelectorAll("button")).some(b => b.textContent === "Try again")).toBe(false);
     await answer(2, { items: [] }); expect(container.querySelector("#workbench-title")).toBeNull();
   });
   it("aborts all reads on navigation and ignores late responses after return", async () => {
@@ -199,7 +199,7 @@ describe("home summary real route", () => {
   it("renders a retriable full error when all reads fail", async () => {
     await render(); for (let i = 0; i < 3; i++) await answer(i, {}, 503);
     expect(container.querySelector("#workbench-title")).toBeNull();
-    const retry = Array.from(container.querySelectorAll("button")).find(b => b.textContent === "Try again");
+    const retry = Array.from(document.querySelectorAll("button")).find(b => b.textContent === "Try again");
     expect(retry).toBeTruthy(); await act(async () => retry!.click()); expect(requests).toHaveLength(6);
     await answer(3, taskSummary); await answer(4, knowledge); await answer(5, { items: [] });
     expect(container.textContent).toContain("Private guide");

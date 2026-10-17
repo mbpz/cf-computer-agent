@@ -19,10 +19,10 @@ describe("role write recovery", () => {
 
   async function renderDetail(runtime = locale()) { await act(async () => root.render(<AdminRoleDetailRoute locale={runtime} roleId="role-editor" />)); await flush(); }
   async function renderCreate(runtime = locale()) { await act(async () => root.render(<AdminRoleNewRoute locale={runtime} />)); await flush(); }
-  function button(label: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; }
+  function button(label: string) { return [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; }
   async function click(label: string) { expect(button(label)).toBeTruthy(); await act(async () => button(label).click()); await flush(); }
   async function confirmChange(label: string) {
-    await click(label); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+    await click(label); expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
     await click("Confirm change");
   }
   async function input(label: string, value: string) { const el = container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement; expect(el).toBeTruthy(); await act(async () => { const setter = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!; setter.call(el, value); el.dispatchEvent(new browser.Event("input", {bubbles: true})); }); }
@@ -56,7 +56,7 @@ describe("role write recovery", () => {
     if (label === "Assign member") await input("Assigned members", "member-new");
     await click(label); await click("Cancel");
     expect(requests).toEqual(["GET"]);
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
   it("discards unconfirmed permission writes on route unmount", async () => {
@@ -70,7 +70,7 @@ describe("role write recovery", () => {
     await act(async () => staleConfirm.click());
     await renderDetail();
     expect(requests).toEqual(["GET", "GET"]);
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
   it("synchronously admits one mask write and refreshes authoritative roles", async () => {

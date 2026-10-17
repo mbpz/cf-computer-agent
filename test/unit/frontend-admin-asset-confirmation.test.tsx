@@ -26,9 +26,9 @@ describe("asset retry confirmation", () => {
   });
   afterEach(async () => {await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals();});
   async function mount(props: Partial<React.ComponentProps<typeof AssetQueuePage>> = {}) {await act(async () => root.render(<AssetQueuePage data={data} locale={locale} onRetry={onRetry} {...props}/>));}
-  function button(label:string) {const el = [...container.querySelectorAll("button")].find(el => el.textContent === label); expect(el,label).toBeTruthy(); return el as HTMLButtonElement;}
+  function button(label:string) {const el = [...document.querySelectorAll("button")].find(el => el.textContent === label); expect(el,label).toBeTruthy(); return el as HTMLButtonElement;}
   async function click(label:string) {await act(async () => button(label).click());}
-  const dialog = () => container.querySelector('[role="alertdialog"]');
+  const dialog = () => document.querySelector('[role="alertdialog"]');
   it("shows exact target and requeue impact before a single explicit write",async () => {
     await mount(); await click("Retry"); expect(onRetry).not.toHaveBeenCalled();
     for (const value of ["report.pdf","asset-1","queued","attempt count","does not mean parsing succeeded"]) expect(dialog()?.textContent).toContain(value);

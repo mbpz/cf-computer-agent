@@ -11,7 +11,11 @@ describe("review period request ownership", () => {
   let reads: {period: string; signal?: AbortSignal | null; resolve: (response: Response) => void; reject: (error: Error) => void}[];
   afterEach(async () => { await journey?.unmount(); journey = undefined; });
   const main = () => journey!.container.querySelector("main")!;
-  const button = (label: string) => [...main().querySelectorAll("button")].find(node => node.textContent === label)!;
+  // The review period is a beUI radio group: its choices are `role="radio"` buttons whose
+  // visible label sits beside the control, so a label addresses either a text button or a
+  // radio in that row.
+  const button = (label: string) => [...main().querySelectorAll("button")].find(node => node.textContent === label)
+    ?? [...main().querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(node => node.closest("label")?.textContent === label)!;
   async function mount() {
     reads = [];
     journey = await mountAuthenticatedApp({url: "https://app.test/review", role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { LinkSimpleIcon, ListBulletsIcon } from "@phosphor-icons/react";
 import { ExpandableTabs } from "../components/ui/expandable-tabs";
+import { FileTree, FileTreeFile } from "../components/motion/file-tree";
+import { ReaderArticle } from "../components/knowledge/reader-article";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleIndicator, CollapsibleTrigger, useCollapsible } from "../components/motion/collapsible";
 import { PageHeader } from "../components/ui/page-header";
@@ -123,7 +125,7 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
         <ReaderOutlinePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} onSelectChunk={setSelectedChunkId} />
       </aside>
       <main className="min-w-0 space-y-5">
-        <Card><CardContent><div className="prose prose-slate max-w-none text-sm leading-7">{renderMarkdown(normalizedRevision.markdown)}</div></CardContent></Card>
+        <Card><CardContent><ReaderArticle locale={locale} markdown={normalizedRevision.markdown} renderMarkdown={renderMarkdown} /></CardContent></Card>
         <KnowledgeDerivativesPanel
           locale={locale}
           knowledgeItemId={normalizedRevision.knowledgeItemId}
@@ -203,7 +205,24 @@ function ReaderOutlinePanel({ locale, revision, selectedChunkId, onSelectChunk }
     id: chunk.id,
     label: chunk.headingPath.join(" / ").trim(),
   })).filter((item, index, items) => item.label && items.findIndex((candidate) => candidate.label === item.label) === index);
-  return <ReaderSection locale={locale} title={frontendText(locale, "KNOWLEDGE_READER_OUTLINE")} data-reader-outline-card="true">{headings.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_OUTLINE_EMPTY")}</p> : <nav aria-label={frontendText(locale, "KNOWLEDGE_READER_OUTLINE")}><ol className="space-y-1">{headings.map((heading) => <li key={heading.id}><button type="button" aria-current={selectedChunkId === heading.id ? "location" : undefined} onClick={() => onSelectChunk(heading.id)} className="w-full rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground aria-[current=location]:bg-accent aria-[current=location]:font-medium aria-[current=location]:text-foreground">{heading.label}</button></li>)}</ol></nav>}</ReaderSection>;
+  // The outline is beUI's `file-tree`: one keyboard-navigable row per heading, each row
+  // carrying `aria-current="location"` for the chunk the reader is on. The `<nav>` name is
+  // the same landmark the section title uses.
+  return <ReaderSection locale={locale} title={frontendText(locale, "KNOWLEDGE_READER_OUTLINE")} data-reader-outline-card="true">{headings.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_OUTLINE_EMPTY")}</p> : <nav aria-label={frontendText(locale, "KNOWLEDGE_READER_OUTLINE")}>
+      <FileTree
+        ariaLabel={frontendText(locale, "KNOWLEDGE_READER_OUTLINE")}
+        value={selectedChunkId}
+        onValueChange={onSelectChunk}
+        classNames={{ item: "h-auto min-h-11 py-1 lg:min-h-9" }}
+      >
+        {headings.map((heading) => <FileTreeFile
+          key={heading.id}
+          value={heading.id}
+          name={heading.label}
+          rowProps={{ "aria-current": selectedChunkId === heading.id ? "location" : undefined }}
+        />)}
+      </FileTree>
+    </nav>}</ReaderSection>;
 }
 
 function RelatedKnowledgePanel({ locale, state, onRetry }: { locale?: LocaleRuntime; state: RelatedState; onRetry?: () => void }) {

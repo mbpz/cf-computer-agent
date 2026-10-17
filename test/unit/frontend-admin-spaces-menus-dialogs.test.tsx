@@ -33,12 +33,12 @@ describe("spaces and menus overlays", () => {
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   function setInput(selector: string, value: string) {
-    const el = container.querySelector(selector) as HTMLInputElement;
+    const el = document.querySelector(selector) as HTMLInputElement;
     expect(el, selector).toBeTruthy();
     Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value);
     el.dispatchEvent(new browser.Event("input", { bubbles: true }));
   }
-  function buttonByText(text: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === text) as HTMLButtonElement | undefined; }
+  function buttonByText(text: string) { return [...document.querySelectorAll("button")].find((item) => item.textContent === text) as HTMLButtonElement | undefined; }
   async function click(element: HTMLElement | undefined | null) { expect(element, "clickable").toBeTruthy(); await act(async () => element!.click()); }
 
   async function renderSpaces(onManage = vi.fn().mockResolvedValue(true), onCreate = vi.fn().mockResolvedValue(true)) {
@@ -52,51 +52,51 @@ describe("spaces and menus overlays", () => {
 
   it("opens the create-space overlay from its trigger, renders the fields and closes on cancel", async () => {
     await renderSpaces();
-    expect(container.querySelector("[data-space-create-dialog]")).toBeNull();
-    const trigger = container.querySelector("[data-space-create-open]") as HTMLButtonElement;
+    expect(document.querySelector("[data-space-create-dialog]")).toBeNull();
+    const trigger = document.querySelector("[data-space-create-open]") as HTMLButtonElement;
     expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     await click(trigger);
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(container.querySelectorAll("[data-space-create-dialog]")).toHaveLength(1);
-    expect(container.querySelector("#admin-space-name")).toBeTruthy();
-    expect(container.querySelector("#admin-space-slug")).toBeTruthy();
-    await click(container.querySelector("[data-space-create-cancel]") as HTMLButtonElement);
-    expect(container.querySelector("[data-space-create-dialog]")).toBeNull();
+    expect(document.querySelectorAll("[data-space-create-dialog]")).toHaveLength(1);
+    expect(document.querySelector("#admin-space-name")).toBeTruthy();
+    expect(document.querySelector("#admin-space-slug")).toBeTruthy();
+    await click(document.querySelector("[data-space-create-cancel]") as HTMLButtonElement);
+    expect(document.querySelector("[data-space-create-dialog]")).toBeNull();
   });
 
   it("opens the edit-space overlay from its trigger and closes on cancel", async () => {
     await renderSpaces();
-    expect(container.querySelector("[data-space-edit-dialog]")).toBeNull();
+    expect(document.querySelector("[data-space-edit-dialog]")).toBeNull();
     const trigger = buttonByText("Edit space: Space")!;
     expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
     await click(trigger);
-    expect(container.querySelectorAll("[data-space-edit-dialog]")).toHaveLength(1);
-    expect(container.querySelector("#admin-record-name")).toBeTruthy();
-    expect(container.querySelector("#admin-record-status")).toBeTruthy();
-    await click(container.querySelector("[data-space-edit-cancel]") as HTMLButtonElement);
-    expect(container.querySelector("[data-space-edit-dialog]")).toBeNull();
+    expect(document.querySelectorAll("[data-space-edit-dialog]")).toHaveLength(1);
+    expect(document.querySelector("#admin-record-name")).toBeTruthy();
+    expect(document.querySelector("#admin-record-status")).toBeTruthy();
+    await click(document.querySelector("[data-space-edit-cancel]") as HTMLButtonElement);
+    expect(document.querySelector("[data-space-edit-dialog]")).toBeNull();
   });
 
   it("opens the create-menu overlay from its trigger, renders the fields and closes on cancel", async () => {
     await renderMenus();
-    expect(container.querySelector("[data-menu-create-dialog]")).toBeNull();
-    const trigger = container.querySelector("[data-menu-create-open]") as HTMLButtonElement;
+    expect(document.querySelector("[data-menu-create-dialog]")).toBeNull();
+    const trigger = document.querySelector("[data-menu-create-open]") as HTMLButtonElement;
     expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
     await click(trigger);
-    expect(container.querySelectorAll("[data-menu-create-dialog]")).toHaveLength(1);
-    expect(container.querySelector('[name="key"]')).toBeTruthy();
-    expect(container.querySelector('[name="path"]')).toBeTruthy();
-    expect(container.querySelector('[name="parentId"]')).toBeTruthy();
-    await click(container.querySelector("[data-menu-create-cancel]") as HTMLButtonElement);
-    expect(container.querySelector("[data-menu-create-dialog]")).toBeNull();
+    expect(document.querySelectorAll("[data-menu-create-dialog]")).toHaveLength(1);
+    expect(document.querySelector('[name="key"]')).toBeTruthy();
+    expect(document.querySelector('[name="path"]')).toBeTruthy();
+    expect(document.querySelector('[name="parentId"]')).toBeTruthy();
+    await click(document.querySelector("[data-menu-create-cancel]") as HTMLButtonElement);
+    expect(document.querySelector("[data-menu-create-dialog]")).toBeNull();
   });
 
   it("opens the edit-menu overlay and writes the same payload on save", async () => {
     const { onUpdate } = await renderMenus(vi.fn().mockResolvedValue(true));
-    expect(container.querySelector("[data-menu-edit-dialog]")).toBeNull();
-    await click(container.querySelector("[data-menu-edit-open]") as HTMLButtonElement);
-    expect(container.querySelectorAll("[data-menu-edit-dialog]")).toHaveLength(1);
+    expect(document.querySelector("[data-menu-edit-dialog]")).toBeNull();
+    await click(document.querySelector("[data-menu-edit-open]") as HTMLButtonElement);
+    expect(document.querySelectorAll("[data-menu-edit-dialog]")).toHaveLength(1);
     await act(async () => setInput('[name="path"]', "/changed"));
     await click(buttonByText("Save menu"));
     expect(onUpdate).not.toHaveBeenCalled();
@@ -104,6 +104,6 @@ describe("spaces and menus overlays", () => {
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate.mock.calls[0][0]).toBe(menu);
     expect(onUpdate.mock.calls[0][1]).toMatchObject({ path: "/changed", expected: { path: "/private-menu", position: 1 } });
-    expect(container.querySelector("[data-menu-edit-dialog]")).toBeNull();
+    expect(document.querySelector("[data-menu-edit-dialog]")).toBeNull();
   });
 });

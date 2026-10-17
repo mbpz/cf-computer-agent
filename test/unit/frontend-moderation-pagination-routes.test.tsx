@@ -143,7 +143,7 @@ describe("moderation numbered routes", () => {
     const gets: string[] = []; const posts: string[] = []; const retry = deferred<Response>();
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === "POST") posts.push(String(input)); gets.push(String(input)); return gets.length === 1 ? new Response(null, { status: 500 }) : retry.promise; });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    const button = [...container.querySelectorAll("button")].find((item) => item.textContent === "Try again") as HTMLButtonElement;
+    const button = [...document.querySelectorAll("button")].find((item) => item.textContent === "Try again") as HTMLButtonElement;
     expect(button).toBeTruthy();
     await act(async () => { button.click(); button.click(); });
     expect(gets).toHaveLength(2); expect(gets[1]).toBe(gets[0]); expect(posts).toHaveLength(0);
@@ -203,9 +203,9 @@ describe("moderation numbered routes", () => {
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     const reject = container.querySelector('button[aria-label="Reject item-1-0"]') as HTMLButtonElement;
     await act(async () => { reject.click(); reject.click(); });
-    const confirm = [...container.querySelectorAll("button")].find((item) => item.textContent === "Confirm rejection")!;
+    const confirm = [...document.querySelectorAll("button")].find((item) => item.textContent === "Confirm rejection")!;
     await act(async () => { confirm.click(); confirm.click(); }); expect(posts).toBe(0);
-    const final = container.querySelector("[data-confirm-action]") as HTMLButtonElement;await act(async () => {final.click();final.click();});expect(posts).toBe(1);
+    const final = document.querySelector("[data-confirm-action]") as HTMLButtonElement;await act(async () => {final.click();final.click();});expect(posts).toBe(1);
     await act(async () => root.render(null));
     await act(async () => writeWorkspaceHistory("push", "/admin/submissions"));
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
@@ -247,7 +247,7 @@ describe("moderation numbered routes", () => {
     await clickButton("Reject"); await typeNote("Please verify the source"); await submitReview("Confirm rejection"); await flush();
     expect(gets).toBe(1); expect(bodies).toHaveLength(1); expect(JSON.parse(bodies[0]!).note).toBe("Please verify the source");
     expect((container.querySelector('button[aria-label="Publish Review"]') as HTMLButtonElement).disabled).toBe(true);
-    const again = [...container.querySelectorAll("button")].find((button) => button.textContent === "Retry same decision")!;
+    const again = [...document.querySelectorAll("button")].find((button) => button.textContent === "Retry same decision")!;
     await act(async () => { again.click(); again.click(); }); expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]);
     await act(async () => retry.resolve(rejected("review-1"))); await flush();
     expect(gets).toBe(2); expect(container.textContent).toContain("Submission rejected.");
@@ -446,7 +446,7 @@ describe("moderation numbered routes", () => {
     const retry = container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement;
     await act(async () => { retry.click(); retry.click(); });
     expect(posts).toBe(0);
-    const confirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    const confirm = document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await act(async () => {confirm.click();confirm.click();});
     expect(posts).toBe(1);
     await act(async () => mutation.resolve(json({}))); await flush();
@@ -544,7 +544,7 @@ describe("moderation numbered routes", () => {
     await renderAssets(); await retryAsset(); await flush();
     const retry = container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement;
     expect(retry.disabled).toBe(true); expect(gets).toBe(1); expect(posts).toBe(1);
-    const read = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+    const read = [...document.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
     await act(async () => { read.click(); read.click(); retry.click(); });
     expect(gets).toBe(2); expect(posts).toBe(1);
     await act(async () => recovery.resolve(numbered([assetRow()], 2, 21))); await flush();
@@ -580,7 +580,7 @@ describe("moderation numbered routes", () => {
     });
     await renderAssets(); await retryAsset();
     await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
-    const read = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+    const read = [...document.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
     await act(async () => { read.click(); read.click(); }); await flush(); expect(gets).toBe(3);
     await act(async () => recovery.resolve(numbered([assetRow("recovered")], 1, 1))); await flush();
     await act(async () => mutation.resolve(new Response(null, { status: 403 }))); await flush();
@@ -643,12 +643,12 @@ describe("moderation numbered routes", () => {
     let posts=0;
     vi.stubGlobal("fetch",async (input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});}return pageResponse(String(input),id=>({id,title:id,submitterId:"m1",status:"review_pending"}));});
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search}/>));await flush();await clickButton("Publish");
-    const old=container.querySelector("[data-confirm-action]") as HTMLButtonElement;expect(old).toBeTruthy();
+    const old=document.querySelector("[data-confirm-action]") as HTMLButtonElement;expect(old).toBeTruthy();
     await act(async () => writeWorkspaceHistory("push", "/admin/submissions")); await flush();
-    expect(browser.location.search).toBe("?page=2"); expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();
-    await act(async () => (container.querySelector("[data-cancel-action]") as HTMLButtonElement).click());
+    expect(browser.location.search).toBe("?page=2"); expect(document.querySelector('[role="alertdialog"]')).toBeTruthy();
+    await act(async () => (document.querySelector("[data-cancel-action]") as HTMLButtonElement).click());
     await act(async () => writeWorkspaceHistory("push", "/admin/submissions")); await flush();
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();await act(async () => old.click());expect(posts).toBe(0);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();await act(async () => old.click());expect(posts).toBe(0);
   });
 
   async function retryAsset() {await clickButton("Retry");await clickButton("Confirm retry");}
@@ -658,27 +658,27 @@ describe("moderation numbered routes", () => {
     vi.stubGlobal("fetch",async (_input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});} gets++;return numbered([assetRow()],2,21);});
     await renderAssets();await clickButton("Retry");expect(posts).toBe(0);
     await clickButton("Cancel");expect(posts).toBe(0);expect(gets).toBe(1);
-    expect(container.textContent).toContain("asset-1.pdf");expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(container.textContent).toContain("asset-1.pdf");expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
   it.each(["filter change","filter clear"])("discards asset retry confirmation on %s navigation", async kind => {
     let posts=0;
     vi.stubGlobal("fetch",async (input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});} return pageResponse(String(input),assetRow);});
-    await renderAssets();await clickButton("Retry");const old=container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await renderAssets();await clickButton("Retry");const old=document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await act(async () => {browser.history.pushState({},"",kind === "filter change" ? "/admin/assets?status=queued" : "/admin/assets");browser.dispatchEvent(new browser.PopStateEvent("popstate"));});await flush();
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();await act(async () => old.click());expect(posts).toBe(0);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();await act(async () => old.click());expect(posts).toBe(0);
   });
 
   it("clears a pending asset confirmation when an in-flight preview is denied",async () => {
     const preview=deferred<Response>();let posts=0;
     vi.stubGlobal("fetch",async (input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});}return String(input).endsWith("/preview") ? preview.promise : numbered([assetRow()],2,21);});
-    await renderAssets();await clickButton("Preview");await clickButton("Retry");const old=container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await renderAssets();await clickButton("Preview");await clickButton("Retry");const old=document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await act(async () => preview.resolve(new Response(null,{status:403})));await flush();
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();expect(container.textContent).not.toContain("asset-1.pdf");
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();expect(container.textContent).not.toContain("asset-1.pdf");
     await act(async () => old.click());expect(posts).toBe(0);
   });
 
-  async function clickButton(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes(label)) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); }
+  async function clickButton(label: string) { const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.includes(label)) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); }
   async function applyAssetFilter(value: string) {
     const trigger = container.querySelector('[aria-haspopup="listbox"]') as HTMLButtonElement;
     expect(trigger).toBeTruthy();

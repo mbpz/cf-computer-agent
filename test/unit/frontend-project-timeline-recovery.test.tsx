@@ -15,7 +15,7 @@ describe("parameterized project timeline through real App", () => {
   let requests: { url: URL; init?: RequestInit }[];
   let override: ((url: URL, init?: RequestInit) => Promise<Response> | Response | undefined) | undefined;
   const main = () => app!.container.querySelector("main")!;
-  const button = (text: string) => [...main().querySelectorAll("button")].find(node => node.textContent === text)!;
+  const button = (text: string) => [...document.querySelectorAll("button")].find(node => node.textContent === text)!;
   /** The timeline appends by scrolling its table container to the bottom. */
   async function loadMore() {
     const scroller = main().querySelector("div.overflow-auto") as HTMLElement;
@@ -55,8 +55,8 @@ describe("parameterized project timeline through real App", () => {
     override = (url) => url.pathname === "/api/projects/a/timeline" && url.searchParams.get("page") === "2" ? new Promise<Response>(done => { resolve = done; }) : undefined;
     await loadMore();
     await click(button("Back to projects"));
-    expect(main().querySelector('[role="alertdialog"]')).toBeTruthy();
-    await click(main().querySelector<HTMLButtonElement>('[data-confirm-action]')!);
+    expect(document.querySelector('[role="alertdialog"]')).toBeTruthy();
+    await click(document.querySelector<HTMLButtonElement>('[data-confirm-action]')!);
     const pending = requests.findLast(r => r.url.pathname === "/api/projects/a/timeline")!;
     await navigate("b"); await waitForApp(() => main().textContent!.includes("b first"));
     expect(title().value).toBe(""); expect(pending.init?.signal?.aborted).toBe(true);
@@ -274,7 +274,7 @@ describe("parameterized project timeline through real App", () => {
     await mount(); await fill("Keep this title");
     expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this title");
     await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"));
-    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    await click(document.querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     expect(app!.browser.sessionStorage.getItem(draftKey)).toBeNull();
     await act(async () => expect(writeWorkspaceHistory("push", "/projects/a/timeline")).toBe("committed"));
     await waitForApp(() => !!title() && !title().disabled);

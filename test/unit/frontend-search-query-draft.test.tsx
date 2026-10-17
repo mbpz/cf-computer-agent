@@ -26,11 +26,11 @@ describe("search query draft ownership", () => {
     await act(async () => root.render(<SearchRoute memberId="member-a" locale={createLocaleRuntime({ navigatorLanguage: "en" })} search={browser.location.search} />));
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
   }
-  function input() { return container.querySelector('[data-saved-view-controls] input') as HTMLInputElement; }
+  function input() { return document.querySelector('[data-saved-view-controls] input') as HTMLInputElement; }
   function edit(value: string) { props<{ onChange: (event: unknown) => void }>(input()).onChange({ currentTarget: { value } }); }
-  function submit() { container.querySelector('[data-saved-view-controls] form')!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); }
-  async function click(selector: string) { const button = container.querySelector(selector) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => { button.click(); await new Promise(resolve => setTimeout(resolve, 20)); }); }
-  function queryInput() { return container.querySelector("#knowledge-search") as HTMLInputElement; }
+  function submit() { document.querySelector('[data-saved-view-controls] form')!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); }
+  async function click(selector: string) { const button = document.querySelector(selector) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => { button.click(); await new Promise(resolve => setTimeout(resolve, 20)); }); }
+  function queryInput() { return document.querySelector("#knowledge-search") as HTMLInputElement; }
   function editQuery(value: string) { props<{ onChange: (event: unknown) => void }>(queryInput()).onChange({ currentTarget: { value } }); }
   function searchSubmit() { queryInput().closest("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); }
   function unloadWarns() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
@@ -87,7 +87,7 @@ describe("search query draft ownership", () => {
   it("submits the latest same-event draft and accepts its normalized value as the new baseline", async () => {
     await mount(); await act(async () => { editQuery("  latest  "); searchSubmit(); });
     expect(new URLSearchParams(browser.location.search).get("q")).toBe("latest"); expect(queryInput().value).toBe("latest");
-    expect(container.querySelector("[data-confirm-action]")).toBeNull(); expect(unloadWarns()).toBe(false);
+    expect(document.querySelector("[data-confirm-action]")).toBeNull(); expect(unloadWarns()).toBe(false);
   });
   it("retains the draft and releases the application reservation after another guard rejects submission", async () => {
     await mount(); const remove = registerWorkspaceLeaveGuard(() => ({ kind: "block" }));
@@ -108,7 +108,7 @@ describe("search query draft ownership", () => {
     await mount(async (_url, init) => { if (init?.method === "POST") writes++; return Response.json({ items: [view()] }); });
     const savedSubmit = props<{ onSubmit: (event: unknown) => void }>(input().closest("form")!).onSubmit;
     const nameEdit = props<{ onChange: (event: unknown) => void }>(input()).onChange;
-    const deleteClick = props<{ onClick: () => void }>(container.querySelector('button[aria-label="Delete saved view: Docs"]') as HTMLElement).onClick;
+    const deleteClick = props<{ onClick: () => void }>(document.querySelector('button[aria-label="Delete saved view: Docs"]') as HTMLElement).onClick;
     await act(async () => editQuery("unsent"));
     await act(async () => writeWorkspaceHistory("push", "/knowledge"));
     await act(async () => { nameEdit({ currentTarget: { value: "blocked name" } }); savedSubmit({ preventDefault() {} }); deleteClick(); editQuery("late"); searchSubmit(); });
@@ -179,14 +179,14 @@ describe("search query draft ownership", () => {
     expect(input().value).toBe("");
     expect(unloadWarns()).toBe(false);
   });
-  function filterInput(selector: string) { return container.querySelector(selector) as HTMLInputElement; }
+  function filterInput(selector: string) { return document.querySelector(selector) as HTMLInputElement; }
   function editFilter(selector: string, value: string) { props<{ onChange: (event: unknown) => void }>(filterInput(selector)).onChange({ currentTarget: { value } }); }
-  async function submitFilters() { await act(async () => { container.querySelector("[data-search-filters]")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); await new Promise(resolve => setTimeout(resolve, 20)); }); }
+  async function submitFilters() { await act(async () => { document.querySelector("[data-search-filters]")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); await new Promise(resolve => setTimeout(resolve, 20)); }); }
   async function chooseKind(optionLabel: string) {
-    const trigger = [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === "Type");
+    const trigger = [...document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === "Type");
     expect(trigger).toBeTruthy();
     await act(async () => trigger!.click());
-    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === optionLabel);
+    const option = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent === optionLabel);
     expect(option, optionLabel).toBeTruthy();
     await act(async () => option!.click());
   }
@@ -197,11 +197,11 @@ describe("search query draft ownership", () => {
    * turns them into canonical UTC timestamps.
    */
   async function pickPublishedRange() {
-    const trigger = container.querySelector<HTMLButtonElement>("[data-search-filter-published-from]")!;
+    const trigger = document.querySelector<HTMLButtonElement>("[data-search-filter-published-from]")!;
     expect(trigger).toBeTruthy();
     const settle = async () => { const { promise, resolve } = Promise.withResolvers<void>(); setTimeout(resolve, 20); await promise; };
     await act(async () => { trigger.click(); await settle(); });
-    const days = [...container.querySelectorAll<HTMLButtonElement>('[role="grid"] button:not([disabled])')];
+    const days = [...document.querySelectorAll<HTMLButtonElement>('[role="grid"] button:not([disabled])')];
     expect(days.length).toBeGreaterThan(1);
     await act(async () => { days[0].click(); await settle(); });
     await act(async () => { days[1].click(); await settle(); });
@@ -239,7 +239,7 @@ describe("search query draft ownership", () => {
     expect(location.get("publishedTo")).toBe(picked.to);
     expect(location.get("q")).toBe("docs");
     // The applied conditions are rendered back as removable text.
-    expect(container.querySelector("[data-applied-filters]")?.textContent).toContain("Author: member-b");
+    expect(document.querySelector("[data-applied-filters]")?.textContent).toContain("Author: member-b");
     const sent = searchCalls.at(-1)!;
     expect(appliedDate(sent, "kind")).toBe("markdown");
     expect(appliedDate(sent, "authorId")).toBe("member-b");
@@ -252,7 +252,7 @@ describe("search query draft ownership", () => {
     root = createRoot(container);
     await mount(savedViewHandler, searchHandler);
     expect(filterInput("[data-search-filter-author]").value).toBe("member-b");
-    expect(container.querySelector("[data-search-filter-published-from]")?.textContent).toContain(picked.fromDay);
+    expect(document.querySelector("[data-search-filter-published-from]")?.textContent).toContain(picked.fromDay);
     expect(appliedDate(searchCalls.at(-1)!, "kind")).toBe("markdown");
     expect(searchCalls.length).toBeGreaterThan(callsBeforeRefresh);
 
@@ -280,8 +280,8 @@ describe("search query draft ownership", () => {
     await act(async () => editFilter("[data-search-filter-author]", "member-c"));
     await submitFilters();
     expect(container.textContent).not.toContain("Previous condition row");
-    expect(container.querySelector("[data-page-state='loading']")).toBeNull();
-    expect(container.querySelector("[data-applied-filters]")?.textContent).toContain("Author: member-c");
+    expect(document.querySelector("[data-page-state='loading']")).toBeNull();
+    expect(document.querySelector("[data-applied-filters]")?.textContent).toContain("Author: member-c");
   });
 
   it("does not keep a submitted query as an unsent draft", async () => {

@@ -107,7 +107,7 @@ function FileView({ manager, importer, assetImporter, locale = 'en', onDownload,
       <Button data-file-save-as disabled={state.busy || !saveName.trim()} onClick={() => { void manager.saveAs(saveName); setSaveName(''); }}>{t('Save as new file', '另存为新文件')}</Button>
     </div>}
     {!!state.results.length && <ul aria-label={t('Upload results', '上传结果')}>{state.results.map((result, index) => <li key={index}>{result.name} — {result.status} {result.error}</li>)}</ul>}
-    <Dialog open={modal?.epoch === state.epoch} onOpenChange={open => { if (!open) { setModal(null); setName(''); } }}><DialogContent aria-labelledby={titleId}>
+    <Dialog open={modal?.epoch === state.epoch} onOpenChange={open => { if (!open) { setModal(null); setName(''); } }}><DialogContent aria-labelledby={titleId} dismissLabel={t('Dismiss', '忽略')}>
       <DialogTitle id={titleId}>{modal?.action === 'remove' ? t('Confirm removal', '确认删除') : modal?.action === 'rename' ? t('Rename', '重命名') : t('New folder', '新建文件夹')}</DialogTitle>
       {modal?.action === 'remove' ? <p>{t('Remove this file or empty directory?', '删除此文件或空目录？')} {modal.name}</p> : <label>{t('Name', '名称')}<Input autoFocus value={name} onChange={event => setName(event.target.value)} /></label>}
       <div className="flex gap-2"><Button data-file-confirm disabled={state.busy || (modal?.action !== 'remove' && !name.trim())} onClick={confirm}>{t('Confirm', '确认')}</Button><Button onClick={() => { setModal(null); setName(''); }}>{t('Cancel', '取消')}</Button></div>

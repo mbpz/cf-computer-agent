@@ -21,7 +21,9 @@ describe("Workbench review page", () => {
       expect((html.match(/<h1/g) ?? []).length, JSON.stringify(state)).toBe(1);
       expect(html).toContain(`>${title}</h1>`);
       expect(html).toContain(frontendText(locale, "REVIEW_DAILY"));
-      expect(html).toContain(`aria-pressed="true"`);
+      // The period is one named choice: the selected radio, not a pressed toggle.
+      expect(html).toContain('role="radiogroup"');
+      expect(html).toMatch(/<button(?=[^>]*role="radio")(?=[^>]*aria-checked="true")/u);
       expect(html).not.toContain("<select");
     }
   });

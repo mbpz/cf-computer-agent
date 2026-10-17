@@ -1,5 +1,27 @@
 "use client";
 // beui.dev/components/motion/popover
+//
+// Localized fork — payload `@beui/popover` (registry
+// `components/motion/popover.tsx`, 709 lines at fork time), installed for the
+// shell's two click-anchored menus (language, account). Only the §17 patch
+// classes are applied; the goo morph, portal and dismiss model below are the
+// payload's.
+//
+// 1. 属性透传 (attribute passthrough): `Popover` and `PopoverContent` accept
+//    rest props, so `data-menu-id` / `data-account-menu` ride on the menu panel
+//    itself, and `PopoverContent` gains `role` (default "dialog" | "menu") —
+//    the shell renders `role="menu"` with `role="menuitem"` rows
+//    (`frontend/components/shell/app-shell.tsx` account/language menus;
+//    `test/unit/workspace-shell.test.tsx:415-470`,
+//    `test/unit/frontend-menu-keyboard.test.tsx:220-260`).
+// 2. 属性透传 (attribute passthrough): `PopoverTrigger` gains
+//    `aria-haspopup` (default "dialog" | "menu") instead of the hardcoded
+//    `"dialog"`, so a menu trigger announces `aria-haspopup="menu"` while the
+//    payload's `aria-expanded`/`aria-controls`/`data-state` stay untouched
+//    (`frontend-a11y.test.tsx:47-54` semantics, now on the shell menus).
+//
+// The portal positioning, clip-path morph, outside/escape dismissal and focus
+// return are unchanged.
 
 import {
   animate,
@@ -12,6 +34,7 @@ import {
   cloneElement,
   createContext,
   isValidElement,
+  type HTMLAttributes,
   type ReactElement,
   type ReactNode,
   type Ref,
@@ -232,7 +255,8 @@ function usePopoverContext(component: string) {
   return ctx;
 }
 
-export interface PopoverProps {
+export interface PopoverProps
+  extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
   children: ReactNode;
   /** Controlled open state. */
   open?: boolean;
@@ -266,6 +290,7 @@ export function Popover({
   panelRadius = 16,
   gooStrength = 8,
   className,
+  ...props
 }: PopoverProps) {
   const reduce = useReducedMotion() ?? false;
   const gooId = useId().replace(/:/g, "");
@@ -393,6 +418,7 @@ export function Popover({
   return (
     <PopoverContext.Provider value={ctx}>
       <div
+        {...props}
         ref={rootRef}
         className={cn("relative inline-flex isolate", className)}
         {...hoverHandlers}
@@ -416,9 +442,14 @@ function mergeRefs<T>(...refs: Array<Ref<T> | undefined>) {
 export interface PopoverTriggerProps {
   /** A single focusable element (e.g. a Button) that opens the popover. */
   children: ReactElement;
+  /** `aria-haspopup` for the cloned trigger. Default "dialog"; menus pass "menu". */
+  ariaHaspopup?: "dialog" | "menu";
 }
 
-export function PopoverTrigger({ children }: PopoverTriggerProps) {
+export function PopoverTrigger({
+  children,
+  ariaHaspopup = "dialog",
+}: PopoverTriggerProps) {
   const ctx = usePopoverContext("PopoverTrigger");
   // What the last gesture on the trigger was, and whether the panel was
   // already open when it started. A click reports neither.
@@ -486,7 +517,7 @@ export function PopoverTrigger({ children }: PopoverTriggerProps) {
     }),
     // Above the goo layer (z-[-1]) so the neck reads behind it.
     className: cn("relative z-0", childProps.className as string | undefined),
-    "aria-haspopup": "dialog",
+    "aria-haspopup": ariaHaspopup,
     "aria-expanded": ctx.open,
     "aria-controls": ctx.open ? ctx.contentId : undefined,
     "data-state": ctx.open ? "open" : "closed",
@@ -499,12 +530,20 @@ const ALIGN_ORIGIN: Record<Align, string> = {
   end: "right",
 };
 
-export interface PopoverContentProps {
+export interface PopoverContentProps
+  extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "role"> {
   children: ReactNode;
   className?: string;
+  /** Panel role. Default "dialog"; menus pass "menu". */
+  role?: "dialog" | "menu";
 }
 
-export function PopoverContent({ children, className }: PopoverContentProps) {
+export function PopoverContent({
+  children,
+  className,
+  role = "dialog",
+  ...props
+}: PopoverContentProps) {
   const ctx = usePopoverContext("PopoverContent");
   const [portalReady, setPortalReady] = useState(false);
   const {
@@ -684,9 +723,10 @@ export function PopoverContent({ children, className }: PopoverContentProps) {
           }}
         >
           <div
+            {...props}
             ref={measureRef}
             id={contentId}
-            role="dialog"
+            role={role}
             {...hoverHandlers}
             style={{
               position: "absolute",

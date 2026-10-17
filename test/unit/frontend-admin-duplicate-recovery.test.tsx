@@ -30,7 +30,7 @@ describe("duplicate decision recovery", () => {
     await act(async () => root.render(<AdminDuplicateRoute locale={locale()} memberId="member-a" search={browser.location.search} />)); await flush();
   }
   function action(label = "Associate", id = "dup-1") { return container.querySelector(`button[aria-label="${label} ${id}"]`) as HTMLButtonElement; }
-  async function click(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); await flush(); }
+  async function click(label: string) { const button = [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); await flush(); }
   async function go(page: number) { await act(async () => { writeWorkspaceHistory("push", `/admin/duplicates?page=${page}`); }); await flush(); }
 
   function unloadBlocked() { const event = new browser.Event("beforeunload", {cancelable: true}); browser.dispatchEvent(event); return event.defaultPrevented; }
@@ -42,7 +42,7 @@ describe("duplicate decision recovery", () => {
       gets++; return numbered([duplicate()]);
     });
     await render(); await act(async () => action().click());
-    await act(async () => { (container.querySelector("[data-confirm-action]") as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
+    await act(async () => { (document.querySelector("[data-confirm-action]") as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
     expect(browser.location.pathname).toBe("/admin/duplicates"); expect(unloadBlocked()).toBe(true);
     await go(2); expect(browser.location.search).toBe("?page=1"); expect(gets).toBe(1);
     post.resolve(new Response(null, {status: 500})); await flush(); await leave();
@@ -85,7 +85,7 @@ describe("duplicate decision recovery", () => {
     await render();
     expect(container.querySelector('[data-page-state="error"]')).toBeTruthy();
     expect(container.textContent).toContain("Duplicate candidates");
-    const retry = [...container.querySelectorAll("button")].find(button => button.textContent === "Try again") as HTMLButtonElement;
+    const retry = [...document.querySelectorAll("button")].find(button => button.textContent === "Try again") as HTMLButtonElement;
     expect(retry).toBeTruthy();
     await act(async () => { retry.click(); retry.click(); }); await flush();
     expect(gets).toBe(2); expect(posts).toBe(0);
@@ -113,10 +113,10 @@ describe("duplicate decision recovery", () => {
       return numbered([duplicate()], page, page === 1 ? 1 : 21);
     });
     await render(); await act(async () => action().click());
-    const old = container.querySelector("[data-confirm-action]") as HTMLButtonElement;
+    const old = document.querySelector("[data-confirm-action]") as HTMLButtonElement;
     expect(old).toBeTruthy(); await go(2); expect(browser.location.search).toBe("?page=1");
     await click("Cancel"); await go(2); await act(async () => old.click());
-    expect(posts).toBe(0); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(posts).toBe(0); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
   it("synchronously admits only one decision across three buttons and rows", async () => {
@@ -128,7 +128,7 @@ describe("duplicate decision recovery", () => {
     await render();
     await act(async () => { action().click(); action("Reject").click(); action("Associate", "dup-2").click(); });
     expect(writes).toEqual([]);
-    const confirm = container.querySelector("[data-confirm-action]") as HTMLButtonElement;
+    const confirm = document.querySelector("[data-confirm-action]") as HTMLButtonElement;
     await act(async () => {confirm.click();confirm.click();});
     expect(writes).toEqual(['{"decision":"associate"}']);
     expect(action("Associate", "dup-2").disabled).toBe(true);
@@ -239,7 +239,7 @@ describe("duplicate decision recovery", () => {
       return ++gets === 1 ? numbered([duplicate()]) : recovery.promise;
     });
     await render(); await act(async () => action().click()); await click("Confirm decision"); await flush();
-    const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again") as HTMLButtonElement;
+    const retry = [...document.querySelectorAll("button")].find((button) => button.textContent === "Try again") as HTMLButtonElement;
     await act(async () => { retry.click(); retry.click(); });
     expect(gets).toBe(2); expect(posts).toBe(1); expect(action().disabled).toBe(true);
     recovery.resolve(numbered([duplicate()])); await flush(); expect(action().disabled).toBe(false);

@@ -29,7 +29,7 @@ describe("member access confirmation", () => {
     await act(async () => root.render(<MembersPage locale={locale} members={initial} {...props} />));
   }
   async function click(selector: string) {
-    const button = container.querySelector(selector) as HTMLButtonElement;
+    const button = document.querySelector(selector) as HTMLButtonElement;
     expect(button, selector).not.toBeNull(); await act(async () => button.click()); return button;
   }
   it.each(["cancel", "confirm"])("blocks shared navigation and unload until the member action is %s", async (outcome) => {
@@ -37,7 +37,7 @@ describe("member access confirmation", () => {
     await click('button[aria-label]');
     await act(async () => writeWorkspaceHistory("push", "/home"));
     expect(browser.location.pathname).toBe("/admin/members");
-    expect(container.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
     const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload);
     expect(unload.defaultPrevented).toBe(true);
     await click(outcome === "cancel" ? '[data-cancel-action]' : '[data-confirm-action]');
@@ -49,53 +49,53 @@ describe("member access confirmation", () => {
   });
   it("guards same-batch action admission and cleans up the guard on unmount", async () => {
     const update = vi.fn(); await mount({ onStatusChange: update });
-    await act(async () => { (container.querySelector('button[aria-label]') as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
+    await act(async () => { (document.querySelector('button[aria-label]') as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
     expect(browser.location.pathname).toBe("/admin/members");
-    const oldConfirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    const oldConfirm = document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await act(async () => root.render(<div>Signed out</div>));
     await act(async () => oldConfirm.click()); expect(update).not.toHaveBeenCalled();
     await act(async () => writeWorkspaceHistory("push", "/home")); expect(browser.location.pathname).toBe("/home");
   });
   it.each(["active", "disabled"])("requires explicit confirmation for %s member access", async (status) => {
     const update = vi.fn(); await mount({ members: [{ ...initial[0]!, status }], onStatusChange: update });
-    const trigger = container.querySelector('button[aria-label]') as HTMLButtonElement; trigger.focus();
+    const trigger = document.querySelector('button[aria-label]') as HTMLButtonElement; trigger.focus();
     await act(async () => trigger.click());
     expect(update).not.toHaveBeenCalled();
-    const dialog = container.querySelector('[role="alertdialog"]'); expect(dialog).not.toBeNull();
+    const dialog = document.querySelector('[role="alertdialog"]'); expect(dialog).not.toBeNull();
     expect(dialog?.textContent).toContain("target@example.test");
     expect(dialog?.textContent).toContain(status === "active" ? "prevent" : "allow");
     expect(browser.document.activeElement?.textContent).toBe("Cancel");
-    expect(container.querySelector('section')?.hasAttribute('inert')).toBe(true);
+    expect(document.querySelector('section')?.hasAttribute('inert')).toBe(true);
     const confirm = dialog!.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await act(async () => { confirm.click(); confirm.click(); });
     expect(update).toHaveBeenCalledTimes(1); expect(update).toHaveBeenCalledWith("m1", status === "active" ? "disabled" : "active");
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
   it.each(["cancel", "escape"])("%s makes no write and restores trigger focus", async (action) => {
     const update = vi.fn(); await mount({ onStatusChange: update });
-    const trigger = container.querySelector('button[aria-label]') as HTMLButtonElement; trigger.focus();
+    const trigger = document.querySelector('button[aria-label]') as HTMLButtonElement; trigger.focus();
     await act(async () => trigger.click());
-    const dialog = container.querySelector('[role="alertdialog"]')!; expect(dialog).not.toBeNull();
+    const dialog = document.querySelector('[role="alertdialog"]')!; expect(dialog).not.toBeNull();
     if (action === "cancel") await click('[data-cancel-action]');
     else await act(async () => dialog.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as Event));
-    expect(update).not.toHaveBeenCalled(); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(update).not.toHaveBeenCalled(); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(browser.document.activeElement).toBe(trigger);
   });
   it.each(["replacement", "pending", "row pending", "forbidden", "loading", "filter"])("invalidates a confirmation after %s changes", async (change) => {
     const update = vi.fn(); await mount({ onStatusChange: update }); await click('button[aria-label]');
-    const oldConfirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement; expect(oldConfirm).not.toBeNull();
+    const oldConfirm = document.querySelector('[data-confirm-action]') as HTMLButtonElement; expect(oldConfirm).not.toBeNull();
     const props = change === "replacement" ? { members: initial.map(item => ({ ...item })) }
       : change === "pending" ? { pending: true } : change === "row pending" ? { pendingIds: ["m1"] }
       : change === "forbidden" ? { forbidden: true, error: "Denied" } : change === "loading" ? { loading: true }
       : { status: "active" as const };
     await mount({ onStatusChange: update, ...props });
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     await act(async () => oldConfirm.click()); expect(update).not.toHaveBeenCalled();
-    await mount({ onStatusChange: update }); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    await mount({ onStatusChange: update }); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("keeps Tab inside the confirmation and renders Chinese impact text", async () => {
     await mount({ locale: createLocaleRuntime({ navigatorLanguage: "zh-CN" }), onStatusChange: vi.fn() });
-    await click('button[aria-label]'); const dialog = container.querySelector('[role="alertdialog"]')!; expect(dialog).not.toBeNull();
+    await click('button[aria-label]'); const dialog = document.querySelector('[role="alertdialog"]')!; expect(dialog).not.toBeNull();
     expect(dialog.textContent).toContain("取消"); expect(dialog.textContent).toContain("访问");
     const key = async (shiftKey: boolean) => act(async () => dialog.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true }) as unknown as Event));
     await key(true); expect(browser.document.activeElement?.hasAttribute('data-confirm-action')).toBe(true);
@@ -103,6 +103,6 @@ describe("member access confirmation", () => {
   });
   it("does not offer changes for administrators or unavailable status", async () => {
     await mount({ members: [{ ...initial[0]!, role: "admin" }, { ...initial[0]!, id: "m2", status: undefined }], onStatusChange: vi.fn() });
-    expect(container.querySelector('button[aria-label]')).toBeNull();
+    expect(document.querySelector('button[aria-label]')).toBeNull();
   });
 });

@@ -26,7 +26,7 @@ describe("member status refresh recovery", () => {
     await flush();
   }
   function enable() { return container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement | null; }
-  async function click(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); await flush(); }
+  async function click(label: string) { const button = [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); await flush(); }
   async function confirm() { const button = enable(); expect(button).toBeTruthy(); await act(async () => button!.click()); await flush(); await click("Confirm enable"); }
   function unloadBlocked() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
   async function leave() { await act(async () => writeWorkspaceHistory("push", "/home")); await flush(); }

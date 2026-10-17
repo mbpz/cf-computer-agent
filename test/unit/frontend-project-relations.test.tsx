@@ -58,7 +58,7 @@ describe("project relation editing and readback", () => {
     await waitForApp(() => editor()?.textContent?.includes("Goal 0") === true);
   }
   const card = (id: string) => [...main().querySelectorAll("tr")].find(tr => tr.querySelector(`[data-project-id="${id}"]`))!;
-  async function confirm() { const n = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(n).toBeTruthy(); await act(async () => n!.click()); }
+  async function confirm() { const n = document.querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(n).toBeTruthy(); await act(async () => n!.click()); }
   /** The editor appends by scrolling its table container to the bottom. */
   async function next() {
     const scroller = editor().querySelector("div.overflow-auto") as HTMLElement;

@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
+import { ReviewPeriodControl } from "../components/review-period-control";
 
 export type ReviewTarget = {kind: "task" | "inbox" | "project"; id: string};
 export type WorkbenchReviewPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; snapshot: WorkbenchReviewSnapshot };
@@ -18,8 +19,15 @@ export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onR
       description={`${frontendText(locale, "REVIEW_DESCRIPTION")}${s ? ` · ${s.periodKey}` : ""}`}
       actions={<>
         {s && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "REVIEW_REFRESH")}</Button>}
-        <Button aria-pressed={period === "daily"} variant={period === "daily" ? "default" : "outline"} onClick={() => onPeriodChange?.("daily")}>{frontendText(locale, "REVIEW_DAILY")}</Button>
-        <Button aria-pressed={period === "weekly"} variant={period === "weekly" ? "default" : "outline"} onClick={() => onPeriodChange?.("weekly")}>{frontendText(locale, "REVIEW_WEEKLY")}</Button>
+        {/* One named period at a time: a beUI radio group, not two toggle buttons. */}
+        <ReviewPeriodControl
+          ariaLabel={frontendText(locale, "KNOWLEDGE_REVIEW_PERIOD")}
+          dailyLabel={frontendText(locale, "REVIEW_DAILY")}
+          weeklyLabel={frontendText(locale, "REVIEW_WEEKLY")}
+          value={period}
+          onChange={(next) => onPeriodChange?.(next)}
+          disabled={periodBlocked}
+        />
       </>}
     />
     {periodBlocked && <div data-review-period-blocked role="alert" className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "REVIEW_PERIOD_RECORD_BLOCKED")}</p><Button variant="outline" onClick={onDiscardPeriod}>{frontendText(locale, "REVIEW_PERIOD_RECORD_DISCARD")}</Button></div>}

@@ -43,7 +43,7 @@ export function CalendarPage({ locale, state, pending = false, actionError, onRe
   const changePage = (page: number) => { if (controlsPending || confirmation.isOpen()) return; onPageChange?.(page); };
   const changePageSize = (pageSize: SupportedPageSize) => { if (controlsPending || confirmation.isOpen()) return; onPageSizeChange?.(pageSize); };
   return <>{confirmation.dialog}<Dialog open={createOpen} onOpenChange={next => { if (!next) setCreateOpen(false); }}>
-    <DialogContent role="dialog" data-calendar-create-dialog aria-labelledby={createTitleId} aria-describedby={createDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
+    <DialogContent role="dialog" data-calendar-create-dialog dismissLabel={frontendText(locale, "COMMON_DISMISS")} aria-labelledby={createTitleId} aria-describedby={createDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
       <DialogTitle id={createTitleId}>{frontendText(locale, "CALENDAR_CREATE_TITLE")}</DialogTitle>
       <p id={createDescriptionId} className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "CALENDAR_DESCRIPTION")}</p>
       <div className="mt-4"><CalendarCreateForm locale={locale} createMemberId={createMemberId} pending={(createPending ?? pending) || confirmation.open} isSubmitBlocked={confirmation.isOpen} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={locked => { setCreateComposerLocked(locked); onCreateLock?.(locked); }} onCreated={() => setCreateOpen(false)} /></div>

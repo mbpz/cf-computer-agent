@@ -128,7 +128,10 @@ test("real repository includes exact-result controls and both secondary confirma
   assert.equal(result.routes.length,39);
   assert.ok(result.routes.every(route=>route.candidateOperationIds.length > 0));
   assert.ok(result.routes.some(route=>route.pathname === "/environments"));
-  assert.ok(result.operations.some(op => op.path === "frontend/components/shell/command-palette.tsx" && op.kind === "listener"));
+  // The ⌘/Ctrl-K shortcut listener moved into the vendored beUI palette when the
+  // shell adopted it (the shell now passes the shortcut prop); the contract is that
+  // the palette implementation binds a key listener, wherever it lives.
+  assert.ok(result.operations.some(op => (op.path === "frontend/components/shell/command-palette.tsx" || op.path === "frontend/components/motion/command-palette.tsx") && op.kind === "listener"));
   const json = readFileSync(resolve(import.meta.dirname,"../docs/product/frontend-operation-inventory.json"),"utf8");
   assert.deepEqual(JSON.parse(json),result,"operation inventory is stale; regenerate deliberately");
   assert.equal(readFileSync(resolve(import.meta.dirname,"../docs/product/frontend-operation-inventory.md"),"utf8"),renderOperationInventory(result));

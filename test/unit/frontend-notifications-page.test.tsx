@@ -208,7 +208,7 @@ describe("notification inbox paging surface", () => {
     await act(async () => root.render(<NotificationsPage {...props} state={readyState(1, 12)} onPageChange={onPageChange} onPageSizeChange={vi.fn()} onLoadMore={onLoadMore} />));
     expect(container.querySelector("[data-pagination-desktop]")).toBeNull();
     expect(container.querySelector("[data-pagination-mobile]")).toBeNull();
-    const scroller = container.querySelector("table")!.parentElement as HTMLElement;
+    const scroller = container.querySelector("[data-notification-feed]") as HTMLElement;
     await act(async () => scroller.dispatchEvent(new browser.Event("scroll") as unknown as Event));
     expect(onLoadMore).toHaveBeenCalledTimes(1);
     expect(onPageChange).not.toHaveBeenCalled();

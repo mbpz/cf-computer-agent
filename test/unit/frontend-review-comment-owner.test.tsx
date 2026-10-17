@@ -22,7 +22,7 @@ describe("review comment draft and write ownership", () => {
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   async function render(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} locale={locale} requester={requester} />)); await flush(); }
   async function renderMember(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} memberId="member-a" locale={locale} requester={requester} />)); await flush(); }
-  function button(label: string) { const found = [...container.querySelectorAll("button")].find(node => node.textContent === label); if (!found) throw new Error(`Missing ${label}: ${container.textContent}`); return found; }
+  function button(label: string) { const found = [...document.querySelectorAll("button")].find(node => node.textContent === label); if (!found) throw new Error(`Missing ${label}: ${container.textContent}`); return found; }
   function text() { return container.querySelector("textarea")!; }
   async function type(value: string) { await act(async () => { const input = text(); if (!input) throw new Error(container.innerHTML); Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new browser.Event("input", { bubbles: true }) as unknown as Event); }); }
   function unload() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
@@ -63,7 +63,7 @@ describe("review comment draft and write ownership", () => {
     const request = server(async () => { posts++; if (outcome === "transport") throw new TypeError("Failed to fetch"); if (outcome === "malformed") return json({}); if (["500", "401", "403", "generic400"].includes(outcome)) return new Response(null, { status: outcome === "generic400" ? 400 : Number(outcome) }); return receipt(outcome === "wrong-target" ? "sub-2" : "sub-1", outcome === "wrong-body" ? "someone else" : "A note", outcome === "edit-receipt" ? "old-comment" : undefined); });
     await render(request); await type("A note"); await act(async () => button("Add comment").click()); await flush();
     expect(text().value).toBe("A note"); expect(button("Add comment").disabled).toBe(true); expect(unload()).toBe(true);
-    await leave(); expect(browser.location.pathname).toBe("/admin/submissions/sub-1"); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    await leave(); expect(browser.location.pathname).toBe("/admin/submissions/sub-1"); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     await act(async () => button("Reload current state").click()); await flush();
     expect(posts).toBe(1); expect(unload()).toBe(true); expect(button("Add comment").disabled).toBe(true);
   });

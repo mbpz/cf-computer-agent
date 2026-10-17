@@ -16,9 +16,9 @@ describe("Focus start dialog", () => {
   let calls: {path: string; method: string; body?: unknown; signal?: AbortSignal | null}[] = [];
   let current: Record<string, unknown> | null = null;
   const main = () => app!.container.querySelector("main")!;
-  const button = (text: string) => [...main().querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === text);
+  const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === text);
   const trigger = () => main().querySelector<HTMLButtonElement>("[data-focus-start-open]")!;
-  const dialog = () => main().querySelector<HTMLElement>("[data-focus-start-dialog]");
+  const dialog = () => document.querySelector<HTMLElement>("[data-focus-start-dialog]");
   const click = async (node: HTMLElement) => act(async () => node.click());
   const openComposer = async () => { await act(async () => trigger().click()); await waitForApp(() => !!dialog() && !!button("Owned task 1")); return dialog()!; };
   /** The title field keeps the native event-style input, so tests drive it through React's own props. */

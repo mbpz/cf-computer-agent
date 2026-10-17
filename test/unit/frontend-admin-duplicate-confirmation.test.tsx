@@ -29,15 +29,15 @@ describe("duplicate decision confirmation", () => {
   });
   afterEach(async () => {await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals();});
   async function mount(props: Partial<React.ComponentProps<typeof DuplicateQueuePage>> = {}) {await act(async () => root.render(<DuplicateQueuePage state={{kind:"ready",data}} locale={locale} onDecision={onDecision} {...props}/>));}
-  function button(label:string) {const el = [...container.querySelectorAll("button")].find(el => el.textContent === label); expect(el,label).toBeTruthy(); return el as HTMLButtonElement;}
+  function button(label:string) {const el = [...document.querySelectorAll("button")].find(el => el.textContent === label); expect(el,label).toBeTruthy(); return el as HTMLButtonElement;}
   async function click(label:string) {await act(async () => button(label).click());}
-  const dialog = () => container.querySelector('[role="alertdialog"]');
+  const dialog = () => document.querySelector('[role="alertdialog"]');
   it.each(["Cancel", "Confirm decision"])("blocks same-batch leave and unload until %s", async outcome => {
     await mount();
     await act(async () => { button("Associate").click(); writeWorkspaceHistory("push", "/home"); });
     expect(browser.location.pathname).toBe("/admin/duplicates");
     const unload = new browser.Event("beforeunload", {cancelable: true}); browser.dispatchEvent(unload);
-    expect(unload.defaultPrevented).toBe(true); expect(container.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
+    expect(unload.defaultPrevented).toBe(true); expect(document.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
     await click(outcome);
     expect(onDecision).toHaveBeenCalledTimes(outcome === "Cancel" ? 0 : 1);
     const clean = new browser.Event("beforeunload", {cancelable: true}); browser.dispatchEvent(clean);

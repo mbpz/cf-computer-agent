@@ -78,7 +78,7 @@ describe("admin asset hygiene panel", () => {
   }
 
   function button(label: string): HTMLButtonElement {
-    const element = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+    const element = [...document.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
     expect(element, label).toBeTruthy();
     return element as HTMLButtonElement;
   }
@@ -89,7 +89,7 @@ describe("admin asset hygiene panel", () => {
   }
 
   async function typeInto(selector: string, value: string) {
-    const element = container.querySelector(selector) as HTMLInputElement;
+    const element = document.querySelector(selector) as HTMLInputElement;
     expect(element, selector).toBeTruthy();
     await act(async () => {
       Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(element, value);
@@ -98,10 +98,12 @@ describe("admin asset hygiene panel", () => {
     await flush();
   }
 
-  const dialog = () => container.querySelector('[role="alertdialog"]');
+  const dialog = () => document.querySelector('[role="alertdialog"]');
 
   function dialogButton(label: string): HTMLButtonElement {
-    const element = [...(dialog()?.querySelectorAll("button") ?? [])].find((candidate) => candidate.textContent === label);
+    // The confirm control is the slide thumb, which carries only an icon; its
+    // accessible name (the caller's confirm label) is the addressable surface.
+    const element = [...(dialog()?.querySelectorAll("button") ?? [])].find((candidate) => candidate.getAttribute("aria-label") === label);
     expect(element, label).toBeTruthy();
     return element as HTMLButtonElement;
   }

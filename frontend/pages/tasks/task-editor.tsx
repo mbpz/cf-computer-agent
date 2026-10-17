@@ -321,7 +321,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
   </div>;
   const editor = taskId
     ? <Sheet open onOpenChange={(open) => { if (!open) close(); }}><SheetContent side="right" ariaLabel={t("TASKS_EDIT")} className="w-full overflow-y-auto sm:max-w-xl"><SheetTitle id="task-editor-heading" className="mb-4">{t("TASKS_EDIT")}</SheetTitle>{content}</SheetContent></Sheet>
-    : <Dialog open onOpenChange={(open) => { if (!open) close(); }}><DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto" aria-labelledby="task-editor-heading"><DialogTitle id="task-editor-heading" className="mb-4">{t("TASKS_NEW")}</DialogTitle>{content}</DialogContent></Dialog>;
+    : <Dialog open onOpenChange={(open) => { if (!open) close(); }}><DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto" dismissLabel={t("COMMON_DISMISS")} aria-labelledby="task-editor-heading"><DialogTitle id="task-editor-heading" className="mb-4">{t("TASKS_NEW")}</DialogTitle>{content}</DialogContent></Dialog>;
   return <><div inert={confirmingDiscard} aria-hidden={confirmingDiscard || undefined}>{editor}</div>
     <ConfirmAction open={confirmingDiscard} title={t("TASKS_DISCARD_TITLE")}
       description={`${fields.title.trim() || t("TASKS_NEW")}${taskId ? ` (${taskId})` : ""}. ${t("TASKS_DISCARD_IMPACT")}`}

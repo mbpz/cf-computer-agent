@@ -330,10 +330,12 @@ async function navigateFromOwningEntry(journey: MountedApp, routeId: MaturityRou
   if (routeId === "home") return;
   if (routeId === "settings") {
     await act(async () => (journey.container.querySelector("[data-account-trigger]") as HTMLElement).click());
-    await waitForApp(() => journey.container.querySelector('[data-route-id="settings"]') !== null);
+    await waitForApp(() => journey.browser.document.querySelector('[data-route-id="settings"]') !== null);
   }
   await ensureRouteEntry(journey, routeId);
-  const entry = journey.container.querySelector(`[data-route-id="${routeId}"]`) as HTMLElement | null;
+  // Settings lives in the account menu, which is portalled; the other route
+  // entries stay in the sidebar, so the document covers both.
+  const entry = journey.browser.document.querySelector(`[data-route-id="${routeId}"]`) as HTMLElement | null;
   expect(entry, routeId).not.toBeNull();
   await act(async () => entry!.click());
   await waitForApp(() => journey.browser.location.pathname === pathname);
@@ -341,12 +343,12 @@ async function navigateFromOwningEntry(journey: MountedApp, routeId: MaturityRou
 }
 
 async function ensureRouteEntry(journey: MountedApp, routeId: string): Promise<void> {
-  for (let pass = 0; pass < 4 && journey.container.querySelector(`[data-route-id="${routeId}"]`) === null; pass += 1) {
+  for (let pass = 0; pass < 4 && journey.browser.document.querySelector(`[data-route-id="${routeId}"]`) === null; pass += 1) {
     const collapsedGroup = journey.container.querySelector('[data-shell-sidebar-scroll] button[aria-expanded="false"]') as HTMLElement | null;
     if (!collapsedGroup) break;
     await act(async () => collapsedGroup.click());
   }
-  await waitForApp(() => journey.container.querySelector(`[data-route-id="${routeId}"]`) !== null);
+  await waitForApp(() => journey.browser.document.querySelector(`[data-route-id="${routeId}"]`) !== null);
 }
 
 async function triggerActionState(journey: MountedApp, routeId: "submit" | "agent" | "search"): Promise<void> {
@@ -396,11 +398,11 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
       await waitForApp(() => [...journey.container.querySelectorAll("main button")].some(button => button.textContent === "Choose task"));
       // The start composer is a dialog now: the confirm only exists once it is opened, and
       // it stays disabled until a task is chosen.
-      expect(journey.container.querySelector('main [data-focus-start-dialog]')).toBeNull();
+      expect(journey.browser.document.querySelector('[data-focus-start-dialog]')).toBeNull();
       const opener = [...journey.container.querySelectorAll<HTMLButtonElement>("main button")].find(button => button.textContent === "Choose task")!;
       await act(async () => opener.click());
-      await waitForApp(() => journey.container.querySelector('main [data-focus-start-dialog]') !== null);
-      expect([...journey.container.querySelectorAll("main button")].find((button) => button.textContent === "Start focus")?.hasAttribute("disabled")).toBe(true);
+      await waitForApp(() => journey.browser.document.querySelector('[data-focus-start-dialog]') !== null);
+      expect([...journey.browser.document.querySelectorAll("button")].find((button) => button.textContent === "Start focus")?.hasAttribute("disabled")).toBe(true);
       expect(journey.container.querySelector('main [data-page-state="empty"]')).toBeNull();
     } else if (routeId === "today" || routeId === "review") {
       const text = routeId === "today" ? "No tasks due today" : "No completed work in this snapshot";

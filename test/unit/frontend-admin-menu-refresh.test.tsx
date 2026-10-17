@@ -19,7 +19,7 @@ describe("menu write refresh recovery", () => {
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   async function render() { await act(async () => root.render(<AdminMenusRoute locale={locale()} memberId="member-a" />)); await flush(); }
-  function button(label: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement | undefined; }
+  function button(label: string) { return [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement | undefined; }
   async function click(label: string) { const target = button(label); expect(target).toBeTruthy(); await act(async () => target!.click()); await flush(); }
   async function disable() { await click("Disable"); await click("Confirm change"); }
   function unloadBlocked() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
@@ -74,7 +74,7 @@ describe("menu write refresh recovery", () => {
   });
 
   const draftKey = "memory-garden:admin-menu-draft:v1:member-a";
-  const path = () => container.querySelector('[name="path"]') as HTMLInputElement;
+  const path = () => document.querySelector('[name="path"]') as HTMLInputElement;
   async function typePath(value: string) {
     const el = path();
     await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value); el.dispatchEvent(new browser.Event("input", { bubbles: true })); });
@@ -133,7 +133,7 @@ describe("menu write refresh recovery", () => {
   });
 
   const positionKey = "memory-garden:admin-menu-position:v1:member-a";
-  const position = () => container.querySelector('input[type="number"]') as HTMLInputElement;
+  const position = () => document.querySelector('input[type="number"]') as HTMLInputElement;
   async function typePosition(value: string) {
     const el = position();
     await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value); el.dispatchEvent(new browser.Event("input", { bubbles: true })); });

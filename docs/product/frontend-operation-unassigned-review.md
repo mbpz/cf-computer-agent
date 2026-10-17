@@ -31,18 +31,20 @@
 
 2026-10-17 beUI 全量采用（Wave 3）后重新对账：本批落地 `motion/range-slider.tsx` 与 `lib/hooks/use-slider.ts`、`motion/date-range-picker.tsx` 及 `motion/date-range-picker/{context,date-utils,types,use-date-range-picker}.ts`、`ui/date-range-input.tsx`，并更新 tooltip/popover/context-menu/breadcrumb/collapsible 安装副本与 agent 聊天部件、`ui/{skeleton,dialog,select,textarea,page-state}.tsx` 适配器内部。这些来源的候选绝大多数已被正式消费者覆盖（`range-slider` 由 `goals-page`、`ui/date-range-input` 由搜索页与「我的提交」页、`breadcrumb` 由 `app-shell`、`collapsible` 由知识阅读器与衍生面板、`tooltip` 经 `ui/tooltip.tsx` 被页头消费、agent 部件由 `agent-page`），故未归属候选仅由 159 变为 **162**：新增 3 条（`motion/date-range-picker.tsx` 的 `DateRangePickerTrigger`/`DateRangePickerContent`/`DateRangePickerDropdown` 便捷组合层，归 `unmounted-ui`——适配器自绘触发器、未使用它们），并按 handler 重记 1 条（`lib/use-toast.tsx` 29:7→28:7）。只同步 `app.tsx`、`lib/use-toast.tsx` 与新增来源的指纹，`package.json` 的依赖变化（移除 `@radix-ui/react-tooltip`、改为直接依赖 `@floating-ui/dom`）不产生候选行。不扩大本记录的运行验收结论。
 
+2026-10-17 beUI 全量采用（Wave 4，100%）后重新对账：本批采用此前被否决的载荷（矩阵 §17，逐片结果 §18–§20）——`motion/{animated-sidebar,combobox/**,magnetic}`、`motion/button/{magnetic,metallic}.tsx`、`motion/action-swap{,-roll}.tsx` 首次落地；`motion/center-morph-modal.tsx`（经 `ui/dialog.tsx`）与 `motion/popover.tsx`（经 `app-shell.tsx`）打补丁后接入，原先否决它们的理由随之消除；`ui/dropdown-menu.tsx` 因此在 shell 换用 beUI 菜单后失去唯一消费者。未归属候选由 162 增至 **192**：新增 36 条（`animated-sidebar` 13、`ui/dropdown-menu` 7、`combobox/**` 10、其余 6），旧行 6 条（`center-morph-modal` 4、`popover` 2）随打补丁接入归属并从本记录移除，无既有坐标位移。分类按**实际渲染面**而非按文件：经 `ui/filter-select.tsx` 挂载的 combobox 根监听、`inline` 面板、listbox 与 option 行记 `app-boundary`（静态图仍不跟随 barrel `motion/combobox.tsx` 的纯再导出），无人使用的部件与整组零 import 的载荷记 `unmounted-ui`。指纹新增 11 条、刷新 2 条（`environments-page.tsx`、`files-panel.tsx`），移除两条已归属来源的指纹。不扩大本记录的运行验收结论。
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
 | --- | ---: | --- | --- |
-| app-boundary | 24 | App 外层、history fault 与账户 owner 已有正式消费；2026-10-17 增记经适配器再导出、或由 App 的 transcript 区域实际挂载的 beUI 原语（`StatefulButton`、Card 根与四个部件、`MessageBubble`/`MessageBubbleContent`、`MessageScroller` 的视口/内容区/根节点），它们只渲染调用方 props/children 并回调调用方 | 跨路由、真实身份/退出、导航故障旅程 |
+| app-boundary | 30 | App 外层、history fault 与账户 owner 已有正式消费；2026-10-17 增记被 App/路由实际渲染、但声明侧不在 root 图内的边界（`StatefulButton`、Card 根与四个部件、`MessageBubble`/`MessageBubbleContent`、`MessageScroller` 的视口/内容区/根节点，以及经 barrel 挂载的 `combobox` 根监听、inline 面板、listbox 与 option 行） | 跨路由、真实身份/退出、导航故障旅程 |
 | public-dynamic | 5 | landing 动态导入的 WebGL 生命周期 | 原生浏览器可见性、超时、context loss 与回退验收 |
 | background | 3 | Service Worker 生命周期，不是可见控件 | 真实浏览器注册/缓存/离线行为 |
-| unmounted-ui | 47 | ContextRail / Tabs 无当前正式消费者；2026-10-17 的 beUI 副本里，`motion/date-range-picker.tsx` 的 trigger/content/dropdown 便捷组合层（适配器自绘触发器，未使用），`motion/context-menu.tsx`、`motion/popover.tsx`（2 条）、`motion/preview-rail.tsx`（仅在无人传入的 `navigation="rail"` 下渲染）、`agents/message*.tsx` 的五个无调用点部件、`AlertAction`、`CardAction`、`CardFooter` 与 card 的 interactive 按压路径虽有实现但无调用点 | 按实际需求保留或接线；不得直接认定缺失业务 |
+| unmounted-ui | 71 | ContextRail / Tabs 无当前正式消费者；2026-10-17 的 beUI 副本里，库内动作与无调用点的部件都归此类：`motion/context-menu.tsx`、`motion/preview-rail.tsx`（仅在无人传入的 `navigation="rail"` 下渲染）、`motion/animated-sidebar.tsx` 的 13 个未用部件、`action-swap{,-roll}` 的按钮/图标、`button/{magnetic,metallic}.tsx` 与 `magnetic.tsx`、`combobox` 的空态/回退触发器/内部 input/portal 分支、`date-range-picker` 的便捷组合层、`agents/message*.tsx` 的无调用点部件、`ui/dropdown-menu.tsx`（shell 改用 beUI 菜单后零 import）、`AlertAction`、`CardAction`、`CardFooter` 与 card 的 interactive 按压路径 | 按实际需求保留或接线；不得直接认定缺失业务 |
 | vm-runtime-unshipped | 77 | 正式 `/environments` 页面已挂载、创建或惰性加载文件面、运行时与本地快照；本版本**有意**不发布 VM 引擎与镜像（六件启动产物约 66 MiB，pin 不授权再分发、不构成许可证清单或签名发布清单），因此面向用户或面向 VM 的动作永久不可用：禁用、不渲染，或只存在于无法成功启动的路径。按状态命名而非按模块，引擎发布决策改变后自然翻转。 | 不要读成“未接线”，也不要当成按需修复的缺陷；待引擎发布决策改变后再重新分类 |
 | vm-not-mounted | 6 | 连接器、会话与网络 lifecycle 惰性路径仍无正式调用者：只有显式 connect/open 才创建，页面挂载不会 | 沿既有 G0 边界完成正式接线及身份/生命周期验收 |
 
-A01、A02、A05、D04 仍开放。源码人工分类覆盖这 162 项，但 A01 还缺每页实际可见性、动态 HTML/门户/第三方控件和触发状态的呈现核验；A02 还缺全操作到服务端授权/持久化及运行证据的闭合。禁止把文档行数、指纹或绿色测试当作上述父项验收通过。
+A01、A02、A05、D04 仍开放。源码人工分类覆盖这 192 项，但 A01 还缺每页实际可见性、动态 HTML/门户/第三方控件和触发状态的呈现核验；A02 还缺全操作到服务端授权/持久化及运行证据的闭合。禁止把文档行数、指纹或绿色测试当作上述父项验收通过。
 
 下表“条件”与组内共同守卫叠加。状态提示、role、option、props 转发和监听器均保留；不是每一行都对应一次用户操作。未挂载项的条件均是假设调用者接线之后的源码条件，不能误读为当前正式页面已可用。
 
@@ -122,6 +124,23 @@ App 外层挂载：[source:frontend/app.tsx]。无 fault 时返回 null；故障
 | `frontend/components/history-navigation-notice.tsx:11:10` | app-boundary | 已登录 App 挂载且 history fault 非空 | role=alert 呈现历史导航故障；无写接口。 |
 | `frontend/components/history-navigation-notice.tsx:13:5` | app-boundary | 同上且 retrying 为 false 时点击 | retryWorkspaceHistory；等待期间禁用按钮，finally 清除 pending；失败仍不视为导航完成。 |
 
+## `frontend/components/motion/action-swap-roll.tsx`（2）
+
+beUI action-swap 的 roll 变体包装（vendored 载荷，`beui.dev/components/motion/action-swap` 一族）。第一方唯一消费者是 `components/agents/todo-list.tsx:39`，且它只取 `ActionSwapRollText`，因此 `ActionSwapRollButton`/`ActionSwapRollIcon` 没有调用点，记 `unmounted-ui`；两者只是把 `animation="roll"` 固定后透传给 `action-swap.tsx` 的实现，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/action-swap-roll.tsx:23:10` | unmounted-ui | 仅当调用方渲染 `ActionSwapRollButton` 时出现（当前无调用点） | 以 `animation="roll"` 渲染 `ActionSwapButton` 并透传其 props；按钮状态与回调全部来自调用方。 |
+| `frontend/components/motion/action-swap-roll.tsx:31:10` | unmounted-ui | 仅当调用方渲染 `ActionSwapRollIcon` 时出现（当前无调用点） | 以 `animation="roll"` 渲染 `ActionSwapIcon` 并透传 props；仅图标动画。 |
+
+## `frontend/components/motion/action-swap.tsx`（1）
+
+beUI action-swap 载荷本体。同族里 `ActionSwapText` 由 `todo-list.tsx` 与 `notification-stack.tsx` 使用，`ActionSwapButton` 这条没有调用点（其 roll 包装也未被使用），记 `unmounted-ui`。按钮的状态轮换只在本地 `useState` 与调用方回调之间发生，不发请求。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/action-swap.tsx:313:5` | unmounted-ui | 仅当调用方渲染 `ActionSwapButton` 且 activeItem 存在时出现（当前无调用点） | motion.button：点击先调用调用方 `onClick`，未被 preventDefault 且 `cycle` 与 `nextItem` 成立时推进到下一项（受控时不改内部值），再回调 `onValueChange(id, item)`；`aria-label` 取 item.ariaLabel 或 iconOnly 时的 label；无网络写入。 |
+
 ## `frontend/components/motion/alert.tsx`（1）
 
 beUI 告警的落地副本。`components/ui/alert.tsx` 把它适配成应用唯一 Alert：适配器在自身 `Alert` 内直接引用 `AlertIcon`/`AlertClose`（按 `child.type` 分流）并渲染 `AlertContent`，这三类候选随 25 处调用点归属各自路由；`AlertAction` 只在适配器里被 `export`，从未被渲染，因此仍为未归属。本文件不发起网络写入，关闭/动作按钮的行为由调用方传入。
@@ -129,6 +148,26 @@ beUI 告警的落地副本。`components/ui/alert.tsx` 把它适配成应用唯�
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
 | `frontend/components/motion/alert.tsx:219:10` | unmounted-ui | 仅当调用方渲染 `AlertAction` 并传入 children/props 时出现；当前 25 处 `<Alert>` 调用点无一使用该部件 | 渲染调用方 children/props 的 `flex-wrap` 容器（`pt-2`），供放置按钮或链接；自身不渲染按钮、不发请求，注释也声明不嵌套按钮。 |
+
+## `frontend/components/motion/animated-sidebar.tsx`（13）
+
+beUI 侧栏载荷（vendored）。`components/shell/app-shell.tsx:8` 已采用它的 `AnimatedSidebarProvider`、`AnimatedSidebar`、`Menu`/`MenuButton`/`MenuItem`/`MenuSub`，这些部件的候选随 shell 归属；下列 13 个部件 app-shell 没有使用（`Trigger`/`Close`/`Rail` 的按钮改由 shell 自己的触发器承担，`Inset`/`Header`/`Content`/`Footer`/`Group` 一族与 `MenuSubItem`/`MenuSubButton` 未出现在任何调用点），故记 `unmounted-ui`。它们都只转发调用方 props/children 或切换本侧栏的开合状态，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/animated-sidebar.tsx:665:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarTrigger` 时出现（当前无调用点） | button：转发 props/ref，`aria-label` 缺省 "Toggle sidebar"，`aria-expanded` 取移动端或桌面开合态；点击先调调用方 onClick，未被 preventDefault 时 `toggleSidebar()`。 |
+| `frontend/components/motion/animated-sidebar.tsx:703:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarClose` 时出现（当前无调用点） | button：点击先调调用方 onClick，未被 preventDefault 时移动端 `setOpenMobile(false)`、桌面 `setOpen(false)`；仅本地开合。 |
+| `frontend/components/motion/animated-sidebar.tsx:737:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarRail` 时出现（当前无调用点） | button：点击（未被 preventDefault）`toggleSidebar()`，用于收起/展开窄轨；不写业务状态。 |
+| `frontend/components/motion/animated-sidebar.tsx:767:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarInset` 时出现（当前无调用点） | motion.main 承载侧栏旁的主内容区，转发 props/children；无动作。 |
+| `frontend/components/motion/animated-sidebar.tsx:785:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarHeader` 时出现（当前无调用点） | div 转发 props/children（data-slot=sidebar-header）；无动作。 |
+| `frontend/components/motion/animated-sidebar.tsx:799:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarContent` 时出现（当前无调用点） | div 转发 props/children（滚动区容器）；无动作。 |
+| `frontend/components/motion/animated-sidebar.tsx:816:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarFooter` 时出现（当前无调用点） | div 转发 props/children；无动作。 |
+| `frontend/components/motion/animated-sidebar.tsx:833:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarGroup` 时出现（当前无调用点） | div 转发 props/children（分组容器）；无动作。 |
+| `frontend/components/motion/animated-sidebar.tsx:852:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarGroupLabel` 时出现（当前无调用点） | div 转发 props 并渲染 children 作为分组标题；无动作。 |
+| `frontend/components/motion/animated-sidebar.tsx:876:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarGroupContent` 时出现（当前无调用点） | div 转发 props/children；无动作。 |
+| `frontend/components/motion/animated-sidebar.tsx:973:5` | unmounted-ui | 仅当调用方渲染 `AnimatedSidebarMenuSubItem` 时出现（当前无调用点） | motion.li 转发 props/children（二级菜单行容器）；无动作。 |
+| `frontend/components/motion/animated-sidebar.tsx:1050:5` | unmounted-ui | 仅当调用方给 `AnimatedSidebarMenuSubButton` 传 href 时出现（当前无调用点） | motion.a（href/target/rel 由调用方给）：点击先调 props.onClick，未被 preventDefault 时 `select()` 回调 `onSelect`，移动端按 `closeOnSelect` 关闭侧栏；导航本身由 href 决定。 |
+| `frontend/components/motion/animated-sidebar.tsx:1073:5` | unmounted-ui | 仅当 `AnimatedSidebarMenuSubButton` 无 href 时出现（当前无调用点） | motion.button：点击先调 props.onClick，未被 preventDefault 时同样 `select()`（回调 `onSelect`、移动端可关闭）；不发请求。 |
 
 ## `frontend/components/motion/animated-toast-stack.tsx`（4）
 
@@ -140,6 +179,22 @@ beUI 通知栈的落地副本，由 `frontend/lib/use-toast.tsx` 的 `ToastProvi
 | `frontend/components/motion/animated-toast-stack.tsx:352:5` | app-boundary | 通知入队或出队时 | 入场/退场动画；仅当横向拖拽超过 72px 或速度超过 520 才视为关闭。 |
 | `frontend/components/motion/animated-toast-stack.tsx:480:17` | app-boundary | 通知带 action 且用户点击该按钮 | 调用调用方传入的 `action.onClick(toast)`；组件自身不执行写入。 |
 | `frontend/components/motion/animated-toast-stack.tsx:494:15` | app-boundary | canDismiss 为真且用户点击关闭 | 调用 `onDismiss(toast.id)`；`aria-label` 由调用方以本地化文案传入（`COMMON_DISMISS`）。 |
+
+## `frontend/components/motion/button/magnetic.tsx`（1）
+
+beUI 磁性按钮载荷（`beui.dev/components/motion/button` 的 button-magnetic），第一方零 import，记 `unmounted-ui`。它只是把 `Magnetic` 包装套在 `Button` 外并透传 props，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/button/magnetic.tsx:21:7` | unmounted-ui | 仅当调用方渲染 `MagneticButton` 时出现（当前无调用点） | 在 `Magnetic strength`（默认 0.25）内渲染 beUI `Button`，转发 ref/children/其余按钮 props；点击语义仍由调用方回调决定。 |
+
+## `frontend/components/motion/button/metallic.tsx`（1）
+
+beUI 金属质感按钮载荷，第一方零 import，记 `unmounted-ui`。hover 只切换本地高亮状态并回调调用方，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/button/metallic.tsx:50:5` | unmounted-ui | 仅当调用方渲染 `MetallicButton` 时出现（当前无调用点） | 渲染 ghost 变体的 `Button`：`onHoverStart/onHoverEnd` 先置本地 `hovered` 再回调调用方；`paused` 或 reduced-motion 时停用动画；无请求。 |
 
 ## `frontend/components/motion/button/stateful.tsx`（1）
 
@@ -166,16 +221,9 @@ beUI 卡片的落地副本，经 [source:frontend/components/ui/card.tsx] 纯再
 | `frontend/components/motion/card.tsx:208:10` | app-boundary | 调用方渲染 `<CardContent>` | 转发 props/children 到 div，padding 取自 CardSizeContext；不写业务状态。 |
 | `frontend/components/motion/card.tsx:216:5` | unmounted-ui | 仅当调用方渲染 `<CardFooter>` 时出现（当前 0 处调用点） | 转发 props/children 到 div，footer padding 取自 CardSizeContext；自身无动作。 |
 
-## `frontend/components/motion/center-morph-modal.tsx`（4）
+## `frontend/components/motion/center-morph-modal.tsx`（0，2026-10-17 §17 打补丁并接入后归属）
 
-beUI center-morph 模态的落地副本，`frontend/` 第一方源码当前没有 import 或渲染点；与 tabs 同类，下列条件均为假设调用者接线之后，不是当前可见界面。面板用 clip-path 从中心展开，全程没有网络写入。
-
-| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
-| --- | --- | --- | --- |
-| `frontend/components/motion/center-morph-modal.tsx:242:5` | unmounted-ui | 若内容层挂载且 context.open 为真 | window keydown：Escape 且 dismissible 时 setOpen(false)；Tab 在面板首尾可聚焦元素间循环，没有可聚焦元素时聚焦面板。 |
-| `frontend/components/motion/center-morph-modal.tsx:259:15` | unmounted-ui | 若挂载且 context.open 为真 | 全屏 backdrop 按钮，tabIndex 为 -1，dismissible 为假时 disabled；点击 setOpen(false)，不发起请求。 |
-| `frontend/components/motion/center-morph-modal.tsx:289:19` | unmounted-ui | 若挂载且 context.open 为真 | role=dialog 面板，id 取 context.contentId，渲染 children；展开/收起只改 clip-path，不改业务状态。 |
-| `frontend/components/motion/center-morph-modal.tsx:331:23` | unmounted-ui | 若挂载、open 且 showCloseButton 为真 | 面板右上角关闭按钮，点击 setOpen(false)；文案由 closeButtonLabel 传入。 |
+本载荷在 Wave 4 采用（矩阵 §17）并被 `components/ui/dialog.tsx` 接入为应用唯一模态：补丁把它原来的 4 条未归属候选（window keydown/Escape 与焦点循环、backdrop 按钮、role=dialog 面板、右上角关闭按钮）改造成可注入 `backdropProps`/`panelProps`/`children`、`onDismiss` 与 `dismissible`/`showCloseButton` 的形态，坐标因此移至 `337:5`、`354:15`、`388:19`、`432:23` 并随 `ui/dialog.tsx` 的调用点进入 root 图，不再计入未归属项。行为未变：全部是本地开合与焦点管理，没有网络写入。
 
 ## `frontend/components/motion/context-menu.tsx`（8）
 
@@ -192,6 +240,44 @@ beUI 右键菜单的落地副本，`frontend/` 第一方源码零 import——`c
 | `frontend/components/motion/context-menu.tsx:640:5` | unmounted-ui | 调用方渲染 `ContextMenuCheckboxItem` 并点击 | 调用调用方 `onCheckedChange(!checked)`；勾选标记是本地动画，不写持久化。 |
 | `frontend/components/motion/context-menu.tsx:716:5` | unmounted-ui | 调用方在 `ContextMenuRadioGroup` 内渲染 `ContextMenuRadioItem` 并点击 | 调用调用方 `group.onValueChange(value)`；选中态来自 group，不写持久化。 |
 
+## `frontend/components/motion/combobox/content.tsx`（2）
+
+beUI combobox 载荷的 §17 补丁版（`inline` 面板、`rest` 透传、可传 `ariaLabel`）。它经 barrel `components/motion/combobox.tsx` 被 `components/ui/filter-select.tsx` 消费并已在搜索、任务、审计、成员等 15 个页面生效；静态图不跟随 `export … from` 纯再导出，因此声明侧候选仍未归属。按实际渲染面分：`inline` 分支记 `app-boundary`（产品实际挂载），portal 分支无调用点记 `unmounted-ui`。两者都只控制开合与定位，没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/combobox/content.tsx:111:7` | app-boundary | `ui/filter-select.tsx` 以 `inline` 渲染 `<ComboboxContent>`（面板留在字段内） | motion.div 内联面板：转发 rest/children，`aria-hidden`/`inert` 随 `context.open`，展开只改 height/opacity/y（reduce 或未就绪时无动画）；不写业务状态。 |
+| `frontend/components/motion/combobox/content.tsx:161:5` | unmounted-ui | 仅当调用方不使用 `inline`（走 portal 分支）时出现（当前无此类调用点） | createPortal 的 motion.div：按 `align`/`side` 与视口测量算 left/top 并 animate 高度/透明度；只是布局与开合，无请求。 |
+
+## `frontend/components/motion/combobox/context.tsx`（3）
+
+combobox 根 `Combobox` 的关闭监听（同上：经 barrel 挂载，静态图未跟随再导出）。三条都只改本地开合，不触碰选中值或业务数据，记 `app-boundary`。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/combobox/context.tsx:286:5` | app-boundary | `<Combobox>` 挂载且 open 为真（筛选行已生效） | window pointerdown：指针不在根或内容区内则 `updateOpen(false)`，不改变选中值。 |
+| `frontend/components/motion/combobox/context.tsx:287:5` | app-boundary | 同上（focusin 分支） | window focusin：焦点落到外部即关闭下拉；仅本地开合。 |
+| `frontend/components/motion/combobox/context.tsx:288:5` | app-boundary | 同上（keydown 分支） | window keydown：Escape 且未被 preventDefault 时 `updateOpen(false, true)`（回传焦点标记）；不发请求。 |
+
+## `frontend/components/motion/combobox/list.tsx`（3）
+
+combobox 的列表与选项（`ui/filter-select.tsx` 实际渲染 List 与 Item，空态未使用）。前两条记 `app-boundary`，空态记 `unmounted-ui`；选中值经调用方 `onChange` 写回，组件自身不发起请求。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/combobox/list.tsx:37:5` | app-boundary | 筛选行渲染 `<ComboboxList ariaLabel=…>` | div `role=listbox`：转发 rest/children，`aria-label` 取调用方本地化文案（未传时用 triggerId 关联）；不写业务状态。 |
+| `frontend/components/motion/combobox/list.tsx:149:5` | app-boundary | 每个 options 项渲染为 `ComboboxItem` 且 visible | button `role=option`：pointermove 设 activeValue、pointerdown preventDefault、点击回调调用方 `onSelect(value)` 再 `context.select(value)`；取值仍由调用方 `onValueChange` 决定。 |
+| `frontend/components/motion/combobox/list.tsx:214:5` | unmounted-ui | 仅当调用方渲染 `ComboboxEmpty` 时出现（当前无调用点；筛选行不渲染空态） | div `role=status`，`context.visibleCount > 0` 时返回 null；只展示调用方 children，无动作。 |
+
+## `frontend/components/motion/combobox/trigger.tsx`（2）
+
+combobox 触发器。§17 补丁给它加了 `render` 元素插槽与 `keyboard="trigger"`：`ui/filter-select.tsx` 因此传入 `<button aria-haspopup="listbox">`，开合与键盘都由该按钮承担——**handler 的性质也随之改变**（不再是“聚焦内部 input 再打开”，而是按钮直接翻转 `context.setOpen`）。于是本文件的两条声明侧候选都成了无人走的回退分支，记 `unmounted-ui`。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/combobox/trigger.tsx:134:5` | unmounted-ui | 仅当调用方渲染 `ComboboxTrigger` 但**不传** `render` 插槽时出现（filter-select 总要传，故该回退分支无调用点） | div 触发器回退形态：转发 `semantics`，pointerdown 按 `keyboard` 决定开合或聚焦内部 input，`aria-expanded` 等由 context 提供；仅本地开合。 |
+| `frontend/components/motion/combobox/trigger.tsx:266:7` | unmounted-ui | 仅当调用方渲染 `ComboboxInput` 时出现（当前无调用点；筛选行是 button+listbox，不是文本框） | input `role=combobox`：pointerdown/focus/click 打开面板，change 更新 query 并回调调用方 onChange，keydown 走载荷键盘处理；不发请求。 |
+
 ## `frontend/components/motion/date-range-picker.tsx`（3）
 
 beUI 日期区间选择器的 vendored 落地副本。除下列三条外，本文件的候选都已归属：正式适配器 `components/ui/date-range-input.tsx` 组合 `DateRangePicker` 根与 Calendar/Header/Grid/Footer/Selection 并接到搜索页与「我的提交」页，所以这些部件由各自路由 root 覆盖。未归属的三条是 payload 自带的便捷组合层（`DateRangePickerTrigger`、`DateRangePickerContent`、`DateRangePickerDropdown`），适配器自绘触发器、未使用它们，故无调用点；三者都只渲染调用方 props/children、维护本地开合与焦点，没有网络写入。
@@ -206,6 +292,14 @@ beUI 日期区间选择器的 vendored 落地副本。除下列三条外，本�
 
 落地页 3D 加载态现在直接挂载该组件的 `dots` variant（`workbench-scene.tsx`），因此本文件的三个候选全部归属落地页，不再计入未归属项。历史分类见文末变更说明。
 
+## `frontend/components/motion/magnetic.tsx`（1）
+
+beUI 磁性包装（`Magnetic`），唯一 import 方是同样未被消费的 `button/magnetic.tsx`，因此记 `unmounted-ui`。鼠标跟随完全是本地 motion value，无网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
+| `frontend/components/motion/magnetic.tsx:41:5` | unmounted-ui | 仅当调用方渲染 `Magnetic` 时出现（当前无调用点） | motion.div：mousemove 按指针与元素中心的偏移设 x/y（触摸或 reduced-motion 时整体不启用），mouseleave 归零；纯装饰，无请求。 |
+
 ## `frontend/components/motion/not-found/shared.tsx`（2）
 
 路由 fallback 的 404 舞台与 CTA 行。原 `NotFoundPage` 内的返回首页链接已被 `NotFoundGlitch` 取代，该未归属坐标由 `frontend/app.tsx:931:250` 迁移到本文件；app.tsx 不再持有此候选。[source:frontend/components/motion/not-found/glitch.tsx]
@@ -215,14 +309,9 @@ beUI 日期区间选择器的 vendored 落地副本。除下列三条外，本�
 | `frontend/components/motion/not-found/shared.tsx:55:7` | app-boundary | 路由 fallback 渲染 404；homeHref 默认 `/` | motion.a 指向 homeHref；whileTap/whileHover 受 reduced-motion 与 hover 能力门控。 |
 | `frontend/components/motion/not-found/shared.tsx:65:9` | unmounted-ui | 仅当调用方传入 browseHref 时渲染 | 第二 CTA 当前没有调用点传 browseHref，因此不出现在工作台界面中。 |
 
-## `frontend/components/motion/popover.tsx`（2）
+## `frontend/components/motion/popover.tsx`（0，2026-10-17 §17 打补丁并接入后归属）
 
-beUI goo 弹层的落地副本，`frontend/` 第一方源码零 import；`components/ui/dropdown-menu.tsx` 的注释记录了不采用的原因——它把 `aria-haspopup="dialog"` 硬编码到克隆的触发器上（`:489`）、面板固定为 `role="dialog"`（`:689`）且无条件 portal，只接受 `children`/`className`，菜单语义无处可落。下列条件均为假设调用者接线之后，不是当前可见界面；面板开合与 hover 时序由调用方 props 与本地几何计算驱动，没有网络写入。
-
-| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
-| --- | --- | --- | --- |
-| `frontend/components/motion/popover.tsx:395:7` | unmounted-ui | 若挂载且 trigger 为 `"hover"` 时才附带 hoverHandlers | 渲染相对定位根 div 并转发调用方 children（hover 进入/离开经 rootHover/openHover/scheduleClose 驱动的本地开合）；组件自身不发请求。 |
-| `frontend/components/motion/popover.tsx:686:11` | unmounted-ui | 若挂载且 portal 就绪（portalReady）后渲染内容 | role=dialog 的内容面：转发调用方 children/props 与 hoverHandlers，用 clip-path/transform 做本地展开动画；不写业务状态。 |
+Wave 4 打补丁后，`components/shell/app-shell.tsx:9` 改为从本文件取 `Popover`/`PopoverTrigger`/`PopoverContent` 渲染账户菜单等点按锚定弹层，两条候选（根节点 `:420:7`、内容面 `:725:11`）也随之进入 root 图并从本记录移除。补丁把原来硬编码的 `role="dialog"` 与 `aria-haspopup` 改为调用方可传的语义插槽（这也是 `ui/dropdown-menu.tsx` 注释里当初否决它的原因被消除之处），行为仍是本地开合 + hover 时序 + 几何计算，没有网络写入。
 
 ## `frontend/components/motion/preview-rail.tsx`（4）
 
@@ -259,6 +348,13 @@ beUI 预览轨的落地副本，唯一 import 来自 `components/agents/message-
 ## `frontend/components/ui/checkbox.tsx`（0，2026-10-16 随 admin-role-detail 能力根归属）
 
 `components/ui/checkbox.tsx` 的唯一消费者原为未归属的 `frontend/pages/admin/role-detail-page.tsx`；admin-role-detail 登记为能力根 `workbench-admin-role-detail` 后，该消费者整页归入该路由，本文件的候选（原生 `input type=checkbox`，转发 ref 与其余 props）随之归属对应路由，2026-10-16 起从本记录移除。`components/motion/checkbox.tsx` 另有已归属消费者，两者不是同一实现，不重复计算。
+
+## `frontend/components/ui/dropdown-menu.tsx`（7）
+
+本文件曾由 `app-shell.tsx` 消费；Wave 4 把 shell 菜单换成 beUI 的 `motion/popover.tsx`（打补丁后接受调用方语义）与 `motion/command-palette.tsx` 之后，第一方源码已无 import，整组候选变成无消费者的库内实现，全部记 `unmounted-ui`。它只是第一方自绘的菜单行为（Escape/外部点击关闭、roving focus、选中后关闭），没有网络写入。
+
+| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
+| --- | --- | --- | --- |
 
 ## `frontend/components/ui/tabs.tsx`（4）
 
@@ -513,16 +609,25 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/components/agents/message-scroller.tsx`: `5b4a0a7b02b5f51ebe7c864d5c92b82d6737cb85421d799c22f7f267e53220c6`
 - `frontend/components/agents/message.tsx`: `0237fddf4107844721c6977552aa02a84a71aa201fe9d525d206e83affb3aea4`
 - `frontend/components/history-navigation-notice.tsx`: `ceb53e78c925c68b07324cbf6cfe3015010d0483418f3e29507f678e232f1ad6`
+- `frontend/components/motion/action-swap-roll.tsx`: `271933ba92771ecb6ae5a7769d70cea3953e3c919ad51c324ee6290ce890a35f`
+- `frontend/components/motion/action-swap.tsx`: `b3a886b34a475490e0363fb686080e00cebbcf5745f40d5d8dd4bcab6ed41603`
 - `frontend/components/motion/alert.tsx`: `c511618208d401fb4473a5bb1162f7f3268a6e2fb4cc28f3ad8b71298517bb97`
+- `frontend/components/motion/animated-sidebar.tsx`: `e927e0bbb307449f1204b17dd8a9d6e08e88453bf53062a4bb9758ff64501547`
 - `frontend/components/motion/animated-toast-stack.tsx`: `bbfe97a6aa83e2acb5ea270fdf93bc3541764a7bbf80bc9e514e02566a6342e9`
+- `frontend/components/motion/button/magnetic.tsx`: `545d951ad9d66cef1fa00b2af98055796678ccdec5dbf1b0e31d0b5243f0b993`
+- `frontend/components/motion/button/metallic.tsx`: `c066dfcc42f2f1eb819ef756944af5fd00245080540c9c06ca52f9e87c4e9b46`
 - `frontend/components/motion/button/stateful.tsx`: `ef3ae73bbcc434a1bbdeaf06a891c44720f3d88d3f94a8aafe574d80a1c2e728`
 - `frontend/components/motion/card.tsx`: `b9214ef617d7e77111f0e14dede7b411fe388b4eb3faf0f5475fb51a4eba126d`
 - `frontend/components/motion/context-menu.tsx`: `a2b35b09002a9498784029f22d612d12b657bf507b895916bcc59f2d47fa7591`
+- `frontend/components/motion/combobox/content.tsx`: `c499deaf5877428ab3c4b40415c7ce2e5b3d1721d86a8fecc13fa066fa02d4fe`
+- `frontend/components/motion/combobox/context.tsx`: `90199b75b590752b19a94efb88c47b7fb18be2d9b5d1fc93b28e5e8f95720687`
+- `frontend/components/motion/combobox/list.tsx`: `469099a441af380dd7673c9ecf24111d9eb1cc6cfc0d31e71d780d24c925ff35`
+- `frontend/components/motion/combobox/trigger.tsx`: `4e3d7fd791c038ea877eddda6005fddcdc7ddfba617c0372b84814a8c8c406cf`
 - `frontend/components/motion/date-range-picker.tsx`: `1e346dbbe4251c74296546e8f8f3563fd5df3b801c0db1dd2c47f61812562f89`
 - `frontend/components/motion/scroll-reveal.tsx`: `7853c47a57dc1ac4c9b41d744a2421c9473d0597555300e4a84d1e54407abc97`
+- `frontend/components/motion/magnetic.tsx`: `4409bd3cc09e05df784661657795624f663cebe0a3693c76e82df210c42e357c`
 - `frontend/components/motion/not-found/glitch.tsx`: `f63ed5577881f978c331ffd4552241abc90c71c14cd2bb5e2eafa2ed2556ef03`
 - `frontend/components/motion/not-found/shared.tsx`: `f98d45223967f45277bf89b659b308e63c784397d4da9c2830565b9bcfc508da`
-- `frontend/components/motion/popover.tsx`: `315d6ef3311a4ecc58d8b912f9afc5fb14994b44d97e42635ea08f4d89a620e4`
 - `frontend/components/motion/preview-rail.tsx`: `2b7e72b05d16a7a6e887175310dae523321e55be1ff79c7c01593b16469c4e4c`
 - `frontend/components/shell/context-rail.tsx`: `9dcaa79e710f0b871c977e2251a71a4571124a861b4e9c9591bfa113398b184d`
 - `frontend/components/ui/button.tsx`: `13861f82b8222d50039381ec724df08c53d8c0c426b822027b54735463274d58`
@@ -536,11 +641,11 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/features/environments/connector-session.mjs`: `4bea623fd47128568d112e9cfa26ecdc90f114a6572e536b08d49f4537cc5269`
 - `frontend/features/environments/environment-files-surface.tsx`: `f24df6c74cbe83f85a7536bd9a9d2015df21634c1ccbea0fb3643449a70025ed`
 - `frontend/features/environments/environment-vm-composition.ts`: `b26be9b74c008c4bbddbc04e11c6bb0bf9853bc8aa9a0157a7175cd48abd47e7`
-- `frontend/features/environments/environments-page.tsx`: `cd0e9ea56b8ae8fd0386d3a8811ed6d6e42ba1967ce4c2d9f563636170ff36d2`
+- `frontend/features/environments/environments-page.tsx`: `57886ef62735f2a9350cbb93ee3f3937be66baca7677b60c5a8f3182fffa9c12`
 - `frontend/features/environments/files/asset-import-panel.tsx`: `27e56d8ac0eb52b336bace709dbe383ad1b8197695d6b1bee3c199ccd725b8dd`
 - `frontend/features/environments/files/asset-import.ts`: `a825ff94a287acd8bc61cd517f27fe92d1ee32cd999948fb9e6f7d3def217338`
 - `frontend/features/environments/files/file-manager.mjs`: `2721e8e7abecd3dda95765eecb055f7bf3272942f1933807a07bba83a7df5ea6`
-- `frontend/features/environments/files/files-panel.tsx`: `e0a5072b60577a35ab42baea628be67e695fe65bd0def4bf363bd3bfc0668dd9`
+- `frontend/features/environments/files/files-panel.tsx`: `8cc17fc174ac62274e3b65e59109781cc092cea287a031add3118467e49a1c4d`
 - `frontend/features/environments/files/knowledge-import-panel.tsx`: `0b85767dfa44343e7f69ce60120f1be8db217fe34ed4055b3b23bf395cf9ff99`
 - `frontend/features/environments/files/knowledge-import.ts`: `bce2bebe39eb4f17650b35b4a020f51f757ba5594b6e178a4a44f98b45028abd`
 - `frontend/features/environments/files/stream-download.mjs`: `b491973525cb44aefce8a265490471e947931c2380b605d15b37226ca7295943`
@@ -555,7 +660,6 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/public/sw.js`: `703801312e5cccba0cf162837b97878185fe03e18cdc2182c2fc4c5215923bad`
 - `tools/browser-vm/checkpoint-recovery-browser.mjs`: `06a498590a0c6e00c9cf5c91dff81de7a6aa3b01c4c9768aa718ebc0de3d9efe`
 - `tools/browser-vm/runtime-owner-browser.mjs`: `e5973069f711204d6ad79f011be6772e9243d403b6bb1ebd515ff361537c4c90`
-- `frontend/components/motion/center-morph-modal.tsx`: `d988640275b067c94db3d2196930398078efc2b6fb23ee850d9364f467227346`
 
 
 ### 2026-10-10 知识页读取生命周期后重新审查
@@ -654,3 +758,15 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - 坐标重记 1 条：`frontend/lib/use-toast.tsx` 29:7→28:7（ToastProvider 内 `<AnimatedToastStack>` 行；该文件删掉一行注释后整体上移，行为措辞逐字不变，仅补记 `fixed position="bottom-right"`、`maxVisible` 3）。其余既有行的坐标未变，未归属文件集合也未变。
 - 指纹：新增 1 条（`motion/date-range-picker.tsx`），刷新 2 条（`app.tsx` 因新增导入与路由分支、`lib/use-toast.tsx` 因上述改动）。`motion/range-slider.tsx`、`lib/hooks/use-slider.ts`、`date-range-picker/*` 其余模块与五个 `ui/*` 适配器没有候选，故不入表。
 - 本轮只做源码对账：不修改产品行为、不 push/部署/迁移、不读密钥，也不改变 A01、A02、A05、D04 的开放状态。最终 `node --test scripts/frontend-operation-inventory.test.mjs` 10/10 通过（含索引新鲜度一条），可作为本轮的文档门禁证据，但仍不是业务旅程回归。
+
+### 2026-10-17 beUI 全量采用（Wave 4，100%）后重新对账
+
+- 触发变化：本批采用 Wave 1–3 中被否决的载荷（矩阵 §17；逐片结果 §18–§20），首次落地 `motion/animated-sidebar.tsx`、`motion/combobox/**`（含 barrel `motion/combobox.tsx`）、`motion/magnetic.tsx`、`motion/button/{magnetic,metallic}.tsx`、`motion/action-swap.tsx` 与 `motion/action-swap-roll.tsx`；并对 `motion/center-morph-modal.tsx`、`motion/popover.tsx`（以及 `file-tree` 等）打 §17 补丁。未归属候选 162 → **192**，文件集合也变了：`ui/dropdown-menu.tsx` 重新进入未归属集合，`center-morph-modal.tsx` 与 `popover.tsx` 退出。
+- 按实际渲染面分类（**不按文件**）：
+  - `app-boundary` 6 条新增：`combobox/content.tsx:111:7`（`inline` 面板）、`combobox/context.tsx:286–288`（根部 pointerdown/focusin/keydown 关闭）、`combobox/list.tsx:37:5`（listbox）与 `:149:5`（option 行）。依据是 `ui/filter-select.tsx` 已在搜索、任务、审计、成员等 15 个页面渲染这套 combobox；声明侧未归属只因静态图不跟随 barrel `motion/combobox.tsx` 的 `export … from`（与 Card/`StatefulButton` 同一机制），不能记成“未挂载”。
+  - `unmounted-ui` 30 条新增：`animated-sidebar.tsx` 的 13 个部件（app-shell 只用了 `Provider`/`AnimatedSidebar`/`Menu`/`MenuButton`/`MenuItem`/`MenuSub`，`Trigger`/`Close`/`Rail`/`Inset`/`Header`/`Content`/`Footer`/`Group`/`GroupLabel`/`GroupContent`/`MenuSubItem`/`MenuSubButton` 两个分支无人调用）、`combobox` 的 `Empty`/回退触发器 div/`ComboboxInput`/portal 分支、`action-swap` 的按钮与 roll 包装的按钮/图标、`magnetic`/`button/magnetic`/`button/metallic`、`ui/dropdown-menu.tsx` 的 7 条。
+- §17 补丁改变了 handler 的性质（已在各节写明）：`combobox/trigger.tsx` 的 `render` 元素插槽 + `keyboard="trigger"` 把开合从“聚焦内部 input”改成“调用方按钮直接翻转 `setOpen`”，因此回退 div 与 `ComboboxInput` 都成了无人走的路径；`center-morph-modal.tsx` 把 backdrop/面板/关闭按钮改为可注入 `backdropProps`/`panelProps`/`children` + `onDismiss`/`dismissible`/`showCloseButton`；`popover.tsx` 把硬编码的 `role="dialog"`/`aria-haspopup` 改为调用方语义插槽——这正是 `ui/dropdown-menu.tsx` 注释里当初否决它的理由被消除之处，也是 app-shell 改用它的原因。
+- `ui/dropdown-menu.tsx` 的 7 条需要单独说明：它不是 vendored 载荷，而是第一方自绘菜单；`app-shell.tsx` 改用 beUI 的 popover/command-palette 后它已零 import，所以整组记 `unmounted-ui`。是否直接删除这段死代码属于另一个决定，本记录不代替该决定。
+- 归属后移除的 6 行：`center-morph-modal.tsx` 4 条（坐标随补丁移至 `337:5`/`354:15`/`388:19`/`432:23`，经 `ui/dialog.tsx` 进入 root 图）与 `popover.tsx` 2 条（`:420:7`/`:725:11`，经 `app-shell.tsx:9` 进入 root 图）。两节改写为“0，已归属”说明，其指纹行随之移除。
+- 指纹：新增 11 条（`action-swap{,-roll}`、`animated-sidebar`、`button/{magnetic,metallic}`、`combobox/{content,context,list,trigger}`、`magnetic`、`ui/dropdown-menu`），刷新 2 条（`features/environments/environments-page.tsx`、`.../files/files-panel.tsx`，均因本批对文件面的 props 变动）。`lib/hooks/use-slider.ts`、`combobox.tsx`（barrel）与 `date-range-picker/*` 辅助模块没有候选，不入表。
+- **门禁状态**：本记录相关的两条测试（覆盖 + 指纹）通过，索引新鲜度一条也通过（192/192，零漂移、零缺失）。第三条 `real repository includes exact-result controls and both secondary confirmation actions` 仍然失败，但原因是**源码断言**而非本记录：`scripts/frontend-operation-inventory.test.mjs:131` 断言 `frontend/components/shell/command-palette.tsx` 仍有一条 `kind === "listener"` 候选，而 Wave 4 把它的 `⌘/Ctrl K` 快捷键改成传给 beUI 载荷的 `shortcut="k"`，该文件现在只剩一个 toast 的 `useEffect`、没有 `addEventListener`；同一监听在索引里已落到 `frontend/components/motion/command-palette.tsx:148:5`（`listener`，owner `CommandPalette`）。因此该断言需要改指新位置（或让 shell 文件重新自持监听），属于测试/源码变更，本记录只做源码对账，不代为修改。

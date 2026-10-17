@@ -671,7 +671,7 @@ describe("notification inbox route", () => {
     await act(async () => trigger.click());
   }
   async function click(label: string) {
-    const find = () => [...container.querySelectorAll("button"), ...browser.document.querySelectorAll("button")].find((candidate) => candidate.textContent === label) as HTMLButtonElement | undefined;
+    const find = () => [...document.querySelectorAll("button"), ...browser.document.querySelectorAll("button")].find((candidate) => candidate.textContent === label) as HTMLButtonElement | undefined;
     let button = find();
     if (!button) { await openFilters(); button = find(); }
     expect(button, `button ${label}`).toBeTruthy(); await act(async () => button!.click());

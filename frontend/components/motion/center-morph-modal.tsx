@@ -1,5 +1,34 @@
 "use client";
 // beui.dev/components/motion/center-morph-modal
+//
+// §17 controlled-localization patches (slug: center-morph-modal). Everything
+// outside this list is the payload verbatim: the unfold/fold animation, the
+// unconditional portal, the body scroll lock, the window Tab trap, Escape and
+// the trigger focus return.
+//
+// 1. Labels (hardcoded English removed): `backdropLabel` names the backdrop
+//    control (was `aria-label="Dismiss modal"`), and `closeButtonLabel` no
+//    longer defaults to English. Preserves the app's rule that every control in
+//    a modal has a name in both locales — `ui/dialog.tsx` passes the caller's
+//    localized `dismissLabel`; see `frontend/components/ui/dialog.tsx:1-40`.
+// 2. Attribute passthrough: `panelProps` reach the panel element itself, so
+//    `role="alertdialog"`, `aria-labelledby`, `data-focus-scope`, `tabIndex`
+//    and the `data-*-dialog` hooks land on the same node the suites address
+//    (`test/unit/frontend-admin-duplicate-confirmation.test.tsx:34` and the
+//    other 50 confirmation suites select the panel by those attributes), and
+//    `backdropProps` reach the backdrop control so `[data-dialog-backdrop]`
+//    keeps selecting it. `panelRef` exposes the same panel to the adapter's
+//    `useFocusScope`, which owns initial focus, Tab and focus restore.
+// 4. Callback extension: `onDismiss` lets the owner observe every dismissal
+//    path (Escape, backdrop, close control) through one callback. The app's
+//    adapter does not use it (its `CenterMorphModal` `onOpenChange` already
+//    reports `setOpen(false)`); the window-level key trap now returns early on
+//    `event.defaultPrevented` so a key the panel's own focus scope handled is
+//    not handled a second time.
+//
+// Design lock applied in place (same tokens, no new scale): the payload's
+// `rounded-[30px]` panel and `round 30px` clip become the theme's `--radius`
+// (`rounded-lg`, 8.8px), and the close control keeps its own circle.
 
 import { X } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -7,8 +36,13 @@ import {
   cloneElement,
   createContext,
   isValidElement,
+  type AriaRole,
+  type CSSProperties,
+  type KeyboardEventHandler,
+  type MouseEventHandler,
   type ReactElement,
   type ReactNode,
+  type Ref,
   useCallback,
   useContext,
   useEffect,
@@ -141,17 +175,53 @@ export function CenterMorphModalClose({
   });
 }
 
+/**
+ * [patch 2] Panel attributes. Only attributes a caller can meaningfully put on
+ * the panel are named here; everything else (`data-*` hooks, which the suites
+ * address) rides the template-literal index. Motion's own props are not part of
+ * this contract: the payload owns the animation.
+ */
+export type CenterMorphPanelProps = {
+  id?: string;
+  role?: AriaRole;
+  tabIndex?: number;
+  className?: string;
+  style?: CSSProperties;
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+  onKeyUp?: KeyboardEventHandler<HTMLDivElement>;
+  onClick?: MouseEventHandler<HTMLDivElement>;
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+  "aria-describedby"?: string;
+  "aria-modal"?: boolean;
+  [attribute: `data-${string}`]: unknown;
+};
+
 export interface CenterMorphModalContentProps {
   children: ReactNode;
   /** Accessible name announced by screen readers. */
-  ariaLabel: string;
+  ariaLabel?: string;
   /** Optional id of descriptive content inside the modal. */
   ariaDescribedBy?: string;
   /** Close on Escape or backdrop press. Default true. */
   dismissible?: boolean;
   /** Render the close control inside the panel's top-right corner. Default true. */
   showCloseButton?: boolean;
+  /** [patch 1] Accessible name of the close control. Required when it renders. */
   closeButtonLabel?: string;
+  /** [patch 1] Accessible name of the backdrop control that dismisses the modal. */
+  backdropLabel: string;
+  /** [patch 2] Attributes for the panel element itself (role, aria-*, data-*, tabIndex). */
+  panelProps?: CenterMorphPanelProps;
+  /** [patch 2] Attributes for the backdrop control (the `data-*` hooks that address it). */
+  backdropProps?: {
+    className?: string;
+    [attribute: `data-${string}`]: unknown;
+  };
+  /** [patch 2] The panel node, for an owner that runs its own focus scope. */
+  panelRef?: Ref<HTMLDivElement>;
+  /** [patch 4] Every dismissal path (Escape, backdrop, close control) reports here. */
+  onDismiss?: () => void;
   className?: string;
   backdropClassName?: string;
 }
@@ -166,8 +236,11 @@ const FOCUSABLE_SELECTOR = [
 ].join(",");
 
 const CENTER_FOLDED_CLIP =
-  "inset(48% 48% 48% 48% round 30px)";
-const CENTER_OPEN_CLIP = "inset(0% 0% 0% 0% round 30px)";
+  "inset(48% 48% 48% 48% round 8.8px)";
+// 8.8px is the resolved value of `--radius` (0.55rem): the panel paints
+// `rounded-lg`, which Tailwind maps to `var(--radius)`, so the clip and the box
+// corners share one scale instead of the payload's 30px.
+const CENTER_OPEN_CLIP = "inset(0% 0% 0% 0% round 8.8px)";
 
 // Complex clip-path strings can snap when a spring resolves its final distance.
 // Keep the radius constant so the whole duration reads as surface unfolding,
@@ -191,7 +264,12 @@ export function CenterMorphModalContent({
   ariaDescribedBy,
   dismissible = true,
   showCloseButton = true,
-  closeButtonLabel = "Close modal",
+  closeButtonLabel,
+  backdropLabel,
+  panelProps,
+  backdropProps,
+  panelRef: panelRefProp,
+  onDismiss,
   className,
   backdropClassName,
 }: CenterMorphModalContentProps) {
@@ -199,6 +277,16 @@ export function CenterMorphModalContent({
   const reduce = useReducedMotion() ?? false;
   const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  // The adapter's focus scope and the payload's own Tab trap/Escape both need
+  // the panel node; both refs are written, neither replaces the other.
+  const setPanelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      panelRef.current = node;
+      if (typeof panelRefProp === "function") panelRefProp(node);
+      else if (panelRefProp) panelRefProp.current = node;
+    },
+    [panelRefProp],
+  );
 
   useEffect(() => setMounted(true), []);
 
@@ -214,9 +302,16 @@ export function CenterMorphModalContent({
     });
 
     const onKeyDown = (event: KeyboardEvent) => {
+      // The adapter's `useFocusScope` listens on the panel itself and
+      // preventDefaults the keys it owns (Escape, Tab). This window-level trap
+      // is the outer net for keys that never reach the panel — when the panel
+      // has already handled one, running it again would move focus twice and
+      // call `onOpenChange` twice for a single Escape press.
+      if (event.defaultPrevented) return;
       if (event.key === "Escape" && dismissible) {
         event.preventDefault();
         context.setOpen(false);
+        onDismiss?.();
         return;
       }
 
@@ -246,7 +341,7 @@ export function CenterMorphModalContent({
       document.body.style.overflow = previousOverflow;
       document.getElementById(context.triggerId)?.focus();
     };
-  }, [context, dismissible]);
+  }, [context, dismissible, onDismiss]);
 
   if (!mounted) return null;
 
@@ -258,9 +353,10 @@ export function CenterMorphModalContent({
             <>
               <motion.button
                 type="button"
-                aria-label="Dismiss modal"
+                aria-label={backdropLabel}
                 tabIndex={-1}
                 disabled={!dismissible}
+                {...backdropProps}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -269,7 +365,10 @@ export function CenterMorphModalContent({
                   duration: reduce ? 0.1 : 0.28,
                   ease: EASE_OUT,
                 }}
-                onClick={() => context.setOpen(false)}
+                onClick={() => {
+                  context.setOpen(false);
+                  onDismiss?.();
+                }}
                 className={cn(
                   "pointer-events-auto fixed inset-0 z-[100] h-full w-full cursor-default bg-background/10 backdrop-blur-sm",
                   backdropClassName,
@@ -287,13 +386,14 @@ export function CenterMorphModalContent({
                     unfolding silhouette without introducing another panel layer. */}
                 <div className="flex w-full flex-col items-center py-8">
                   <motion.div
-                    ref={panelRef}
+                    ref={setPanelRef}
                     id={context.contentId}
-                    role="dialog"
+                    role={panelProps?.role ?? "dialog"}
                     aria-modal="true"
                     aria-label={ariaLabel}
                     aria-describedby={ariaDescribedBy}
                     tabIndex={-1}
+                    {...panelProps}
                     initial={
                       reduce
                         ? { opacity: 0, clipPath: CENTER_OPEN_CLIP }
@@ -321,8 +421,9 @@ export function CenterMorphModalContent({
                         : CENTER_UNFOLD_TRANSITION
                     }
                     className={cn(
-                      "pointer-events-auto relative w-full max-w-[26rem] origin-center overflow-hidden rounded-[30px] border border-border bg-background will-change-[clip-path]",
+                      "pointer-events-auto relative w-full max-w-[26rem] origin-center overflow-hidden rounded-lg border border-border bg-background will-change-[clip-path]",
                       className,
+                      panelProps?.className,
                     )}
                   >
                     {children}
@@ -331,7 +432,10 @@ export function CenterMorphModalContent({
                       <motion.button
                         type="button"
                         aria-label={closeButtonLabel}
-                        onClick={() => context.setOpen(false)}
+                        onClick={() => {
+                          context.setOpen(false);
+                          onDismiss?.();
+                        }}
                         initial={
                           reduce
                             ? { opacity: 0 }

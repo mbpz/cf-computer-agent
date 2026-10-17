@@ -13,13 +13,13 @@ describe("timeline content editing through real App", () => {
   let patch: (body: Record<string, unknown>) => Response | Promise<Response>;
   let readFailure: number | undefined;
   const main = () => app!.container.querySelector("main")!;
-  const button = (text: string) => [...main().querySelectorAll("button")].find(node => node.textContent === text)!;
+  const button = (text: string) => [...document.querySelectorAll("button")].find(node => node.textContent === text)!;
   const field = (label: string) => main().querySelector<HTMLInputElement>(`[aria-label="${label}"]`)!;
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); }); }
   async function fill(label: string, value: string) { const n = field(label); expect(n).toBeTruthy(); if (n.tagName === "SELECT") { await act(async () => { n.value = value; n.dispatchEvent(new app!.browser.Event("change", { bubbles: true })); }); return; } const key = Object.keys(n).find(k => k.startsWith("__reactProps$"))!; await act(async () => (n as any)[key].onChange({ currentTarget: { value } })); }
   function captured(node: HTMLElement, name = "onClick") { const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!; return (node as any)[key][name]; }
-  const confirm = () => main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
-  const keep = () => main().querySelector<HTMLButtonElement>("[data-cancel-action]")!;
+  const confirm = () => document.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+  const keep = () => document.querySelector<HTMLButtonElement>("[data-cancel-action]")!;
   const unload = () => { const event = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(event); return event.defaultPrevented; };
   async function mount() {
     saved = row(); writes = []; reads = 0; readFailure = undefined;
@@ -69,7 +69,7 @@ describe("timeline content editing through real App", () => {
   ])("protects dirty %s on cancel and retains it when keeping editing", async (label, value) => {
     await mount(); await click(button("Edit timeline item")); await fill(label, value);
     expect(unload()).toBe(true); await click(button("Cancel editing"));
-    expect(main().querySelector('[role="alertdialog"]')).toBeTruthy(); expect(document.activeElement).toBe(keep());
+    expect(document.querySelector('[role="alertdialog"]')).toBeTruthy(); expect(document.activeElement).toBe(keep());
     await click(keep()); expect(field(label).value).toBe(value); expect(writes).toHaveLength(0);
     await click(button("Cancel editing")); const approve = captured(confirm());
     await act(async () => { approve(); approve(); });

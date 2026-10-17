@@ -35,7 +35,7 @@ describe("review queue decision identity", () => {
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   const locale = () => createLocaleRuntime({ storage: { getItem: () => "en", setItem: () => {} } });
   async function mount() { await act(async () => root.render(<ReviewQueueRoute locale={locale()} memberId="member-a" search={browser.location.search} />)); await flush(); }
-  async function click(label: string) { const el = [...container.querySelectorAll("button")].find((button) => button.textContent === label); expect(el, label).toBeTruthy(); await act(async () => el!.click()); await flush(); }
+  async function click(label: string) { const el = [...document.querySelectorAll("button")].find((button) => button.textContent === label); expect(el, label).toBeTruthy(); await act(async () => el!.click()); await flush(); }
   function unload() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
 
   it("decides from the queue with one operation identity and the row's authoritative version", async () => {
@@ -54,7 +54,7 @@ describe("review queue decision identity", () => {
     await mount();
     await click("Reject");
     await click("Confirm rejection");
-    const final = container.querySelector("[data-confirm-action]") as HTMLButtonElement;
+    const final = document.querySelector("[data-confirm-action]") as HTMLButtonElement;
     await act(async () => final.click());
     await flush();
 
@@ -95,7 +95,7 @@ describe("review queue decision identity", () => {
     await mount();
     await click("Reject");
     await click("Confirm rejection");
-    const final = container.querySelector("[data-confirm-action]") as HTMLButtonElement;
+    const final = document.querySelector("[data-confirm-action]") as HTMLButtonElement;
     await act(async () => final.click());
     await flush();
 

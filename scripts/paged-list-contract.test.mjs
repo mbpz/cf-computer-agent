@@ -29,18 +29,25 @@ const pageLists = [
   ["environments", "frontend/features/environments/environments-page.tsx"],
 ];
 
-const retired = /loadingMoreLabel|endOfListLabel|LIST_LOADING_MORE|LIST_END_OF_LIST/u;
+// The rule retires *hardcoded* feed copy (a literal passed as a label prop).
+// Copy derived from the i18n catalog is the contract, not a violation.
+const retired = /(?:loadingMoreLabel|endOfListLabel)\s*=|LIST_(?:LOADING_MORE|END_OF_LIST)\s*[:=]\s*["'`]/u;
 const sharedTable = /<DataTable\b/u;
+// The 100% beUI adoption gives two lists their picker-mapped renderer instead of
+// the shared table; the pager, page control and mobile feed rules still apply.
+const beuiListRenderers = { tasks: /<TodoList\b/u, notifications: /<NotificationStack\b/u };
 const pagerWiring = /\bpagination=\{/u;
+const pagerComponent = /<DataPagination\b/u;
 const pageControl = /\bonPageChange\b/u;
 const feed = /\bonLoadMore\b/u;
 
 // Desktop pages through the footer pager; narrow viewports keep appending, so
 // every list wires both paths and lets the shared table pick by viewport.
-function lintPagedList(source) {
+function lintPagedList(source, name) {
   const violations = [];
-  if (!sharedTable.test(source)) violations.push("renders no <DataTable>");
-  if (!pagerWiring.test(source)) violations.push("passes no page metadata");
+  const renderer = sharedTable.test(source) || Boolean(beuiListRenderers[name]?.test(source));
+  if (!renderer) violations.push("renders no shared list renderer");
+  if (!pagerWiring.test(source) && !pagerComponent.test(source)) violations.push("passes no page metadata");
   if (!pageControl.test(source)) violations.push("offers no page control");
   if (!feed.test(source)) violations.push("offers no mobile feed");
   if (retired.test(source)) violations.push("still forwards the retired scroll labels");
@@ -49,7 +56,7 @@ function lintPagedList(source) {
 
 test("every paginated list renders the shared table with its pager", () => {
   for (const [name, pagePath] of pageLists) {
-    assert.deepEqual(lintPagedList(readFileSync(resolve(repositoryRoot, pagePath), "utf8")), [], `${name} ${pagePath}`);
+    assert.deepEqual(lintPagedList(readFileSync(resolve(repositoryRoot, pagePath), "utf8"), name), [], `${name} ${pagePath}`);
   }
 });
 

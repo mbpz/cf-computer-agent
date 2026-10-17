@@ -19,10 +19,10 @@ describe("space write refresh recovery", () => {
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   async function render() { await act(async () => root.render(<AdminSpacesRoute locale={locale()} memberId="member-a" />)); await flush(); }
-  function button(label: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement | undefined; }
+  function button(label: string) { return [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement | undefined; }
   async function click(label: string) { const target = button(label); expect(target).toBeTruthy(); await act(async () => target!.click()); await flush(); }
-  async function input(id: string, value: string) { const el = container.querySelector(`#${id}`) as HTMLInputElement; await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value); el.dispatchEvent(new browser.Event("input", { bubbles: true })); }); }
-  async function createSpace() { await click("Create space"); await input("admin-space-name", "New space"); await input("admin-space-slug", "new-space"); await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); }); await flush(); if (button("Confirm changes")) await click("Confirm changes"); }
+  async function input(id: string, value: string) { const el = document.querySelector(`#${id}`) as HTMLInputElement; await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value); el.dispatchEvent(new browser.Event("input", { bubbles: true })); }); }
+  async function createSpace() { await click("Create space"); await input("admin-space-name", "New space"); await input("admin-space-slug", "new-space"); await act(async () => { document.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); }); await flush(); if (button("Confirm changes")) await click("Confirm changes"); }
   function unloadBlocked() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
   async function leave() { await act(async () => writeWorkspaceHistory("push", "/home")); await flush(); }
 
@@ -76,7 +76,7 @@ describe("space write refresh recovery", () => {
   });
 
   const draftKey = "memory-garden:admin-space-draft:v1:member-a";
-  const name = () => container.querySelector("#admin-space-name") as HTMLInputElement;
+  const name = () => document.querySelector("#admin-space-name") as HTMLInputElement;
   async function remount() {
     await act(async () => root.unmount());
     const { createRoot } = await import("react-dom/client"); root = createRoot(container);
@@ -93,7 +93,7 @@ describe("space write refresh recovery", () => {
     expect(unloadBlocked()).toBe(true); expect(posts).toBe(0);
     await remount();
     expect(name().value).toBe("Keep this space");
-    expect((container.querySelector("#admin-space-slug") as HTMLInputElement).value).toBe("keep-space");
+    expect((document.querySelector("#admin-space-slug") as HTMLInputElement).value).toBe("keep-space");
     expect(posts).toBe(0); expect(unloadBlocked()).toBe(true);
   });
   it("keeps the space draft on screen when the tab cannot record it", async () => {
@@ -137,7 +137,7 @@ describe("space write refresh recovery", () => {
     expect(browser.sessionStorage.getItem(draftKey)).toContain("Keep this edit");
     expect(unloadBlocked()).toBe(true); expect(patches).toBe(0);
     await remount();
-    expect((container.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("Keep this edit");
+    expect((document.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("Keep this edit");
     expect(patches).toBe(0); expect(unloadBlocked()).toBe(true);
   });
 });

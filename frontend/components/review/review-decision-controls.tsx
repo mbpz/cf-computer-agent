@@ -4,6 +4,7 @@ import { ReviewDraftProvider, useReviewDrafts, initialReviewNote as initialDetai
 import { ConfirmAction } from "../ui/confirm-action";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
+import { OverflowActions } from "../motion/overflow-actions";
 import { Label } from "../ui/label";
 import { Select } from "../ui/select";
 import { Textarea } from "../ui/textarea";
@@ -98,14 +99,29 @@ function ReviewDecisionEditor({ disabled, terminal, pendingAction, decisionUnres
   return <>
     <div className="space-y-3" inert={valid} aria-hidden={valid || undefined}>
       <div className="flex flex-wrap gap-2">
-        {(["publish", "request_changes", "reject"] as const).map((action) => {
-          const label = frontendText(locale, decisionLabel(action));
-          return <Button key={action} type="button" disabled={locked || valid} variant={action === "publish" ? "default" : action === "reject" ? "destructive" : "outline"}
-            aria-label={`${label} ${targetLabel}`} aria-busy={pendingAction === action}
-            aria-expanded={action === "publish" ? undefined : selected === action} onClick={() => requestChoice(action)}>
-            {pendingAction === action ? frontendText(locale, "ADMIN_REVIEW_ACTION_PENDING") : label}
-          </Button>;
-        })}
+        {/* Three decisions per row on one beUI rail (overflow-actions). Each
+            item keeps the exact accessible name (`<label> <target>`) and the
+            pending/expanded state the suites and the page read. */}
+        <OverflowActions
+          size="sm"
+          openLabel={frontendText(locale, "COMMON_MORE_ACTIONS")}
+          closeLabel={frontendText(locale, "COMMON_FEWER_ACTIONS")}
+          primaryActions={(["publish", "request_changes", "reject"] as const).map((action) => {
+            const label = frontendText(locale, decisionLabel(action));
+            return {
+              id: action,
+              label: pendingAction === action ? frontendText(locale, "ADMIN_REVIEW_ACTION_PENDING") : label,
+              ariaLabel: `${label} ${targetLabel}`,
+              tone: action === "reject" ? "destructive" : "default",
+              disabled: locked || valid,
+              attributes: {
+                "aria-busy": pendingAction === action,
+                ...(action === "publish" ? {} : { "aria-expanded": selected === action }),
+              },
+              onClick: () => requestChoice(action),
+            };
+          })}
+        />
       </div>
       {selected && !terminal && <ReviewDecisionForm action={selected} details={details} onChange={setDetails} disabled={locked || valid || drafts.confirming} locale={locale}
         onCancel={() => requestChoice(null)} onSubmit={submit} />}

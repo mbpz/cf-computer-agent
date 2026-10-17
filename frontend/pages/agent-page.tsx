@@ -7,6 +7,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
+import { PromptInput } from "../components/agents/prompt-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/motion/select";
 import { SummaryRow, type SummaryRowItem } from "../components/ui/summary-row";
 import { agentLocationFromSearch, type AgentScope, type AgentTurnState, type ChatStage } from "../lib/agent-data";
@@ -71,27 +72,33 @@ export function AgentPage({ scope, state, locale, question = "", onQuestionChang
     ...(state.kind === "ready" && state.confidence === "low" ? [{ label: frontendText(locale, "AGENT_CONFIDENCE"), value: frontendText(locale, "AGENT_CONFIDENCE_LOW") }] : []),
   ];
   return <section className="flex flex-col space-y-6 lg:h-full lg:min-h-0"><div><PageHeader title={frontendText(locale, "AGENT_TITLE")} /><SummaryRow className="mt-1" locale={locale} items={summaryItems} /></div>
-    {/* Kept hand-rolled on purpose. beUI's `prompt-input` (slug
-        `@beui/prompt-input`) carries the drafted question (`value`/`onValueChange`
-        plus `id` through its textarea props) and honours `disabled`, so the
-        write-blocked guard survives - but one icon-only button serves both send
-        and stop and its accessible name is the hardcoded English literal pair
-        `"Stop generating"` / `"Send prompt"` (payload
-        `components/agents/prompt-input.tsx:300-307`, the label at `:304`), and no
-        prop can override it: the props interface (`:47-67`) has no label or
-        button-props entry and its only spread, `{...textareaProps}` (`:90`),
-        lands on the textarea (`:190`), while a caller's `aria-label` is consumed
-        by that textarea (`:88`, `:188`). The `+` action trigger is a second
-        icon-only button with the same defect (`:200-207`, `"Add to prompt"` at
-        `:205`). Adopting it would drop the localized AGENT_SUBMIT and AGENT_STOP
-        affordances this composer owes both locales, so the two controls stay
-        here; re-verified against the live payload on 2026-10-17. */}
-    <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
+    {/* beUI `prompt-input` with the §17 label patch. It owns the auto-growing
+        textarea, Enter-to-send, focus return and the send/stop swap; the
+        caller still owns the write-blocked guard (`onSubmit` -> `submit()`,
+        `frontend/app.tsx:1277`) and the unknown-outcome recovery panel. The
+        required `labels` keep AGENT_SUBMIT / AGENT_STOP accessible in both
+        locales, and every textarea prop (`id`, `name`, placeholder,
+        aria-label, autoComplete) reaches `#agent-question` unchanged. */}
+    <div className="space-y-2">
       <Label htmlFor="agent-question">{frontendText(locale, "AGENT_QUESTION_LABEL")}</Label>
-      <div className="flex flex-col gap-2 sm:flex-row"><Input id="agent-question" name="question" disabled={state.kind === "loading" || feedbackBlocked} value={question} onChange={(event) => onQuestionChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "AGENT_QUESTION_PLACEHOLDER")} autoComplete="off" /><Button type="submit" disabled={!onSubmit || state.kind === "loading" || feedbackBlocked}>{frontendText(locale, "AGENT_SUBMIT")}</Button></div>
-    </form>
+      <PromptInput
+        id="agent-question"
+        name="question"
+        labels={{ submit: frontendText(locale, "AGENT_SUBMIT"), stop: frontendText(locale, "AGENT_STOP") }}
+        value={question}
+        onValueChange={(value) => onQuestionChange?.(value)}
+        onSubmit={() => onSubmit?.()}
+        onStop={onCancel}
+        loading={state.kind === "loading"}
+        disabled={state.kind === "loading" || feedbackBlocked}
+        placeholder={frontendText(locale, "AGENT_QUESTION_PLACEHOLDER")}
+        aria-label={frontendText(locale, "AGENT_QUESTION_LABEL")}
+        autoComplete="off"
+        minRows={1}
+      />
+    </div>
     {onStartScope && sourceDraft && <AgentSourceControls key={JSON.stringify(scope)} draft={sourceDraft} locale={locale} disabled={state.kind === "loading" || feedbackBlocked} isWriteBlocked={isWriteBlocked} onStartScope={onStartScope} />}
-    {state.kind === "loading" ? <div><div data-page-state="loading" aria-busy="true"><StreamingResponse status="streaming" announce={false}><AgentStageProgress locale={locale} stage={stage ?? null} /></StreamingResponse></div><Button className="mt-4" variant="outline" onClick={onCancel}>{frontendText(locale, "AGENT_STOP")}</Button></div> : state.kind === "cancelled" ? <PageState kind="degraded" title={frontendText(locale, "AGENT_STOPPED_WAITING")} description={frontendText(locale, "AGENT_STOPPED_DETAIL")} /> : state.kind === "unavailable" ? <div data-agent-unavailable={state.reason}><PageState kind="degraded" title={frontendText(locale, state.reason === "quota" ? "AGENT_UNAVAILABLE_QUOTA" : "AGENT_UNAVAILABLE_DEGRADED")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState></div> : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_ANSWER_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState> : <>{state.kind === "refused" ? <AgentRefusal locale={locale} state={state} onRetry={onRetry} /> : <AnswerPanel locale={locale} state={state} />}{state.conversationId && <AgentFeedback admission={feedbackAdmission} memberId={memberId} key={state.conversationId} locale={locale} conversationId={state.conversationId} citationIds={state.citations.map((citation) => citation.id)} />}</>}
+    {state.kind === "loading" ? <div><div data-page-state="loading" aria-busy="true"><StreamingResponse status="streaming" announce={false}><AgentStageProgress locale={locale} stage={stage ?? null} /></StreamingResponse></div></div> : state.kind === "cancelled" ? <PageState kind="degraded" title={frontendText(locale, "AGENT_STOPPED_WAITING")} description={frontendText(locale, "AGENT_STOPPED_DETAIL")} /> : state.kind === "unavailable" ? <div data-agent-unavailable={state.reason}><PageState kind="degraded" title={frontendText(locale, state.reason === "quota" ? "AGENT_UNAVAILABLE_QUOTA" : "AGENT_UNAVAILABLE_DEGRADED")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState></div> : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_ANSWER_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState> : <>{state.kind === "refused" ? <AgentRefusal locale={locale} state={state} onRetry={onRetry} /> : <AnswerPanel locale={locale} state={state} />}{state.conversationId && <AgentFeedback admission={feedbackAdmission} memberId={memberId} key={state.conversationId} locale={locale} conversationId={state.conversationId} citationIds={state.citations.map((citation) => citation.id)} />}</>}
   </section>;
 }
 

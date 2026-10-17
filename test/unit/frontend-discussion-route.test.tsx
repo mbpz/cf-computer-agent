@@ -62,7 +62,7 @@ describe("discussion routes", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
     complete = true;
     await act(async () => {
-      if (action === "lookup") [...container.querySelectorAll("button")].find(b => b.textContent === "Check exact result")!.click();
+      if (action === "lookup") [...document.querySelectorAll("button")].find(b => b.textContent === "Check exact result")!.click();
       else container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
     });
     await waitFor(() => container.querySelector("textarea")?.value === "" && !container.querySelector("textarea")?.disabled);
@@ -213,7 +213,7 @@ describe("discussion routes", () => {
     expect(container.querySelector("[data-messages-scroll]")).toBeNull();
 
     revoked = false;
-    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === frontendText(locale, "MESSAGES_RETRY"))!.click(); });
+    await act(async () => { [...document.querySelectorAll("button")].find((button) => button.textContent === frontendText(locale, "MESSAGES_RETRY"))!.click(); });
     await waitFor(() => browser.location.pathname === "/messages/thread-1");
     expect(attempts.filter((attempt) => attempt.startsWith("POST"))).toHaveLength(2);
   });
@@ -245,7 +245,7 @@ describe("discussion routes", () => {
 
     // The context is revoked while the thread is open; refreshing must not re-render it.
     revoked = true;
-    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === frontendText(locale, "MESSAGES_REFRESH"))!.click(); });
+    await act(async () => { Array.from(document.querySelectorAll("button")).find((button) => button.textContent === frontendText(locale, "MESSAGES_REFRESH"))!.click(); });
     await waitFor(() => container.querySelector("[data-thread-context-revoked]") !== null);
     expect(container.textContent).not.toContain("Thread A");
     expect(container.querySelector("[data-message-id]")).toBeNull();
@@ -262,7 +262,7 @@ describe("discussion routes", () => {
 
     // Access restored: only the explicit retry re-authorizes and renders the history again.
     revoked = false;
-    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === frontendText(locale, "MESSAGES_RETRY"))!.click(); });
+    await act(async () => { [...document.querySelectorAll("button")].find((button) => button.textContent === frontendText(locale, "MESSAGES_RETRY"))!.click(); });
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     expect(container.textContent).toContain("Thread A");
   });
@@ -339,7 +339,7 @@ describe("discussion routes", () => {
       await waitFor(() => container.querySelector("[role='alert']") !== null);
     }
     failRead = true;
-    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
+    await act(async () => { Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
     await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
     expect(container.querySelector("#discussion-composer")).toBeNull();
     expect(container.textContent).not.toContain("Retry this reply");
@@ -380,7 +380,7 @@ describe("discussion routes", () => {
     await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
     await waitFor(() => container.querySelector("[role='alert']") !== null);
     denied = true;
-    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
+    await act(async () => { Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
     await waitFor(() => container.querySelector("[data-thread-context-revoked]") !== null);
     expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
     expect(container.querySelector("[data-page-state='error']")).toBeNull();
@@ -418,7 +418,7 @@ describe("discussion routes", () => {
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Old attempt");
     await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
     denied = true;
-    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
+    await act(async () => { Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
     await waitFor(() => container.querySelector("[data-page-state='forbidden']") !== null);
     denied = false;
     await act(async () => { container.querySelector("button")!.click(); });
@@ -483,7 +483,7 @@ describe("discussion routes", () => {
     await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Private draft");
-    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
+    await act(async () => { Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
     await waitFor(() => detailReads === 2);
     await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
     await waitFor(() => container.querySelector("#discussion-composer") === null);
@@ -509,13 +509,13 @@ describe("discussion routes", () => {
     await changeReactTextarea(textarea, "Keep draft");
     await act(async () => { writeWorkspaceHistory("push", "/home"); });
     expect(browser.location.pathname).toBe("/messages/thread-1");
-    expect(container.querySelector("[role='alertdialog']")).not.toBeNull();
+    expect(document.querySelector("[role='alertdialog']")).not.toBeNull();
     await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
     expect(writes).toBe(0);
-    await act(async () => { Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Keep editing")!.click(); });
+    await act(async () => { Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Keep editing")!.click(); });
     expect(textarea.value).toBe("Keep draft");
     await act(async () => { writeWorkspaceHistory("push", "/home"); });
-    await act(async () => { Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Discard changes")!.click(); });
+    await act(async () => { Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Discard changes")!.click(); });
     expect(browser.location.pathname).toBe("/home");
     expect(textarea.value).toBe("");
   });
@@ -550,7 +550,7 @@ describe("discussion routes", () => {
     await act(async () => { (reply as unknown as Record<string, { onClick: () => void }>)[propsKey]!.onClick(); });
     await act(async () => { (container.querySelector("[data-message-id] button") as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
     expect(browser.location.pathname).toBe("/messages/thread-1");
-    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect(document.querySelector("[role='alertdialog']")).toBeNull();
     const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload);
     expect(unload.defaultPrevented).toBe(true);
     await submit();
@@ -918,7 +918,7 @@ describe("discussion routes", () => {
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Original");
     const submit = () => container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
-    const click = (text: string) => [...container.querySelectorAll("button")].find(b => b.textContent === text)!.click();
+    const click = (text: string) => [...document.querySelectorAll("button")].find(b => b.textContent === text)!.click();
     await act(async () => { submit(); });
     await waitFor(() => container.querySelector("[role=alert]") !== null);
     await act(async () => { click("Check exact result"); });
@@ -968,7 +968,7 @@ describe("discussion routes", () => {
     await waitFor(() => container.querySelector("[role=alert]") !== null);
     expect(container.textContent).toContain(key);
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
-    const check = [...container.querySelectorAll("button")].find(b => b.textContent === "Check exact result")!;
+    const check = [...document.querySelectorAll("button")].find(b => b.textContent === "Check exact result")!;
     expect(check).toBeTruthy();
     await act(async () => { check.click(); check.click(); });
     if (outcome !== "offline") {
@@ -986,7 +986,7 @@ describe("discussion routes", () => {
     } else {
       if (outcome === "denied") {
         expect(container.textContent).not.toContain("Original"); expect(container.textContent).not.toContain(key);
-        await act(async () => ([...container.querySelectorAll("button")].find(b => b.textContent === "Try discussions again")!).click());
+        await act(async () => ([...document.querySelectorAll("button")].find(b => b.textContent === "Try discussions again")!).click());
         await waitFor(() => container.querySelector("#discussion-composer") !== null);
       }
       expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("Original");
@@ -1102,7 +1102,7 @@ describe("discussion routes", () => {
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Keep this reply");
     expect(browser.sessionStorage.getItem("memory-garden:discussion-draft:v1:member-1:thread-1")).toContain("Keep this reply");
     await act(async () => { writeWorkspaceHistory("push", "/home"); });
-    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Discard changes")!.click(); });
+    await act(async () => { Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Discard changes")!.click(); });
     expect(browser.location.pathname).toBe("/home");
     expect(browser.sessionStorage.getItem("memory-garden:discussion-draft:v1:member-1:thread-1")).toBeNull();
     await act(async () => root.unmount());
@@ -1140,7 +1140,7 @@ describe("discussion routes", () => {
     await waitFor(() => container.textContent?.includes("can't be read") ?? false);
     expect(writeWorkspaceHistory("push", "/home")).toBe("committed");
     browser.history.replaceState({}, "", "/messages/thread-1");
-    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Discard record")!.click(); });
+    await act(async () => { Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Discard record")!.click(); });
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "After discard");
     expect(browser.sessionStorage.getItem("memory-garden:discussion-draft:v1:member-1:thread-1")).toContain("After discard");

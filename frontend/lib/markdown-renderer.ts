@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import MarkdownIt, { type StateCore, type Token } from "markdown-it";
+import MarkdownIt, { type RendererRule, type StateCore, type Token } from "markdown-it";
 import { createElement, type ReactNode } from "react";
 
 const markdown = new MarkdownIt({
@@ -10,6 +10,46 @@ const markdown = new MarkdownIt({
 });
 
 const HEADING_TAG = /^h([1-6])$/u;
+
+/**
+ * An image only enters the article when its source is one the reader can safely fetch:
+ * an absolute `http(s)` URL, or a same-origin/relative path. Every other scheme —
+ * `javascript:`, `vbscript:`, `data:`, `file:`, protocol-relative `//host` — is refused and
+ * the image's alt text is rendered instead, so a published revision can never turn a
+ * Markdown image into script, a local file read or an unexpected host.
+ */
+function safeImageSource(source: string): string | null {
+  const value = source.trim();
+  if (!value) return null;
+  if (/^[a-z][a-z0-9+.-]*:/iu.test(value)) return /^https?:/iu.test(value) ? value : null;
+  if (value.startsWith("//")) return null;
+  return value;
+}
+
+/**
+ * Renders the image when its source passes the scheme check, and its alt text otherwise.
+ * The safety attributes are written here, before sanitization: the reader's delegated
+ * click/keyboard handler is what turns the image into the lightbox trigger, and lazy +
+ * async decoding keeps a long article from fetching every picture at once.
+ */
+const renderImage: RendererRule = (tokens, index, options, env, self) => {
+  const token = tokens[index];
+  const source = token.attrGet("src") ?? "";
+  const sourceText = typeof source === "string" ? source : "";
+  const alt = self.renderInlineAsText(token.children ?? [], options, env);
+  const safe = safeImageSource(sourceText);
+  if (safe === null) return alt.replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
+  token.attrSet("src", safe);
+  token.attrSet("loading", "lazy");
+  token.attrSet("decoding", "async");
+  token.attrSet("class", "reader-image");
+  token.attrSet("role", "button");
+  token.attrSet("tabindex", "0");
+  token.attrSet("aria-haspopup", "dialog");
+  return self.renderToken(tokens, index, options);
+};
+
+markdown.renderer.rules.image = renderImage;
 
 /**
  * Every page has exactly one `h1`: its title, drawn by `PageHeader`. The reader's
@@ -46,8 +86,11 @@ markdown.core.ruler.push("content_heading_levels", (state: StateCore) => { demot
 function sanitize(html: string): string {
   if (typeof window === "undefined") return html;
   return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ["a", "blockquote", "br", "code", "del", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "li", "ol", "p", "pre", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul"],
-    ALLOWED_ATTR: ["class", "href", "rel", "target"],
+    ALLOWED_TAGS: ["a", "blockquote", "br", "code", "del", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "img", "li", "ol", "p", "pre", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul"],
+    ALLOWED_ATTR: ["alt", "aria-haspopup", "class", "decoding", "height", "href", "loading", "rel", "role", "src", "tabindex", "target", "title", "width"],
+    // Every URL-valued attribute (including `img src`) is held to these schemes; the
+    // renderer above has already dropped anything else before this pass runs.
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/iu,
     FORBID_ATTR: ["style", "onerror", "onclick", "onload"],
     ALLOW_DATA_ATTR: false,
   });

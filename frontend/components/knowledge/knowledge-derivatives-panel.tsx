@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleIndicator, CollapsibleTrigger } from "../motion/collapsible";
+import { BouncyAccordion } from "../motion/bouncy-accordion";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import {
   EVIDENCE_INSUFFICIENT_MESSAGE_KEY,
@@ -197,17 +198,26 @@ function ArtifactBody(props: {
         {citationsOf(artifact.citations)}
       </>;
     case "faq":
-      return <dl className="space-y-3">
-        {artifact.items.map((item, index) => <div key={index} data-faq-item={item.gap ? "gap" : "answered"}>
-          <dt className="text-sm font-medium">{item.question}</dt>
-          <dd className="mt-1 text-sm">
+      // beUI's `bouncy-accordion` (slug: bouncy-accordion) carries the FAQ
+      // entries. `data-faq-item` moves to each row wrapper through the payload's
+      // `attributes` slot, and the answer (gap copy or markdown prose plus
+      // citations) is the row description. The previous `<dl>` term/definition
+      // pairing is expressed by the trigger naming its content section via
+      // `aria-labelledby`; the definition-list element itself is gone.
+      return <BouncyAccordion
+        className="space-y-3"
+        items={artifact.items.map((item, index) => ({
+          id: `faq-${index}`,
+          title: item.question,
+          attributes: { "data-faq-item": item.gap ? "gap" : "answered" },
+          description: <>
             {item.answer === null || item.answer.trim().length === 0
               ? <p className="text-muted-foreground">{frontendText(locale, "KNOWLEDGE_DERIVATIVES_FAQ_GAP")}</p>
               : <Prose renderMarkdown={renderMarkdown} text={item.answer} />}
             {citationsOf(item.citations)}
-          </dd>
-        </div>)}
-      </dl>;
+          </>,
+        }))}
+      />;
     case "timeline":
       return <>
         {artifact.sortStatus === "unsorted" && <p className="text-xs text-muted-foreground" data-derivative-unsorted="true">{frontendText(locale, "KNOWLEDGE_DERIVATIVES_UNSORTED")}</p>}

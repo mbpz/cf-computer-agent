@@ -9,6 +9,7 @@ import { frontendText } from "../lib/i18n";
 import type { Goal, GoalStatus } from "../lib/goals-data";
 import { Badge } from "../components/ui/badge";
 import { RangeSlider } from "../components/motion/range-slider";
+import { OverflowActions, type OverflowActionItem } from "../components/motion/overflow-actions";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
 import { PageHeader } from "../components/ui/page-header";
@@ -41,7 +42,7 @@ export function GoalsPage({ locale, state, pending = false, actionError, onRetry
   const changePage = (page: number) => { if (controlsBlocked) return; onPageChange?.(page); };
   const changePageSize = (pageSize: SupportedPageSize) => { if (controlsBlocked) return; onPageSizeChange?.(pageSize); };
   return <>{state.kind === "ready" && <>{statusConfirmation.dialog}<Dialog open={createOpen} onOpenChange={next => { if (!next) setCreateOpen(false); }}>
-    <DialogContent role="dialog" data-goals-create-dialog aria-labelledby={createTitleId} aria-describedby={createDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
+    <DialogContent variant="morph" role="dialog" data-goals-create-dialog dismissLabel={frontendText(locale, "COMMON_DISMISS")} aria-labelledby={createTitleId} aria-describedby={createDescriptionId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">
       <DialogTitle id={createTitleId}>{frontendText(locale, "GOALS_CREATE_TITLE")}</DialogTitle>
       <p id={createDescriptionId} className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "GOALS_DESCRIPTION")}</p>
       <div className="mt-4"><PlanningCreateForm isSubmitBlocked={statusConfirmation.isOpen} createMemberId={createMemberId} kind="GOALS" locale={locale} pending={pending || statusConfirmation.open} onCreate={onCreate} onCreateReadback={onCreateReadback} onCreateDenied={onCreateDenied} onCreateLock={locked => { setCreateComposerLocked(locked); onCreateLock?.(locked); }} onCreated={() => setCreateOpen(false)} /></div>
@@ -77,7 +78,16 @@ export function GoalsPage({ locale, state, pending = false, actionError, onRetry
         { key: "goal", header: frontendText(locale, "GOALS_COLUMN_GOAL"), cellClassName: "whitespace-normal", cell: (goal) => <div className="min-w-0"><h2 className="truncate font-medium">{goal.title}</h2>{goal.description && <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{goal.description}</p>}</div> },
         { key: "status", header: frontendText(locale, "GOALS_COLUMN_STATUS"), width: "140px", cell: (goal) => <Badge variant={goal.status === "completed" ? "success" : goal.status === "archived" ? "outline" : "secondary"}>{frontendText(locale, `GOALS_STATUS_${goal.status.toUpperCase()}`)}</Badge> },
         { key: "progress", header: frontendText(locale, "GOALS_COLUMN_PROGRESS"), width: "200px", cellClassName: "whitespace-normal", cell: (goal) => <div className="space-y-2"><div className="flex items-center justify-between text-xs text-muted-foreground"><span>{frontendText(locale, "GOALS_PROGRESS")}</span><span>{goal.progress}%</span></div><RangeSlider aria-label={`${frontendText(locale, "GOALS_PROGRESS")} ${goal.title}`} min={0} max={100} step={1} value={goal.progress} disabled={statusConfirmation.open || createLocked || pending || goal.status === "archived"} formatValueText={(value) => `${value}%`} onValueChange={(value) => { if (!statusConfirmation.isOpen()) onProgressChange?.(goal, value); }} className="w-full" /></div> },
-        { key: "actions", header: frontendText(locale, "GOALS_COLUMN_ACTIONS"), width: "300px", cellClassName: "whitespace-normal", cell: (goal) => <div className="flex flex-wrap gap-2">{onManageTasks && <Button id={`manage-goal-tasks-${goal.id}`} type="button" size="sm" variant="outline" disabled={statusConfirmation.open || createLocked || pending} onClick={event => onManageTasks(goal, event.currentTarget)}>{frontendText(locale, "GOALS_TASK_LINKS")}</Button>}{goal.status !== "completed" && goal.status !== "archived" && <Button type="button" size="sm" disabled={statusConfirmation.unavailable || statusConfirmation.open || createLocked || pending} onClick={() => statusConfirmation.request(goal, "completed")}><CheckCircle size={14} className="mr-1" />{frontendText(locale, "GOALS_COMPLETE")}</Button>}{goal.status !== "archived" && <Button type="button" size="sm" variant="outline" disabled={statusConfirmation.unavailable || statusConfirmation.open || createLocked || pending} onClick={() => statusConfirmation.request(goal, "archived")}><Archive size={14} className="mr-1" />{frontendText(locale, "GOALS_ARCHIVE")}</Button>}{goal.status === "archived" && <Button type="button" size="sm" variant="outline" disabled={statusConfirmation.unavailable || statusConfirmation.open || createLocked || pending} onClick={() => statusConfirmation.request(goal, "active")}>{frontendText(locale, "GOALS_RESTORE")}</Button>}</div> },
+        { key: "actions", header: frontendText(locale, "GOALS_COLUMN_ACTIONS"), width: "300px", cellClassName: "whitespace-normal", cell: (goal) => {
+          const blocked = statusConfirmation.open || createLocked || pending;
+          const statusBlocked = statusConfirmation.unavailable || blocked;
+          const actions: OverflowActionItem[] = [];
+          if (onManageTasks) actions.push({ id: "tasks", label: frontendText(locale, "GOALS_TASK_LINKS"), attributes: { id: `manage-goal-tasks-${goal.id}` }, disabled: blocked, onClick: (event) => { if (event) onManageTasks(goal, event.currentTarget); } });
+          if (goal.status !== "completed" && goal.status !== "archived") actions.push({ id: "complete", label: frontendText(locale, "GOALS_COMPLETE"), icon: <CheckCircle size={14} aria-hidden="true" />, disabled: statusBlocked, onClick: () => statusConfirmation.request(goal, "completed") });
+          if (goal.status !== "archived") actions.push({ id: "archive", label: frontendText(locale, "GOALS_ARCHIVE"), icon: <Archive size={14} aria-hidden="true" />, disabled: statusBlocked, onClick: () => statusConfirmation.request(goal, "archived") });
+          if (goal.status === "archived") actions.push({ id: "restore", label: frontendText(locale, "GOALS_RESTORE"), disabled: statusBlocked, onClick: () => statusConfirmation.request(goal, "active") });
+          return <OverflowActions size="sm" primaryActions={actions} openLabel={frontendText(locale, "COMMON_MORE_ACTIONS")} closeLabel={frontendText(locale, "COMMON_FEWER_ACTIONS")} />;
+        } },
       ]}
     />}
   </section></>;

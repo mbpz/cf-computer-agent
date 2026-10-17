@@ -22,7 +22,7 @@ describe("menu write recovery", () => {
 
 
   async function render(runtime = locale()) { await act(async () => root.render(<AdminMenusRoute locale={runtime} />)); await flush(); }
-  function button(label: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; }
+  function button(label: string) { return [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; }
   async function click(label: string) { expect(button(label)).toBeTruthy(); await act(async () => button(label).click()); await flush(); }
 
   it.each(["pending", "unknown", "forbidden"])("route-blocks %s menu writes even after editor removal", async outcome => {
@@ -41,12 +41,12 @@ describe("menu write recovery", () => {
     else { response.resolve(json({ menu: menu({ status: "disabled" }) })); await flush(); }
   });
   async function confirmChange(label: string) {
-    await click(label); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+    await click(label); expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
     await click("Confirm change");
   }
 
   async function field(name: string, value: string) {
-    const input = container.querySelector(`[name="${name}"]`) as HTMLInputElement;
+    const input = document.querySelector(`[name="${name}"]`) as HTMLInputElement;
     expect(input).toBeTruthy();
     await act(async () => { const proto = input.tagName === "SELECT" ? browser.HTMLSelectElement.prototype : browser.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(input, value); input.dispatchEvent(new browser.Event(input.tagName === "SELECT" ? "change" : "input", { bubbles: true }) as unknown as Event); });
   }
@@ -54,40 +54,40 @@ describe("menu write recovery", () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { calls.push(init?.method || "GET"); return json({tree:[menu()]}); });
     await render(); if(label === "Save menu") { await click("Edit menu"); await field("path", "/draft"); }
-    await click(label); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
-    await act(async () => (container.querySelector('[data-cancel-action]') as HTMLButtonElement).click());
+    await click(label); expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+    await act(async () => (document.querySelector('[data-cancel-action]') as HTMLButtonElement).click());
     expect(calls).toEqual(["GET"]);
-    if(label === "Save menu") expect((container.querySelector('[name="path"]') as HTMLInputElement).value).toBe("/draft");
+    if(label === "Save menu") expect((document.querySelector('[name="path"]') as HTMLInputElement).value).toBe("/draft");
   });
   it("discards a deletion confirmation on unmount without replaying it", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { calls.push(init?.method || "GET"); return json({tree:[menu()]}); });
     await render(); await click("Delete"); const stale = button("Confirm change");
     await act(async()=>root.render(<div>Other route</div>)); await act(async()=>stale.click()); await render();
-    expect(calls).toEqual(["GET", "GET"]); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(calls).toEqual(["GET", "GET"]); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("creates from an empty tree and closes the acknowledged draft even if refresh fails", async () => {
     const calls: string[] = []; let body: Record<string, unknown> = {};
     vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { const method = init?.method || "GET"; calls.push(method); if (method === "POST") { body = JSON.parse(init!.body as string); return json({ menu: menu({ ...body, id: "created" }) }); } return calls.length === 1 ? json({ tree: [] }) : new Response(null, { status: 503 }); });
     await render(); await click("Create menu"); await field("key", "new-menu"); await field("path", "/new-menu"); await click("Create");
     expect(body).toMatchObject({ key: "new-menu", path: "/new-menu", parentId: null, labelKey: "NAV_HOME", groupName: "workspace", requiredBits: "0x0" });
-    expect(calls).toEqual(["GET", "POST", "GET"]); expect(container.querySelector("form")).toBeNull(); expect(button("Create menu").disabled).toBe(true);
+    expect(calls).toEqual(["GET", "POST", "GET"]); expect(document.querySelector("form")).toBeNull(); expect(button("Create menu").disabled).toBe(true);
   });
   it("edits hierarchy with the opened snapshot and excludes self and descendants", async () => {
     const original = menu({ children: [menu({ id: "child", key: "child", path: "/child", parentId: "custom" })] }); let body: Record<string, unknown> = {};
     vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { if (init?.method) { body = JSON.parse(init.body as string); return json({ menu: menu({ ...body, children: [] }) }); } return json({ tree: [original, menu({ id: "other", key: "other", path: "/other" })] }); });
     await render(); await click("Edit menu");
-    const options = [...container.querySelectorAll<HTMLSelectElement>('[name="parentId"] option')].map(option => option.value);
+    const options = [...document.querySelectorAll<HTMLSelectElement>('[name="parentId"] option')].map(option => option.value);
     expect(options).toEqual(["", "other"]);
     await field("parentId", "other"); await field("labelKey", "NAV_SEARCH"); await field("path", "/moved"); await field("requiredBits", "0xA"); await confirmChange("Save menu");
     expect(body).toMatchObject({ parentId: "other", labelKey: "NAV_SEARCH", path: "/moved", requiredBits: "0xa", expected: { parentId: null, path: "/private-menu", position: 1 } });
-    expect(container.querySelector("form")).toBeNull();
+    expect(document.querySelector("form")).toBeNull();
   });
   it.each(["network", "receipt", "conflict"])("retains draft and does not auto-replay an uncertain create: %s", async failure => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { const method = init?.method || "GET"; calls.push(method); if (method === "GET") return json({ tree: [] }); if (failure === "network") throw new TypeError("lost"); if (failure === "conflict") return new Response(null, { status: 409 }); return json({ menu: menu({ key: "wrong" }) }); });
-    await render(); await click("Create menu"); await field("key", "new-menu"); await click("Create"); expect(button("Create").disabled).toBe(true); expect(container.querySelector("form")).not.toBeNull();
-    await click("Try again"); expect(calls).toEqual(["GET", "POST", "GET"]); expect((container.querySelector('[name="key"]') as HTMLInputElement).value).toBe("new-menu");
+    await render(); await click("Create menu"); await field("key", "new-menu"); await click("Create"); expect(button("Create").disabled).toBe(true); expect(document.querySelector("form")).not.toBeNull();
+    await click("Try again"); expect(calls).toEqual(["GET", "POST", "GET"]); expect((document.querySelector('[name="key"]') as HTMLInputElement).value).toBe("new-menu");
   });
   it("keeps a stale editor snapshot across recovery reads", async () => {
     let reads = 0; const bodies: Record<string, unknown>[] = [];
@@ -97,12 +97,12 @@ describe("menu write recovery", () => {
   });
   it.each([401,403])("clears the creation draft on denial %s", async status => {
     vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => init?.method ? new Response(null, { status }) : json({ tree: [] }));
-    await render(); await click("Create menu"); await field("key", "private-draft"); await click("Create"); expect(container.querySelector("form")).toBeNull(); await click("Try again"); await click("Create menu"); expect((container.querySelector('[name="key"]') as HTMLInputElement).value).toBe("");
+    await render(); await click("Create menu"); await field("key", "private-draft"); await click("Create"); expect(document.querySelector("form")).toBeNull(); await click("Try again"); await click("Create menu"); expect((document.querySelector('[name="key"]') as HTMLInputElement).value).toBe("");
   });
   it.each([["key", "a"], ["key", "Bad key"], ["path", "https://evil.test"], ["position", ""], ["position", "-1"], ["position", "10001"], ["position", "1.5"], ["requiredBits", "0x10000000000000000"], ["requiredBits", "not-hex"]])("rejects invalid form %s=%s before sending", async (name, value) => {
     const calls: string[] = []; vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { calls.push(init?.method || "GET"); return json({ tree: [] }); });
     await render(); await click("Create menu"); await field("key", "valid-key"); await field(name, value); await click("Create");
-    expect(calls).toEqual(["GET"]); expect(container.querySelector('[role="alert"]')?.textContent).toContain("Check the key");
+    expect(calls).toEqual(["GET"]); expect(document.querySelector('[role="alert"]')?.textContent).toContain("Check the key");
   });
   it("serializes double submissions and disables row actions while editing", async () => {
     const pending = deferred<Response>(); const calls: string[] = [];
@@ -116,11 +116,11 @@ describe("menu write recovery", () => {
     const third = menu({ id: "three", key: "three", path: "/three", parentId: "two", children: [fourth] });
     const second = menu({ id: "two", key: "two", path: "/two", parentId: "custom", children: [third] });
     vi.stubGlobal("fetch", async () => json({ tree: [menu({ children: [second] })] }));
-    await render(); await click("Create menu"); expect([...container.querySelectorAll<HTMLOptionElement>('[name="parentId"] option')].map(option => option.value)).toEqual(["", "custom", "two", "three"]);
+    await render(); await click("Create menu"); expect([...document.querySelectorAll<HTMLOptionElement>('[name="parentId"] option')].map(option => option.value)).toEqual(["", "custom", "two", "three"]);
   });
   it.each(["parentId", "path", "labelKey", "requiredBits"])("does not accept a wrong %s editing receipt", async key => {
     const calls: string[] = []; vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { calls.push(init?.method || "GET"); if (init?.method) { const body = JSON.parse(init.body as string); return json({ menu: menu({ ...body, [key]: key === "parentId" ? "wrong-parent" : key === "requiredBits" ? "0x2" : "wrong" }) }); } return json({ tree: [menu()] }); });
-    await render(); await click("Edit menu"); await confirmChange("Save menu"); expect(calls).toEqual(["GET", "PATCH"]); expect(button("Save menu").disabled).toBe(true); expect(container.querySelector("form")).not.toBeNull();
+    await render(); await click("Edit menu"); await confirmChange("Save menu"); expect(calls).toEqual(["GET", "PATCH"]); expect(button("Save menu").disabled).toBe(true); expect(document.querySelector("form")).not.toBeNull();
   });
   it("admits only one same-batch write and reads the authoritative hierarchy", async () => {
     const pending=deferred<Response>();const calls:string[]=[];let refreshed=false;
@@ -152,12 +152,12 @@ describe("menu write recovery", () => {
     vi.stubGlobal("fetch",async()=>json(data));await render();expect(container.textContent).toContain("Menus are temporarily unavailable.");expect(button("Try again")).toBeTruthy();
   });
   it("refreshes position input from authoritative read after an uncertain write",async()=>{
-    let gets=0;vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>init?.method?new Response(null,{status:503}):json({tree:[menu({position:++gets===1?1:7})]}));await render();await position(4);await confirmChange("Save");expect((container.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("4");await click("Try again");expect((container.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("7");expect(button("Save").disabled).toBe(true);
+    let gets=0;vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>init?.method?new Response(null,{status:503}):json({tree:[menu({position:++gets===1?1:7})]}));await render();await position(4);await confirmChange("Save");expect((document.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("4");await click("Try again");expect((document.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("7");expect(button("Save").disabled).toBe(true);
   });
   it("preserves an independent position draft when recovering a different row action",async()=>{
     let gets=0;vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>init?.method?new Response(null,{status:503}):json({tree:[menu({position:++gets===1?1:7})]}));
     await render();await position(4);await confirmChange("Disable");await click("Try again");
-    expect((container.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("4");expect(button("Save").disabled).toBe(false);
+    expect((document.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("4");expect(button("Save").disabled).toBe(false);
   });
   it("does not let a late old-scope denial clear a freshly read tree",async()=>{
     const pending=deferred<Response>();let gets=0;const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?pending.promise:json({tree:[menu({labelKey:++gets===1?"Old":"New scope"})]});});await render();await confirmChange("Disable");await render(locale());pending.resolve(new Response(null,{status:403}));await flush();expect(container.textContent).toContain("New scope");expect(button("Disable").disabled).toBe(true);await click("Try again");expect(calls).toEqual(["GET","PATCH","GET","GET"]);expect(button("Disable").disabled).toBe(false);
@@ -178,7 +178,7 @@ describe("menu write recovery", () => {
     const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return json(init?.method?{menu:menu()}:{tree:[menu()]});});await render();await confirmChange("Hide");expect(button("Disable").disabled).toBe(true);expect(calls).toEqual(["GET","PATCH"]);await click("Try again");expect(calls).toEqual(["GET","PATCH","GET"]);
   });
   it("locks all rows for a pending write and coalesces recovery reads",async()=>{
-    const pending=deferred<Response>();const recovery=deferred<Response>();let gets=0;const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?pending.promise:++gets===1?json({tree:[menu(),menu({id:"second",key:"second",path:"/second"})]}):recovery.promise;});await render();await confirmChange("Disable");expect([...container.querySelectorAll("button")].filter(item=>item.textContent==="Delete").every(item=>item.disabled)).toBe(true);pending.resolve(new Response(null,{status:503}));await flush();await act(async()=>{button("Try again").click();button("Try again").click();});expect(calls).toEqual(["GET","PATCH","GET"]);recovery.resolve(json({tree:[menu()]}));await flush();expect(button("Disable").disabled).toBe(false);
+    const pending=deferred<Response>();const recovery=deferred<Response>();let gets=0;const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?pending.promise:++gets===1?json({tree:[menu(),menu({id:"second",key:"second",path:"/second"})]}):recovery.promise;});await render();await confirmChange("Disable");expect([...document.querySelectorAll("button")].filter(item=>item.textContent==="Delete").every(item=>item.disabled)).toBe(true);pending.resolve(new Response(null,{status:503}));await flush();await act(async()=>{button("Try again").click();button("Try again").click();});expect(calls).toEqual(["GET","PATCH","GET"]);recovery.resolve(json({tree:[menu()]}));await flush();expect(button("Disable").disabled).toBe(false);
   });
   it.each([menu({requiredBits:"0x10000000000000000"}), menu({children:undefined}), menu({position:10001})])("rejects out-of-contract menu data %j",async node=>{
     vi.stubGlobal("fetch",async()=>json({tree:[node]}));await render();expect(container.textContent).toContain("Menus are temporarily unavailable.");
@@ -186,7 +186,7 @@ describe("menu write recovery", () => {
   it("rejects duplicate paths in an otherwise valid tree",async()=>{
     vi.stubGlobal("fetch",async()=>json({tree:[menu(),menu({id:"other",key:"other"})]}));await render();expect(container.textContent).toContain("Menus are temporarily unavailable.");
   });
-  async function position(value:number){const el=container.querySelector('input[type="number"]') as HTMLInputElement;await act(async()=>{const setter=Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype,"value")!.set!;setter.call(el,String(value));el.dispatchEvent(new browser.Event("input",{bubbles:true}));});}
+  async function position(value:number){const el=document.querySelector('input[type="number"]') as HTMLInputElement;await act(async()=>{const setter=Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype,"value")!.set!;setter.call(el,String(value));el.dispatchEvent(new browser.Event("input",{bubbles:true}));});}
 });
 function menu(overrides:Record<string,unknown>={}){return {id:"custom",parentId:null,key:"custom",labelKey:"NAV_HOME",path:"/private-menu",icon:null,groupName:"workspace",position:1,requiredBits:"0x0",status:"active",visible:true,isSystem:false,children:[],...overrides};}
 function json(value:unknown){return new Response(JSON.stringify(value),{headers:{"content-type":"application/json"}});}

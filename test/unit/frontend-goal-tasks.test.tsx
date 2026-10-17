@@ -52,8 +52,8 @@ describe("goal task association journey", () => {
     await act(async () => button("Manage task links").click());
     await waitForApp(() => editor()?.textContent?.includes("Private task 0") === true);
   }
-  const confirm = () => main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
-  const keep = () => main().querySelector<HTMLButtonElement>("[data-cancel-action]")!;
+  const confirm = () => document.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+  const keep = () => document.querySelector<HTMLButtonElement>("[data-cancel-action]")!;
   const captured = (node: HTMLElement) => (node as any)[Object.keys(node).find(key => key.startsWith("__reactProps$"))!].onClick;
   const marker = () => app!.browser.sessionStorage.getItem("memory-garden:planning-write:v1:contributor-route-auditor:GOALS");
   const unload = () => { const event = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(event); return event.defaultPrevented; };
@@ -68,7 +68,7 @@ describe("goal task association journey", () => {
   it.each([false, true])("requires exact goal/task impact confirmation for linked=%s, with zero-write cancellation", async initial => {
     await mount(initial); const action = button(initial ? "Unlink" : "Link", editor()); const count = reads.length;
     await click(action); expect(writes).toEqual([]); expect(marker()).toBeNull(); expect(confirm()).toBeTruthy();
-    const dialog = main().querySelector('[role="alertdialog"]')!;
+    const dialog = document.querySelector('[role="alertdialog"]')!;
     expect(dialog.textContent).toContain("Private goal"); expect(dialog.textContent).toContain("Private task 0");
     expect(dialog.textContent).toContain("does not delete"); expect(document.activeElement).toBe(keep());
     await click(keep()); expect(writes).toEqual([]); expect(reads).toHaveLength(count); expect(document.activeElement).toBe(action);

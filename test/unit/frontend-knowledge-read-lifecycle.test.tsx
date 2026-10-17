@@ -179,7 +179,7 @@ describe("knowledge page read ownership and revocation", () => {
   it("offers explicit retry of the same review period without changing the selection", async () => {
     respond = url => url.pathname === "/api/knowledge/review" ? deny(500) : reply(url); await mount();
     expect(container.textContent).toContain("Unable to prepare the review list.");
-    respond = reply; await click('[data-knowledge-review] button:not([aria-haspopup="listbox"]):not([role="option"])');
+    respond = reply; await click('[data-knowledge-review] button:not([aria-haspopup="listbox"]):not([role="option"]):not([role="radio"])');
     expect(container.textContent).toContain("Nothing needs your attention in this period.");
     expect(requests.filter(request => request.url.pathname === "/api/knowledge/review").map(request => request.url.searchParams.get("period"))).toEqual(["daily", "daily"]);
   });

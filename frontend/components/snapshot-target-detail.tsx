@@ -43,7 +43,7 @@ export function SnapshotTargetDetail({ target, locale, onClose, onDenied, title 
     });
     return () => { active = false; controller.abort(); };
   }, [target.kind, target.id, locale, retry, onDenied]);
-  return <Dialog open onOpenChange={open => {if (!open) onClose();}}><DialogContent aria-labelledby="snapshot-detail-title" className="max-h-[85vh] overflow-y-auto space-y-3">
+  return <Dialog open onOpenChange={open => {if (!open) onClose();}}><DialogContent aria-labelledby="snapshot-detail-title" dismissLabel={frontendText(locale, "COMMON_DISMISS")} className="max-h-[85vh] overflow-y-auto space-y-3">
     <DialogTitle id="snapshot-detail-title">{title ?? frontendText(locale, "TODAY_DETAIL_TITLE")}</DialogTitle>
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "TODAY_LOADING")} /> : state.kind === "error" ? <PageState kind="error" title={frontendText(locale, "COMMON_UNABLE_TO_LOAD")}><Button onClick={() => setRetry(value => value + 1)}>{frontendText(locale, "TODAY_DETAIL_RETRY")}</Button></PageState> : <div className="space-y-2"><h3 className="font-medium break-words">{state.title}</h3><p>{state.status}</p>{state.time && <p>{state.time}</p>}<p className="whitespace-pre-wrap break-words">{state.description}</p></div>}
     <Button variant="outline" onClick={onClose}>{frontendText(locale, "TODAY_DETAIL_CLOSE")}</Button>

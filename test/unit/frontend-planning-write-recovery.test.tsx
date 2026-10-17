@@ -13,7 +13,7 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   let failure: number | undefined; let detailId = "row"; let defer: ((value: Response) => void) | undefined; let delayed = false; let writeStatus = 503; let listFailure: number | undefined; let detailVersion = version; let delayDetail = false; let resolveDetail: (() => void) | undefined;
   const row = () => ({ id: detailId, clientKey: "row", title: "Current row", description: null, status: "active", progress: 10, targetAt: null, createdAt: version, updatedAt: detailVersion });
   const main = () => app!.container.querySelector("main")!;
-  const complete = () => [...main().querySelectorAll("button")].find(node => node.textContent === "Complete")!;
+  const complete = () => [...document.querySelectorAll("button")].find(node => node.textContent === "Complete")!;
   const recover = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   async function click(node: HTMLButtonElement) { await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
   async function navigate(path: string) { await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("committed"); }); }
@@ -46,7 +46,7 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   async function submitStatus() {
     const count = writes.length;
     await click(complete()); expect(writes).toHaveLength(count);
-    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
+    const confirm = document.querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
     await click(confirm!);
   }
   /** Progress is beUI's RangeSlider: one click on the pointer track at the target ratio. */
@@ -62,9 +62,9 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   afterEach(async () => { await app?.unmount(); app = undefined; writes = []; reads = []; failure = undefined; detailId = "row"; delayed = false; defer = undefined; writeStatus = 503; listFailure = undefined; detailVersion = version; delayDetail = false; resolveDetail = undefined; });
   it("cancel and route exit leave no write recovery marker or request", async () => {
     await mount(); await click(complete()); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
-    await click(main().querySelector<HTMLButtonElement>("[data-cancel-action]")!); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    await click(document.querySelector<HTMLButtonElement>("[data-cancel-action]")!); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
     await click(complete()); await navigate("/settings"); await navigate(`/${module}`); await waitForApp(() => !!complete());
-    expect(main().querySelector('[role="alertdialog"]')).toBeNull(); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
   });
   it("persists before POST and recovers an unknown write after a route return using GET only", async () => {
     await mount(); await submitStatus(); expect(writes).toEqual([{ status: "completed", expectedUpdatedAt: version }]);

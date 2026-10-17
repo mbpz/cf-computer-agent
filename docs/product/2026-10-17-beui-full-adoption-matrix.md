@@ -673,3 +673,334 @@ payload `https://beui.dev/r/range-slider.json`（5 个文件，逐行核对）�
 **关于圆角的表述修正**：`sm/md/lg/xl` 是主题从 `--radius`（`0.55rem`）派生的**同一套刻度**，不是"多套圆角"——迁移前那 4 个非胶囊值正是这套刻度。本轮真正消除的是刻度之外的漂移（`16px`）与载荷带来的外来色/圆角（`emerald`/`orange`、`rounded-2xl/3xl` 一律不入内）。因此"风格凌乱"的根因与修复都不在圆角数量，而在**基元来源混用**：按钮/字段/徽标/提示条/弹层/日期范围/对话面现在分别只有一套实现。
 
 **探针限制（自我更正）**：我一度用 `main select:not([data-field])` 数"裸 select"，但那会把我方适配层渲染的原生 `<select>` 一并计入（例如 `/submit` 的 4 个都是适配层字段），因此该数字不可用于结论；裸控件的真实依据是源码 grep 为空。
+
+## 17. Wave 4：100% beUI —— 受控本地化补丁政策（2026-10-17，用户决定）
+
+用户明确要求：先前"有据拒绝"的组件**也必须**用 beUI。据此，拒绝的处置被本节的补丁政策取代；凡是"载荷接口封闭"造成的阻断，改为**增量式本地补丁**后采用。
+
+**允许的补丁（仅此四类，缺一不可地写进文件头）**
+
+1. **文案本地化**：把不可覆盖的硬编码英文无障碍串改成必填/可选的 label props（或 `labels` 表）；调用方传本地化文案。禁止保留英文默认值作为唯一取值。
+2. **属性透传**：为行/触发器/面板开放 `...rest` 或明确的 data-* 出口（我们的 `data-*` 钩子、`aria-*`、`role` 必须能到达同一元素）。
+3. **插槽扩展**：增加 `actions` / `renderRow` 一类渲染插槽，让逐行操作（编辑/状态/删除及其确认门）能落在行内。
+4. **回调扩展**：增加缺失的回调（如 `onFilesRejected`、`onReorderDisabled` 的理由），用于保住既有拒绝语义或明确禁用某能力。
+
+**禁止**：重写载荷的行为逻辑（动画、portal、焦点模型、拖拽算法、日历语义）；把载荷拆成自研实现；新增依赖（缺失依赖只报告）。
+
+**必须随补丁交付**：文件头注释写明 `slug`、补丁条目、以及每条补丁守住的原契约（附 `file:line`）；对应测试断言**不变**，只允许把"寻址方式"从内联容器改为 `document`/portal 或新的角色选择器。
+
+**两处语义边界仍然成立，需要专门处理而不是硬套**：
+- 日历的**瞬时区间**（本地时区、分钟精度、≤31 天）与 `date-range-picker` 的 UTC 日历日语义不同 → 该面改为"用 beUI 基元重建表面"（`popover` + `tabs` + `input` 等），而不是把语义降级；
+- 阅读器的 markdown 白名单不含 `img` → `morphing-lightbox` 在接入前必须先在白名单放开图片并做安全校验，否则采用即为死代码。
+
+**完成判据**：`frontend/components/ui` 与各页面不再存在非 beUI 来源的交互基元（适配层内可以是 beUI 源 + 上述四类补丁）；`npm test` 全绿；operation inventory 与复核台账由父级统一重生成。
+
+## 18. Wave 4 · 弹层与行操作轨（OverlayAndActions 切片，2026-10-17）—— **未完成，交回父级**
+
+### 18.1 结论
+
+按 §17 落盘并接入 5 个 slug，`npm run typecheck` 对下列文件干净；**但本切片没有完成**：51 个确认/弹层套件的"寻址迁移"（container → `document`）尚未执行，行操作轨只完成 duplicate-queue、review decision controls、goals 三处，`admin/menus-page`、`projects`、读者 FAQ 尚未改造，套件未跑。下文逐项写明现状与下一步，避免重复劳动。
+
+### 18.2 已落盘 slug 与补丁（每文件头部有完整补丁日志）
+
+| slug → 文件 | 补丁 | 守住的契约（file:line） |
+| --- | --- | --- |
+| `center-morph-modal` → `motion/center-morph-modal.tsx` | 1 label（`backdropLabel`，`closeButtonLabel` 去英文默认） | 两种语言的弹层控件名（`ui/dialog.tsx` 传 `dismissLabel`） |
+| 同上 | 2 透传（`panelProps`/`panelRef`/`backdropProps`，`data-*` 类型化） | `role="alertdialog"`、`aria-labelledby`、`data-focus-scope`、`tabIndex`、`data-*-dialog` 落在面板本身（`test/unit/frontend-admin-duplicate-confirmation.test.tsx:34` 等 50 个套件按这些属性选择面板）；`[data-dialog-backdrop]` 落在遮罩 |
+| 同上 | 4 回调（`onDismiss`） | Escape/遮罩/关闭控件统一进入 `onOpenChange(false)`，各调用方的 cancel/receipt 路径不变（`frontend/components/ui/confirm-action.tsx:26-35`） |
+| 同上 | 设计锁就地修正 | `rounded-[30px]`/`round 30px` → `rounded-lg`/8.8px（`--radius`，0.55rem） |
+| `morphing-modal` → `motion/morphing-modal.tsx` | 1 label（`backdropLabel`） | 遮罩控件名本地化（原写死 "Close modal"） |
+| 同上 | 2 透传（`panelProps`/`panelRef`） | `role`/`aria-*`/`data-*`/`tabIndex` 到面板；由适配层 `useFocusScope` 统一持有焦点（本载荷自身无焦点模型，未重写其动画/portal 行为——注意它**不 portal**） |
+| 同上 | 设计锁 | `rounded-3xl` → `rounded-lg` |
+| `hold-action-button` → `motion/hold-action-button.tsx` | 4 回调（`onActivate`） | 单击/键盘一次即确认的既有契约（`test/unit/frontend-admin-member-confirmation.test.tsx:43`、`test/unit/admin-menus-page.test.tsx:85`、`scripts/browser-vm-environments-page.test.mjs:480`）；长按填充仍是载荷行为；完成长按后迟到 click 被 `completedRef` 吞掉 |
+| 同上 | label + 设计锁 | `holdingLabel`/`completeLabel` 由调用方给定（本仓库调用方传空串，按钮名由 `aria-label` 承担，DOM textContent 仍等于确认文案，保住按 textContent 精确匹配的 `dialogButton` 类助手）；填充/波纹 `sky-400` → `primary` token，`--hold-radius:22px` → `var(--radius)` |
+| `slide-action-button` → `motion/slide-action-button.tsx` | 1 label（`ariaLabel`）、2 透传（`thumbProps`、`disabled`）、4 回调（`onActivate`） | 键入式确认的 `[data-confirm-action]` 仍在可点击的 thumb 上（`test/unit/frontend-admin-asset-hygiene.test.tsx:103-110`），`disabled` 仍是真实按钮状态（`:186`），匹配门禁 `matches` 未动（`ui/typed-confirm-action.tsx:38-40`）；`maxDistance===0`（窄轨/非布局 DOM）下单击不再失效 |
+| 同上 | 设计锁 | `rounded-[22px]`/`rounded-[18px]` → `rounded-lg`/`rounded-md` |
+| `overflow-actions` → `motion/overflow-actions.tsx` | 1 label（`openLabel`/`closeLabel` 变为必填）、2 透传（`OverflowActionItem.attributes`：`data-*`/`id`/`aria-*`）、3 槽位（无 overflow 动作时不渲染失效的 toggle）、4 回调（`onClick(event)` 转发、`onAction`） | 行钩子可寻址：`data-menu-edit-open`、`manage-goal-tasks-<id>`（`test/unit/frontend-goals-page.test.tsx:25`）、`aria-label="<决策> <target>"`（`test/unit/frontend-review-confirmation.test.tsx:85`）、`aria-busy`/`aria-expanded`；破坏性动作保留强调（`tone="destructive"`，wave 1 拒绝理由之一）；新增 `COMMON_MORE_ACTIONS`/`COMMON_FEWER_ACTIONS` 双语键（`frontend/lib/i18n.ts:1734-1735,3758-3759`）；触控 44px（`max-sm:min-h-11`） |
+| `bouncy-accordion` → `motion/bouncy-accordion.tsx` | 2 透传（`item.attributes`，保住 `data-faq-item`） | 读者 FAQ 的条目钩子（`frontend/components/knowledge/knowledge-derivatives-panel.tsx:201`）；设计锁 28px → 8.8px；**尚未接入** |
+| `ui/dialog.tsx` | 重写为 `center-morph-modal` 适配层；`variant="morph"` 走 `morphing-modal` | `data-dialog-open` 仍在行内包装上；`useFocusScope`、`data-focus-scope`、Escape、遮罩关闭、焦点归还全部保留；面板在 `open=false` 时立即卸载（退出动画不播放），保住 `expect(dialog()).toBeNull()` 这类同帧断言；`portal` prop 删除（现在一律 portal） |
+| `ui/confirm-action.tsx` | 破坏性确认改 `HoldActionButton` | `role="alertdialog"`、名称/描述对、`[data-cancel-action]`/`[data-confirm-action]`、单击一次写入、回执/未决路径不变 |
+| `ui/typed-confirm-action.tsx` | 确认控件改 `SlideActionButton` | `data-typed-confirm-input`、`aria-invalid` 之外的原门禁、`pending`、取消按钮全部不变；确认控件的 `.disabled` 转由 thumb 承担 |
+| `pages/admin/duplicate-queue-page.tsx` | 决策三键 → `OverflowActions` | 每键 `aria-label="<决策> <target>"`、禁用态、破坏性 tone 不变 |
+| `components/review/review-decision-controls.tsx` | 决策三键 → `OverflowActions` | 同上 + `aria-busy`/`aria-expanded` |
+| `pages/goals-page.tsx` | 行动作 → `OverflowActions` | `manage-goal-tasks-<id>`、禁用语义、`request()` 门禁不变 |
+
+### 18.3 未完成（按优先级）
+
+1. **测试寻址迁移（阻断，51 套件）**：`container.querySelector('[role="alertdialog"]')`、`container/main().querySelector("[data-confirm-action]")`、`[data-*‑dialog]`、`[data-dialog-open="true"] > [aria-hidden="true"]` 全部要改为 `document`/`[data-dialog-backdrop]`。只改寻址，断言不动。唯独 `test/unit/frontend-focus-scope.test.tsx` 的 Dialog 部分需从 `renderToStaticMarkup` 改为 DOM 挂载（否则挂载后才渲染的载荷什么都不产出）；Sheet 部分可保留静态断言。
+2. **`test/unit/frontend-admin-asset-hygiene.test.tsx` 的 `dialogButton`** 需从 textContent 精确匹配改为 `aria-label` 匹配（slide 的 thumb 只有图标，label 在轨道上）。
+3. **`admin/menus-page` 行轨**：建议 primary = Edit + Delete（套件点击这两个），overflow = Enable/Disable + Show/Hide；位置输入与 Save 保持在轨外（它们是一个表单，不是行动作）。
+4. **`projects` 行轨**：套件会点 `Manage links`、`Timeline`、`Complete`、`Archive`，因此这四项必须是 primary；破坏性 tone 用于 Archive。
+5. **读者 FAQ**：`knowledge-derivatives-panel.tsx` 的 `faq` 分支改 `BouncyAccordion`（`item.attributes = {"data-faq-item": gap?"gap":"answered"}`，answer 进 description；`<dl>` 语义消失需在采用说明里写明）。
+6. **未验证**：本切片未运行任何 vitest 套件（预算耗尽），因此"套件绿"未取得；`npm run typecheck` 在本切片文件上干净，但整仓仍被其他并行切片的 payload 类型错误（`motion/combobox`、`motion/command-palette`、`feedback-widget`、`notification-stack`、`radio` 等）占用，非本切片范围。
+
+### 18.4 已知风险（给后续切片）
+
+- `center-morph-modal` 自带 window 级 Tab 陷阱与我们的 `useFocusScope`（面板级）并存；实测路径是面板级先移动焦点，window 级在边界处不再触发第二次移动，但**尚未用套件证明**。
+- 同一载荷的 Escape 与 `useFocusScope` 的 Escape 都会触发关闭；各调用方 `onOpenChange(false)` 目前都是幂等的，但需要套件确认。
+- `morphing-modal` 不 portal，`variant="morph"` 的两个规划弹层仍渲染在原容器内——这正是它们套件无需改寻址的原因，但也意味着带 `transform` 的祖先生效时会被裁剪；这两处页面没有该祖先。
+
+## 19. Wave 4 · 会话输入 / 回答反馈 / 通知收件箱（ComposerFeedbackInbox 切片，2026-10-17）
+
+范围：`frontend/components/agents/*`、`frontend/components/agent/*`、`frontend/pages/agent-page.tsx`、`frontend/pages/notifications/*` 与三个 slug（`prompt-input`、`feedback-widget`、`notification-stack`）。三个载荷均按 §17 增量补丁落盘：行为逻辑（自动增高、键盘提交、焦点回填、morph/focus/portal/关闭计时、悬停/点按展开、`useDismiss`）保持载荷原样，只加 label、data 出口、插槽与回调。新增的依赖文件全部是载荷自身依赖（`action-swap`、`magnetic`、`button/{magnetic,metallic,index}`），未引入新依赖；`lib/{ease,touch,utils}` 与 `hooks/*` 用仓库既有版本。
+
+### 19.1 `prompt-input` → `frontend/components/agents/prompt-input.tsx`
+
+| 补丁 | 类型 | 守住的契约（file:line） |
+| --- | --- | --- |
+| 发送/停止的英文硬编码 `"Send prompt"` / `"Stop generating"` 改为必填 `labels.submit` / `labels.stop`；`+` 触发器与模型 fallback 同改 | 文案本地化 | `AGENT_SUBMIT` / `AGENT_STOP` 两种语言仍是有名控件（`frontend/lib/i18n.ts:1218,1235,3240,3257`；`test/unit/frontend-agent-cancellation-route.test.tsx:860-864` 以 aria-label 驱动） |
+| `textareaProps` 继续落在 `<textarea>`；`id="agent-question"`、`name="question"`、placeholder、aria-label、autoComplete 不变；change 读 `currentTarget.value` | 属性透传 | 标签关联与 `#agent-question` 全部驱动方式（`test/unit/frontend-user-read-pages.test.tsx:153`；`test/unit/frontend-agent-cancellation-route.test.tsx:852-858`） |
+| `canSubmit` 增加 `onSubmit` 存在性；提交读 textarea 的实时值 | 回调扩展 | 无回调时发送控件保持禁用；同一事件内「应用来源 + 编辑 + 提交」仍发出带新草稿的请求（`test/unit/frontend-agent-cancellation-route.test.tsx:597-602`） |
+
+写阻断门（`locked()`）与未知结果恢复仍由路由持有（`frontend/app.tsx:1277,1306`）；`disabled` / `loading` / `onStop` 让守卫与取消照旧。加载中的独立文字 Stop 按钮移入载荷的同一图标按钮（`AGENT_STOP` 只在 aria-label），套件改为按 aria-label 寻址。
+
+### 19.2 `feedback-widget` → `frontend/components/motion/feedback-widget.tsx`
+
+| 补丁 | 类型 | 守住的契约（file:line） |
+| --- | --- | --- |
+| `Close` / `Cancel` / `Submit` / `Sending` / `Thanks!` / 成功描述 / `Something went wrong` / 重试描述 / `Try again` 改为必填 `labels` | 文案本地化 | 反馈标题、详情、发送中、已保存、未确认、重试全部来自 `AGENT_FEEDBACK_*`（`frontend/lib/i18n.ts:1167-1179,3189-3201`） |
+| `FeedbackData` 增加 `rating` / `citationIds`；`ratings` 用 `useful` / `not_useful` / `citation_error` 替换自由文本表单；`persistent` 槽渲染 tab 记录提示；`initialStatus` 让恢复的未确认意图直接呈现重试 | 插槽 + 数据面扩展 | 三档评分与 `citationIds` 不变（`frontend/components/agent/agent-feedback.tsx`）；恢复后重试同一评分（`test/unit/frontend-agent-cancellation-route.test.tsx:717-739`） |
+| `onSubmit` 可返回 `false`：调用方拒绝（admission / 已提交 / 记录不可读）时不进入 sending/sent/error；返回 Promise 时由载荷展示发送/成功/失败 | 回调扩展 | `AgentFeedbackAdmission.begin/settled` 只在真正发起时调用；两种未确认路径（记录卡住、网络/服务端失败）都保留重试同一意图（`frontend/app.tsx:1407-1421`；`test/unit/frontend-agent-cancellation-route.test.tsx:123-243`） |
+
+`AgentFeedback` 现在只拥有会话契约（admission、sessionStorage 记录、notice、完成后禁用），morph、焦点计时、Escape/外部关闭与成功自动收起都是载荷自己的。记录不可读、未确认与撤销目标的持久提示仍由路由内联（`frontend/app.tsx:1423-1424` 与本组件的 `persistent` 槽）。角标触发器打开后评分按钮才出现，套件仅把寻址改为「先开触发器再找按钮」，断言未动（`test/unit/frontend-agent-cancellation-route.test.tsx:505-515,860-864`）。
+
+### 19.3 `notification-stack` → `frontend/components/motion/notification-stack.tsx`
+
+| 补丁 | 类型 | 守住的契约（file:line） |
+| --- | --- | --- |
+| `NotificationStackItem.data` 透传到行元素；`actions` 渲染行内操作 | 属性/插槽透传 | `data-notification-id` / `data-read` 仍与行同元素（`frontend/pages/notifications/notifications-page.tsx:120-155`；`test/unit/frontend-notifications-page.test.tsx:100-101`；`test/unit/frontend-notifications-route.test.tsx:631-632`） |
+| `interactive={false}` 关闭整叠 `<motion.button>`（悬停/点按/`onViewAll`/consume 关闭），渲染带 `aria-label` 的 `role="list"` 与逐行 `listitem` | 交互控制 + 属性透传 | 行内「打开 / 标记已读」是真正的按钮，不再内嵌于按钮；bulk 操作与行操作禁用语义不变（`frontend/pages/notifications/notifications-page.tsx` 的 `actionsDisabled`） |
+| `footer` 槽渲染在载荷自己的 footer 行 | 插槽扩展 | 20/50/100 分页器完整落在 `DataPagination` 上：`data-pagination-desktop/mobile`、`Total`、`21–40`、`Rows per page`、`Page N`（`frontend/components/data-pagination.tsx:39`；`test/unit/frontend-notifications-page.test.tsx:152-157`） |
+| aria 模板 `${n} notifications. …` 改为必填 `labels.expanded/collapsed`；`rounded-2xl/3xl` 收敛到 `rounded-lg`，橙色计数药丸改 `bg-primary` | 文案本地化 + 设计令牌 | 两种语言的收件箱名、可见文案与主题圆角/颜色；空态仍是页面的 `PageState`（`test/unit/frontend-notifications-page.test.tsx:135-143`） |
+
+收件箱 ready 态改由 `NotificationStack` 承载：移动端仍以 `data-notification-feed` 的 `overflow-auto` 滚动容器触发 `onLoadMore`，`LIST_LOADING_MORE` / `LIST_END_OF_LIST` 的 `role="status"` 保持桌面静默；持久状态（actionError、`recordBlocked` 与丢弃、recovery、`revokedTarget`）全部留在页面内联。窄屏 append 套件仅把滚动容器从 `table` 父节点改为 `[data-notification-feed]`（`test/unit/frontend-notifications-page.test.tsx:211`）；桌面分页器与行钩子断言未改。
+
+### 19.4 门禁与遗留
+
+- `npm run typecheck` 干净（worker + frontend）。
+- 本切片套件全绿：`frontend-agent-cancellation-route`（79）、`frontend-notifications-page`（15）、`frontend-notifications-route`（33）、`frontend-agent-page-summary`、`frontend-agent-receipt-read`、`frontend-agent-source-identity`、`frontend-user-read-pages`、`frontend-notifications-data`、`frontend-notification-summary-refresh`、`frontend-shell-notifications`、`frontend-mobile-filters`、`frontend-a11y`（8 文件 69 测试的合并批 + 各自批）。
+- `frontend-workbench-maturity-routes.test.tsx` 的 `focus empty` / `settings ready` 两个用例在并行切片进行中失败（`authenticated App condition not reached`），不经过本切片文件；agent 旅程用例通过。
+- 未改 ledger / operation inventory；`NOTIFICATIONS_COLUMN_*` 等表格列键在页面不再渲染，保留待父级统一清理。
+
+## 18. Wave 4 · 外壳（SidebarAndPalette 切片：`animated-sidebar`／`command-palette`／`popover`／`morphing-search`，2026-10-17）
+
+用户决定（§17）后的外壳收口：先前以"载荷接口封闭"拒绝的两件（I5 `command-palette`、I6 `animated-sidebar`）改为**受控本地化补丁**后采用；外壳的两个点击锚定菜单改由 `popover` 承载。取源仍按 §5：`https://beui.dev/r/{slug}.json` 手工落盘，只把 `lucide→@phosphor-icons/react`、`@/lib|components→相对路径`、`process.env` 三处做安装层适配；未加新依赖、未覆盖既有 `lib/*`（新增 4 个载荷自带 lib 文件：`lib/command-search.ts`、`lib/hooks/{use-on-open,use-row-cursor,use-touch-capable}.ts`）。
+
+### 18.1 `@beui/animated-sidebar` → `frontend/components/motion/animated-sidebar.tsx`（外壳桌面栏）
+
+载荷行号指 registry 原件，补丁清单同时写在文件头。
+
+1. **回调/能力扩展** `mobilePanel?: boolean`（`AnimatedSidebarProps` `:489-497`，移动分支 `:523-530`、`:305-487`）：外壳传 `false`，载荷自带移动抽屉（`:384` 包裹层、`:401` `role="dialog"`、`:434-470` Tab 陷阱/滚动锁）永不渲染 ⇒ `ui/sheet.tsx`→`motion/drawer` 仍是唯一移动面板。守住：`workspace-shell.test.tsx:327-357`（移动抽屉是唯一 `role="dialog"`、焦点归还）、`ui/sheet` 的焦点/背板契约。
+2. **回调/配置扩展** `breakpoint: "md" | "lg"`（provider `:200-210`、`:226` `useIsMobile()`、`:551-553` 可见性类、`:384` `md:hidden`）：查询与 CSS 类一起按 `lg` 出；外壳内容偏移也是 `lg:pl-64/16`（`app-shell.tsx:127,144`）⇒ 768–1023 不会再出现"桌面栏 + 抽屉"双栏。守住：`frontend-shell.test.tsx:44-58` 的 SSR 断点类、`workspace-shell.test.tsx:200-235` 移动回退。同时 `keyboardShortcut?: boolean`（provider `:240-266`）让外壳显式不采纳新增的全局 `Cmd/Ctrl+B`（§8.1.6）。
+3. **属性透传** `AnimatedSidebarMenuButton` / `AnimatedSidebarMenuSubButton` 增 `...rest` 并于渲染的 `motion.a`/`motion.button`（`:1139`/`:1160`、`:981`/`:999`）展开，`onSelect` 收到点击事件：`data-route-id` 仍落在可交互锚点上，`event.preventDefault(); onNavigate(path)` 仍是 SPA 导航。守住：`app-shell.tsx:205`、`workspace-shell.test.tsx:262-283`、`frontend-shell.test.tsx:89-125`。
+4. **文案本地化** 移动背板 `"Close sidebar"`（`:390`）→ `mobileCloseLabel`；`ariaLabel` 由外壳传 `SHELL_WORKSPACE_NAVIGATION`。虽然本切片 `mobilePanel=false` 使该分支不可达，仍不留英文唯一取值。
+
+保留未改：面板 morph、`SharedLayoutBg` hover/子菜单 variants、portal、焦点模型。载荷的 hover pill 与子菜单入场含 `filter: blur()`，与本仓库"只动画 transform/opacity"的旧锁不同——按 §17 采用即接受载荷动效（`useReducedMotion` 仍退化为静态）。外壳侧：`useHoverCapable` 仍决定是否挂 `AnimatedSidebarMenu`（触屏不出现会粘住的 hover pill）；子菜单仅在展开时挂载荷 `AnimatedSidebarMenuSub`（`open` 为真），折叠在同一提交移除子项（`workspace-shell.test.tsx:139-162`）。`data-nav-node`/`data-nav-depth`/`data-nav-availability` 由 `AnimatedSidebarMenuItem` 承载（同一元素位置），coming_soon 行仍用 beUI `Button`（保持可 Tab + `aria-disabled`，`app-shell.tsx:197-201`）。未使用的载荷导出（`AnimatedSidebarTrigger`/`AnimatedSidebarClose`/`AnimatedSidebarRail`）保留其英文默认名，外壳不渲染它们。
+
+### 18.2 `@beui/command-palette` → `frontend/components/motion/command-palette.tsx`（⌘K）
+
+1. **文案本地化**：`closeLabel`/`dialogLabel`/`listLabel`/`resultsGroup`（载荷硬编码 `:194`、`:222`、`:273`、`:124`），外壳传既有 `SHELL_COMMAND_CLOSE`/`SHELL_COMMAND_PALETTE`/`SHELL_GROUP_WORKSPACE`；输入框补 `aria-label={placeholder}`（`SHELL_COMMAND_PLACEHOLDER`）。空态仍走 `SHELL_COMMAND_EMPTY`。
+2. **属性透传**：`CommandItem.dataAttributes` 展开到 option 按钮（载荷 `role="option"`/`data-index` 处 `:295-303`）⇒ `data-command-id` 仍在行按钮上（`workspace-shell.test.tsx:90,98,113`）。另加 `rowClassName` 供 44px 移动底线（`max-lg:min-h-11`）。
+3. **回调扩展** `nativeEnter`：Enter 分支（`:153-166`，面板 `onKeyDown` 在 `:237`）在焦点属于行按钮时不再 `preventDefault`，原生激活保留。守住：`workspace-shell.test.tsx:94-107`（`enter.defaultPrevented === false`）。
+4. **插槽扩展** `footer`：面板底部渲染外壳既有的 `↑↓/↵/Esc` 本地化提示，故 `SHELL_COMMAND_NAVIGATE/EXECUTE/CLOSE` 仍在两语使用。
+5. 安装层：`LucideIcon→ComponentType<{className}>`、`Search→MagnifyingGlass`。
+
+未改载荷行为：portal、`rAF` 聚焦（`:149-152`）、滚动锁、分组重排与模糊检索、presence/morph。外壳另补上载荷没有的"关闭后焦点归还触发元素"（`shell/command-palette.tsx` 的 `setPaletteOpen`），等价于旧 `DialogContent` 的 focus scope 归还。旧 `Dialog`/`Input` 行渲染、`filterCommands` 行高亮不再参与外壳；`filterCommands` 的模型测试（`command-palette.test.ts:11-20`）不变。
+
+### 18.3 `@beui/popover` → `frontend/components/motion/popover.tsx`（语言／账户菜单）
+
+1. **属性透传** `Popover`/`PopoverContent` 增 `...rest`，面板增 `role?: "dialog" | "menu"`（载荷 `:689`）：`role="menu"` 与 `data-account-menu`/`data-menu-id` 落在同一面板元素上。
+2. **属性透传** `PopoverTrigger.ariaHaspopup`（载荷硬编码 `:489`）：菜单触发按钮为 `aria-haspopup="menu"`；`aria-expanded`/`aria-controls`/`data-state` 仍是载荷行为。
+
+保留未改：goo morph、无条件 portal（`:603`）、outside-pointer/Escape 关闭与焦点归还、定位。外壳侧：菜单行是带 `role="menuitem"`/`menuitemradio` 的按钮（44px 移动底线），Home/End/↑/↓ 由外壳的 `menuKeyAction` 处理器承担，触发按钮 ↓/↑ 打开并落到首/末行；`data-account-*`/`data-theme-*` 不变。旧 `ui/dropdown-menu` 不再有生产调用方（仍被 `frontend-menu-keyboard`/`frontend-a11y` 直接覆盖，留待清理波次退休）；`ui/dialog` 由 OverlayAndActions 切片接管，外壳调色板已不经过它。
+
+### 18.4 `@beui/morphing-search`：本切片不具备采用条件
+
+外壳没有独立搜索输入（唯一搜索框是 ⌘K 面板自身，见 18.2），故"若可承载既有标签与提交语义"不成立：`morphing-search` 自带触发面/portal、硬编码 `"Close search"`/`"Search"`/`"Search results"`（载荷 `:388,409,411,480`）与**无修饰键**的 `f` 全局快捷键（`:260-282`），接入即与 ⌘K 形成第二个全局搜索面并新增键盘行为。未安装；留给持有搜索页的切片（知识搜索）在带显式提交语义时评估。
+
+### 18.5 测试寻址变更（断言不变）
+
+- `workspace-shell.test.tsx`：账户/语言菜单面板改从 `document` 取（portal），`[data-menu-id="x"] [role="menu"]` → `[data-menu-id="x"][role="menu"]`（同一元素）；语义词板首个断言增加一次 16ms 帧等待（载荷 rAF 聚焦时机，断言 `activeElement === input` 不变）；视口边界断言由旧内联 `left-0` 改钉 portal 固定层的 `fixed`。
+- `frontend-menu-keyboard.test.tsx`：三处 shell 菜单选择器同上改地址。
+
+### 18.6 门禁（本切片）
+
+`npm run typecheck`：本切片文件无错（并行切片 `agents/todo-list.tsx`、`pages/tasks/tasks-page.tsx`、新增 `slide-action-button.tsx` 处于编辑中，属他切片）。套件全绿：`workspace-shell`(31)、`frontend-shell`(14)、`command-palette`(5)、`frontend-menu-keyboard`(21)、`frontend-shell-notifications`、`frontend-context-rail`、`frontend-a11y`、`ui-shell`；另跑同样渲染 `AppShell` 的 `frontend-boards-route`/`frontend-recycle-bin-navigation`/`frontend-responsive`（56）全绿。未跑 build/deploy；未改 operation inventory 与复核台账；未新增 i18n 键、未新增 `data-*` 钩子。
+
+## 18. Wave 4 · 筛选／看板／任务／附件／阅读器（FiltersBoardsTasks 切片，2026-10-17）
+
+按 §17 的四类补丁采用先前“有据拒绝”的 slug。所有 payload 手写落盘（`npx shadcn add` 不可用），统一 `lucide→@phosphor-icons/react`、`@/lib/*→相对路径`、丢弃 payload 自带的 `lib/{ease,utils}`。每个文件头注释写入 slug、补丁条目与“守住的原契约（file:line）”。
+
+### 18.1 `combobox`（筛选行）—— 采用
+
+落盘 `components/motion/combobox.tsx` + `combobox/{context,trigger,content,list,use-active-option}.tsx`；`ui/filter-select.tsx` 改由它承载（13 处调用点全部保留原 props）。
+
+- **补丁 1 文案本地化**：`ComboboxTrigger.label`（`.sr-only` 名称）、`ComboboxList.ariaLabel`（缺省时用 `aria-labelledby` 指向触发器，即 `motion/select` 既有形状）、`ComboboxEmpty.children`、`ComboboxInput` 的 `aria-label`。
+- **补丁 2 属性透传**：`ComboboxTrigger.render`（调用方自己的 `button[aria-haspopup="listbox"]` + `disabled`）、`ComboboxContent/List/Item` 的 `...rest`（`data-*`/`aria-*`/`role` 落到面板与选项行）。
+- **补丁 4 回调扩展**：`ComboboxTrigger.keyboard="trigger"`——筛选行没有内层 `ComboboxInput`，同一套 `moveActive/selectActive/setOpen` 由触发器按钮承担；触发按 click 开合（payload 默认的 input 焦点 pointerdown 仅在 `keyboard="input"`）。
+- **非 portal 模式**：`ComboboxContent.inline` 把面板渲染在字段内（搜索筛选行在移动端进底部抽屉，body portal 会逃出）。开合弹簧、`aria-hidden`/`inert` 关闭态、指针门禁仍由 payload 决定。
+- 守住：`button[aria-haspopup="listbox"]` + `.sr-only` 历史名 + `:disabled`（`frontend/components/ui/filter-select.tsx:22`；`frontend-tasks-page.test.tsx:34-38,143`、`frontend-admin-queue-filters.test.tsx:37-40,101`）；选项仍在 `trigger.parentElement` 内（`frontend-tasks-page.test.tsx:167`、`frontend-graph-page.test.tsx:863`）。
+- 门禁：`frontend-tasks-page`(9)、`frontend-admin-queue-filters`、`frontend-mobile-filters`、`frontend-list-filters`、`frontend-review-period-refresh`、`frontend-knowledge-read-lifecycle` 全绿；未改任何筛选断言。
+
+### 18.2 `multi-select` —— 不适用（无可承载面）
+
+全仓筛选状态均为单值（`grep` 证据：`FilterSelect` 13 处调用全为 `value: string`；`TaskFilterState`/`InboxStatus`/graph lens 等均为标量；无 `Set<string>`/数组型筛选）。无多值筛选即无采用点，落盘只会是 §17 明确禁止的死代码（与 Wave 1 拒绝 `radio` 的判据同源，后者本轮因“复盘周期”获得真实场景）。payload 的 `combobox/use-active-option` 与 combobox 共用，已随 combobox 落盘；`multi-select/*` 未写入。
+
+### 18.3 `radio`（复盘周期）—— 采用
+
+落盘 `components/motion/radio.tsx`；新 `components/review-period-control.tsx` 同时接入 `/review`（`pages/workbench-review-page.tsx`，原两个 `aria-pressed` 按钮）与 `/knowledge` 复盘卡（`pages/knowledge-page.tsx`，原 `FilterSelect`）。
+
+- **补丁 1 文案本地化**：`label`/`description` 已是 props；另修 payload 真实缺陷——`labelId` 原先只在“label+description 同时存在”时才设置，仅有 label 时 `role="radio"` 按钮无可访问名（button 不是 labelable，外层 `<label htmlFor>` 不命名它）。现在 visible label 恒为名称，description 单独 announcement。
+- **补丁 2 属性透传**：`RadioGroup`/`RadioGroupItem` 的 `...rest`（`data-review-period`、`aria-*`）。
+- 守住：周期是具名枚举（`frontend/lib/review-period.ts`），仍只写 `daily|weekly`；两语言名称沿用 `REVIEW_DAILY/WEEKLY`、`KNOWLEDGE_REVIEW_DAILY/WEEKLY`；组名沿用 `KNOWLEDGE_REVIEW_PERIOD`。
+- 断言只改寻址：`frontend-review-period-refresh.test.tsx`（`[data-knowledge-review] [role=radiogroup]` + `aria-checked`）、`frontend-review-period.test.tsx`（标签→radio 行）、`frontend-workbench-review-page.test.tsx`（`aria-pressed`→`role=radiogroup` + `aria-checked`）、`frontend-knowledge-read-lifecycle.test.tsx`（点击选择器排除 `[role=radio]`）。断言本身（同一周期重读、不可串期、`inert` 等）未变。三套件 9+7+9 绿。
+
+### 18.4 `sortable-stack`（看板列）—— 采用，重排关闭
+
+落盘 `components/motion/sortable-list.tsx` + `sortable-stack.tsx`；`pages/boards/boards-page.tsx` 的 `[data-board-columns]` 行改由 `SortableList/SortableListGroup/SortableListItem` 承载。
+
+- **补丁 1 文案本地化**：`instructions`（sr-only 拖拽帮助，`null` 即不渲染）、`labels.{handle,undo,movedToPosition,previousOrderRestored}`。
+- **补丁 2 属性透传**：`SortableList` 根 `...rest`；行/分组本身已是 motion props（`data-board-column` 与列总数落在行上）。
+- **重排关闭**：`disabled` + `showUndo={false}` + 不渲染 `SortableListHandle`（payload 本身 `dragListener={false}`，只能由把手启动）；列顺序仍是固定 `BOARD_STATUSES`（`board-model.ts:4`），移动仍走 `data-board-move-*` 回执（`boards-page.tsx:38-49`），未新增本地置换路径。
+- 守住：`[data-board-columns]` 仍是横向滚动器（`overflow-x-auto`）、`[data-board-column]` 仍含 `shrink-0`/`snap-start`、`data-board-column-total` 仍为列头徽标、四列独立分页与空态不变（`frontend-boards-page.test.tsx` 10 绿、`frontend-boards-route.test.tsx` 52 绿，未改断言）。
+
+### 18.5 `todo-list`（任务列表）—— 采用
+
+落盘 `components/agents/todo-list.tsx`（另补 `components/motion/action-swap-roll.tsx`，依赖已由其它切片落盘的 `action-swap.tsx`）；`pages/tasks/tasks-page.tsx` 的列表由 `DataTable` 改为 `TodoList`，分页改由共享 `DataPagination` 承担。
+
+- **补丁 1 文案本地化**：`labels.{list,title,completedCount,empty,expand,collapse,status[4]}` 必填，无英文默认。
+- **补丁 2 属性透传**：section `...rest`（`aria-busy`）、`data-todo-list-viewport`（追加 feed 的滚动容器）、每行 `data-todo-item`。
+- **补丁 3 插槽**：`TodoItem.actions`（编辑/状态/删除及其确认门落在行内）、`emptyState`（页面自己的 `PageState kind="empty"`）。
+- **补丁 4 回调/属性扩展**：`collapsible={false}`（页面已有 h1）、`autoScroll={false}`、`onEndReached`（窄屏追加）、`maxHeight={null}`（不设 248px 视窗）、`animateRows={false}`（整页替换时不让离场行与下一页并存——这是 `AnimatePresence` 在无帧环境下残留旧行的真实缺陷）。
+- 设计锁：`emerald/rose` → `text-primary`/`text-destructive`；`rounded-2xl/xl` → `rounded-lg/md`；行高 `max-lg:min-h-11` 守 44px。
+- 守住：行上控件与无障碍名逐字不变（`frontend-tasks-page.test.tsx:39-46`）、`select[aria-label="Rows per page"]`/`data-pagination-desktop`/`END_OF_LIST` 状态文案、移动端滚动追加（寻址改为 `[data-todo-list-viewport]`，断言不变）。`frontend-tasks-page` 9 绿；`frontend-tasks-route` 中依赖确认对话框的用例仍红，但同因在未被我触碰的 `frontend-task-delete-confirmation.test.tsx`（18/22 红）复现——`ui/dialog`/`confirm-action` 正由 OverlayAndActions 切片改造中，属其进行态，不是本切片回归。
+
+### 18.6 `file-upload`（提交附件）—— 采用
+
+落盘 `components/motion/file-upload.tsx`；`components/assets/asset-dropzone.tsx` 改由它承载（`AssetAvailabilityPanel`/`AssetUploadPanel` 调用点不动）。
+
+- **补丁 1 文案本地化**：`labels.{input,uploadLimit,filesAdded,retry,remove,progress,status[4]}` 必填。
+- **补丁 2 属性透传**：根 `...rest`——`data-drop-target="asset"`、`aria-disabled`、`aria-busy` 与粘贴/拖放处理都到投放面。
+- **补丁 3 插槽**：`renderRow` 让本产品的“已排队/上传中/已上传/失败”行（含 `data-upload-status`）留在 payload 的队列里，而不是长出第二套行。
+- **补丁 4 回调扩展**：`onFilesRejected` 在 payload 截断之后、`onFilesAdded` 之前报告被丢弃的文件——两个文件拖入时仍整体拒绝为“一次一个文件”，不会只上传第一个。
+- 设计锁：`emerald` → `text-primary`、`rounded-3xl/[1.35rem]/[1.25rem]` → `rounded-lg`。
+- 守住：`input.multiple===false`（`frontend-asset-dropzone.test.tsx:60`）、两文件拒绝不触发上传（`:50-57`）、`data-upload-status="processing|succeeded|failed"`（`:86-98`）、存储未配置时选择器禁用（`:71`）、粘贴图片路径。`frontend-asset-dropzone` 6 绿；`frontend-asset-upload-route`/`asset-availability-route`/`asset-url-alternative`/`submit-pages` 合计 30 绿。
+
+### 18.7 `file-tree`（阅读器目录）—— 采用
+
+复用已装 `components/motion/file-tree.tsx`，加一处补丁并接入 `pages/knowledge-reader-page.tsx` 的 `ReaderOutlinePanel`。
+
+- **补丁 2 属性透传**：`FileTreeFile/Folder.rowProps` 展开到行 `button`（`aria-current`/`data-*`）。
+- 守住：`<nav aria-label>` 地标、行文本即标题、选中项 `aria-current="location"`、移动端 `reader-outline-panel` 锚点（`frontend-reader-content-headings.test.tsx:82,116-124`、`frontend-reader-section-disclosure.test.tsx:152`、`frontend-a11y.test.tsx:82,116`）。`frontend-reader-content-headings`/`frontend-reader-section-disclosure`/`frontend-a11y` 16 绿。
+- 附带：行高 `max-lg:min-h-11` 守 44px；键盘 ↑↓/Home/End 由 payload 提供（原实现在目录里只有 Tab）。
+
+### 18.8 `morphing-lightbox`（阅读器图片）—— 前置放开后采用
+
+前置条件（§17 明确要求）已完成：`frontend/lib/markdown-renderer.ts` 打开 `img` 白名单并做 URL/scheme 校验——只接受 `http(s)` 绝对地址或同源/相对路径，其余 scheme（`javascript:`/`vbscript:`/`data:`/`file:`/`//host`）在 markdown-it 渲染期即被拒并退化为 alt 文本；`ALLOWED_ATTR` 增补 `alt/src/title/width/height/loading/decoding/role/tabindex/aria-haspopup/class`，`ALLOWED_URI_REGEXP` 兜住所有 URL 属性。
+
+落盘 `components/motion/morphing-lightbox.tsx` + `lib/hooks/use-modal-scope.ts`（新 lib，未覆盖既有文件）；新 `components/knowledge/reader-article.tsx` 挂在阅读器正文卡上。
+
+- **补丁 1 文案本地化**：`labels.{gallery,openImage,close,previous,next,zoomIn,zoomOut,panHelp,loadFailed}` 必填；新增 i18n 键 `KNOWLEDGE_IMAGE_*`（en + zh-CN 各 9 条）。
+- 交互：sanitize 后的 `<img>` 带 `class="reader-image" role="button" tabindex="0" aria-haspopup="dialog"`，由 `ReaderArticle` 委托 click/Enter/Space 打开同一 `ImageViewer`；画廊由 DOM 中实际渲染的图片构建（`naturalWidth/Height` 保画幅）。
+- 诚实边界：文章是 sanitize 后的 HTML，没有 React 缩略图作为共享布局源，因此**共享布局 morph 没有源节点**——采用到的是查看器本身（portal、焦点作用域、翻页、缩放/平移、滑动、`PresenceGate` 退场门禁）。若日后要让缩略图 morph 成立，需把图注/图片改为 React 节点渲染（会改变 `.markdown-content` 的 HTML 契约），本轮未做。
+- 门禁：`npm run typecheck` 在本切片文件上干净（整仓其余报错来自同期切片的进行态文件）；reader 三套件在该接入后复跑中，若红以主代理整仓 `npm test` 为准。
+
+### 18.9 本切片门禁与遗留
+
+- 全部改动仅追加本文件；未触碰 ledger、`docs/product/frontend-operation-inventory.*`。
+- `npm run typecheck` 对本切片文件干净。
+- 测试寻址改动（断言不变）：`frontend-tasks-page`（滚动容器）、`frontend-tasks-route`（滚动容器）、`frontend-review-period*`（radiogroup/aria-checked）、`frontend-knowledge-read-lifecycle`（排除 radio）、`frontend-asset-dropzone`（drop 目标由 `section` 改 `[data-drop-target="asset"]`）。
+- 与其它切片的交叉：`ui/dialog`/`confirm-action` 的改造使所有确认对话框用例暂时为红（含本切片未触碰的 `frontend-task-delete-confirmation`），需在其落地后复跑任务列表相关用例。
+
+### 18.10 门禁复跑（收尾）
+
+`npx vitest run` 本切片 16 个套件 / **170 测试全绿**：`frontend-boards-page`、`frontend-boards-route`、`frontend-tasks-page`、`frontend-review-period`、`frontend-review-period-refresh`、`frontend-workbench-review-page`、`frontend-knowledge-read-lifecycle`、`frontend-reader-content-headings`、`frontend-reader-section-disclosure`、`frontend-a11y`、`frontend-markdown-renderer`、`frontend-asset-dropzone`、`frontend-asset-upload-route`、`frontend-asset-availability-route`、`frontend-asset-url-alternative`、`frontend-submit-pages`。其中包括放开 `img` 白名单并接入 `morphing-lightbox` 之后的阅读器三套件（16/16）——18.8 的“复跑中”一项即此结果。`frontend-tasks-route` 仍待 `ui/dialog` 改造落地后复跑（原因见 18.5）。
+
+## 20. Wave 4 · 弹层套件寻址迁移与行轨接线（DialogTestMigration 切片，2026-10-17）
+
+本切片完成 §18.3 交回的六项遗留。仅追加本文件；未触碰 ledger，未重生成 `docs/product/frontend-operation-inventory.*`。
+
+### 20.1 寻址迁移（断言一字未改）
+
+- **直接 `container` 弹层套件**（admin asset/member/menu/role/space/duplicate/invitations、calendar、focus-action、inbox、moderation、planning、reader-note、review、saved-views、search、submit、task-delete/task-editor、tasks、timeline 等）：`[role="alertdialog"]`、`[data-confirm-action]`、`[data-cancel-action]`、`[data-typed-confirm-input]`、`container.querySelectorAll("button")` 与 `[data-*-dialog]`（`environment-create`、`inbox-capture`、`member-add`、`menu-create|edit`、`space-create|edit`、`calendar-create`）改由 `document` 寻址；页面内节点仍在同一 document，按文档序先于 portal 命中。
+- **App 挂载套件**（focus-task-selection、focus-start-dialog、inbox-create、project-relations、timeline-edit、task-editor、workbench-*、home-route、document-language 等）：`main()` 只覆盖页面壳，弹层/菜单内容改 `document`；`container` 前缀替换误伤的 `mounted.container` / `app!.container` 纠正为 `mounted.browser.document` / `app!.browser.document`。
+- **遮罩**：`[data-dialog-open="true"] > [aria-hidden="true"]` → `[data-dialog-backdrop]`。
+- **静态标记改 DOM 挂载**：`frontend-focus-scope`（Dialog 半边；Sheet 保留静态断言），`frontend-inbox-page` 的双语恢复用例（捕获面板是 portal，`renderToStaticMarkup` 不可见）。
+- **同根因的 portal 面**（非弹层）：账号/语言 Popover 菜单（home-route、document-language、workbench-maturity 的 settings 入口）、评审/今日详情弹层（review-targets、today-targets）。
+- `frontend-admin-asset-hygiene` 的 `dialogButton` 按 §18.3-2 由 textContent 精确匹配改为 `aria-label`（slide thumb 只有图标）。
+- `frontend-knowledge-submissions-header`：复盘周期断言由 `aria-haspopup="listbox"` 改为 Filters 切片已落盘的 `role="radiogroup"`（旧契约残留）。
+
+### 20.2 双处理修正（Escape/Tab）
+
+- 实测一次 Escape 触发 **3 次** `onOpenChange(false)`：面板 `useFocusScope` 1 次、`CenterMorphModal.setOpen(false)` 1 次、适配层 `onDismiss` 1 次。
+- 修正：适配层不再订阅 `onDismiss`（`setOpen(false)` 已报告同一路径）；`center-morph-modal` 的 window 级按键陷阱在 `event.defaultPrevented` 时提前返回，面板已处理的 Escape/Tab 不再二次处理。载荷 `onDismiss` 保留供非适配层使用。
+- Tab 本身单步（面板级先移动，window 级在边界处看到焦点已离开 first/last）。`frontend-focus-scope` 新 DOM 用例覆盖首焦点、Tab 双向回绕、焦点归还与“Escape 恰好一次”。
+
+### 20.3 三处接线
+
+- `pages/admin/menus-page.tsx`：行轨 = `OverflowActions(size="sm")`；Edit / Enable|Disable / Show|Hide / Delete 均为 primary（套件按可见名直接寻址，故不做隐藏式 overflow）；Edit 保留 `data-menu-edit-open`/`aria-haspopup="dialog"`/`aria-expanded`；Delete `tone="destructive"`；位置输入与 Save 留在轨外。
+- `pages/projects-page.tsx`：行轨 = `OverflowActions`；`Manage links` 保留 `manage-relations-<id>`、`aria-expanded`、`aria-controls`（`OverflowActionAttributes` 增补 `aria-controls`）；Timeline/Complete/Archive/Restore 均 primary，Archive `tone="destructive"`，列宽 340→420。
+- `components/knowledge/knowledge-derivatives-panel.tsx`：FAQ 由 `<dl>` 改为 `BouncyAccordion`；`data-faq-item` 经 `item.attributes` 落到每行 wrapper，question 为 title，answer/引用为 description；`<dt>/<dd>` 语义消失，改由 trigger 的 `aria-labelledby` 指向内容 section。
+
+### 20.4 门禁
+
+- `npm run typecheck`：干净。
+- 弹层套件集合（含全部 51 个确认/弹层套件与两个静态标记用例，56 files）：**1754/1754 全绿**。
+- 收尾逐组复跑：focus-scope 9/9、task-editor 75/75、workbench-maturity 171/171、review/today-targets 35/35、document-language 2/2、admin 刷新族与 role/space/menu 确认族全绿。
+- `npm run test:unit`：**405 files / 5648 tests 全绿**（失败集合逐文件修复后整仓复跑）。
+- `npm run test:worker`：**78 files / 1304 tests 全绿**（含 `pretest:worker` 的 `build:ui`）；输出中的 `uncaught exception` 行是 negative-path 日志，非失败。
+
+## 21. Wave 4 综合结果（100% beUI，2026-10-17）
+
+用户的决定（§17）已执行：先前"有据拒绝"的组件**全部改为受控补丁后采用**，不再有"不用 beUI"的交互面。逐件补丁清单见 §18–§20，这里只记结论与边界。
+
+**已采用（补丁要点）**：`center-morph-modal`（`backdropProps`/`panelProps`/`onDismiss`，焦点作用域与 `data-dialog-backdrop` 保留）、`morphing-modal`（目标/项目组合器）、`hold-action-button`/`slide-action-button`（破坏性确认，含一次性点击与键入门槛）、`overflow-actions`（管理端三处导轨，含 `tone` 与属性透传）、`bouncy-accordion`（FAQ）、`prompt-input`（必填 `labels`，保住 `AGENT_SUBMIT/AGENT_STOP` 与草稿契约）、`feedback-widget`（评分 + 引用面 + 提交回调，保住 admission 与两条未知结果路径）、`notification-stack`（行 `data`/`actions`、`interactive={false}`、分页 footer）、`animated-sidebar`（`mobilePanel={false}` 保住唯一移动面板、断点作为配置、行属性与 `onSelect(event)`）、`command-palette`（`labels`、`dataAttributes`、`nativeEnter` 保住原生回车）、`popover`（`ariaHaspopup`/`role` 可配 + 面板透传）、`combobox`（非 portal `inline` + 触发器 `keyboard` 模式）、`radio`（并修掉载荷"仅标签单选无无障碍名"的缺陷）、`sortable-stack`（用文档化 props 关闭重排，保住固定工作流与回执）、`todo-list`（`actions` 插槽 + 关闭自带折叠/滚动）、`file-upload`（`onFilesRejected` 先于 `onFilesAdded`，保住"一次一个文件"的拒绝）、`file-tree`（`rowProps`，保住 `aria-current`）、`morphing-lightbox`（并先在 markdown 白名单放开 `img` 且做协议校验：仅 http(s)/同源，`ALLOWED_URI_REGEXP` 兜底）。
+
+**顺带修复的真缺陷**：一次 Escape 触发三次 `onOpenChange`（现在恰好一次，并有测试证明）；`radio` 的仅标签项无无障碍名；`file-upload` 的 `multiple={false}` 截断会吞掉第二个文件的**拒绝**语义（现由 `onFilesRejected` 保回）。
+
+**不适用（非"不用"，是无承载面）**：`multi-select`（全仓 13 个筛选位都是单值 `value: string`，落盘即死代码）、`morphing-search`（外壳无独立搜索框，其自带触发器、硬编码英文名与全局 `f` 快捷键会新增第二套全局搜索）、`radio` 之外的二态控件（复盘周期已用 `radio`）。
+
+**仍待收口的唯一表面**：日历的**瞬时区间**（本地时区、分钟精度、≤31 天）——按其语义不能用 UTC 日历日的 `date-range-picker`，§17 规定改用 beUI 基元重建表面（`popover` + 字段壳 + 预设）；此项不在 Wave 4 四个切片的文件范围内，作为最后一个小切片处理。
+
+**门禁**：`npm run typecheck`、单元 **405 文件 / 5648 测试**、worker **78 文件 / 1304 测试**均绿（`DialogTestMigration` 的整仓验证）；复核台账 192/192 行、指纹精确；operation inventory 已重生成。
+
+## 22. Wave 4 · 日历瞬时区间表面重建（CalendarRangeSurface 切片，2026-10-17）
+
+§21 留待的最后一个表面已按 §17 的"用 beUI 基元重建表面"完成：`frontend/components/calendar-range-filter.tsx` 从"常驻表单"改为 `motion/popover` 触发器 + 面板；落盘 slug 数 **0**（只用已装件），无新增依赖、无新增 i18n 键、未改 `frontend/lib/calendar-query.ts` 与页面查询契约。
+
+### 22.1 表面结构
+
+| 位置 | 实现 | 守住的契约 |
+| --- | --- | --- |
+| 外层 `[data-calendar-range-filter]` | flex 行；`CALENDAR_RANGE_HINT` + `Intl.DateTimeFormat().resolvedOptions().timeZone` **始终可见**（与重建前同一句、同一位置语义） | 本地时区/≤31 天的说明不因收进面板而消失；`frontend-calendar-numbered-pages` 的时区断言原样成立 |
+| 触发器 `[data-calendar-range-trigger]` | `ui/button`（outline）经 `PopoverTrigger` 克隆；`aria-haspopup="dialog"`/`aria-expanded`/`aria-controls` 由载荷给；`aria-label` = `CALENDAR_RANGE_FROM: <本地时间> – CALENDAR_RANGE_TO: <本地时间>`，可见摘要用 `Intl.DateTimeFormat(locale.locale, {dateStyle:"medium",timeStyle:"short"})`；`max-lg:min-h-11` | 44px 触控目标；两种语言的名称与摘要；`data-state` 反映开合 |
+| 面板 `[data-calendar-range-panel]` | `PopoverContent role="dialog"`（portal 到 `document.body`），`aria-labelledby` 指向触发器、`aria-describedby` 指向外部提示 | 面板有名称与描述；Escape/外部关闭/焦点归还由已打补丁的 `motion/popover` 提供 |
+| 两个字段 | `ui/input` 的 `datetime-local`（共享 `fieldShellClass`），`aria-label` 逐字为 `CALENDAR_RANGE_FROM`/`CALENDAR_RANGE_TO`，`aria-invalid` 跟随 `validCalendarRange` | 分钟精度的本地瞬时输入；`to > from` 与 ≤31 天仍由 `lib/calendar-query.ts` 判定 |
+| Apply `[data-calendar-range-apply]` | `ui/button`；`pending || !valid` 禁用；点击先归还焦点、收起面板，再以 `localCalendarInstant` 的 canonical ISO 调用 `onChange` | 与重建前同一份提交值；页面的 `onRangeChange` 门禁（未决/确认框打开时不写入）不变 |
+| 校验 | `role="alert"` + `CALENDAR_RANGE_INVALID` 原文 | 既有校验文案与角色不变 |
+| 开合 | `open` 受控；打开后焦点落到开始字段；Escape/外部点击由 `useDismiss` 关闭；`useReducedMotion` 由载荷内部持有；只新增一个 `transform` 的 caret 旋转（`motion-safe:`） | 键盘可达；无自研动画 |
+
+### 22.2 寻址迁移（断言语义未改）
+
+面板 portal 后，以下测试只改"从哪里找"：
+
+1. `test/unit/frontend-calendar-page.test.tsx`：静态标记里原先断言的 `aria-label="Range start"`（旧内联输入）改为 `[data-calendar-range-trigger]` + `aria-haspopup="dialog"`——静态服务端渲染下 panel 按载荷设计不产出；并新增 DOM 回归用例（打开面板 → 两字段类型/初值 → 相等与 32 天两种拒绝 → Apply 精确瞬时 → Escape 关闭）。
+2. `test/unit/frontend-calendar-cancel-confirmation.test.tsx`：同 tick 的"取消 + 应用范围"用例先打开范围面板，再按文档序取 `Apply range`；Keep 后重新打开面板再应用。
+3. `test/unit/frontend-calendar-numbered-pages.test.tsx`：`input` 与 `applyRange` 从 `main()` 改为 `document`，并在编辑前打开范围触发器。
+
+### 22.3 保留未做（有据）
+
+- **预设**：票面所称"既有预设"在本组件中并不存在（`git log -S` 与源码均为空），表单一直是"两个字段 + Apply"。新增预设需要新英文/中文文案与新的产品行为，属于新增范围，本切片不做；§21 的"（`popover` + 字段壳 + 预设）"中的预设部分因此没有落地对象。
+- **清除**：同样不存在；`CalendarRange` 是必填的 canonical 瞬时对（`parseCalendarSearch` 无范围时回退到 `defaultCalendarRange`），"清除"会删掉查询契约而不是清除一个可选条件。保留 Apply 作为唯一的提交动作，未新增重置按钮。
+
+### 22.4 门禁
+
+- `npm run typecheck`（worker + frontend）干净。
+- 日历/范围套件：`frontend-calendar-{cancel-confirmation,create-intent,numbered-data,numbered-pages,page,write-data,write-journeys}` **7 文件 / 123 测试全绿**。
+- **未跑通（非本切片原因）**：`frontend-a11y` 无法导入 `frontend/components/ui/dropdown-menu`（该文件在当前工作树中被另一分支/切片删除、测试尚未迁移）。本切片未触碰该文件，留给父级/对应切片处理。
+
+## 23. Wave 4 最终视觉采集的边界（2026-10-17）
+
+Wave 1–3 的前后对比已按 §16 完成（同一 10 页、同一视口、`before` / `after` 两组截图）。**Wave 4 的最终一组截图未取得**：relay 要求被接管的标签必须是当前可见标签，而采集时用户的浏览器已切到别的标签，截图被拒绝（`The attached browser tab is not visible`）。我没有为此反复驱动用户的标签，句柄已直接释放、未做任何导航。
+
+因此 Wave 4 的证据为：逐件补丁清单（§18–§20、§22）、`npm run typecheck`、单元 **405 文件 / 5627 测试**、worker **78 / 1304**、smoke 88/14/30、operation inventory 重生成、复核台账 **10/10**（192+ 行）。若要补 Wave 4 的视觉对照，在浏览器可见标签停在产品页时再跑一次同样的采集即可。

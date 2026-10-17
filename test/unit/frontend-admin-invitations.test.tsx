@@ -31,12 +31,12 @@ describe("admin member invitations", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   function setEmail(value: string) {
-    const input = container.querySelector("#invitation-email") as HTMLInputElement;
+    const input = document.querySelector("#invitation-email") as HTMLInputElement;
     const setter = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!;
     setter.call(input, value);
     input.dispatchEvent(new browser.Event("input", { bubbles: true }));
   }
-  function buttonByText(text: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === text) as HTMLButtonElement | undefined; }
+  function buttonByText(text: string) { return [...document.querySelectorAll("button")].find((item) => item.textContent === text) as HTMLButtonElement | undefined; }
   async function click(element: HTMLElement | undefined) { expect(element, "button").toBeTruthy(); await act(async () => element!.click()); }
   async function openAddDialog() { await click(container.querySelector("[data-member-add-open]") as HTMLButtonElement); }
 
@@ -47,23 +47,23 @@ describe("admin member invitations", () => {
     await act(async () => setEmail("new@example.test"));
     await click(buttonByText("Generate code"));
     expect(issue).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("A one-time login code will be created for new@example.test.");
-    await click(container.querySelector("[data-confirm-action]") as HTMLButtonElement);
+    expect(document.body.textContent).toContain("A one-time login code will be created for new@example.test.");
+    await click(document.querySelector("[data-confirm-action]") as HTMLButtonElement);
     expect(issue).toHaveBeenCalledWith("new@example.test");
     expect(issue).toHaveBeenCalledTimes(1);
   });
 
   it("opens the add-member dialog from the add control and closes it on cancel", async () => {
     await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} />));
-    expect(container.querySelector("[data-member-add-dialog]")).toBeNull();
+    expect(document.querySelector("[data-member-add-dialog]")).toBeNull();
     const trigger = container.querySelector("[data-member-add-open]") as HTMLButtonElement;
     expect(trigger.textContent).toBe("Invite member");
     expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
     await click(trigger);
-    expect(container.querySelectorAll("[data-member-add-dialog]")).toHaveLength(1);
-    expect(container.querySelector("#invitation-email")).toBeTruthy();
-    await click(container.querySelector("[data-member-add-cancel]") as HTMLButtonElement);
-    expect(container.querySelector("[data-member-add-dialog]")).toBeNull();
+    expect(document.querySelectorAll("[data-member-add-dialog]")).toHaveLength(1);
+    expect(document.querySelector("#invitation-email")).toBeTruthy();
+    await click(document.querySelector("[data-member-add-cancel]") as HTMLButtonElement);
+    expect(document.querySelector("[data-member-add-dialog]")).toBeNull();
   });
 
   it("submits the dialog email through the same issue call as the inline flow", async () => {
@@ -73,7 +73,7 @@ describe("admin member invitations", () => {
     await act(async () => setEmail("dialog@example.test"));
     await click(buttonByText("Generate code"));
     expect(issue).not.toHaveBeenCalled();
-    await click(container.querySelector("[data-confirm-action]") as HTMLButtonElement);
+    await click(document.querySelector("[data-confirm-action]") as HTMLButtonElement);
     expect(issue).toHaveBeenCalledWith("dialog@example.test");
     expect(issue).toHaveBeenCalledTimes(1);
   });
@@ -81,9 +81,9 @@ describe("admin member invitations", () => {
   it("dismisses the dialog after a code is issued", async () => {
     await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} />));
     await openAddDialog();
-    expect(container.querySelectorAll("[data-member-add-dialog]")).toHaveLength(1);
+    expect(document.querySelectorAll("[data-member-add-dialog]")).toHaveLength(1);
     await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} issuedInvitation={{ email: "new@example.test", code: "CODE-ABCD-1234", expiresAt: pending.expiresAt }} />));
-    expect(container.querySelector("[data-member-add-dialog]")).toBeNull();
+    expect(document.querySelector("[data-member-add-dialog]")).toBeNull();
   });
 
   it("fills the available height for the member list", async () => {
@@ -99,20 +99,20 @@ describe("admin member invitations", () => {
   it("shows the code once with copy, expiry, and the one-time notice", async () => {
     await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} issuedInvitation={{ email: "new@example.test", code: "CODE-ABCD-1234", expiresAt: pending.expiresAt }} />));
     expect(container.querySelectorAll("[data-invitation-code]")).toHaveLength(1);
-    expect(container.textContent).toContain("CODE-ABCD-1234");
-    expect(container.textContent).toContain("Login code for new@example.test");
-    expect(container.textContent).toContain("shown only once");
-    expect(container.textContent).toContain(`Expires ${pending.expiresAt}`);
+    expect(document.body.textContent).toContain("CODE-ABCD-1234");
+    expect(document.body.textContent).toContain("Login code for new@example.test");
+    expect(document.body.textContent).toContain("shown only once");
+    expect(document.body.textContent).toContain(`Expires ${pending.expiresAt}`);
     expect(buttonByText("Copy code")).toBeTruthy();
   });
 
   it("revokes a pending invitation only after confirmation", async () => {
     const revoke = vi.fn();
     await act(async () => root.render(<MembersPage locale={locale} members={[]} invitations={[pending]} onRevokeInvitation={revoke} />));
-    expect(container.textContent).toContain("Pending");
+    expect(document.body.textContent).toContain("Pending");
     await click(buttonByText("Revoke"));
     expect(revoke).not.toHaveBeenCalled();
-    await click(container.querySelector("[data-confirm-action]") as HTMLButtonElement);
+    await click(document.querySelector("[data-confirm-action]") as HTMLButtonElement);
     expect(revoke).toHaveBeenCalledWith("i1");
   });
 
@@ -127,11 +127,11 @@ describe("admin member invitations", () => {
     await openAddDialog();
     await act(async () => setEmail("new@example.test"));
     await click(buttonByText("Generate code"));
-    await click(container.querySelector("[data-confirm-action]") as HTMLButtonElement);
+    await click(document.querySelector("[data-confirm-action]") as HTMLButtonElement);
     await flush();
     expect(issues).toBe(1);
     expect(reads).toBeGreaterThanOrEqual(2);
-    expect(container.textContent).toContain("The result for new@example.test could not be confirmed.");
+    expect(document.body.textContent).toContain("The result for new@example.test could not be confirmed.");
   });
 
   it("treats a duplicate issue as already pending and reconciles instead of erroring hard", async () => {
@@ -145,11 +145,11 @@ describe("admin member invitations", () => {
     await openAddDialog();
     await act(async () => setEmail("new@example.test"));
     await click(buttonByText("Generate code"));
-    await click(container.querySelector("[data-confirm-action]") as HTMLButtonElement);
+    await click(document.querySelector("[data-confirm-action]") as HTMLButtonElement);
     await flush();
     expect(issues).toBe(1);
     expect(reads).toBeGreaterThanOrEqual(2);
-    expect(container.textContent).toContain("is already pending");
+    expect(document.body.textContent).toContain("is already pending");
   });
 });
 

@@ -27,7 +27,7 @@ describe("document language follows the active locale", () => {
   it("sets <html lang> from the stored locale when the App mounts", async () => {
     const app = await mountWithStoredLocale();
     try {
-      await waitForApp(() => app.container.querySelector('[data-menu-id="language"]') !== null);
+      await waitForApp(() => app.browser.document.querySelector('[data-shell-topbar] button[aria-haspopup="menu"]') !== null);
       expect(app.browser.document.documentElement.lang).toBe("zh-CN");
     } finally {
       await app.unmount();
@@ -37,13 +37,13 @@ describe("document language follows the active locale", () => {
   it("updates <html lang> when the shell switches the locale through the runtime", async () => {
     const app = await mountWithStoredLocale();
     try {
-      await waitForApp(() => app.container.querySelector('[data-menu-id="language"]') !== null);
+      await waitForApp(() => app.browser.document.querySelector('[data-shell-topbar] button[aria-haspopup="menu"]') !== null);
       expect(app.browser.document.documentElement.lang).toBe("zh-CN");
 
-      const trigger = app.container.querySelector<HTMLButtonElement>('[data-menu-id="language"] > button');
+      const trigger = app.browser.document.querySelector<HTMLButtonElement>('[data-shell-topbar] button[aria-haspopup="menu"]');
       expect(trigger).not.toBeNull();
       await act(async () => trigger?.click());
-      const english = [...app.container.querySelectorAll<HTMLElement>('[data-menu-id="language"] [role="menuitemradio"]')]
+      const english = [...app.browser.document.querySelectorAll<HTMLElement>('[data-menu-id="language"] [role="menuitemradio"]')]
         .find((item) => item.textContent?.includes("English"));
       expect(english).not.toBeUndefined();
       await act(async () => english?.click());

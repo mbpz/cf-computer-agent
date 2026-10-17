@@ -51,15 +51,15 @@ describe("project relations persistent read-only recovery through App", () => {
   }
   beforeEach(() => { linked = false; revision = 0; failure = 0; readFailure = false; summaryFailure = false; holdWrite = undefined; holdRead = undefined; readVersion = undefined; writes = []; reads = []; markers = []; });
   afterEach(async () => { await app?.unmount(); app = undefined; vi.restoreAllMocks(); });
-  const confirm = () => main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
-  const keep = () => main().querySelector<HTMLButtonElement>("[data-cancel-action]")!;
+  const confirm = () => document.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+  const keep = () => document.querySelector<HTMLButtonElement>("[data-cancel-action]")!;
   const captured = (node: HTMLElement, name = "onClick") => (node as any)[Object.keys(node).find(k => k.startsWith("__reactProps$"))!][name];
   const unload = () => { const event = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(event); return event.defaultPrevented; };
   it.each([ ["goals", false], ["tasks", false], ["goals", true], ["tasks", true] ] as const)("confirms %s linked=%s with exact impact, cancellation and single consumption", async (kind, initial) => {
     linked = initial; await mount(); await open(kind); const action = button(initial ? "Unlink" : "Link", editor());
     const count = reads.length; await click(action);
     expect(writes).toHaveLength(0); expect(stored()).toBeNull(); expect(confirm()).toBeTruthy(); expect(document.activeElement).toBe(keep());
-    const modal = main().querySelector('[role="alertdialog"]')!;
+    const modal = document.querySelector('[role="alertdialog"]')!;
     expect(modal.textContent).toContain("Private project"); expect(modal.textContent).toContain("Private target");
     expect(modal.textContent).toContain(kind === "goals" ? "Goals" : "Tasks"); expect(modal.textContent).toContain("does not delete");
     await click(keep()); expect(reads).toHaveLength(count); expect(document.activeElement).toBe(action); expect(writes).toHaveLength(0);

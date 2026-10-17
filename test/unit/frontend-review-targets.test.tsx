@@ -18,7 +18,7 @@ describe("review traceable member-private targets through App", () => {
   const main = () => app!.container.querySelector("main")!;
   const click = async (node: HTMLElement) => act(async () => node.click());
   const target = (kind: string) => main().querySelector<HTMLButtonElement>(`[data-review-target="${kind}"]`)!;
-  const button = (text: string) => [...main().querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
+  const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
   async function mount() {
     app = await mountAuthenticatedApp({url:"https://app.test/review", role:"contributor", permissionMask:"0x100000", fetch:async (input,init) => {
       const url = new URL(String(input), "https://app.test");
@@ -61,22 +61,22 @@ describe("review traceable member-private targets through App", () => {
     expect(url.searchParams.get(kind === "overdue" ? "due" : "status")).toBe(({completed:"done",overdue:"overdue",blocked:"blocked",inbox:"inbox",projects:"active"} as any)[kind]);
   });
   it.each(["task","inbox","project"])("re-authorizes %s and renders only a matching live receipt", async kind => {
-    await mount(); await click(target(kind)); await waitForApp(() => !!main().querySelector('[role="dialog"]')?.textContent?.includes("Authorized"));
-    expect(main().querySelector('[role="dialog"]')!.textContent).not.toContain("Snapshot");
+    await mount(); await click(target(kind)); await waitForApp(() => !!document.querySelector('[role="dialog"]')?.textContent?.includes("Authorized"));
+    expect(document.querySelector('[role="dialog"]')!.textContent).not.toContain("Snapshot");
     expect(calls.filter(c => !c.path.includes("telemetry")).every(c => c.method === "GET")).toBe(true);
   });
   it.each(["task","inbox","project"])("does not use cached %s content for missing targets and supports exact retry", async kind => {
-    await mount(); deny=404; await click(target(kind)); await waitForApp(() => !!main().querySelector('[role="dialog"]')?.textContent?.includes("Unable to load"));
-    expect(main().querySelector('[role="dialog"]')!.textContent).not.toContain("Snapshot");
-    deny=0; await click(button("Retry detail")); await waitForApp(() => !!main().querySelector('[role="dialog"]')?.textContent?.includes("Authorized"));
+    await mount(); deny=404; await click(target(kind)); await waitForApp(() => !!document.querySelector('[role="dialog"]')?.textContent?.includes("Unable to load"));
+    expect(document.querySelector('[role="dialog"]')!.textContent).not.toContain("Snapshot");
+    deny=0; await click(button("Retry detail")); await waitForApp(() => !!document.querySelector('[role="dialog"]')?.textContent?.includes("Authorized"));
   });
   it.each(["task","inbox","project"])("rejects mismatched %s target identity", async kind => {
-    await mount(); wrongId=true; await click(target(kind)); await waitForApp(() => !!main().querySelector('[role="dialog"]')?.textContent?.includes("Unable to load"));
-    expect(main().querySelector('[role="dialog"]')!.textContent).not.toContain("Authorized");
+    await mount(); wrongId=true; await click(target(kind)); await waitForApp(() => !!document.querySelector('[role="dialog"]')?.textContent?.includes("Unable to load"));
+    expect(document.querySelector('[role="dialog"]')!.textContent).not.toContain("Authorized");
   });
   it.each([401,403])("clears snapshot and detail on permission denial %i", async status => {
-    await mount(); deny=status; await click(target("task")); await waitForApp(() => !!main().textContent?.includes("Unable to load"));
-    expect(main().querySelector('[role="dialog"]')).toBeNull(); expect(main().textContent).not.toContain("Snapshot task");
+    await mount(); deny=status; await click(target("task")); await waitForApp(() => !!document.body.textContent?.includes("Unable to load"));
+    expect(document.querySelector('[role="dialog"]')).toBeNull(); expect(main().textContent).not.toContain("Snapshot task");
   });
   it("aborts a closed detail and ignores its late private response", async () => {
     let resolve!: (r:Response) => void; detail=() => new Promise(done => {resolve=done;});
@@ -85,6 +85,6 @@ describe("review traceable member-private targets through App", () => {
     await click(button("Close detail")); expect(read.signal?.aborted).toBe(true);
     await act(async () => resolve(Response.json({task:{...task,title:"Late private content"},tags:[],links:[]})));
     await waitForApp(() => true);
-    expect(main().querySelector('[role="dialog"]')).toBeNull(); expect(main().textContent).not.toContain("Late private content");
+    expect(document.querySelector('[role="dialog"]')).toBeNull(); expect(main().textContent).not.toContain("Late private content");
   });
 });

@@ -24,7 +24,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
   const title = () => main().querySelector<HTMLInputElement>(titleSelector)!;
   const button = (selector: string) => main().querySelector(selector) as HTMLButtonElement;
   const composer = () => main().querySelector(`[data-${kind}-create-dialog]`);
-  const create = () => [...main().querySelectorAll("button")].find((node) => node.textContent === (kind === "goals" ? "Add goal" : "Add project"))!;
+  const create = () => [...document.querySelectorAll("button")].find((node) => node.textContent === (kind === "goals" ? "Add goal" : "Add project"))!;
   /** The composer only mounts while its dialog is open, so every create step opens it first. */
   async function openComposer() { if (main().querySelector(titleSelector)) return; await click(main().querySelector<HTMLButtonElement>(`[data-${kind}-create-open]`)!); }
   async function change(value: string) {
@@ -231,11 +231,11 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await mount(); await change("Wait for status");
     let resolve!: (value: Response) => void;
     respond = () => new Promise((done) => { resolve = done; });
-    const complete = [...main().querySelectorAll("button")].find((node) => node.textContent === "Complete")!;
+    const complete = [...document.querySelectorAll("button")].find((node) => node.textContent === "Complete")!;
     const submit = create();
     await act(async () => { complete.click(); submit.click(); });
     expect(bodies).toHaveLength(0);
-    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
+    const confirm = document.querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
     await click(confirm!);
     expect(bodies).toHaveLength(1); expect(bodies[0]).toEqual({ status: "completed", expectedUpdatedAt: "2026-09-26T00:00:00.000Z" });
     await act(async () => resolve(Response.json({ ...entity({ id: "existing", clientKey: "existing", title: "Existing private row" }), status: "completed", updatedAt: "2026-09-26T00:00:00.001Z" })));
@@ -283,7 +283,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await mount(); await change("Keep this title");
     expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this title");
     await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"));
-    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    await click(document.querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     expect(app!.browser.sessionStorage.getItem(draftKey)).toBeNull();
     await act(async () => expect(writeWorkspaceHistory("push", `/${kind}`)).toBe("committed"));
     await waitForApp(() => !!main().querySelector(`[data-${kind}-create-open]`));

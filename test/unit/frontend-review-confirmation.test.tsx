@@ -24,9 +24,9 @@ describe("review decision confirmation and draft protection", () => {
   });
   afterEach(async () => {await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals();});
   async function mount(props: Partial<React.ComponentProps<typeof ReviewDetailPage>> = {}) {await act(async () => root.render(<ReviewDetailPage state={{kind:"ready",detail}} locale={locale} onDecision={onDecision} {...props}/>));}
-  function button(label:string) {const el = [...container.querySelectorAll("button")].find(el => el.textContent === label); expect(el,label).toBeTruthy(); return el as HTMLButtonElement;}
+  function button(label:string) {const el = [...document.querySelectorAll("button")].find(el => el.textContent === label); expect(el,label).toBeTruthy(); return el as HTMLButtonElement;}
   async function click(label:string) {await act(async () => button(label).click());}
-  const dialog = () => container.querySelector('[role="alertdialog"]');
+  const dialog = () => document.querySelector('[role="alertdialog"]');
   const note = () => container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement;
   async function typeNote(value:string) {await act(async () => {Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype,"value")!.set!.call(note(),value);note().dispatchEvent(new browser.Event("input",{bubbles:true}));note().dispatchEvent(new browser.Event("change",{bubbles:true}));});}
   async function confirm() {const el=dialog()?.querySelector("[data-confirm-action]") as HTMLButtonElement;expect(el).toBeTruthy();await act(async () => {el.focus();el.click();el.click();});}
@@ -83,7 +83,7 @@ describe("review decision confirmation and draft protection", () => {
     const data={items:[{id:"sub-1",title:"First",status:"review_pending"},{id:"sub-2",title:"Second",status:"review_pending"}],pagination:{page:1,pageSize:20 as const,total:2,totalPages:1}};
     await act(async () => root.render(<ReviewQueuePage state={{kind:"ready",data}} locale={locale} onReview={onDecision}/>));
     const first=container.querySelector('button[aria-label="Publish First"]') as HTMLButtonElement;const second=container.querySelector('button[aria-label="Publish Second"]') as HTMLButtonElement;
-    await act(async () => {first.click();second.click();});expect(container.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);await confirm();expect(onDecision).toHaveBeenCalledExactlyOnceWith("sub-1","publish",undefined);
+    await act(async () => {first.click();second.click();});expect(document.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);await confirm();expect(onDecision).toHaveBeenCalledExactlyOnceWith("sub-1","publish",undefined);
     await act(async () => second.click());await cancel();expect(onDecision).toHaveBeenCalledTimes(1);
   });
   it("queue binds confirmation to exact row and discards it on replacement read",async () => {

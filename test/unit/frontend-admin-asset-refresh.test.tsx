@@ -20,7 +20,7 @@ describe("asset retry refresh recovery", () => {
 
   async function render() { browser.history.replaceState({}, "", "/admin/assets"); await act(async () => root.render(<AdminAssetsRoute locale={locale()} memberId="member-a" search="" />)); await flush(); }
   function retryButton() { return container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement | null; }
-  async function click(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); await flush(); }
+  async function click(label: string) { const button = [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); await flush(); }
   async function retry() { const button = retryButton(); expect(button).toBeTruthy(); await act(async () => button!.click()); await flush(); await click("Confirm retry"); }
   function unloadBlocked() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
   async function leave() { await act(async () => writeWorkspaceHistory("push", "/home")); await flush(); }
@@ -98,7 +98,7 @@ describe("asset retry refresh recovery", () => {
     });
     await render();
     await act(async () => retryButton()!.click()); await flush();
-    const confirm = [...container.querySelectorAll("button")].find((item) => item.textContent === "Confirm retry") as HTMLButtonElement;
+    const confirm = [...document.querySelectorAll("button")].find((item) => item.textContent === "Confirm retry") as HTMLButtonElement;
     await act(async () => confirm.click());
     expect(posts).toBe(1);
     expect(retryButton()?.disabled).toBe(true);

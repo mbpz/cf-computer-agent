@@ -206,7 +206,7 @@ describe("member submission loop through App", () => {
     await click(main().querySelector("[data-submission-draft-discard]"));
     expect(state.discardCount).toBe(0);
     expect(state.drafts).toHaveLength(1);
-    await click(main().querySelector("[data-confirm-action]"));
+    await click(document.querySelector("[data-confirm-action]"));
 
     await waitForApp(() => state.discardCount === 1);
     await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "idle");
@@ -236,7 +236,7 @@ describe("member submission loop through App", () => {
     // reports an unknown outcome instead of a discarded draft.
     state.lostDiscardResponse = true;
     await click(main().querySelector("[data-submission-draft-discard]"));
-    await click(main().querySelector("[data-confirm-action]"));
+    await click(document.querySelector("[data-confirm-action]"));
     await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "unconfirmed");
     expect(state.drafts).toHaveLength(0);
     expect(contentInput().value).toBe("# Body");
@@ -264,7 +264,7 @@ describe("member submission loop through App", () => {
     // and the page says the draft is still there with the text intact.
     state.refuseDraftDiscard = true;
     await click(main().querySelector("[data-submission-draft-discard]"));
-    await click(main().querySelector("[data-confirm-action]"));
+    await click(document.querySelector("[data-confirm-action]"));
     await waitForApp(() => draftStatus()?.dataset.submissionDraftStatus === "unconfirmed");
     expect(draftStatus()!.textContent).toContain("The draft was not discarded.");
     expect(contentInput().value).toBe("# Body");

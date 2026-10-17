@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createAgentIntent, saveAgentIntent } from "../../frontend/lib/agent-turn-intent";
 import { AgentRoute } from "../../frontend/app";
-import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -40,7 +40,8 @@ describe("agent request cancellation route", () => {
     await render(); await question("First question");
     await act(async () => { const form = container.querySelector("form")!; form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }) as unknown as Event); form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }) as unknown as Event); });
     expect(requests).toHaveLength(1);
-    expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+    expect(container.querySelector('button[type="submit"]')).toBeNull();
+    expect(container.querySelector('button[aria-label="Stop"]')).not.toBeNull();
   });
 
   it("starts a fresh conversation after Stop even if remote cancellation fails", async () => {
@@ -150,7 +151,7 @@ describe("agent request cancellation route", () => {
       return answer("Answer", "conv-1");
     });
     await render(); await question("Question"); await submit();
-    const useful = [...container.querySelectorAll("button")].find((button) => button.textContent === "Useful")!;
+    const useful = await ratingButton("Useful");
     expect(useful).toBeTruthy();
     await act(async () => { useful.click(); useful.click(); });
     expect(writes).toBe(1);
@@ -164,7 +165,8 @@ describe("agent request cancellation route", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/feedback") ? late.promise : answer("Answer", "conv-1"));
     await render(); await question("Question"); await submit();
     expect(unloadBlocked()).toBe(false);
-    await act(async () => { button("Useful").click(); expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true); });
+    const useful = await ratingButton("Useful");
+    await act(async () => { useful.click(); expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true); });
     await act(async () => late.resolve(Response.json({feedback: {conversationId: "conv-1", rating: "useful", citationIds: []}}))); await flush();
     expect(container.textContent).toContain("Feedback saved"); expect(unloadBlocked()).toBe(false);
     await act(async () => expect(leave()).toBe("committed"));
@@ -207,7 +209,7 @@ describe("agent request cancellation route", () => {
     let writes = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {if (String(input).endsWith("/feedback")) {writes++; return new Promise<Response>(() => undefined);} return answer("Answer", "conv-1");});
     await render(); await question("Question"); await submit();
-    const node = button("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
+    const node = await ratingButton("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
     const send = (node as unknown as Record<string, {onClick: () => void}>)[key].onClick;
     if (draft === "question") await question("Draft"); else await sourceDraft();
     await act(async () => {expect(leave()).toBe("deferred"); send();});
@@ -222,7 +224,7 @@ describe("agent request cancellation route", () => {
       return answer("Answer", "conv-1");
     });
     await render(); await question("Question"); await submit();
-    const node = button("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
+    const node = await ratingButton("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
     const send = (node as unknown as Record<string, {onClick: () => void}>)[key].onClick;
     if (phase === "saved") await click("Useful");
     else await act(async () => root.render(<AgentRoute locale={language} memberId="other-member" />));
@@ -248,7 +250,7 @@ describe("agent request cancellation route", () => {
       return answer("Answer", "conv-1");
     });
     await render(); await question("Question"); await submit();
-    const node = button("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
+    const node = await ratingButton("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
     const send = (node as unknown as Record<string, {onClick: () => void}>)[key].onClick;
     await act(async () => {sendForm(); send();}); await flush();
     expect(questions).toBe(2); expect(feedback).toBe(0); expect(leave()).toBe("blocked");
@@ -258,7 +260,7 @@ describe("agent request cancellation route", () => {
     let writes = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {if (String(input).endsWith("/feedback")) {writes++; return new Promise<Response>(() => undefined);} return answer("Answer", "conv-1");});
     await render(); await question("Question"); await submit(); await sourceDraft();
-    const node = button("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
+    const node = await ratingButton("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
     const send = (node as unknown as Record<string, {onClick: () => void}>)[key].onClick;
     await act(async () => {button("Start with these sources").click(); send();}); await flush();
     expect(browser.location.search).toBe("?scope=space&spaceId=space-a");
@@ -391,7 +393,10 @@ describe("agent request cancellation route", () => {
     (input as unknown as Record<string, {onChange: (event: {currentTarget: HTMLInputElement}) => void}>)[key]!.onChange({currentTarget: input});
   }
   function sendForm() { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", {bubbles: true, cancelable: true}) as unknown as Event); }
-  async function decision(accept: boolean) { await act(async () => container.querySelector<HTMLButtonElement>(accept ? "[data-confirm-action]" : "[data-cancel-action]")!.click()); await flush(); }
+  /** The confirmation surface renders through the app's modal, which may live
+      in a portal; the action buttons keep their data hooks. */
+  function confirmationControl(selector: string) { return container.querySelector<HTMLButtonElement>(selector) ?? browser.document.querySelector<HTMLButtonElement>(selector); }
+  async function decision(accept: boolean) { await act(async () => confirmationControl(accept ? "[data-confirm-action]" : "[data-cancel-action]")!.click()); await flush(); }
 
   it("protects an unsent question edited in the same event and preserves it on cancellation", async () => {
     const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher); await render();
@@ -405,7 +410,7 @@ describe("agent request cancellation route", () => {
     const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher); await render(); await question("Unsent draft");
     const before = browser.history.length;
     await act(async () => expect(leave()).toBe("deferred"));
-    const approve = container.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    const approve = confirmationControl("[data-confirm-action]")!;
     await act(async () => {approve.click(); approve.click();});
     expect(browser.location.pathname).toBe("/tasks"); expect(browser.history.length).toBe(before + 1);
     expect(questionInput().value).toBe(""); expect(unloadBlocked()).toBe(false); expect(fetcher).not.toHaveBeenCalled();
@@ -502,7 +507,17 @@ describe("agent request cancellation route", () => {
     await chooseSourceKind("One space");
     await act(async () => changeSource("#agent-scope-ids", "space-a"));
   }
-  function button(label: string) {return [...container.querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === label)!;}
+  function findButton(label: string) {return [...container.querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === label || node.getAttribute("aria-label") === label);}
+  /** The beUI feedback widget is a closed corner trigger until opened; the
+      rating buttons live in that panel, so addressing one opens the trigger
+      first. The assertion on the rating itself is unchanged. */
+  async function openFeedback() {
+    if (findButton("Useful")) return;
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>("button")].find(node => node.getAttribute("aria-label") === frontendText(language, "AGENT_FEEDBACK_TITLE"));
+    if (trigger) { await act(async () => trigger.click()); await flush(); }
+  }
+  async function ratingButton(label: string) {await openFeedback(); return findButton(label)!;}
+  function button(label: string) {return findButton(label)!;}
   function sourceIds() {return container.querySelector<HTMLInputElement>("#agent-scope-ids")!.value;}
 
   it("exposes the scope type as one named listbox carrying the same four scope values", async () => {
@@ -544,7 +559,7 @@ describe("agent request cancellation route", () => {
     await render(); await sourceDraft();
     await act(async () => {changeSource("#agent-scope-ids", "space-b"); button("Start with these sources").click();});
     expect(new URLSearchParams(browser.location.search).get("spaceId")).toBe("space-b");
-    expect(container.querySelector("[data-confirm-action]")).toBeNull(); expect(sourceIds()).toBe("space-b"); expect(unloadBlocked()).toBe(false);
+    expect(confirmationControl("[data-confirm-action]")).toBeNull(); expect(sourceIds()).toBe("space-b"); expect(unloadBlocked()).toBe(false);
   });
   it("keeps both drafts when source application is canceled then permits a fresh apply", async () => {
     await render(); await question("Unsent question"); await sourceDraft();
@@ -847,7 +862,11 @@ describe("agent request cancellation route", () => {
     });
   }
   async function submit() { await act(async () => container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }) as unknown as Event)); await flush(); }
-  async function click(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent === label); expect(button).toBeTruthy(); await act(async () => button!.click()); await flush(); }
+  async function click(label: string) {
+    let button = findButton(label);
+    if (!button) { await openFeedback(); button = findButton(label); }
+    expect(button).toBeTruthy(); await act(async () => button!.click()); await flush();
+  }
 
   it("shows the pipeline stage the server reports while the answer is pending", async () => {
     const late = deferred<Response>();

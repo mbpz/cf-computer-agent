@@ -27,18 +27,18 @@ describe("review queue leave ownership", () => {
   const locale = () => createLocaleRuntime({storage:{getItem:()=>"en",setItem:()=>{}}});
   async function mount() {await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search}/>)); await flush();}
   async function mountMember() {await act(async () => root.render(<ReviewQueueRoute locale={locale()} memberId="member-a" search={browser.location.search}/>)); await flush();}
-  async function click(label:string) {const el = [...container.querySelectorAll("button")].find(b => b.textContent === label); expect(el, label).toBeTruthy(); await act(async () => el!.click()); await flush();}
-  async function decide() {await click("Reject"); await click("Confirm rejection"); const final=container.querySelector("[data-confirm-action]") as HTMLButtonElement; expect(final).toBeTruthy(); await act(async () => final.click()); await flush();}
+  async function click(label:string) {const el = [...document.querySelectorAll("button")].find(b => b.textContent === label); expect(el, label).toBeTruthy(); await act(async () => el!.click()); await flush();}
+  async function decide() {await click("Reject"); await click("Confirm rejection"); const final=document.querySelector("[data-confirm-action]") as HTMLButtonElement; expect(final).toBeTruthy(); await act(async () => final.click()); await flush();}
   async function leave() {await act(async () => writeWorkspaceHistory("push", "/home"));}
   function unload() {const e = new browser.Event("beforeunload", {cancelable:true}); browser.dispatchEvent(e); return e.defaultPrevented;}
   async function typeNote(value:string, index=0) { const input=container.querySelectorAll("textarea[data-review-note]")[index] as HTMLTextAreaElement; expect(input).toBeTruthy(); await act(async()=>{Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype,"value")!.set!.call(input,value);input.dispatchEvent(new browser.Event("input",{bubbles:true}));input.dispatchEvent(new browser.Event("change",{bubbles:true}));}); }
-  async function dismissLeave(confirm=false) {const button=container.querySelector(confirm ? "[data-confirm-action]" : "[data-cancel-action]") as HTMLButtonElement;expect(button).toBeTruthy();await act(async()=>button.click());await flush();}
+  async function dismissLeave(confirm=false) {const button=document.querySelector(confirm ? "[data-confirm-action]" : "[data-cancel-action]") as HTMLButtonElement;expect(button).toBeTruthy();await act(async()=>button.click());await flush();}
   it.each(["missing", "denied"])("retains an independent note after a %s refresh and restores it only to its own row", async outcome=>{
     let reads=0; let posts=0;
     vi.stubGlobal("fetch",async (_:unknown,init?:RequestInit)=>{if(init?.method==="POST") {posts++;return json({});} reads++;return reads===2 ? (outcome==="denied" ? new Response(null,{status:403}) : queue([{id:"review-2",title:"Other",submitterId:"member-1",status:"review_pending"}])) : queue();});
     await mount();await click("Reject");await typeNote("Private unsent note");await mount();
     expect(container.textContent).not.toContain("Private unsent note");expect(unload()).toBe(true);
-    await leave();expect(browser.location.pathname).toBe("/admin/submissions");expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();
+    await leave();expect(browser.location.pathname).toBe("/admin/submissions");expect(document.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();
     await mount();const note=container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement;expect(note?.value).toBe("Private unsent note");expect(posts).toBe(0);
     await leave();await dismissLeave(true);expect(browser.location.pathname).toBe("/home");expect(unload()).toBe(false);
   });
@@ -46,13 +46,13 @@ describe("review queue leave ownership", () => {
     let reads=0;
     vi.stubGlobal("fetch",async()=>++reads===1 ? queue() : queue([{id:"review-1",title:"Review",submitterId:"member-1",status:"rejected"}]));
     await mount();await click("Reject");await typeNote("Independent draft");await mount();expect(unload()).toBe(true);
-    await leave();expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();expect(browser.location.pathname).toBe("/admin/submissions");
+    await leave();expect(document.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();expect(browser.location.pathname).toBe("/admin/submissions");
   });
   it("keeps another row's unsent note when a submitted row completes and the next list omits both", async()=>{
     let reads=0;let posts=0;
     vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{if(init?.method==="POST"){posts++;return json({decision:{submissionId:"review-1",decision:"rejected"}});}return ++reads===1 ? queue([{id:"review-1",title:"One",submitterId:"member-1",status:"review_pending"},{id:"review-2",title:"Two",submitterId:"member-2",status:"review_pending"}]) : queue([]);});
-    await mount();const rejects=[...container.querySelectorAll("button")].filter(b=>b.textContent==="Reject");await act(async()=>rejects[1]!.click());await typeNote("Other row note");await decide();
-    expect(posts).toBe(1);expect(unload()).toBe(true);await leave();expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();
+    await mount();const rejects=[...document.querySelectorAll("button")].filter(b=>b.textContent==="Reject");await act(async()=>rejects[1]!.click());await typeNote("Other row note");await decide();
+    expect(posts).toBe(1);expect(unload()).toBe(true);await leave();expect(document.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();
   });
   it("preserves a hidden draft when final navigation admission refuses, then clears only on actual commit", async()=>{
     let reads=0;
@@ -61,7 +61,7 @@ describe("review queue leave ownership", () => {
     const unregister=registerWorkspaceLeaveGuard(()=>({kind:"allow",beforeCommit:()=>false}));
     try {await leave();await dismissLeave(true);expect(browser.location.pathname).toBe("/admin/submissions");expect(unload()).toBe(true);} finally {unregister();}
     await mount();expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement).value).toBe("Retained revision request");
-    expect([...container.querySelectorAll("button")].some(b=>b.textContent==="Confirm request for changes")).toBe(true);
+    expect([...document.querySelectorAll("button")].some(b=>b.textContent==="Confirm request for changes")).toBe(true);
     await leave();await dismissLeave(true);expect(unload()).toBe(false);
     await act(async()=>writeWorkspaceHistory("push","/admin/submissions"));await mount();expect(container.querySelector("textarea[data-review-note]")?.textContent ?? "").not.toContain("Retained revision request");expect(unload()).toBe(false);
   });
@@ -73,7 +73,7 @@ describe("review queue leave ownership", () => {
       return ++reads===1 ? queue() : queue([]);
     });
     await mount();await click("Reject");await typeNote("Unknown submission note");await click("Confirm rejection");await dismissLeave(true);await click("Reload current state");
-    await leave();expect(container.querySelector('[role="alertdialog"]')).toBeNull();expect(browser.location.pathname).toBe("/admin/submissions");expect(unload()).toBe(true);expect(posts).toBe(1);
+    await leave();expect(document.querySelector('[role="alertdialog"]')).toBeNull();expect(browser.location.pathname).toBe("/admin/submissions");expect(unload()).toBe(true);expect(posts).toBe(1);
   });
   it("starts a fresh draft owner after forced session teardown", async()=>{
     vi.stubGlobal("fetch",async()=>queue());await mount();await click("Reject");await typeNote("Previous session note");
@@ -123,7 +123,7 @@ describe("review queue leave ownership", () => {
     vi.stubGlobal("fetch", async (_:unknown, init?:RequestInit) => {if(init?.method === "POST") {posts++; throw new TypeError("lost");} return queue();});
     await mount(); await decide(); await mount(); await leave(); expect(unload()).toBe(true);
     expect(browser.location.pathname).toBe("/admin/submissions"); expect(posts).toBe(1);
-    expect([...container.querySelectorAll("button")].some(b=>b.textContent === "Retry same decision")).toBe(true);
+    expect([...document.querySelectorAll("button")].some(b=>b.textContent === "Retry same decision")).toBe(true);
   });
   it.each(["pending", "denied", "invalid", "missing"])("does not resolve unknown outcome from %s detail", async outcome => {
     let reads=0; let posts=0;
@@ -159,7 +159,7 @@ describe("review queue leave ownership", () => {
       if(String(input).endsWith("/review-1")) return detail.promise;
       return ++reads === 1 ? queue() : new Response(null,{status:403});
     });
-    await mount(); await click("Publish"); const final=container.querySelector("[data-confirm-action]") as HTMLButtonElement;
+    await mount(); await click("Publish"); const final=document.querySelector("[data-confirm-action]") as HTMLButtonElement;
     await act(async () => {final.click(); writeWorkspaceHistory("push", "/home");}); expect(browser.location.pathname).toBe("/admin/submissions");
     await mount(); await act(async () => detail.resolve(preview("review_pending"))); await flush();
     expect(posts).toBe(0); expect(unload()).toBe(false); expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();

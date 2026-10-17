@@ -12,7 +12,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
   const oldVersion = "2026-09-27T00:00:00.000Z";
   const newVersion = "2026-09-27T00:00:00.001Z";
   const main = () => app!.container.querySelector("main")!;
-  const complete = () => [...main().querySelectorAll("button")].find(node => node.textContent === "Complete")!;
+  const complete = () => [...document.querySelectorAll("button")].find(node => node.textContent === "Complete")!;
   const row = (fresh: boolean) => ({ id: "row", clientKey: "row", title: fresh ? "Fresh private row" : "Stale private row", description: null, status: "active", progress: 10, targetAt: null, createdAt: oldVersion, updatedAt: fresh ? newVersion : oldVersion });
   async function mount() {
     bodies = []; reads = 0; failRead = undefined; delay = false; resolveRead = undefined;
@@ -34,7 +34,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
   async function submitStatus() {
     const count = bodies.length;
     await click(complete()); expect(bodies).toHaveLength(count);
-    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
+    const confirm = document.querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
     await click(confirm!);
   }
   /** Progress is beUI's RangeSlider: a `role="slider"` handle on a pointer track,
@@ -63,7 +63,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
     await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().querySelectorAll("h2")).toHaveLength(0); expect(bodies).toHaveLength(1);
     failRead = undefined;
-    const retry = [...main().querySelectorAll("button")].find(node => node.textContent === `Try ${kind} again`)!;
+    const retry = [...document.querySelectorAll("button")].find(node => node.textContent === `Try ${kind} again`)!;
     await click(retry); await waitForApp(() => main().textContent!.includes("Fresh private row"));
     expect(bodies).toHaveLength(1);
   });

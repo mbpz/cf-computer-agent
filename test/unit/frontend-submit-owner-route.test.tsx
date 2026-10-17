@@ -98,11 +98,11 @@ describe("submission owner lifecycle", () => {
     expect(unload.defaultPrevented).toBe(true);
     await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("deferred"); });
     expect(content()).toBe("private A");
-    await act(async () => { (mounted.container.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
+    await act(async () => { (mounted.browser.document.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
     expect(mounted.browser.location.pathname).toBe("/submit");
     expect(loadOfflineSubmissionDraft("member-a", mounted.browser.localStorage)).toEqual(a);
     await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("deferred"); });
-    await act(async () => { (mounted.container.querySelector("[data-confirm-action]") as HTMLButtonElement).click(); });
+    await act(async () => { (mounted.browser.document.querySelector("[data-confirm-action]") as HTMLButtonElement).click(); });
     expect(mounted.browser.location.pathname).toBe("/tasks");
     expect(content()).toBe("");
     expect(loadOfflineSubmissionDraft("member-a", mounted.browser.localStorage)).toBeNull();
@@ -122,7 +122,7 @@ describe("submission owner lifecycle", () => {
     expect(posts).toBe(0);
     expect(loadSubmissionIntent("member-a", mounted.browser.localStorage).kind).toBe("empty");
     expect(loadOfflineSubmissionDraft("member-a", mounted.browser.localStorage)).toEqual(a);
-    await act(async () => { (mounted.container.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
+    await act(async () => { (mounted.browser.document.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
     expect(content()).toBe("private A");
   });
 
@@ -207,7 +207,7 @@ describe("submission owner lifecycle", () => {
   it("clears only the discarded member draft when actual App navigation unmounts the form", async () => {
     const mounted = await openOwner();
     await act(async () => { expect(writeWorkspaceHistory("push", "/my-submissions")).toBe("deferred"); });
-    await act(async () => { (mounted.container.querySelector("[data-confirm-action]") as HTMLButtonElement).click(); });
+    await act(async () => { (mounted.browser.document.querySelector("[data-confirm-action]") as HTMLButtonElement).click(); });
     await flush();
     expect(mounted.browser.location.pathname).toBe("/my-submissions");
     expect(mounted.container.querySelector("#submission-content")).toBeNull();
@@ -237,14 +237,14 @@ describe("submission owner lifecycle", () => {
     await flush();
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
     expect(unloadBlocked()).toBe(true);
-    expect(mounted.container.querySelector("[data-confirm-action]")).toBeNull();
+    expect(mounted.browser.document.querySelector("[data-confirm-action]")).toBeNull();
     expect(loadOfflineSubmissionDraft("member-a", mounted.browser.localStorage)).toEqual({ ...a, mode: "code" });
     await act(async () => { (mounted.container.querySelector("[data-submission-retry]") as HTMLButtonElement).click(); });
     await flush();
     expect(attempts).toHaveLength(2); expect(attempts[1]).toEqual(attempts[0]);
     expect(content()).toBe("private A"); expect(unloadBlocked()).toBe(true);
     await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("deferred"); });
-    await act(async () => { (mounted.container.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
+    await act(async () => { (mounted.browser.document.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
     expect(loadOfflineSubmissionDraft("member-a", mounted.browser.localStorage)).toEqual({ ...a, mode: "code" });
   });
 
@@ -270,7 +270,7 @@ describe("submission owner lifecycle", () => {
     await submit(); expect(posts).toBe(1);
     await renderOwner("member-b");
     await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("deferred"); });
-    await act(async () => { (mounted.container.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
+    await act(async () => { (mounted.browser.document.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
     expect(content()).toBe("private B");
   });
 
@@ -281,7 +281,7 @@ describe("submission owner lifecycle", () => {
     try {
       await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("deferred"); });
       deny = true;
-      await act(async () => { (mounted.container.querySelector("[data-confirm-action]") as HTMLButtonElement).click(); });
+      await act(async () => { (mounted.browser.document.querySelector("[data-confirm-action]") as HTMLButtonElement).click(); });
       expect(mounted.browser.location.pathname).toBe("/submit"); expect(content()).toBe("private A");
       expect(loadOfflineSubmissionDraft("member-a", mounted.browser.localStorage)).toEqual(a);
     } finally { unregister(); }
@@ -296,7 +296,7 @@ describe("submission owner lifecycle", () => {
     await submit();
     expect(posts).toBe(0); expect(loadSubmissionIntent("member-a", mounted.browser.localStorage).kind).toBe("empty");
     await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("deferred"); });
-    await act(async () => { (mounted.container.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
+    await act(async () => { (mounted.browser.document.querySelector("[data-cancel-action]") as HTMLButtonElement).click(); });
     expect(content()).toBe("private A");
   });
 

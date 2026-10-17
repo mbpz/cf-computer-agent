@@ -12,9 +12,9 @@ describe("inbox stable capture through App", () => {
   const entity = (body: Record<string, unknown>) => ({ ...body, status: "inbox", promotedTaskId: null, promotedSubmissionId: null, createdAt: "2026-09-27T00:00:00.000Z", updatedAt: "2026-09-27T00:00:00.000Z" });
   const receipt = (body: Record<string, unknown>) => Response.json({ item: entity(body), created: true });
   const main = () => app!.container.querySelector("main")!;
-  const content = () => main().querySelector("textarea") as HTMLTextAreaElement;
-  const button = (selector: string) => main().querySelector(selector) as HTMLButtonElement;
-  const create = () => [...main().querySelectorAll("button")].find(node => node.textContent === "Add to inbox")!;
+  const content = () => document.querySelector("textarea") as HTMLTextAreaElement;
+  const button = (selector: string) => document.querySelector(selector) as HTMLButtonElement;
+  const create = () => [...document.querySelectorAll("button")].find(node => node.textContent === "Add to inbox")!;
   const captureTrigger = () => main().querySelector<HTMLButtonElement>("[data-inbox-capture-open]");
   /** The composer only mounts while its dialog is open, so every capture step opens it first. */
   async function openCapture() { if (content()) return; await click(captureTrigger()!); }
@@ -164,7 +164,7 @@ describe("inbox stable capture through App", () => {
   const draftKey = "memory-garden:inbox-draft:v1:contributor-route-auditor";
   function unload() { const event = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(event); return event.defaultPrevented; }
   async function source(value: string) {
-    const node = main().querySelector<HTMLInputElement>('input[aria-label="Source URL"]')!;
+    const node = document.querySelector<HTMLInputElement>('input[aria-label="Source URL"]')!;
     await act(async () => {
       node.value = value;
       const prop = Object.keys(node).find(name => name.startsWith("__reactProps$"))!;
@@ -172,7 +172,7 @@ describe("inbox stable capture through App", () => {
     });
   }
   async function chooseLink() {
-    const node = main().querySelector("[data-inbox-capture-dialog] select")!;
+    const node = document.querySelector("[data-inbox-capture-dialog] select")!;
     await act(async () => {
       node.value = "link";
       node.dispatchEvent(new app!.browser.Event("change", { bubbles: true }));
@@ -184,7 +184,7 @@ describe("inbox stable capture through App", () => {
     expect(unload()).toBe(true); expect(bodies).toHaveLength(0);
     await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!captureTrigger()); await openCapture();
     expect(content().value).toBe("Keep this capture");
-    expect(main().querySelector<HTMLInputElement>('input[aria-label="Source URL"]')!.value).toBe("https://example.com/note");
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="Source URL"]')!.value).toBe("https://example.com/note");
     expect(bodies).toHaveLength(0); expect(unload()).toBe(true);
   });
   it("keeps the capture on screen when the tab cannot record the draft", async () => {
@@ -192,12 +192,12 @@ describe("inbox stable capture through App", () => {
     vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
     await change("Unrecorded capture");
     expect(content().value).toBe("Unrecorded capture");
-    expect(main().textContent).toContain("could not record");
+    expect(document.body.textContent).toContain("could not record");
     expect(bodies).toHaveLength(0);
   });
   it("allows leave when the capture draft cannot be read and records only after discard", async () => {
     await mount("contributor-route-auditor", { [draftKey]: "{" });
-    expect(main().textContent).toContain("can't be read"); expect(unload()).toBe(false);
+    expect(document.body.textContent).toContain("can't be read"); expect(unload()).toBe(false);
     await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"));
     await act(async () => expect(writeWorkspaceHistory("push", "/inbox")).toBe("committed"));
     await waitForApp(() => !!button("[data-inbox-draft-blocked] button"));
@@ -209,7 +209,7 @@ describe("inbox stable capture through App", () => {
     await mount(); await change("Keep this capture");
     expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this capture");
     await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"));
-    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    await click(document.querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     expect(app!.browser.sessionStorage.getItem(draftKey)).toBeNull();
     await act(async () => expect(writeWorkspaceHistory("push", "/inbox")).toBe("committed"));
     await waitForApp(() => !!captureTrigger()); await openCapture();

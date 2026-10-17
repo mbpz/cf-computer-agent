@@ -20,7 +20,7 @@ describe("role write refresh recovery", () => {
 
   async function renderDetail() { await act(async () => root.render(<AdminRoleDetailRoute locale={locale()} memberId="member-a" roleId="role-editor" />)); await flush(); }
   async function renderCreate() { await act(async () => root.render(<AdminRoleNewRoute locale={locale()} memberId="member-a" />)); await flush(); }
-  function button(label: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement | undefined; }
+  function button(label: string) { return [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement | undefined; }
   async function click(label: string) { const target = button(label); expect(target).toBeTruthy(); await act(async () => target!.click()); await flush(); }
   async function save() { await click("Save permissions"); await click("Confirm change"); }
   function unloadBlocked() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }

@@ -31,7 +31,7 @@ describe("inbox archive and restore recovery through App", () => {
   const confirmAction = async () => {
     const before = bodies.length;
     await click(action()); expect(bodies).toHaveLength(before);
-    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    await click(document.querySelector<HTMLButtonElement>("[data-confirm-action]")!);
   };
   const navigate = async (path: string) => { await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("committed"); }); };
   async function mount(raw: string | null = null, member = "alice") {
@@ -68,18 +68,18 @@ describe("inbox archive and restore recovery through App", () => {
   }
   afterEach(async () => { await app?.unmount(); app = undefined; calls = []; bodies = []; writeStatus = detailStatus = listStatus = 200; wrongId = staleReceipt = malformedDetail = delay = false; status = "inbox"; updatedAt = version; resolveWrite = undefined; detailVersion = undefined; listTotal = 1; });
   it("status filter navigation invalidates an unsubmitted decision without a marker", async () => {
-    await mount(); await click(action()); const stale = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await mount(); await click(action()); const stale = document.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     // The pager is not in the URL any more: the filter restarts the window at page one and replaces it.
-    await navigate("/inbox"); await waitForApp(() => !!action() && !main().querySelector('[role="alertdialog"]')); await click(stale);
-    expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull(); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
+    await navigate("/inbox"); await waitForApp(() => !!action() && !document.querySelector('[role="alertdialog"]')); await click(stale);
+    expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull(); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("cancel and route exit leave no write or recovery marker", async () => {
     await mount(); await click(action()); expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
-    await click(main().querySelector<HTMLButtonElement>("[data-cancel-action]")!);
+    await click(document.querySelector<HTMLButtonElement>("[data-cancel-action]")!);
     expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
-    await click(action()); const stale = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await click(action()); const stale = document.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await navigate("/unknown"); await click(stale); expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
-    await navigate("/inbox?status=inbox"); await waitForApp(() => !!action()); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
+    await navigate("/inbox?status=inbox"); await waitForApp(() => !!action()); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
   it("archives with version and owned detail plus exact current page readback", async () => {
     await mount(); await confirmAction(); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null);
@@ -164,7 +164,7 @@ describe("inbox archive and restore recovery through App", () => {
   });
   const unload = () => { const e = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(e); return e.defaultPrevented; };
   it("blocks same-event navigation and unload until status write readback completes", async () => {
-    await mount(); delay = true; await click(action()); const approve = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await mount(); delay = true; await click(action()); const approve = document.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await act(async () => { approve.click(); expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"); expect(unload()).toBe(true); });
     expect(bodies).toHaveLength(1); expect(main().textContent).toContain("Private row");
     await act(async () => resolveWrite!()); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null);
@@ -189,7 +189,7 @@ describe("inbox archive and restore recovery through App", () => {
   });
   it("deduplicates clicks and ignores a late response after forced teardown", async () => {
     await mount(); delay = true; const button = action(); await act(async () => { button.click(); button.click(); }); expect(bodies).toHaveLength(0);
-    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    const confirm = document.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await act(async () => { confirm.click(); confirm.click(); }); await waitForApp(() => !!resolveWrite);
     await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
     await forceRemountAppAt(app!, "/unknown"); const count = calls.length; await act(async () => resolveWrite!());

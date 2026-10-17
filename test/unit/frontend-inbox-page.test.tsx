@@ -16,20 +16,37 @@ const { Window } = await import("happy-dom");
 
 const paging = { onFilterChange: vi.fn(), onLoadMore: vi.fn() };
 describe("Inbox page", () => {
-  it("renders bilingual recovery, archive and promotion affordances without undefined", () => {
+  it("renders bilingual recovery, archive and promotion affordances without undefined", async () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
-    const html = renderToStaticMarkup(<InboxPage {...paging} locale={locale} state={{ kind: "ready", items: [{
-      id: "inbox-1", clientKey: "capture-1", kind: "text", content: "整理首页信息架构", sourceUrl: null,
-      status: "inbox", promotedTaskId: null, promotedSubmissionId: null,
-      createdAt: "2026-09-09T00:00:00.000Z", updatedAt: "2026-09-09T00:00:00.000Z",
-    }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} onCreate={vi.fn()} onStatusChange={vi.fn()} onPromoteTask={vi.fn()} />);
-    expect(html).toContain(frontendText(locale, "INBOX_TITLE"));
-    expect(html).toContain(frontendText(locale, "INBOX_CAPTURE_TITLE"));
-    // SSR without a member/storage must not offer an unsafe fresh POST.
-    expect(html).toContain(frontendText(locale, "INBOX_CREATE_STORAGE_BLOCKED"));
-    expect(html).toContain(frontendText(locale, "INBOX_PROMOTE_TASK"));
-    expect(html).toContain(frontendText(locale, "INBOX_STATUS_FILTER"));
-    expect(html).not.toContain("undefined");
+    // The capture surface is a portalled dialog (`DialogContent` now always
+    // portals and renders after its mount effect), so static markup cannot see
+    // it. Mount the page in a DOM and read the same copy from the document.
+    const browser = new Window({ url: "https://app.test/inbox" });
+    for (const [key, value] of Object.entries({ window: browser, document: browser.document, navigator: browser.navigator, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) vi.stubGlobal(key, value);
+    const container = browser.document.createElement("div") as unknown as HTMLElement;
+    browser.document.body.append(container as unknown as Node);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(<InboxPage {...paging} locale={locale} state={{ kind: "ready", items: [{
+          id: "inbox-1", clientKey: "capture-1", kind: "text", content: "整理首页信息架构", sourceUrl: null,
+          status: "inbox", promotedTaskId: null, promotedSubmissionId: null,
+          createdAt: "2026-09-09T00:00:00.000Z", updatedAt: "2026-09-09T00:00:00.000Z",
+        }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} onCreate={vi.fn()} onStatusChange={vi.fn()} onPromoteTask={vi.fn()} />);
+      });
+      const html = browser.document.body.textContent ?? "";
+      expect(html).toContain(frontendText(locale, "INBOX_TITLE"));
+      expect(html).toContain(frontendText(locale, "INBOX_CAPTURE_TITLE"));
+      // SSR without a member/storage must not offer an unsafe fresh POST.
+      expect(html).toContain(frontendText(locale, "INBOX_CREATE_STORAGE_BLOCKED"));
+      expect(html).toContain(frontendText(locale, "INBOX_PROMOTE_TASK"));
+      expect(html).toContain(frontendText(locale, "INBOX_STATUS_FILTER"));
+      expect(html).not.toContain("undefined");
+    } finally {
+      await act(async () => root.unmount());
+      browser.close();
+      vi.unstubAllGlobals();
+    }
   });
 
   it("renders loading, error and empty states", () => {
@@ -54,10 +71,10 @@ describe("inbox quick capture", () => {
   async function mount(extra: Record<string, unknown> = {}) {
     await act(async () => root.render(<InboxPage locale={locale} state={ready()} createMemberId="alice" onFilterChange={() => {}} {...extra} />));
   }
-  const dialog = () => container.querySelector("[data-inbox-capture-dialog]");
+  const dialog = () => document.querySelector("[data-inbox-capture-dialog]");
   const trigger = () => container.querySelector<HTMLButtonElement>("[data-inbox-capture-open]")!;
-  const composer = () => container.querySelector<HTMLTextAreaElement>("textarea")!;
-  const capture = () => [...container.querySelectorAll("button")].find(node => node.textContent === "Add to inbox") as HTMLButtonElement;
+  const composer = () => document.querySelector<HTMLTextAreaElement>("textarea")!;
+  const capture = () => [...document.querySelectorAll("button")].find(node => node.textContent === "Add to inbox") as HTMLButtonElement;
   async function click(node: HTMLButtonElement) {
     expect(node).toBeTruthy();
     const { promise, resolve } = Promise.withResolvers<void>();
@@ -98,7 +115,7 @@ describe("inbox quick capture", () => {
     const create = vi.fn(async () => ({}));
     await mount({ onCreate: create });
     expect(dialog()).not.toBeNull(); expect(composer().value).toBe("Recovered note");
-    expect(container.querySelector("[data-create-retry]")).not.toBeNull();
+    expect(document.querySelector("[data-create-retry]")).not.toBeNull();
     expect(trigger().hasAttribute("data-inbox-capture-pending")).toBe(true);
     expect(create).not.toHaveBeenCalled();
   });

@@ -19,15 +19,15 @@ describe("space write recovery", () => {
   beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/spaces" }); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   async function render(runtime = locale()) { await act(async () => root.render(<AdminSpacesRoute locale={runtime} />)); await flush(); }
-  function button(label: string) { return [...container.querySelectorAll("button")].find(item => item.textContent === label) as HTMLButtonElement; }
+  function button(label: string) { return [...document.querySelectorAll("button")].find(item => item.textContent === label) as HTMLButtonElement; }
   async function click(label: string) { expect(button(label)).toBeTruthy(); await act(async () => button(label).click()); await flush(); }
-  async function input(id:string,value:string) { const el=container.querySelector(`#${id}`) as HTMLInputElement;await act(async()=>{Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype,"value")!.set!.call(el,value);el.dispatchEvent(new browser.Event("input",{bubbles:true}));}); }
+  async function input(id:string,value:string) { const el=document.querySelector(`#${id}`) as HTMLInputElement;await act(async()=>{Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype,"value")!.set!.call(el,value);el.dispatchEvent(new browser.Event("input",{bubbles:true}));}); }
   async function draft(name="New space",slug="new-space") { await click("Create space");await input("admin-space-name",name);await input("admin-space-slug",slug); }
-  async function submit() {await act(async()=>{container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});await flush();if(container.querySelector("[data-confirm-action]")) await click("Confirm changes");}
+  async function submit() {await act(async()=>{document.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});await flush();if(document.querySelector("[data-confirm-action]")) await click("Confirm changes");}
   function reads(url:unknown){return String(url).includes("/collections")?json({items:[]}):json({items:[space()]});}
 
   async function select(id: string, value: string) {
-    const el = container.querySelector(`#${id}`) as HTMLSelectElement;
+    const el = document.querySelector(`#${id}`) as HTMLSelectElement;
     await act(async () => { el.value = value; el.dispatchEvent(new browser.Event("change", { bubbles: true })); });
   }
   function managementFetch(writes: { url: string; body: Record<string, unknown> }[], failure?: string) {
@@ -46,25 +46,25 @@ describe("space write recovery", () => {
     vi.stubGlobal("fetch",async(url:unknown)=>kind==="initial"||String(url).includes("cursor=")?new Response(null,{status:503}):String(url).includes("/collections")?json({items:[]}):json({items:[space()],nextCursor:"next"}));
     await render();if(kind!=="initial"){if(kind==="dirty-page")await draft();await click("Load more");}
     if(kind!=="dirty-page"){const event=new browser.Event("beforeunload",{cancelable:true});browser.dispatchEvent(event);expect(event.defaultPrevented).toBe(false);}
-    await act(async()=>{writeWorkspaceHistory("push","/home");});if(kind==="dirty-page"){expect(browser.location.pathname).toBe("/admin/spaces");const confirm=container.querySelector("[data-confirm-action]") as HTMLButtonElement;expect(confirm).not.toBeNull();await act(async()=>confirm.click());}expect(browser.location.pathname).toBe("/home");
+    await act(async()=>{writeWorkspaceHistory("push","/home");});if(kind==="dirty-page"){expect(browser.location.pathname).toBe("/admin/spaces");const confirm=document.querySelector("[data-confirm-action]") as HTMLButtonElement;expect(confirm).not.toBeNull();await act(async()=>confirm.click());}expect(browser.location.pathname).toBe("/home");
   });
   it.each(["create-pending","create-unknown","create-denied","edit-pending","edit-unknown","edit-denied"])("retains route leave lock through %s and only recovers by reading",async kind=>{
     let resolve!:(value:Response)=>void;const response=new Promise<Response>(done=>{resolve=done;});const methods:string[]=[];
     vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{methods.push(init?.method||"GET");return init?.method?response:reads(url);});
-    await render();if(kind.startsWith("create"))await draft();else{await click("Edit space: Private space");await input("admin-record-name","New name");await act(async()=>{container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});}
-    await act(async()=>{if(kind.startsWith("create"))container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));else button("Confirm changes").click();writeWorkspaceHistory("push", "/home");});expect(browser.location.pathname).toBe("/admin/spaces");
+    await render();if(kind.startsWith("create"))await draft();else{await click("Edit space: Private space");await input("admin-record-name","New name");await act(async()=>{document.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});}
+    await act(async()=>{if(kind.startsWith("create"))document.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));else button("Confirm changes").click();writeWorkspaceHistory("push", "/home");});expect(browser.location.pathname).toBe("/admin/spaces");
     if(!kind.endsWith("pending")){resolve(new Response(null,{status:kind.endsWith("denied")?403:503}));await flush();}
     await act(async()=>{writeWorkspaceHistory("push", "/home");});expect(browser.location.pathname).toBe("/admin/spaces");const event=new browser.Event("beforeunload",{cancelable:true});browser.dispatchEvent(event);expect(event.defaultPrevented).toBe(true);
     if(kind.endsWith("pending")){resolve(new Response(null,{status:503}));await flush();}
-    await click("Try again");await act(async()=>{writeWorkspaceHistory("push", "/home");});const discard=container.querySelector("[data-confirm-action]") as HTMLButtonElement|null;if(discard)await act(async()=>discard.click());expect(browser.location.pathname).toBe("/home");expect(methods.filter(x=>x!=="GET")).toEqual([kind.startsWith("create")?"POST":"PATCH"]);
+    await click("Try again");await act(async()=>{writeWorkspaceHistory("push", "/home");});const discard=document.querySelector("[data-confirm-action]") as HTMLButtonElement|null;if(discard)await act(async()=>discard.click());expect(browser.location.pathname).toBe("/home");expect(methods.filter(x=>x!=="GET")).toEqual([kind.startsWith("create")?"POST":"PATCH"]);
   });
   it.each(["Edit space: Private space", "Edit collection: Private collection"])("canceling %s confirmation sends no PATCH and keeps the draft", async label => {
     const writes: {url:string;body:Record<string,unknown>}[] = []; managementFetch(writes);
     await render();await click(label);await input("admin-record-name","Unsaved");
-    await act(async()=>{container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});
-    expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();expect(writes).toHaveLength(0);
-    await act(async()=>{(container.querySelector("[data-cancel-action]") as HTMLButtonElement).click();});
-    expect(writes).toHaveLength(0);expect((container.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("Unsaved");
+    await act(async()=>{document.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});
+    expect(document.querySelector('[role="alertdialog"]')).toBeTruthy();expect(writes).toHaveLength(0);
+    await act(async()=>{(document.querySelector("[data-cancel-action]") as HTMLButtonElement).click();});
+    expect(writes).toHaveLength(0);expect((document.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("Unsaved");
   });
   it("rejects a stale editor snapshot after recovery rather than rebasing it", async () => {
     const bodies: Record<string,unknown>[] = [];let updated=false;
@@ -75,7 +75,7 @@ describe("space write recovery", () => {
     await render();await click("Edit space: Private space");await input("admin-record-name","Stale");await submit();await click("Try again");
     expect(bodies).toHaveLength(1);await submit();expect(bodies).toHaveLength(2);
     expect(bodies.map(body=>body.expectedUpdatedAt)).toEqual(["2026-09-28T00:00:00.000Z","2026-09-28T00:00:00.000Z"]);
-    expect((container.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("Stale");
+    expect((document.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("Stale");
   });
   it("edits a space through its full management form and refreshes authoritative data", async () => {
     const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes);
@@ -83,24 +83,24 @@ describe("space write recovery", () => {
     await input("admin-record-name", "Renamed"); await input("admin-record-slug", "renamed");
     await input("admin-record-description", "Description"); await input("admin-record-position", "8"); await select("admin-record-status", "disabled");
     await submit(); expect(writes).toEqual([{ url: "/api/admin/spaces/space-1", body: { name: "Renamed", slug: "renamed", description: "Description", status: "disabled", position: 8, expectedUpdatedAt: "2026-09-28T00:00:00.000Z" } }]);
-    expect(container.querySelector("form")).toBeNull(); expect(container.textContent).toContain("Private space");
+    expect(document.querySelector("form")).toBeNull(); expect(container.textContent).toContain("Private space");
   });
   it("creates a collection with the selected space and parent, and edits it back to root", async () => {
     const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes);
     await render(); await click("Create collection: Private space"); await input("admin-record-name", "Child"); await select("admin-record-parent", "collection-1"); await submit();
     expect(writes[0]).toEqual({ url: "/api/admin/collections", body: { spaceId: "space-1", parentId: "collection-1", name: "Child", description: "", position: 0, status: "active" } });
     await click("Edit collection: Private collection"); await input("admin-record-name", "Renamed collection"); await select("admin-record-parent", ""); await submit();
-    expect(writes[1]).toEqual({ url: "/api/admin/collections/collection-1", body: { parentId: null, name: "Renamed collection", description: "", position: 0, status: "active", expectedUpdatedAt: "2026-09-28T00:00:00.000Z" } }); expect(container.querySelector("form")).toBeNull();
+    expect(writes[1]).toEqual({ url: "/api/admin/collections/collection-1", body: { parentId: null, name: "Renamed collection", description: "", position: 0, status: "active", expectedUpdatedAt: "2026-09-28T00:00:00.000Z" } }); expect(document.querySelector("form")).toBeNull();
   });
   it.each(["server", "wrong-id", "wrong-name"])("locks a %s edit until GET recovery without replay", async failure => {
     const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes, failure);
     await render(); await click("Edit space: Private space"); await input("admin-record-name", "My draft"); await submit();
-    expect(button("Save changes").disabled).toBe(true); expect((container.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("My draft");
+    expect(button("Save changes").disabled).toBe(true); expect((document.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("My draft");
     await click("Try again"); expect(button("Save changes").disabled).toBe(false); expect(writes).toHaveLength(1);
   });
   it("discards protected edit state after denial", async () => {
     const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes, "denied");
-    await render(); await click("Edit collection: Private collection"); await submit(); expect(container.querySelector("form")).toBeNull(); expect(container.textContent).not.toContain("Private collection");
+    await render(); await click("Edit collection: Private collection"); await submit(); expect(document.querySelector("form")).toBeNull(); expect(container.textContent).not.toContain("Private collection");
   });
   it("prevents write controls on legacy readonly spaces", async () => {
     vi.stubGlobal("fetch", async (url: unknown) => String(url).includes("/collections") ? json({ items: [collection()] }) : json({ items: [space({ kind: "legacy", readOnly: true })] }));
@@ -109,7 +109,7 @@ describe("space write recovery", () => {
   it("rejects invalid position before edit and cancel leaves no writes", async () => {
     const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes);
     await render(); await click("Edit space: Private space"); await input("admin-record-position", "1000001"); await submit(); expect(writes).toHaveLength(0);
-    await click("Cancel"); await click("Discard changes"); expect(container.querySelector("form")).toBeNull();
+    await click("Cancel"); await click("Discard changes"); expect(document.querySelector("form")).toBeNull();
   });
   it("coalesces collection submits and reuses its request key after response loss", async () => {
     const first = deferred<Response>(); const requests: { key: string | null; body: unknown }[] = [];
@@ -120,10 +120,10 @@ describe("space write recovery", () => {
       return json({ collection: collection({ ...requests[0]!.body as object, id: "created-once" }) });
     });
     await render(); await click("Create collection: Private space"); await input("admin-record-name", "Once");
-    await act(async () => { const form = container.querySelector("form")!; form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await act(async () => { const form = document.querySelector("form")!; form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
     expect(requests).toHaveLength(1); expect(button("Cancel").disabled).toBe(true);
     first.resolve(new Response(null, { status: 503 })); await flush(); await click("Try again"); expect(requests).toHaveLength(1);
-    await submit(); expect(requests).toHaveLength(2); expect(requests[1]).toEqual(requests[0]); expect(requests[0]!.key).toMatch(/^[a-f0-9-]{36}$/); expect(container.querySelector("form")).toBeNull();
+    await submit(); expect(requests).toHaveLength(2); expect(requests[1]).toEqual(requests[0]); expect(requests[0]!.key).toMatch(/^[a-f0-9-]{36}$/); expect(document.querySelector("form")).toBeNull();
   });
   it("closes an acknowledged collection draft even if its post-write GET fails", async () => {
     let writes = 0;
@@ -132,15 +132,15 @@ describe("space write recovery", () => {
       writes++; return json({ collection: collection({ ...JSON.parse(String(init.body)), id: "created" }) });
     });
     await render(); await click("Create collection: Private space"); await input("admin-record-name", "Saved"); await submit();
-    expect(container.querySelector("form")).toBeNull(); expect(button("Try again")).toBeTruthy(); expect(button("Create collection: Private space").disabled).toBe(true); expect(writes).toBe(1);
+    expect(document.querySelector("form")).toBeNull(); expect(button("Try again")).toBeTruthy(); expect(button("Create collection: Private space").disabled).toBe(true); expect(writes).toBe(1);
   });
   it.each(["spaceId", "parentId", "position", "status", "description"])("rejects mismatched collection %s receipts", async field => {
     vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => !init?.method ? reads(url) : json({ collection: collection({ ...JSON.parse(String(init.body)), [field]: field === "position" ? 10 : field === "status" ? "disabled" : "mismatch" }) }));
-    await render(); await click("Create collection: Private space"); await input("admin-record-name", "Draft"); await submit(); expect(button("Save changes").disabled).toBe(true); expect(container.querySelector("form")).not.toBeNull();
+    await render(); await click("Create collection: Private space"); await input("admin-record-name", "Draft"); await submit(); expect(button("Save changes").disabled).toBe(true); expect(document.querySelector("form")).not.toBeNull();
   });
   it("excludes a collection and its descendants from its parent options", async () => {
     vi.stubGlobal("fetch", async (url: unknown) => String(url).includes("/collections") ? json({ items: [collection(), collection({ id: "child", parentId: "collection-1", name: "Child" }), collection({ id: "root", name: "Other root" }), collection({ id: "disabled", name: "Disabled", status: "disabled" })] }) : json({ items: [space()] }));
-    await render(); await click("Edit collection: Private collection"); expect([...container.querySelectorAll("#admin-record-parent option")].map(item => (item as HTMLOptionElement).value)).toEqual(["", "root"]);
+    await render(); await click("Edit collection: Private collection"); expect([...document.querySelectorAll("#admin-record-parent option")].map(item => (item as HTMLOptionElement).value)).toEqual(["", "root"]);
   });
   it("retains an unloaded existing parent without silently moving the collection", async () => {
     const bodies: unknown[] = [];
@@ -148,29 +148,29 @@ describe("space write recovery", () => {
       if (init?.method) { const body = JSON.parse(String(init.body)); bodies.push(body); return json({ collection: collection({ ...body, updatedAt: "2026-09-29T00:00:00.000Z" }) }); }
       return String(url).includes("/collections") ? json({ items: [collection({ parentId: "unloaded-parent" })], nextCursor: "more" }) : json({ items: [space()] });
     });
-    await render(); await click("Edit collection: Private collection"); expect((container.querySelector("#admin-record-parent") as HTMLSelectElement).value).toBe("unloaded-parent"); await submit(); expect(bodies[0]).toMatchObject({ parentId: "unloaded-parent" });
+    await render(); await click("Edit collection: Private collection"); expect((document.querySelector("#admin-record-parent") as HTMLSelectElement).value).toBe("unloaded-parent"); await submit(); expect(bodies[0]).toMatchObject({ parentId: "unloaded-parent" });
   });
   it("ignores an old collection write denial after changing scope", async () => {
     const old = deferred<Response>(); let gets = 0;
     vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => init?.method ? old.promise : String(url).includes("/collections") ? json({ items: [] }) : json({ items: [space({ name: ++gets === 1 ? "Private space" : "New scope" })] }));
     await render(); await click("Create collection: Private space"); await input("admin-record-name", "Old draft"); await submit(); await render(locale());
-    old.resolve(new Response(null, { status: 403 })); await flush(); expect(container.textContent).toContain("New scope"); expect(container.querySelector("form")).toBeNull();
+    old.resolve(new Response(null, { status: 403 })); await flush(); expect(container.textContent).toContain("New scope"); expect(document.querySelector("form")).toBeNull();
   });
   it("coalesces same-batch creates and reads authority rather than appending a receipt",async()=>{
     const pending=deferred<Response>();const calls:string[]=[];let created=false;
     vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");if(init?.method==="POST")return pending.promise;return String(url).includes("/collections")?json({items:[]}):json({items:[space({name:created?"Authority":"Private space"})]});});
-    await render();await draft();await act(async()=>{const form=container.querySelector("form")!;form.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));form.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});
-    expect(calls.filter(x=>x==="POST")).toHaveLength(1);created=true;pending.resolve(json({space:space({id:"new",name:"New space",slug:"new-space"})}));await flush();expect(container.textContent).toContain("Authority");expect(container.querySelector("form")).toBeNull();
+    await render();await draft();await act(async()=>{const form=document.querySelector("form")!;form.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));form.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});
+    expect(calls.filter(x=>x==="POST")).toHaveLength(1);created=true;pending.resolve(json({space:space({id:"new",name:"New space",slug:"new-space"})}));await flush();expect(container.textContent).toContain("Authority");expect(document.querySelector("form")).toBeNull();
   });
   it.each([401,403])("clears protected data and the draft on write %s",async status=>{
-    const calls:string[]=[];vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?new Response(null,{status}):reads(url);});await render();await draft();await submit();expect(container.textContent).not.toContain("Private space");expect(container.querySelector("form")).toBeNull();await click("Try again");await draft("Fresh","fresh");expect(calls.filter(x=>x==="POST")).toHaveLength(1);
+    const calls:string[]=[];vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?new Response(null,{status}):reads(url);});await render();await draft();await submit();expect(container.textContent).not.toContain("Private space");expect(document.querySelector("form")).toBeNull();await click("Try again");await draft("Fresh","fresh");expect(calls.filter(x=>x==="POST")).toHaveLength(1);
   });
   it.each(["network","server","wrong-name","wrong-slug","wrong-kind","wrong-status"])("locks unknown %s creates until GET-only recovery while preserving input",async failure=>{
     const calls:string[]=[];vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");if(!init?.method)return reads(url);if(failure==="network")throw new TypeError("lost");if(failure==="server")return new Response(null,{status:503});return json({space:space({id:"new",name:failure==="wrong-name"?"Other":"New space",slug:failure==="wrong-slug"?"other":"new-space",kind:failure==="wrong-kind"?"legacy":"shared",status:failure==="wrong-status"?"disabled":"active"})});});
-    await render();await draft();await submit();expect((container.querySelector("#admin-space-name") as HTMLInputElement)?.value).toBe("New space");expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);await submit();expect(calls.filter(x=>x==="POST")).toHaveLength(1);await click("Try again");expect(calls.filter(x=>x==="POST")).toHaveLength(1);expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+    await render();await draft();await submit();expect((document.querySelector("#admin-space-name") as HTMLInputElement)?.value).toBe("New space");expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);await submit();expect(calls.filter(x=>x==="POST")).toHaveLength(1);await click("Try again");expect(calls.filter(x=>x==="POST")).toHaveLength(1);expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
   });
   it.each([401,403,503])("handles acknowledged create followed by read %s without resending",async status=>{
-    let created=false;const calls:string[]=[];vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");if(init?.method){created=true;return json({space:space({id:"new",name:"New space",slug:"new-space"})});}return created?new Response(null,{status}):reads(url);});await render();await draft();await submit();expect(calls.filter(x=>x==="POST")).toHaveLength(1);expect(button("Try again")).toBeTruthy();if(status!==503){expect(container.textContent).not.toContain("Private space");expect(container.querySelector("form")).toBeNull();}else expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+    let created=false;const calls:string[]=[];vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");if(init?.method){created=true;return json({space:space({id:"new",name:"New space",slug:"new-space"})});}return created?new Response(null,{status}):reads(url);});await render();await draft();await submit();expect(calls.filter(x=>x==="POST")).toHaveLength(1);expect(button("Try again")).toBeTruthy();if(status!==503){expect(container.textContent).not.toContain("Private space");expect(document.querySelector("form")).toBeNull();}else expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
   });
   it.each([{},{items:[space(),space()]},{items:[space({name:""})]},{items:[space({status:"unexpected"})]}])("rejects malformed space pages %j",async payload=>{
     vi.stubGlobal("fetch",async(url:unknown)=>String(url).includes("/collections")?json({items:[]}):json(payload));await render();expect(button("Try again")).toBeTruthy();expect(container.textContent).not.toContain("Private space");
@@ -179,7 +179,7 @@ describe("space write recovery", () => {
     vi.stubGlobal("fetch",async(url:unknown)=>String(url).includes("/collections")?json(payload):json({items:[space()]}));await render();expect(button("Try again")).toBeTruthy();expect(container.textContent).not.toContain("Private space");
   });
   it("isolates a late old-scope write and requires a fresh read before another create",async()=>{
-    const pending=deferred<Response>();let gets=0;const calls:string[]=[];vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?pending.promise:String(url).includes("/collections")?json({items:[]}):json({items:[space({name:++gets===1?"Old scope":"New scope"})]});});await render();await draft();await submit();await render(locale());pending.resolve(new Response(null,{status:403}));await flush();expect(container.textContent).toContain("New scope");await click("Try again");expect(calls.filter(x=>x==="POST")).toHaveLength(1);expect(container.querySelector("form")).toBeNull();
+    const pending=deferred<Response>();let gets=0;const calls:string[]=[];vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?pending.promise:String(url).includes("/collections")?json({items:[]}):json({items:[space({name:++gets===1?"Old scope":"New scope"})]});});await render();await draft();await submit();await render(locale());pending.resolve(new Response(null,{status:403}));await flush();expect(container.textContent).toContain("New scope");await click("Try again");expect(calls.filter(x=>x==="POST")).toHaveLength(1);expect(document.querySelector("form")).toBeNull();
   });
   it("does not unlock when scope recovery starts before a pending write finishes",async()=>{
     const write=deferred<Response>();const read=deferred<Response>();let gets=0;vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>init?.method?write.promise:String(url).includes("/collections")?json({items:[]}):++gets===2?read.promise:json({items:[space()]}));await render();await draft();await submit();await render(locale());write.resolve(new Response(null,{status:503}));await flush();read.resolve(json({items:[]}));await flush();expect(button("Create space").disabled).toBe(true);await click("Try again");expect(button("Create space").disabled).toBe(false);
@@ -228,14 +228,14 @@ describe("space write recovery", () => {
   });
   it("accepts the server's 80-character slug and 120-character name limits", async () => {
     const writes: unknown[] = []; vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => { if (!init?.method) return reads(url); const body = JSON.parse(String(init.body)); writes.push(body); return json({ space: space(body) }); });
-    await render(); await draft("N".repeat(120), "s".repeat(80)); await submit(); expect(writes).toHaveLength(1); expect(container.querySelector("form")).toBeNull();
+    await render(); await draft("N".repeat(120), "s".repeat(80)); await submit(); expect(writes).toHaveLength(1); expect(document.querySelector("form")).toBeNull();
   });
   it("does not resurrect protected data from a GET pending when a write denies access", async () => {
     const write = deferred<Response>(); const read = deferred<Response>(); let gets = 0;
     vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => init?.method ? write.promise : String(url).includes("/collections") ? json({ items: [] }) : ++gets === 2 ? read.promise : json({ items: [space()] }));
     await render(); await draft(); await submit(); await click("Try again");
     write.resolve(new Response(null, { status: 403 })); await flush(); expect(container.textContent).not.toContain("Private space");
-    read.resolve(json({ items: [space()] })); await flush(); expect(container.textContent).not.toContain("Private space"); expect(container.querySelector("form")).toBeNull(); expect(button("Try again")).toBeTruthy();
+    read.resolve(json({ items: [space()] })); await flush(); expect(container.textContent).not.toContain("Private space"); expect(document.querySelector("form")).toBeNull(); expect(button("Try again")).toBeTruthy();
   });
   it("enforces server-compatible names and slug grammar before POST",async()=>{
     const calls:string[]=[];vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return reads(url);});await render();await draft("N".repeat(121),"bad--slug");await submit();expect(calls.filter(x=>x==="POST")).toHaveLength(0);

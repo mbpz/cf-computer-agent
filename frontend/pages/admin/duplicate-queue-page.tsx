@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ConfirmAction } from "../../components/ui/confirm-action";
+import { OverflowActions, type OverflowActionItem } from "../../components/motion/overflow-actions";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
@@ -92,11 +93,16 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
           { key: "decision", header: frontendText(locale, "ADMIN_DUPLICATE_COLUMN_ACTION"), width: "320px", cellClassName: "whitespace-normal", cell: (item) => {
             const itemPending = Boolean(!onDecision || pending || pendingId || lockedIds?.includes(item.submissionId) || item.decision !== "pending");
             const target = item.submissionTitle.trim() || item.submissionId;
-            return <div className="flex flex-wrap gap-2">
-              <Button aria-label={`${label("associate")} ${target}`} size="sm" disabled={itemPending} onClick={() => request(item, "associate")}>{label("associate")}</Button>
-              <Button aria-label={`${label("keep_separate")} ${target}`} size="sm" variant="outline" disabled={itemPending} onClick={() => request(item, "keep_separate")}>{label("keep_separate")}</Button>
-              <Button aria-label={`${label("reject")} ${target}`} size="sm" variant="destructive" disabled={itemPending} onClick={() => request(item, "reject")}>{label("reject")}</Button>
-            </div>;
+            // Three decisions per row: one beUI rail (overflow-actions) with the
+            // destructive rejection carrying its own tone. The `aria-label`s are
+            // the ones the suites address the exact target by.
+            const decisions: OverflowActionItem[] = [
+              { id: "associate", label: label("associate"), ariaLabel: `${label("associate")} ${target}`, disabled: itemPending, onClick: () => request(item, "associate") },
+              { id: "keep_separate", label: label("keep_separate"), ariaLabel: `${label("keep_separate")} ${target}`, disabled: itemPending, onClick: () => request(item, "keep_separate") },
+              { id: "reject", label: label("reject"), ariaLabel: `${label("reject")} ${target}`, tone: "destructive", disabled: itemPending, onClick: () => request(item, "reject") },
+            ];
+            return <OverflowActions size="sm" primaryActions={decisions}
+              openLabel={frontendText(locale, "COMMON_MORE_ACTIONS")} closeLabel={frontendText(locale, "COMMON_FEWER_ACTIONS")} />;
           } },
         ]}
       />

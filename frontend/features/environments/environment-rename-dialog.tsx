@@ -42,7 +42,7 @@ export function EnvironmentRenameDialog({item,manager,locale,onClose,initialName
     finally {sending.current=false;}
   };
   return <>
-    <Dialog open onOpenChange={open=>{if(!open)cancel();}}><DialogContent aria-labelledby="environment-rename-title">
+    <Dialog open onOpenChange={open=>{if(!open)cancel();}}><DialogContent aria-labelledby="environment-rename-title" dismissLabel={t('COMMON_DISMISS')}>
       <DialogTitle id="environment-rename-title">{t('ENV_RENAME')}</DialogTitle>
       <form className="mt-3 space-y-3" onSubmit={event=>{event.preventDefault();void save();}}>
         <label>{t('ENV_NAME')}<Input required maxLength={120} value={draft.fields.name} disabled={!!discard || draft.confirming || operationBlocked()} onChange={event=>draft.edit('name',event.target.value)} /></label>

@@ -39,7 +39,7 @@ describe("migrated list page headers and filters", () => {
 
   it("carries the review period on the shared beUI filter, not a native select", () => {
     const html = renderToStaticMarkup(<KnowledgePage locale={locale} state={knowledgeReady} review={{ kind: "ready", data: { items: [] } }} />);
-    expect(html).toContain('aria-haspopup="listbox"');
+    expect(html).toContain('role="radiogroup"');
     expect(html).toContain(frontendText(locale, "KNOWLEDGE_REVIEW_PERIOD"));
     expect(html).toContain(frontendText(locale, "KNOWLEDGE_REVIEW_DAILY"));
     expect(html).toContain(frontendText(locale, "KNOWLEDGE_REVIEW_WEEKLY"));

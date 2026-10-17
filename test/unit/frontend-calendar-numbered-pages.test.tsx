@@ -43,8 +43,8 @@ describe("calendar scrolling range through App", () => {
     expect(scroller).toBeTruthy();
     await act(async()=>{ scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new app!.browser.Event("scroll", { bubbles: true })); await new Promise(resolve=>setTimeout(resolve,0)); });
   }
-  async function input(label: string, value: string) { await act(async()=> {const node=main().querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; const key=Object.keys(node).find(key=>key.startsWith("__reactProps$"))!; (node as unknown as Record<string, {onChange: (event: {currentTarget: {value: string}}) => void}>)[key]!.onChange({currentTarget:{value}});}); }
-  const applyRange = () => [...main().querySelectorAll<HTMLButtonElement>("button")].find(n=>n.textContent==="Apply range")!;
+  async function input(label: string, value: string) { await act(async()=> {const node=document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; const key=Object.keys(node).find(key=>key.startsWith("__reactProps$"))!; (node as unknown as Record<string, {onChange: (event: {currentTarget: {value: string}}) => void}>)[key]!.onChange({currentTarget:{value}});}); }
+  const applyRange = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(n=>n.textContent==="Apply range")!;
   afterEach(async()=>{await app?.unmount(); app=undefined;});
 
   it("ignores a numbered deep link, keeps the absolute range and loads the first window", async () => {
@@ -124,6 +124,7 @@ describe("calendar scrolling range through App", () => {
 
   it("applies local range edits and restarts the window only on Apply", async () => {
     await mount(`?${range}&page=2`); const before=requests.length;
+    await click(document.querySelector<HTMLButtonElement>("[data-calendar-range-trigger]")!);
     await input("Range start","2026-09-29T10:00"); await input("Range end (exclusive)","2026-09-30T10:00"); expect(requests.length).toBe(before);
     await click(applyRange());
     await waitForApp(()=>requests.at(-1)!.searchParams.get("from")===new Date("2026-09-29T10:00").toISOString());
@@ -132,7 +133,9 @@ describe("calendar scrolling range through App", () => {
   });
 
   it("rejects reversed or oversized range without a network read", async () => {
-    await mount(); const before=requests.length; await input("Range start","2026-09-30T10:00"); await input("Range end (exclusive)","2026-09-29T10:00");
+    await mount(); const before=requests.length;
+    await click(document.querySelector<HTMLButtonElement>("[data-calendar-range-trigger]")!);
+    await input("Range start","2026-09-30T10:00"); await input("Range end (exclusive)","2026-09-29T10:00");
     expect(applyRange().disabled).toBe(true); expect(requests.length).toBe(before);
   });
 

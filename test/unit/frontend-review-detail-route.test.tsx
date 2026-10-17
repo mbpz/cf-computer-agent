@@ -21,7 +21,7 @@ describe("review detail read recovery", () => {
   const withComments = (requester: Fetcher): Fetcher => (input, init) => String(input).endsWith("/comments") ? Promise.resolve(json({ comments: [] })) : requester(input, init);
   async function render(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} locale={locale} requester={requester} />)); await flush(); }
   async function renderMember(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} memberId="member-a" locale={locale} requester={requester} />)); await flush(); }
-  function button(label: string) { const found = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(found).toBeTruthy(); return found; }
+  function button(label: string) { const found = [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(found).toBeTruthy(); return found; }
 
   async function submitDecision(label: string) { await act(async () => button(label).click()); await act(async () => button("Submit decision").click()); }
 
@@ -130,7 +130,7 @@ describe("review detail read recovery", () => {
     await render(requester);await act(async()=>button("Reject").click());await typeNote("Private detail draft");
     await act(async()=>root.render(<ReviewDetailRoute id="sub-1" locale={createLocaleRuntime({navigatorLanguage:"en"})} requester={requester}/>));await flush();
     expect(container.querySelector("textarea")).toBeNull();expect(container.textContent).not.toContain("Private detail draft");expect(unload()).toBe(true);
-    await leave();expect(browser.location.pathname).toBe("/admin/submissions/sub-1");const cancel=container.querySelector("[data-cancel-action]") as HTMLButtonElement;expect(cancel).toBeTruthy();await act(async()=>cancel.click());
+    await leave();expect(browser.location.pathname).toBe("/admin/submissions/sub-1");const cancel=document.querySelector("[data-cancel-action]") as HTMLButtonElement;expect(cancel).toBeTruthy();await act(async()=>cancel.click());
     await act(async()=>button("Try again").click());await flush();expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement)?.value).toBe("Private detail draft");expect(posts).toBe(0);
   });
 
@@ -138,8 +138,8 @@ describe("review detail read recovery", () => {
     let reads=0;const requester=withComments(async()=>preview("sub-1",++reads===1 ? "review_pending" : "rejected"));
     await render(requester);await act(async()=>button("Reject").click());await typeNote("My independent note");
     await act(async()=>root.render(<ReviewDetailRoute id="sub-1" locale={createLocaleRuntime({navigatorLanguage:"en"})} requester={requester}/>));await flush();
-    expect(button("Reject").disabled).toBe(true);expect(unload()).toBe(true);await leave();expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();
-    const discard=container.querySelector("[data-confirm-action]") as HTMLButtonElement;await act(async()=>discard.click());expect(browser.location.pathname).toBe("/home");expect(unload()).toBe(false);
+    expect(button("Reject").disabled).toBe(true);expect(unload()).toBe(true);await leave();expect(document.querySelector('[role="alertdialog"]')).toBeTruthy();
+    const discard=document.querySelector("[data-confirm-action]") as HTMLButtonElement;await act(async()=>discard.click());expect(browser.location.pathname).toBe("/home");expect(unload()).toBe(false);
   });
   it("does not transfer a hidden detail draft to a newly keyed submission", async()=>{
     let reads=0;const requester=withComments(async(input)=>++reads===2 ? new Response(null,{status:403}) : preview(String(input).split("/").at(-1)!));
