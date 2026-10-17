@@ -7,7 +7,8 @@ import { PageHeader } from "../components/ui/page-header";
 import type { SearchResultItem } from "../lib/search-data";
 import { PageState } from "../components/ui/page-state";
 import { DataTable } from "../components/data-table";
-import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-filters";
+import type { AppliedFilter } from "../components/ui/applied-filters";
+import { SearchChipsField } from "../components/ui/search-chips-field";
 import { FilterSelect } from "../components/ui/filter-select";
 import { FilterDisclosure } from "../components/ui/filter-disclosure";
 import { DateRangeInput } from "../components/ui/date-range-input";
@@ -140,9 +141,26 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
     {savedViewConfirmation}
     <PageHeader title={frontendText(locale, "SEARCH_TITLE")} icon={<MagnifyingGlass size={22} weight="duotone" className="text-primary" />} />
     <div className="flex flex-wrap items-center gap-3" data-search-controls-row>
-      <form className="flex min-w-0 flex-1 basis-72 items-end gap-2" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
-        <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="knowledge-search">{frontendText(locale, "SEARCH_QUERY_LABEL")}</Label><Input id="knowledge-search" name="q" value={inputQuery} disabled={queryLocked} onChange={(event) => onQueryChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "SEARCH_QUERY_PLACEHOLDER")} autoComplete="off" /></div>
-        <Button type="submit" disabled={!onSubmit || queryLocked} className="max-lg:h-11">{frontendText(locale, "SEARCH_SUBMIT")}</Button>
+      <form className="min-w-0 flex-1 basis-72 space-y-2" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
+        <Label htmlFor="knowledge-search">{frontendText(locale, "SEARCH_QUERY_LABEL")}</Label>
+        <SearchChipsField
+          id="knowledge-search"
+          name="q"
+          label={frontendText(locale, "SEARCH_QUERY_LABEL")}
+          placeholder={frontendText(locale, "SEARCH_QUERY_PLACEHOLDER")}
+          query={inputQuery}
+          onQueryChange={(value) => onQueryChange?.(value)}
+          disabled={queryLocked}
+          chips={onFilterChange ? appliedChips : undefined}
+          appliedLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")}
+          clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")}
+          markedChipLabel={(chip) => frontendText(locale, "COMMON_CHIP_SELECTED").replace("{chip}", chip)}
+          removedChipLabel={(chip) => frontendText(locale, "COMMON_CHIP_REMOVED").replace("{chip}", chip)}
+          actions={<>
+            {onFilterChange && appliedChips.length > 0 && <Button type="button" variant="ghost" size="sm" data-filters-clear className="max-lg:h-11" onClick={() => onFilterChange({ tagIds: [] })}>{frontendText(locale, "COMMON_CLEAR_FILTERS")}</Button>}
+            <Button type="submit" disabled={!onSubmit || queryLocked} className="max-lg:h-11">{frontendText(locale, "SEARCH_SUBMIT")}</Button>
+          </>}
+        />
       </form>
       {(savedViews || onSaveView) && <div className="min-w-0 flex-1 basis-72 space-y-2" data-saved-view-controls>
         {savedViewError && !savedViewRecordBlocked && <p role="alert" className="text-sm text-destructive">{savedViewError}</p>}
@@ -190,7 +208,6 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
         {filterError && <p role="alert" className="text-sm text-destructive">{filterError}</p>}
       </form>}
     />}
-    {onFilterChange && <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedChips} onClear={() => onFilterChange({ tagIds: [] })} />}
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
       : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_SEARCH_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>
       : <>

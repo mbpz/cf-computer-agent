@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：443；操作/转发候选：1794。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：445；操作/转发候选：1806。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -107,6 +107,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/motion/magnetic.tsx | 1 |
 | frontend/components/motion/morphing-lightbox.tsx | 15 |
 | frontend/components/motion/morphing-modal.tsx | 2 |
+| frontend/components/motion/morphing-search-chips.tsx | 11 |
 | frontend/components/motion/not-found/glitch.tsx | 0 |
 | frontend/components/motion/not-found/shared.tsx | 2 |
 | frontend/components/motion/notification-stack.tsx | 4 |
@@ -189,6 +190,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/ui/page-header.tsx | 0 |
 | frontend/components/ui/page-state.tsx | 2 |
 | frontend/components/ui/pagination.tsx | 10 |
+| frontend/components/ui/search-chips-field.tsx | 1 |
 | frontend/components/ui/select.tsx | 2 |
 | frontend/components/ui/sheet.tsx | 6 |
 | frontend/components/ui/skeleton.tsx | 1 |
@@ -473,7 +475,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | / | frontend/app.tsx#HomeRoute | 35 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /submit | frontend/app.tsx#SubmitRoute | 120 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /knowledge | frontend/app.tsx#KnowledgeRoute | 123 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /search | frontend/app.tsx#SearchRoute; frontend/lib/search-data.ts#* | 170 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /search | frontend/app.tsx#SearchRoute; frontend/lib/search-data.ts#* | 185 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /agent | frontend/app.tsx#AgentRoute; frontend/app.tsx#AgentConversationRoute; frontend/lib/agent-data.ts#*; frontend/lib/agent-turn-intent.ts#*; frontend/components/agent/agent-feedback.tsx#AgentFeedback; frontend/components/agent/agent-history-list.tsx#AgentHistoryList | 136 | frontend/components/agents/message.tsx#MessageBubble; frontend/components/agents/message.tsx#MessageBubbleContent; frontend/components/agents/message.tsx#MessageScroller; frontend/components/motion/button/index.tsx#Button; frontend/components/motion/button/index.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /my-submissions | frontend/app.tsx#MySubmissionsRoute | 116 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /tasks | frontend/app.tsx#TasksRoute; frontend/lib/tasks-data.ts#*; frontend/pages/tasks/task-editor.tsx#TaskEditor | 164 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
@@ -1404,6 +1406,22 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 97:13 MorphingModal | motion.button  | onClick=onClose; type="button" | {"kind":"branch","expression":"open","branch":"true"}; spread: gate |
 | 124:15 MorphingModal | motion.div  |  | {"kind":"branch","expression":"open","branch":"true"}; spread: gate; spread: panelProps |
 
+## frontend/components/motion/morphing-search-chips.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 578:11 MorphingSearchChips | button labels.clear | onClick=() =&gt; { setRecents([]); announce(labels.clearedRecents); inputRef.current?.focus(); }; type="button" | {"kind":"branch","expression":"!trimmed && recents.length &gt; 0","branch":"true"} |
+| 592:9 MorphingSearchChips | div  |  | aria-busy=loading &#124;&#124; undefined; {"kind":"branch","expression":"showList","branch":"true"} |
+| 604:15 MorphingSearchChips | motion.div  | onPointerDown=(event) =&gt; event.preventDefault(); onPointerMove=() =&gt; moveTo(row.id); onClick=() =&gt; addChip(row.label) | {"kind":"branch","expression":"showList","branch":"true"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"loading &#124;&#124; undefined"}}; {"ki… |
+| 632:19 MorphingSearchChips | span  | onClick=(event) =&gt; { event.stopPropagation(); removeRecent(row.label); } | aria-hidden="true"; {"kind":"branch","expression":"showList","branch":"true"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"loading &#124;&#124… |
+| 662:5 MorphingSearchChips | div  | onBlur=(event) =&gt; { if (rootRef.current?.contains(event.relatedTarget as Node &#124; null)) return; setMarkedChip(null); close(); } |  |
+| 679:15 MorphingSearchChips | div  |  | {"kind":"branch","expression":"panelOpen","branch":"true"}; spread: gate |
+| 727:7 MorphingSearchChips | motion.div  | onPointerDown=focusField |  |
+| 743:13 MorphingSearchChips | div  |  | spread: chipsProps |
+| 783:21 MorphingSearchChips | button  | onClick=() =&gt; removeChip(chip); type="button" | disabled=chipsLocked; {"kind":"repeat","expression":"chips"} |
+| 796:13 MorphingSearchChips | motion.input  | onChange=(event) =&gt; { setQuery(event.currentTarget.value); if (!open) setOpen(true); }; onFocus=() =&gt; setOpen(true); onClick=() =&gt; setOpen(true); on… | aria-expanded=panelOpen; disabled=disabled; spread: inputProps |
+| 836:31 MorphingSearchChips | input  | type="hidden" | {"kind":"branch","expression":"name","branch":"true"}; {"kind":"repeat","expression":"chips"} |
+
 ## frontend/components/motion/not-found/shared.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
@@ -2069,6 +2087,12 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 70:5 Pagination | PaginationPrevious  | onClick=() =&gt; onPageChange?.(previousPage) | disabled=disabled &#124;&#124; safeCurrentPage &lt;= 1; earlier return: !safePageCount |
 | 73:37 Pagination | PaginationLink token | onClick=() =&gt; onPageChange?.(token) | disabled=disabled &#124;&#124; token &gt; lastAllowedPage; {"kind":"repeat","expression":"tokens"}; {"kind":"branch","expression":"token === \"ellipsis\"","b… |
 | 74:5 Pagination | PaginationNext  | onClick=() =&gt; onPageChange?.(safeCurrentPage + 1) | disabled=disabled &#124;&#124; safeCurrentPage &gt;= lastAllowedPage; earlier return: !safePageCount |
+
+## frontend/components/ui/search-chips-field.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 70:10 SearchChipsField | MorphingSearchChips  | onQueryChange=onQueryChange; onChipsChange=(next) =&gt; { // The payload only removes here (the panel that adds terms stays closed), // so a label missing fr… | disabled=disabled; open=false |
 
 ## frontend/components/ui/select.tsx
 
@@ -3174,36 +3198,36 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 138:25 SearchPage | div  |  | {"kind":"logical","expression":"composerBlocked","operator":"&&"} |
-| 138:187 SearchPage | Button frontendText(locale, "SEARCH_COMPOSER_RECORD_DISCARD") | onClick=onDiscardComposer; type="button" | {"kind":"logical","expression":"composerBlocked","operator":"&&"} |
-| 139:24 SearchPage | p composerNotice |  | {"kind":"logical","expression":"composerNotice","operator":"&&"} |
-| 143:7 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); onSubmit?.(); } |  |
-| 144:137 SearchPage | Input  | onChange=(event) =&gt; onQueryChange?.(event.currentTarget.value) | disabled=queryLocked; {"kind":"container","tag":"form","attributes":{}} |
-| 145:9 SearchPage | Button frontendText(locale, "SEARCH_SUBMIT") | type="submit" | disabled=!onSubmit &#124;&#124; queryLocked; {"kind":"container","tag":"form","attributes":{}} |
-| 148:55 SearchPage | p savedViewError |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewError && !savedViewRecordBlo… |
-| 149:36 SearchPage | div  |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewRecordBlocked","operator":"&&"} |
-| 149:155 SearchPage | Button frontendText(locale, "SEARCH_SAVED_VIEW_RECORD_DISCARD") | onClick=onDiscardSavedViewRecord; type="button" | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewRecordBlocked","operator":"&&"} |
-| 150:30 SearchPage | Button frontendText(locale, "SEARCH_SAVED_VIEW_CHECK") | onClick=onCheckSavedView; type="button" | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewUnknown","operator":"&&"} |
-| 152:26 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); const name = savedViewName.trim(); if (controlledName === undefined && !name) return; onSaveView(name); } | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"onSaveView","operator":"&&"} |
-| 153:13 SearchPage | Input  | onChange=(event) =&gt; setSavedViewName(event.currentTarget.value) | disabled=savedViewPending; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"onSaveView… |
-| 154:13 SearchPage | Button frontendText(locale, "SEARCH_SAVE_VIEW") | type="submit" | disabled=savedViewPending &#124;&#124; !savedViewName.trim(); {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind"… |
-| 156:36 SearchPage | div  |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedViews?.length","operator":"&&"} |
-| 157:293 SearchPage | button view.name | onClick=() =&gt; onApplyView?.(view); type="button" | disabled=savedViewPending; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedVie… |
-| 157:471 SearchPage | button × | onClick=() =&gt; onDeleteView?.(view.id); type="button" | disabled=savedViewPending &#124;&#124; !onDeleteView; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logica… |
-| 158:34 SearchPage | Button frontendText(locale, viewsExpanded ? "COMMON_COLLAPSE" : "COMMON_EXPAND") | onClick=() =&gt; setViewsExpanded((current) =&gt; !current); type="button" | aria-expanded=viewsExpanded; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedV… |
-| 171:40 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); if (commitFilters()) close(); } | {"kind":"logical","expression":"onFilterChange","operator":"&&"} |
-| 172:9 SearchPage | FilterSelect  | onChange=(value) =&gt; setDraft((current) =&gt; ({ ...current, kind: value })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
-| 173:131 SearchPage | Input  | onChange=(event) =&gt; setDraft((current) =&gt; ({ ...current, authorId: event.currentTarget.value })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
-| 174:9 SearchPage | DateRangeInput  | onChange=(next) =&gt; setDraft((current) =&gt; ({ ...current, publishedFrom: next.from, publishedTo: next.to })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
-| 189:9 SearchPage | Button frontendText(locale, "SEARCH_FILTERS_APPLY") | type="submit" | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
-| 190:25 SearchPage | p filterError |  | {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"filterEr… |
-| 193:24 SearchPage | AppliedFilters  | onClear=() =&gt; onFilterChange({ tagIds: [] }) | {"kind":"logical","expression":"onFilterChange","operator":"&&"} |
-| 195:133 SearchPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
-| 197:24 SearchPage | div  |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 197:128 SearchPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 199:9 SearchPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
-| 215:160 SearchPage | a result.title?.trim() &#124;&#124; frontendText(locale, "SEARCH_UNTITLED") | href=result.href | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
-| 217:409 SearchPage | a frontendText(locale, "SEARCH_ASK_RESULT") | href=&#96;/agent?scope=items&knowledgeItemId=${encodeURIComponent(result.knowledgeItemId)}&#96; | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 139:25 SearchPage | div  |  | {"kind":"logical","expression":"composerBlocked","operator":"&&"} |
+| 139:187 SearchPage | Button frontendText(locale, "SEARCH_COMPOSER_RECORD_DISCARD") | onClick=onDiscardComposer; type="button" | {"kind":"logical","expression":"composerBlocked","operator":"&&"} |
+| 140:24 SearchPage | p composerNotice |  | {"kind":"logical","expression":"composerNotice","operator":"&&"} |
+| 144:7 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); onSubmit?.(); } |  |
+| 146:9 SearchPage | SearchChipsField  | onQueryChange=(value) =&gt; onQueryChange?.(value) | disabled=queryLocked; {"kind":"container","tag":"form","attributes":{}} |
+| 160:59 SearchPage | Button frontendText(locale, "COMMON_CLEAR_FILTERS") | onClick=() =&gt; onFilterChange({ tagIds: [] }); type="button" | {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"onFilterChange && appliedChips.length &gt; 0","operator":"&&"} |
+| 161:13 SearchPage | Button frontendText(locale, "SEARCH_SUBMIT") | type="submit" | disabled=!onSubmit &#124;&#124; queryLocked; {"kind":"container","tag":"form","attributes":{}} |
+| 166:55 SearchPage | p savedViewError |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewError && !savedViewRecordBlo… |
+| 167:36 SearchPage | div  |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewRecordBlocked","operator":"&&"} |
+| 167:155 SearchPage | Button frontendText(locale, "SEARCH_SAVED_VIEW_RECORD_DISCARD") | onClick=onDiscardSavedViewRecord; type="button" | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewRecordBlocked","operator":"&&"} |
+| 168:30 SearchPage | Button frontendText(locale, "SEARCH_SAVED_VIEW_CHECK") | onClick=onCheckSavedView; type="button" | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewUnknown","operator":"&&"} |
+| 170:26 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); const name = savedViewName.trim(); if (controlledName === undefined && !name) return; onSaveView(name); } | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"onSaveView","operator":"&&"} |
+| 171:13 SearchPage | Input  | onChange=(event) =&gt; setSavedViewName(event.currentTarget.value) | disabled=savedViewPending; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"onSaveView… |
+| 172:13 SearchPage | Button frontendText(locale, "SEARCH_SAVE_VIEW") | type="submit" | disabled=savedViewPending &#124;&#124; !savedViewName.trim(); {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind"… |
+| 174:36 SearchPage | div  |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedViews?.length","operator":"&&"} |
+| 175:293 SearchPage | button view.name | onClick=() =&gt; onApplyView?.(view); type="button" | disabled=savedViewPending; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedVie… |
+| 175:471 SearchPage | button × | onClick=() =&gt; onDeleteView?.(view.id); type="button" | disabled=savedViewPending &#124;&#124; !onDeleteView; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logica… |
+| 176:34 SearchPage | Button frontendText(locale, viewsExpanded ? "COMMON_COLLAPSE" : "COMMON_EXPAND") | onClick=() =&gt; setViewsExpanded((current) =&gt; !current); type="button" | aria-expanded=viewsExpanded; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedV… |
+| 189:40 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); if (commitFilters()) close(); } | {"kind":"logical","expression":"onFilterChange","operator":"&&"} |
+| 190:9 SearchPage | FilterSelect  | onChange=(value) =&gt; setDraft((current) =&gt; ({ ...current, kind: value })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
+| 191:131 SearchPage | Input  | onChange=(event) =&gt; setDraft((current) =&gt; ({ ...current, authorId: event.currentTarget.value })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
+| 192:9 SearchPage | DateRangeInput  | onChange=(next) =&gt; setDraft((current) =&gt; ({ ...current, publishedFrom: next.from, publishedTo: next.to })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
+| 207:9 SearchPage | Button frontendText(locale, "SEARCH_FILTERS_APPLY") | type="submit" | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
+| 208:25 SearchPage | p filterError |  | {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"filterEr… |
+| 212:133 SearchPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
+| 214:24 SearchPage | div  |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 214:128 SearchPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 216:9 SearchPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
+| 232:160 SearchPage | a result.title?.trim() &#124;&#124; frontendText(locale, "SEARCH_UNTITLED") | href=result.href | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
+| 234:409 SearchPage | a frontendText(locale, "SEARCH_ASK_RESULT") | href=&#96;/agent?scope=items&knowledgeItemId=${encodeURIComponent(result.knowledgeItemId)}&#96; | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
 
 ## frontend/pages/settings-page.tsx
 

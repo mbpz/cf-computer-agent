@@ -1138,3 +1138,60 @@ i18n：未新增键。标签「成员」用 `ADMIN_MEMBERS_TITLE`；「授权记
 - 契约冒烟 **30 测试全绿**：`frontend-app-contract`、`wcag-contract`、`i18n-contract`、`paged-list-contract`。
 - `workspace-shell` 单跑 **31 测试全绿**；并行批量运行时其 command-palette 聚焦断言偶发失败（`document.activeElement` 时序），与本切片改动无关（本次未改外壳/命令面板），隔离复跑通过。
 - 未新增 i18n 键、未改 `frontend/lib/i18n.ts`、未动 ledger 与 operation inventory。
+
+
+## 28. Wave 4 · 知识检索查询与筛选 chips（SearchUx 切片，2026-10-17）
+
+范围：`frontend/pages/search-page.tsx`、新适配层 `frontend/components/ui/search-chips-field.tsx`、新载荷 `frontend/components/motion/morphing-search-chips.tsx`。`ui/applied-filters.tsx` **未改**，仍服务其余 10 个页面；`/search` 不再单独渲染它，因为已应用条件改由载荷的 chips 行承载。测试文件零改动、断言零改动。
+
+### 28.1 结论
+
+| slug | 动作 | 说明 |
+| --- | --- | --- |
+| `morphing-search-chips` | **采用** | 落盘 `motion/morphing-search-chips.tsx`（载荷 742 行，行为逻辑未重写）。`/search` 的查询输入与已应用筛选 chips 合成一条 docked bar：输入框照旧在页面的 `<form>` 里，Enter/提交按钮语义不变，chips 逐个可移除。 |
+| `morphing-search` | **不采用（有据）** | 载荷的输入框只存在于 portal 对话框内（见 §28.3），无法在不重写触发/portal/查询所有权/Enter 行为的前提下承载 `#knowledge-search` 的表单语义；§17 明确禁止重写行为逻辑。未安装，避免死代码。 |
+
+先前 §18.4 把 `morphing-search` 留给本切片"带显式提交语义时评估"；评估结论为否，原因不是"没有搜索框"，而是载荷本身是**覆盖式搜索面板**，其提交语义是"选中一个结果项"，不是"提交查询"。筛选行（kind/author/日期 + Apply）保持既有 beUI `FilterSelect`/`DateRangeInput`/`Button` 与 `FilterDisclosure` 不动。
+
+### 28.2 补丁清单（每文件头有完整补丁日志）
+
+| 补丁 | 内容 | 守住的原契约（file:line） |
+| --- | --- | --- |
+| 1 文案本地化 | `label`、`placeholder`、`labels` 表全部必填：`suggestions`/`recent`/`clear`/`recentSearches`/`searching`/`removeChip`/`maxChips`/`addedChip`/`removedChip`/`removedRecent`/`clearedRecents`/`markedChip`/`hint`。载荷内不再有英文默认值。 | 查询框名、每个 chip 的移除名、live region 播报两种语言都有；移除名沿用共享形状 `${COMMON_CLEAR_FILTERS}: ${label}`（`ui/applied-filters.tsx:34`）。 |
+| 2 属性透传 | `inputProps`（id/name/role/aria-*）在载荷 ARIA 默认之后、value/change 之前展开；`chipsProps` 展开到 chips 行。 | `#knowledge-search` 与 `name="q"`（`test/unit/frontend-user-read-pages.test.tsx:105,117`；SSR 断言 `id="knowledge-search"`）、表单关联（`test/unit/frontend-search-query-draft.test.tsx:39-41,47`；`test/unit/frontend-read-pages-paging.test.tsx:74,100-102`）、已应用条件组 `[data-applied-filters]`（`test/unit/frontend-search-query-draft.test.tsx:242,284`）。`role="searchbox"` 覆盖载荷的 combobox，并清掉 `aria-expanded/-autocomplete/-controls/-activedescendant`，不暴露永不展开的 combobox。 |
+| 3 插槽/布局扩展 | 复用载荷既有 `actions` 插槽承载页面自己的提交与清除全部按钮；`expanded` 在宿主关闭建议面板时让 bar/输入框占满宽度（仅 class/style）。 | `data-filters-clear` 与 `COMMON_CLEAR_FILTERS` 仍在（`frontend/pages/search-page.tsx:160`）；提交按钮仍是 `type="submit"` 且 `disabled={!onSubmit || queryLocked}`；44px 下限（`max-lg:min-h-11`/`max-lg:size-11`/`max-lg:h-11`）。 |
+| 4 回调扩展 | `chipsDisabled` 把 chip 移除与输入框 `disabled` 分开（默认跟随 `disabled`）；`onChange` 读 `event.currentTarget.value`。 | 查询被 saved-view 写入锁定时，chips 仍可移除（原 `ui/applied-filters` 行为，`ui/applied-filters.tsx:31`）；不传 `chipsDisabled` 的调用方行为不变。测试以 React props 直接触发 change（`test/unit/frontend-search-query-draft.test.tsx:47`；`test/unit/frontend-mobile-filters.test.tsx:57-59`）。 |
+| 设计锁 | 28px 圆角 → `var(--radius)`；选项行 `rounded-2xl` → `rounded-lg`；chips 保持 pill（原 `ui/applied-filters` 即 pill）；`useReducedMotion` 仍退化为静态。 | 单一圆角刻度与既有主题令牌；动效纪律不回退。 |
+
+**载荷行为中新增到该页的一处**：Escape 在查询框内清空查询（载荷的 chip 会话行为）。它只调用页面既有的 `onQueryChange`，仍走查询草稿/离开守卫；无测试依赖旧的无 Escape 行为。
+
+### 28.3 `morphing-search` 不采用的证据（registry 载荷行号）
+
+1. 关闭态只有触发按钮，输入框只在 portal 对话框里：`morphing-search.tsx:370`（`createPortal`）、`:387-388`（关闭遮罩 `aria-label="Close search"`）、`:409-411`（`role="dialog"` + `aria-label="Search"`）、`:481`（`"Search results"`）。页面首个可 Tab 的字段不会是 `#knowledge-search`，`queryInput().closest("form")` 也不成立。
+2. 查询所有权属于载荷：打开/关闭时 `setQuery("")`（`:256`），没有受控 `value`；Enter 的语义是选中当前结果项（`:321-327`），不是提交表单。
+3. 必填 `items` 结果列表会把页面的 `DataTable` 结果复制进覆盖层；另有全局 `f` 快捷键（`:260-282`）与滚动锁，见 §18.4。
+4. 要保住 `id`/`name`、Enter=submit、受控查询与表单关联，必须改触发结构、去 portal、改 Enter 分支和查询所有权——§17 禁止的"重写行为逻辑"，且属性透传无法把 portal 里的输入框搬进页面表单。因此不落盘、不接入（不留死代码）。
+
+### 28.4 最终查询/筛选面清单（全部保留）
+
+| 位置 | 钩子 / 语义 |
+| --- | --- |
+| 查询框 | `#knowledge-search`、`name="q"`、`role="searchbox"`、`aria-label=SEARCH_QUERY_LABEL`、`autoComplete="off"`、`enterKeyHint="search"`、`disabled={queryLocked}`；可见 `<label for="knowledge-search">`；位于 `form[data-search-controls-row] form` 内，Enter 与提交按钮等价。 |
+| 已应用条件 | chips 行 `[data-applied-filters]` + `role="group"` + `aria-label=COMMON_APPLIED_FILTERS`，**仅在有条件时**存在；每 chip 文案仍为 `${KNOWLEDGE_FILTER_*}: ${value}`，顺序不变（space → collection → tag → kind → author → publishedFrom → publishedTo）；移除名 `${COMMON_CLEAR_FILTERS}: ${label}`；清除全部仍为 `[data-filters-clear]` + `COMMON_CLEAR_FILTERS`（在 bar 的 `actions` 内）。锁定查询时 chips 仍可移除。 |
+| 筛选行 | `data-search-filters`、`data-search-filter-author`、`data-search-filter-published-from/-to`、`data-search-filters-apply`、`data-filter-disclosure*`/`data-filter-sheet-body` 全部不变；`FilterDisclosure` 在 `lg` 以下仍是唯一底部面板。 |
+| 其他 | `data-search-controls-row`、`data-saved-view-*`、`data-search-composer-blocked`、`data-saved-view-record-blocked` 等未改。 |
+| 44px | bar 56px；chip `max-lg:min-h-11`、移除按钮 `max-lg:size-11`、输入框 `max-lg:h-11`；提交/清除按钮 `max-lg:h-11`。 |
+
+i18n：新增 2 个键（`COMMON_CHIP_SELECTED`、`COMMON_CHIP_REMOVED`，中英各一），用于载荷的 live region 播报；其余复用既有 `SEARCH_*`/`KNOWLEDGE_FILTER_*`/`COMMON_*`。无硬编码英文进入 UI（建议面板的文案也全部走 `labels`）。
+
+### 28.5 测试与寻址
+
+**零改动**：`frontend-search-*`、`frontend-saved-view*`、`frontend-list-filters`、`frontend-mobile-filters`、`frontend-a11y` 的断言与寻址都未改，也没有放宽任何断言。查询框仍在 `#knowledge-search`，chips 仍在 `[data-applied-filters]`，移动端筛选仍从 `[data-filter-disclosure-trigger]` 打开。
+
+### 28.6 门禁（本切片）
+
+- `npm run typecheck`（worker + frontend）干净。
+- 指定套件 **11 文件 / 71 测试全绿**：`frontend-search-query-draft`、`frontend-search-matched-fields`、`frontend-search-title-excerpt`、`frontend-search-data`、`frontend-saved-view-intent`、`frontend-saved-view-list-read`、`frontend-saved-views-route`、`frontend-saved-views`、`frontend-list-filters`、`frontend-mobile-filters`、`frontend-a11y`。
+- 连带复核 **3 文件 / 30 测试全绿**：`frontend-user-read-pages`、`frontend-read-pages-paging`、`frontend-knowledge-submissions-header`（均 SSR/布局断言涉及搜索页）。
+- 契约冒烟：`i18n-contract`、`wcag-contract`（15 测试）与 `frontend-i18n`（8 测试）全绿。
+- 按要求未跑整仓 `npm test`、build、deploy；未重生成 operation inventory 与复核台账（父级统一处理）。**新组件文件需要父级在 inventory 中登记**：`components/motion/morphing-search-chips.tsx`、`components/ui/search-chips-field.tsx`。

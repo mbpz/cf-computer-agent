@@ -98,6 +98,7 @@
     "frontend/components/motion/magnetic.tsx",
     "frontend/components/motion/morphing-lightbox.tsx",
     "frontend/components/motion/morphing-modal.tsx",
+    "frontend/components/motion/morphing-search-chips.tsx",
     "frontend/components/motion/not-found/glitch.tsx",
     "frontend/components/motion/not-found/shared.tsx",
     "frontend/components/motion/notification-stack.tsx",
@@ -180,6 +181,7 @@
     "frontend/components/ui/page-header.tsx",
     "frontend/components/ui/page-state.tsx",
     "frontend/components/ui/pagination.tsx",
+    "frontend/components/ui/search-chips-field.tsx",
     "frontend/components/ui/select.tsx",
     "frontend/components/ui/sheet.tsx",
     "frontend/components/ui/skeleton.tsx",
@@ -2122,6 +2124,17 @@
         "frontend/components/motion/loader.tsx:354:5",
         "frontend/components/motion/morphing-modal.tsx:97:13",
         "frontend/components/motion/morphing-modal.tsx:124:15",
+        "frontend/components/motion/morphing-search-chips.tsx:578:11",
+        "frontend/components/motion/morphing-search-chips.tsx:592:9",
+        "frontend/components/motion/morphing-search-chips.tsx:604:15",
+        "frontend/components/motion/morphing-search-chips.tsx:632:19",
+        "frontend/components/motion/morphing-search-chips.tsx:662:5",
+        "frontend/components/motion/morphing-search-chips.tsx:679:15",
+        "frontend/components/motion/morphing-search-chips.tsx:727:7",
+        "frontend/components/motion/morphing-search-chips.tsx:743:13",
+        "frontend/components/motion/morphing-search-chips.tsx:783:21",
+        "frontend/components/motion/morphing-search-chips.tsx:796:13",
+        "frontend/components/motion/morphing-search-chips.tsx:836:31",
         "frontend/components/motion/popover-morph.tsx:137:5",
         "frontend/components/motion/popover-morph.tsx:138:5",
         "frontend/components/motion/table/editable-cell.tsx:13:5",
@@ -2153,9 +2166,6 @@
         "frontend/components/ui/alert.tsx:66:3",
         "frontend/components/ui/alert.tsx:73:3",
         "frontend/components/ui/alert.tsx:85:3",
-        "frontend/components/ui/applied-filters.tsx:29:5",
-        "frontend/components/ui/applied-filters.tsx:33:11",
-        "frontend/components/ui/applied-filters.tsx:36:7",
         "frontend/components/ui/button.tsx:40:5",
         "frontend/components/ui/confirm-action.tsx:31:10",
         "frontend/components/ui/confirm-action.tsx:32:5",
@@ -2189,12 +2199,19 @@
         "frontend/components/ui/pagination.tsx:70:5",
         "frontend/components/ui/pagination.tsx:73:37",
         "frontend/components/ui/pagination.tsx:74:5",
+        "frontend/components/ui/search-chips-field.tsx:70:10",
         "frontend/components/ui/select.tsx:16:135",
         "frontend/components/ui/select.tsx:19:113",
         "frontend/components/ui/sheet.tsx:59:17",
         "frontend/components/ui/sheet.tsx:63:12",
         "frontend/components/ui/sheet.tsx:66:5",
         "frontend/components/ui/skeleton.tsx:18:3",
+        "frontend/lib/hooks/use-dismiss.ts:67:3",
+        "frontend/lib/hooks/use-dismiss.ts:68:3",
+        "frontend/lib/hooks/use-dismiss.ts:69:3",
+        "frontend/lib/hooks/use-dismiss.ts:70:3",
+        "frontend/lib/hooks/use-dismiss.ts:112:5",
+        "frontend/lib/hooks/use-dismiss.ts:113:5",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
         "frontend/lib/list-mode.ts:19:3",
         "frontend/lib/use-create-draft.tsx:55:5",
@@ -2205,36 +2222,36 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/search-page.tsx:138:25",
-        "frontend/pages/search-page.tsx:138:187",
-        "frontend/pages/search-page.tsx:139:24",
-        "frontend/pages/search-page.tsx:143:7",
-        "frontend/pages/search-page.tsx:144:137",
-        "frontend/pages/search-page.tsx:145:9",
-        "frontend/pages/search-page.tsx:148:55",
-        "frontend/pages/search-page.tsx:149:36",
-        "frontend/pages/search-page.tsx:149:155",
-        "frontend/pages/search-page.tsx:150:30",
-        "frontend/pages/search-page.tsx:152:26",
-        "frontend/pages/search-page.tsx:153:13",
-        "frontend/pages/search-page.tsx:154:13",
-        "frontend/pages/search-page.tsx:156:36",
-        "frontend/pages/search-page.tsx:157:293",
-        "frontend/pages/search-page.tsx:157:471",
-        "frontend/pages/search-page.tsx:158:34",
-        "frontend/pages/search-page.tsx:171:40",
-        "frontend/pages/search-page.tsx:172:9",
-        "frontend/pages/search-page.tsx:173:131",
-        "frontend/pages/search-page.tsx:174:9",
-        "frontend/pages/search-page.tsx:189:9",
-        "frontend/pages/search-page.tsx:190:25",
-        "frontend/pages/search-page.tsx:193:24",
-        "frontend/pages/search-page.tsx:195:133",
-        "frontend/pages/search-page.tsx:197:24",
-        "frontend/pages/search-page.tsx:197:128",
-        "frontend/pages/search-page.tsx:199:9",
-        "frontend/pages/search-page.tsx:215:160",
-        "frontend/pages/search-page.tsx:217:409"
+        "frontend/pages/search-page.tsx:139:25",
+        "frontend/pages/search-page.tsx:139:187",
+        "frontend/pages/search-page.tsx:140:24",
+        "frontend/pages/search-page.tsx:144:7",
+        "frontend/pages/search-page.tsx:146:9",
+        "frontend/pages/search-page.tsx:160:59",
+        "frontend/pages/search-page.tsx:161:13",
+        "frontend/pages/search-page.tsx:166:55",
+        "frontend/pages/search-page.tsx:167:36",
+        "frontend/pages/search-page.tsx:167:155",
+        "frontend/pages/search-page.tsx:168:30",
+        "frontend/pages/search-page.tsx:170:26",
+        "frontend/pages/search-page.tsx:171:13",
+        "frontend/pages/search-page.tsx:172:13",
+        "frontend/pages/search-page.tsx:174:36",
+        "frontend/pages/search-page.tsx:175:293",
+        "frontend/pages/search-page.tsx:175:471",
+        "frontend/pages/search-page.tsx:176:34",
+        "frontend/pages/search-page.tsx:189:40",
+        "frontend/pages/search-page.tsx:190:9",
+        "frontend/pages/search-page.tsx:191:131",
+        "frontend/pages/search-page.tsx:192:9",
+        "frontend/pages/search-page.tsx:207:9",
+        "frontend/pages/search-page.tsx:208:25",
+        "frontend/pages/search-page.tsx:212:133",
+        "frontend/pages/search-page.tsx:214:24",
+        "frontend/pages/search-page.tsx:214:128",
+        "frontend/pages/search-page.tsx:216:9",
+        "frontend/pages/search-page.tsx:232:160",
+        "frontend/pages/search-page.tsx:234:409"
       ],
       "unresolvedSymbols": [
         "frontend/components/motion/combobox.tsx#Combobox",
@@ -22089,6 +22106,343 @@
       "earlyReturns": []
     },
     {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:578:11",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 578,
+      "column": 11,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "onClick": "() => {\n              setRecents([]);\n              announce(labels.clearedRecents);\n              inputRef.current?.focus();\n            }",
+        "className": "\"rounded-md px-1.5 py-0.5 text-xs text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring\""
+      },
+      "handlers": {
+        "onClick": "() => {\n              setRecents([]);\n              announce(labels.clearedRecents);\n              inputRef.current?.focus();\n            }"
+      },
+      "spreads": [],
+      "labels": [
+        "labels.clear"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "!trimmed && recents.length > 0",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:592:9",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 592,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "id": "listId",
+        "role": "\"listbox\"",
+        "aria-label": "trimmed ? labels.suggestions : labels.recentSearches",
+        "aria-busy": "loading || undefined",
+        "className": "\"max-h-[min(20rem,45vh)] overflow-y-auto overscroll-contain [scrollbar-width:thin]\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "showList",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:604:15",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 604,
+      "column": 15,
+      "kind": "jsx",
+      "tag": "motion.div",
+      "attributes": {
+        "key": "row.id",
+        "id": "optionId(index)",
+        "role": "\"option\"",
+        "aria-selected": "selected",
+        "onPointerDown": "(event) => event.preventDefault()",
+        "onPointerMove": "() => moveTo(row.id)",
+        "onClick": "() => addChip(row.label)",
+        "className": "\"relative flex h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-sm text-foreground\""
+      },
+      "handlers": {
+        "onPointerDown": "(event) => event.preventDefault()",
+        "onPointerMove": "() => moveTo(row.id)",
+        "onClick": "() => addChip(row.label)"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "showList",
+          "branch": "true"
+        },
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "loading || undefined"
+          }
+        },
+        {
+          "kind": "repeat",
+          "expression": "rows"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:632:19",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 632,
+      "column": 19,
+      "kind": "jsx",
+      "tag": "span",
+      "attributes": {
+        "aria-hidden": "\"true\"",
+        "onClick": "(event) => {\n                      event.stopPropagation();\n                      removeRecent(row.label);\n                    }",
+        "className": "\"relative grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground\""
+      },
+      "handlers": {
+        "onClick": "(event) => {\n                      event.stopPropagation();\n                      removeRecent(row.label);\n                    }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "showList",
+          "branch": "true"
+        },
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "loading || undefined"
+          }
+        },
+        {
+          "kind": "repeat",
+          "expression": "rows"
+        },
+        {
+          "kind": "branch",
+          "expression": "row.kind === \"recent\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:662:5",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 662,
+      "column": 5,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "ref": "rootRef",
+        "className": "cn(\n        \"relative flex h-14 w-full max-w-xl justify-center\",\n        disabled && \"opacity-60\",\n        className,\n      )",
+        "onBlur": "(event) => {\n        if (rootRef.current?.contains(event.relatedTarget as Node | null)) return;\n        setMarkedChip(null);\n        close();\n      }"
+      },
+      "handlers": {
+        "onBlur": "(event) => {\n        if (rootRef.current?.contains(event.relatedTarget as Node | null)) return;\n        setMarkedChip(null);\n        close();\n      }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:679:15",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 679,
+      "column": 15,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "className": "cn(\n                  \"absolute inset-x-0 z-10\",\n                  below ? \"top-full mt-2\" : \"bottom-full mb-2\",\n                )"
+      },
+      "handlers": {},
+      "spreads": [
+        "gate"
+      ],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "panelOpen",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:727:7",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 727,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "motion.div",
+      "attributes": {
+        "layout": "true",
+        "transition": "layout",
+        "onPointerDown": "focusField",
+        "style": "{ borderRadius: SURFACE_RADIUS }",
+        "className": "cn(\n          // Raised over the panel so the growing shape emerges from behind it.\n          \"relative z-20 flex h-14 min-w-0 items-center gap-2 ps-4\",\n          GLASS,\n          disabled ? \"cursor-not-allowed\" : \"cursor-text\",\n          // Trailing buttons carry their own inset; bare text needs the full one.\n          actions ? \"pe-2\" : \"pe-4\",\n          open || expanded ? \"w-full\" : \"w-fit max-w-full\",\n        )"
+      },
+      "handlers": {
+        "onPointerDown": "focusField"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:743:13",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 743,
+      "column": 13,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "ref": "chipsRef",
+        "className": "cn(\n                \"relative flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]\",\n                chips.length > 0 &&\n                  \"-mx-1.5 px-3 [mask-image:linear-gradient(to_right,transparent,#000_12px,#000_calc(100%-12px),transparent)]\",\n              )"
+      },
+      "handlers": {},
+      "spreads": [
+        "chipsProps"
+      ],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:783:21",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 783,
+      "column": 21,
+      "kind": "jsx",
+      "tag": "button",
+      "attributes": {
+        "type": "\"button\"",
+        "disabled": "chipsLocked",
+        "aria-label": "labels.removeChip(chip)",
+        "onClick": "() => removeChip(chip)",
+        "className": "\"grid size-7 max-lg:size-11 shrink-0 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none\""
+      },
+      "handlers": {
+        "onClick": "() => removeChip(chip)"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "repeat",
+          "expression": "chips"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:796:13",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 796,
+      "column": 13,
+      "kind": "jsx",
+      "tag": "motion.input",
+      "attributes": {
+        "ref": "inputRef",
+        "layout": "reduce ? false : \"position\"",
+        "transition": "layout",
+        "type": "\"text\"",
+        "role": "\"combobox\"",
+        "aria-label": "label",
+        "aria-expanded": "panelOpen",
+        "aria-controls": "panelOpen && showList ? listId : undefined",
+        "aria-autocomplete": "\"list\"",
+        "aria-activedescendant": "activeOptionId",
+        "aria-describedby": "labels.hint ? hintId : undefined",
+        "autoComplete": "\"off\"",
+        "spellCheck": "false",
+        "enterKeyHint": "\"search\"",
+        "disabled": "disabled",
+        "value": "query",
+        "placeholder": "placeholder",
+        "onChange": "(event) => {\n                setQuery(event.currentTarget.value);\n                if (!open) setOpen(true);\n              }",
+        "onFocus": "() => setOpen(true)",
+        "onClick": "() => setOpen(true)",
+        "onKeyDown": "onKeyDown",
+        "style": "open || expanded ? undefined : { width: `${Math.max(placeholder.length, 6) + 2}ch` }",
+        "className": "cn(\n                // On a narrow screen the chips scroll first; the field keeps room to type.\n                \"h-9 max-lg:h-11 min-w-24 text-ellipsis bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed\",\n                (open || expanded) && \"flex-1\",\n              )"
+      },
+      "handlers": {
+        "onChange": "(event) => {\n                setQuery(event.currentTarget.value);\n                if (!open) setOpen(true);\n              }",
+        "onFocus": "() => setOpen(true)",
+        "onClick": "() => setOpen(true)",
+        "onKeyDown": "onKeyDown"
+      },
+      "spreads": [
+        "inputProps"
+      ],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/morphing-search-chips.tsx:836:31",
+      "path": "frontend/components/motion/morphing-search-chips.tsx",
+      "owner": "MorphingSearchChips",
+      "line": 836,
+      "column": 31,
+      "kind": "jsx",
+      "tag": "input",
+      "attributes": {
+        "key": "chip",
+        "type": "\"hidden\"",
+        "name": "name",
+        "value": "chip"
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "name",
+          "branch": "true"
+        },
+        {
+          "kind": "repeat",
+          "expression": "chips"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
       "id": "frontend/components/motion/not-found/shared.tsx:55:7",
       "path": "frontend/components/motion/not-found/shared.tsx",
       "owner": "NotFoundActions",
@@ -34417,6 +34771,40 @@
           "source": "if (!safePageCount) return null;"
         }
       ]
+    },
+    {
+      "id": "frontend/components/ui/search-chips-field.tsx:70:10",
+      "path": "frontend/components/ui/search-chips-field.tsx",
+      "owner": "SearchChipsField",
+      "line": 70,
+      "column": 10,
+      "kind": "jsx",
+      "tag": "MorphingSearchChips",
+      "attributes": {
+        "label": "label",
+        "placeholder": "placeholder",
+        "query": "query",
+        "onQueryChange": "onQueryChange",
+        "disabled": "disabled",
+        "chipsDisabled": "false",
+        "open": "false",
+        "expanded": "expanded",
+        "chips": "chipsLabels",
+        "onChipsChange": "(next) => {\n      // The payload only removes here (the panel that adds terms stays closed),\n      // so a label missing from `next` is the condition its owner removes.\n      for (const chip of applied) if (!next.includes(chip.label)) chip.onRemove();\n    }",
+        "labels": "labels",
+        "inputProps": "{\n      id,\n      name,\n      autoComplete: \"off\",\n      // A plain search field, not a collapsed combobox: the panel is not used.\n      role: \"searchbox\",\n      \"aria-expanded\": undefined,\n      \"aria-autocomplete\": undefined,\n      \"aria-controls\": undefined,\n      \"aria-activedescendant\": undefined,\n    }",
+        "chipsProps": "grouped ? { \"data-applied-filters\": \"\", role: \"group\", \"aria-label\": appliedLabel } : undefined",
+        "actions": "actions",
+        "className": "className"
+      },
+      "handlers": {
+        "onQueryChange": "onQueryChange",
+        "onChipsChange": "(next) => {\n      // The payload only removes here (the panel that adds terms stays closed),\n      // so a label missing from `next` is the condition its owner removes.\n      for (const chip of applied) if (!next.includes(chip.label)) chip.onRemove();\n    }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
     },
     {
       "id": "frontend/components/ui/select.tsx:16:135",
@@ -58607,10 +58995,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:138:25",
+      "id": "frontend/pages/search-page.tsx:139:25",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 138,
+      "line": 139,
       "column": 25,
       "kind": "jsx",
       "tag": "div",
@@ -58632,10 +59020,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:138:187",
+      "id": "frontend/pages/search-page.tsx:139:187",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 138,
+      "line": 139,
       "column": 187,
       "kind": "jsx",
       "tag": "Button",
@@ -58661,10 +59049,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:139:24",
+      "id": "frontend/pages/search-page.tsx:140:24",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 139,
+      "line": 140,
       "column": 24,
       "kind": "jsx",
       "tag": "p",
@@ -58686,15 +59074,15 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:143:7",
+      "id": "frontend/pages/search-page.tsx:144:7",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 143,
+      "line": 144,
       "column": 7,
       "kind": "jsx",
       "tag": "form",
       "attributes": {
-        "className": "\"flex min-w-0 flex-1 basis-72 items-end gap-2\"",
+        "className": "\"min-w-0 flex-1 basis-72 space-y-2\"",
         "onSubmit": "(event) => { event.preventDefault(); onSubmit?.(); }"
       },
       "handlers": {
@@ -58706,24 +59094,30 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:144:137",
+      "id": "frontend/pages/search-page.tsx:146:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 144,
-      "column": 137,
+      "line": 146,
+      "column": 9,
       "kind": "jsx",
-      "tag": "Input",
+      "tag": "SearchChipsField",
       "attributes": {
         "id": "\"knowledge-search\"",
         "name": "\"q\"",
-        "value": "inputQuery",
-        "disabled": "queryLocked",
-        "onChange": "(event) => onQueryChange?.(event.currentTarget.value)",
+        "label": "frontendText(locale, \"SEARCH_QUERY_LABEL\")",
         "placeholder": "frontendText(locale, \"SEARCH_QUERY_PLACEHOLDER\")",
-        "autoComplete": "\"off\""
+        "query": "inputQuery",
+        "onQueryChange": "(value) => onQueryChange?.(value)",
+        "disabled": "queryLocked",
+        "chips": "onFilterChange ? appliedChips : undefined",
+        "appliedLabel": "frontendText(locale, \"COMMON_APPLIED_FILTERS\")",
+        "clearLabel": "frontendText(locale, \"COMMON_CLEAR_FILTERS\")",
+        "markedChipLabel": "(chip) => frontendText(locale, \"COMMON_CHIP_SELECTED\").replace(\"{chip}\", chip)",
+        "removedChipLabel": "(chip) => frontendText(locale, \"COMMON_CHIP_REMOVED\").replace(\"{chip}\", chip)",
+        "actions": "<>\n            {onFilterChange && appliedChips.length > 0 && <Button type=\"button\" variant=\"ghost\" size=\"sm\" data-filters-clear className=\"max-lg:h-11\" onClick={() => onFilterChange({ tagIds: [] })}>{frontendText(locale, \"COMMON_CLEAR_FILTERS\")}</Button>}\n            <Button type=\"submit\" disabled={!onSubmit || queryLocked} className=\"max-lg:h-11\">{frontendText(locale, \"SEARCH_SUBMIT\")}</Button>\n          </>"
       },
       "handlers": {
-        "onChange": "(event) => onQueryChange?.(event.currentTarget.value)"
+        "onQueryChange": "(value) => onQueryChange?.(value)"
       },
       "spreads": [],
       "labels": [],
@@ -58737,11 +59131,48 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:145:9",
+      "id": "frontend/pages/search-page.tsx:160:59",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 145,
-      "column": 9,
+      "line": 160,
+      "column": 59,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"ghost\"",
+        "size": "\"sm\"",
+        "data-filters-clear": "true",
+        "className": "\"max-lg:h-11\"",
+        "onClick": "() => onFilterChange({ tagIds: [] })"
+      },
+      "handlers": {
+        "onClick": "() => onFilterChange({ tagIds: [] })"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"COMMON_CLEAR_FILTERS\")"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "form",
+          "attributes": {}
+        },
+        {
+          "kind": "logical",
+          "expression": "onFilterChange && appliedChips.length > 0",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/search-page.tsx:161:13",
+      "path": "frontend/pages/search-page.tsx",
+      "owner": "SearchPage",
+      "line": 161,
+      "column": 13,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -58764,10 +59195,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:148:55",
+      "id": "frontend/pages/search-page.tsx:166:55",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 148,
+      "line": 166,
       "column": 55,
       "kind": "jsx",
       "tag": "p",
@@ -58795,10 +59226,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:149:36",
+      "id": "frontend/pages/search-page.tsx:167:36",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 149,
+      "line": 167,
       "column": 36,
       "kind": "jsx",
       "tag": "div",
@@ -58825,10 +59256,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:149:155",
+      "id": "frontend/pages/search-page.tsx:167:155",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 149,
+      "line": 167,
       "column": 155,
       "kind": "jsx",
       "tag": "Button",
@@ -58860,10 +59291,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:150:30",
+      "id": "frontend/pages/search-page.tsx:168:30",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 150,
+      "line": 168,
       "column": 30,
       "kind": "jsx",
       "tag": "Button",
@@ -58895,10 +59326,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:152:26",
+      "id": "frontend/pages/search-page.tsx:170:26",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 152,
+      "line": 170,
       "column": 26,
       "kind": "jsx",
       "tag": "form",
@@ -58926,10 +59357,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:153:13",
+      "id": "frontend/pages/search-page.tsx:171:13",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 153,
+      "line": 171,
       "column": 13,
       "kind": "jsx",
       "tag": "Input",
@@ -58967,10 +59398,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:154:13",
+      "id": "frontend/pages/search-page.tsx:172:13",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 154,
+      "line": 172,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -59003,10 +59434,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:156:36",
+      "id": "frontend/pages/search-page.tsx:174:36",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 156,
+      "line": 174,
       "column": 36,
       "kind": "jsx",
       "tag": "div",
@@ -59034,10 +59465,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:157:293",
+      "id": "frontend/pages/search-page.tsx:175:293",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 157,
+      "line": 175,
       "column": 293,
       "kind": "jsx",
       "tag": "button",
@@ -59074,10 +59505,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:157:471",
+      "id": "frontend/pages/search-page.tsx:175:471",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 157,
+      "line": 175,
       "column": 471,
       "kind": "jsx",
       "tag": "button",
@@ -59114,10 +59545,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:158:34",
+      "id": "frontend/pages/search-page.tsx:176:34",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 158,
+      "line": 176,
       "column": 34,
       "kind": "jsx",
       "tag": "Button",
@@ -59157,10 +59588,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:171:40",
+      "id": "frontend/pages/search-page.tsx:189:40",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 171,
+      "line": 189,
       "column": 40,
       "kind": "jsx",
       "tag": "form",
@@ -59184,10 +59615,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:172:9",
+      "id": "frontend/pages/search-page.tsx:190:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 172,
+      "line": 190,
       "column": 9,
       "kind": "jsx",
       "tag": "FilterSelect",
@@ -59219,10 +59650,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:173:131",
+      "id": "frontend/pages/search-page.tsx:191:131",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 173,
+      "line": 191,
       "column": 131,
       "kind": "jsx",
       "tag": "Input",
@@ -59256,10 +59687,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:174:9",
+      "id": "frontend/pages/search-page.tsx:192:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 174,
+      "line": 192,
       "column": 9,
       "kind": "jsx",
       "tag": "DateRangeInput",
@@ -59292,10 +59723,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:189:9",
+      "id": "frontend/pages/search-page.tsx:207:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 189,
+      "line": 207,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -59325,10 +59756,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:190:25",
+      "id": "frontend/pages/search-page.tsx:208:25",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 190,
+      "line": 208,
       "column": 25,
       "kind": "jsx",
       "tag": "p",
@@ -59361,38 +59792,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:193:24",
+      "id": "frontend/pages/search-page.tsx:212:133",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 193,
-      "column": 24,
-      "kind": "jsx",
-      "tag": "AppliedFilters",
-      "attributes": {
-        "ariaLabel": "frontendText(locale, \"COMMON_APPLIED_FILTERS\")",
-        "clearLabel": "frontendText(locale, \"COMMON_CLEAR_FILTERS\")",
-        "filters": "appliedChips",
-        "onClear": "() => onFilterChange({ tagIds: [] })"
-      },
-      "handlers": {
-        "onClear": "() => onFilterChange({ tagIds: [] })"
-      },
-      "spreads": [],
-      "labels": [],
-      "context": [
-        {
-          "kind": "logical",
-          "expression": "onFilterChange",
-          "operator": "&&"
-        }
-      ],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/pages/search-page.tsx:195:133",
-      "path": "frontend/pages/search-page.tsx",
-      "owner": "SearchPage",
-      "line": 195,
+      "line": 212,
       "column": 133,
       "kind": "jsx",
       "tag": "Button",
@@ -59423,10 +59826,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:197:24",
+      "id": "frontend/pages/search-page.tsx:214:24",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 197,
+      "line": 214,
       "column": 24,
       "kind": "jsx",
       "tag": "div",
@@ -59457,10 +59860,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:197:128",
+      "id": "frontend/pages/search-page.tsx:214:128",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 197,
+      "line": 214,
       "column": 128,
       "kind": "jsx",
       "tag": "Button",
@@ -59497,10 +59900,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:199:9",
+      "id": "frontend/pages/search-page.tsx:216:9",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 199,
+      "line": 216,
       "column": 9,
       "kind": "jsx",
       "tag": "DataTable",
@@ -59543,10 +59946,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:215:160",
+      "id": "frontend/pages/search-page.tsx:232:160",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 215,
+      "line": 232,
       "column": 160,
       "kind": "jsx",
       "tag": "a",
@@ -59574,10 +59977,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/search-page.tsx:217:409",
+      "id": "frontend/pages/search-page.tsx:234:409",
       "path": "frontend/pages/search-page.tsx",
       "owner": "SearchPage",
-      "line": 217,
+      "line": 234,
       "column": 409,
       "kind": "jsx",
       "tag": "a",
