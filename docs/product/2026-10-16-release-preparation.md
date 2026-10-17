@@ -45,8 +45,9 @@
 | `0072_knowledge_recycle_bin_menu.sql` | 回收站菜单行 seed（`menu-recycle-bin`，`required_bits` 与 `knowledge:review` 同掩码，`WHERE NOT EXISTS` 守卫） | 新增菜单行 |
 | `0073_submission_draft_discard_receipts.sql` | 草稿放弃回执（成员作用域，使"已提交的删除"不会被报为不存在） | 新表 |
 | `0074_knowledge_family_menu_nesting.sql` | 把 `menu-submit`/`menu-my-submissions` 归入 `menu-knowledge`（与 0031 已归入的 `/search`、`/agent` 合成一个一级菜单"AI 知识库"） | 纯导航结构；URL、标签、掩码、可见性均不变；仅移动系统行并保留管理员自建行的归属 |
+| `0075_hide_submit_menu_entry.sql` | 隐藏「提交」导航项（`menu-submit` 置 `visible=0`），提交入口改由「我的提交」页头的主按钮进入 `/submit` | 纯导航可见性；URL、标签、掩码、父级与位置不变，`/submit` 仍受 `submission:create` 门禁；`is_system = 1 AND visible = 1` 守卫，可重跑 |
 
-迁移字节已 pin 在 `scripts/verify-m1-migrations.mjs` 与 `scripts/m1-release-contract.test.mjs`；发布前请以 `npm run verify:m1:migrations -- --files` 与 `node --test scripts/m1-release-contract.test.mjs` 复核（本地均为 pass，`count=74`）。
+迁移字节已 pin 在 `scripts/verify-m1-migrations.mjs` 与 `scripts/m1-release-contract.test.mjs`；发布前请以 `npm run verify:m1:migrations -- --files` 与 `node --test scripts/m1-release-contract.test.mjs` 复核（本地均为 pass，`count=75`）。
 
 ### 1.2 代码面（按菜单）
 

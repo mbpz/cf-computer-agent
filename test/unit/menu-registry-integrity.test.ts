@@ -50,6 +50,9 @@ describe("admin menu label registry integrity", () => {
       ["/submit", "ready", "submission:create", "knowledge", undefined],
       ["/my-submissions", "ready", "submission:read-own", "knowledge", undefined],
     ]);
+    // `/submit` is the one nested route without a navigation entry; the row is
+    // hidden by migrations/0075 and the fallback tree reads this same flag.
+    expect(children.filter((route) => route.hiddenFromNavigation).map((route) => route.id)).toEqual(["submit"]);
   });
 
   it("keeps the documented label key exception list minimal, known and real", () => {

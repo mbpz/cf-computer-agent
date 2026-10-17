@@ -68,6 +68,8 @@ describe("admin menus API", () => {
     const payload = await allowed.json() as { tree: MenuPayloadNode[] };
     expect(payload.tree.some((item) => item.key === "workspace" && item.children.some((child) => child.key === "custom"))).toBe(true);
     const workspace = payload.tree.find((item) => item.key === "workspace");
+    // The management tree retains hidden rows by design: `menu-submit` is listed
+    // here because migrations/0075 only hides it from the member projection.
     expect(workspace?.children.find((child) => child.key === "knowledge")?.children.map((child) => child.key)).toEqual(["search", "agent", "submit", "my-submissions"]);
     const adminRoot = payload.tree.find((item) => item.key === "admin");
     expect(adminRoot?.children.find((child) => child.key === "governance")?.children.map((child) => child.key)).toEqual(["members", "roles", "menus", "spaces", "audit", "site-analytics"]);
@@ -83,9 +85,10 @@ describe("admin menus API", () => {
       "home", "knowledge", "tasks", "boards", "notifications", "messages", "inbox", "goals", "projects",
       "graph", "calendar", "today", "focus", "workbench-review",
     ]);
-    // The knowledge family is one top-level entry: the four related rows hang
-    // beneath `/knowledge` instead of sitting flat beside it.
-    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key)).toEqual(["search", "agent", "submit", "my-submissions"]);
+    // The knowledge family is one top-level entry: the related rows hang beneath
+    // `/knowledge` instead of sitting flat beside it, and `/submit` has no entry
+    // at all (migrations/0075 hides it for the header CTA on 我的提交).
+    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key)).toEqual(["search", "agent", "my-submissions"]);
 
     const adminResponse = await api("/api/navigation", admin);
     expect(adminResponse.status).toBe(200);
@@ -118,10 +121,13 @@ describe("admin menus API", () => {
       .find((node) => node.key === "knowledge")?.children.map((node) => node.key) ?? [];
 
     // The whole family is nested under the one top-level entry for a full mask.
-    expect(await family("0x7ffff")).toEqual(["search", "agent", "submit", "my-submissions"]);
-    // knowledge:read + submission:create reaches the family entry and the single
-    // child that capability opens; the other three stay hidden under it.
-    expect(await family("0x41")).toEqual(["submit"]);
+    // `menu-submit` is seeded but hidden by migrations/0075 (the 我的提交 header
+    // now carries the CTA), so it is absent from every projection while the admin
+    // editor still lists the row.
+    expect(await family("0x7ffff")).toEqual(["search", "agent", "my-submissions"]);
+    // knowledge:read + submission:create reaches the family entry; the submit
+    // child is hidden, so nothing beneath it is projected.
+    expect(await family("0x41")).toEqual([]);
     // knowledge:read + submission:read-own reaches only the tracking entry.
     expect(await family("0x81")).toEqual(["my-submissions"]);
     // knowledge:read alone reaches the entry (`/knowledge` is its own page) and
@@ -133,10 +139,10 @@ describe("admin menus API", () => {
       .find((node) => node.key === "workspace")?.children.map((node) => node.key) ?? [];
     expect(withoutRead).not.toContain("knowledge");
     // A contributor session, which holds knowledge:read plus the submission and
-    // search/agent bits, reaches every seeded child through the same nesting.
+    // search/agent bits, reaches every visible seeded child through the nesting.
     const contributorPayload = await (await api("/api/navigation", contributor)).json() as { tree: MenuPayloadNode[] };
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key))
-      .toEqual(["search", "agent", "submit", "my-submissions"]);
+      .toEqual(["search", "agent", "my-submissions"]);
     // The nested rows are no longer flat siblings of the family entry.
     expect(contributorPayload.tree[0]?.children.map((node) => node.key)).not.toContain("submit");
     expect(contributorPayload.tree[0]?.children.map((node) => node.key)).not.toContain("my-submissions");

@@ -109,10 +109,10 @@ export function currentNavigationFixture(role: "contributor" | "admin", permissi
     navLeaf("knowledge", "NAV_KNOWLEDGE_BASE", "/knowledge", "workspace", [
       navLeaf("search", "NAV_KNOWLEDGE_SEARCH", "/search", "workspace"),
       navLeaf("agent", "NAV_KNOWLEDGE_AGENT", "/agent", "workspace"),
-      // The knowledge family is one top-level entry: the seeded rows put submit
-      // and my-submissions under menu-knowledge (migrations/0074), so the fixture
-      // mirrors that nesting for both roles.
-      navLeaf("submit", "NAV_SUBMIT", "/submit", "workspace"),
+      // The knowledge family is one top-level entry: the seeded rows put
+      // my-submissions under menu-knowledge (migrations/0074). `/submit` has no
+      // entry at all — migrations/0075 hides its row and the composer is entered
+      // from the 我的提交 header — so the fixture mirrors the current server tree.
       navLeaf("my-submissions", "NAV_MY_SUBMISSIONS", "/my-submissions", "workspace"),
     ]),
     ...(permissionMask === "0x100000" ? [
@@ -234,6 +234,10 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
         });
       }
       if (path === "/api/submissions") return probeResponse(state, { submission: { id: "submission-created-route-audit" }, similarCandidates: [] }, { submission: { id: "submission-created-route-audit" }, similarCandidates: [] });
+      // `/submit` has no navigation entry, so its ready-state journey first opens
+      // 我的提交 and follows the header CTA. The tracking page reads its own list
+      // on the way, which is not what this probe audits.
+      if (pathname(path) === "/api/submissions/mine") return probeResponse(state, numbered([]), numbered([]));
       return null;
     case "knowledge":
       if (pathname(path) === "/api/knowledge") return probeResponse(state, numbered([]), numbered([{ id: "ready-knowledge", title: "READY::knowledge", publishedAt: "2026-10-04", tags: [] }]));

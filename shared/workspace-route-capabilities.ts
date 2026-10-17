@@ -35,6 +35,15 @@ export interface WorkspaceRouteCapability {
    * by construction. Absent means the route is a top-level entry.
    */
   parentRouteId?: string;
+  /**
+   * The route stays fully reachable (page kind and capability unchanged) but
+   * owns no navigation entry. migrations/0075_hide_submit_menu_entry.sql hides
+   * the seeded row with `visible = 0`, which menu-tree.ts treats exactly like a
+   * missing entry for `/api/navigation`; the shell's client fallback tree reads
+   * this flag for the same effect. `/submit` is entered from the 我的提交 page
+   * header instead.
+   */
+  hiddenFromNavigation?: true;
 }
 
 export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
@@ -46,7 +55,11 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "knowledge", path: "/knowledge", pageKind: "knowledge", availability: "ready", labelKey: "NAV_KNOWLEDGE_BASE", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read" },
   { id: "search", path: "/search", pageKind: "search", availability: "ready", labelKey: "NAV_SEARCH", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read", parentRouteId: "knowledge" },
   { id: "agent", path: "/agent", pageKind: "agent", availability: "ready", labelKey: "NAV_AGENT", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read", parentRouteId: "knowledge" },
-  { id: "submit", path: "/submit", pageKind: "submit", availability: "ready", labelKey: "NAV_SUBMIT", group: "workspace", moduleKey: "knowledge", capability: "submission:create", parentRouteId: "knowledge" },
+  // `/submit` keeps its capability and page kind but no longer owns a nav entry:
+  // the composer is entered from the 我的提交 page header. The seeded row is
+  // hidden by migrations/0075_hide_submit_menu_entry.sql and the fallback tree
+  // skips it by the same flag.
+  { id: "submit", path: "/submit", pageKind: "submit", availability: "ready", labelKey: "NAV_SUBMIT", group: "workspace", moduleKey: "knowledge", capability: "submission:create", parentRouteId: "knowledge", hiddenFromNavigation: true },
   { id: "my-submissions", path: "/my-submissions", pageKind: "my-submissions", availability: "ready", labelKey: "NAV_MY_SUBMISSIONS", group: "workspace", moduleKey: "knowledge", capability: "submission:read-own", parentRouteId: "knowledge" },
   { id: "graph", path: "/graph", pageKind: "graph", availability: "ready", labelKey: "NAV_GRAPH", group: "workspace", moduleKey: "workbench", capability: null, requiredPermission: "workspace.tasks" },
   { id: "tasks", path: "/tasks", pageKind: "tasks", availability: "ready", labelKey: "NAV_TASKS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },

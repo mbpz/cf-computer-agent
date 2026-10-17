@@ -189,11 +189,52 @@ describe("menu seed integrity against the shared route registry", () => {
 
     // With the family entry but only part of the family's capabilities, exactly
     // the reachable children survive — nesting never hands out an extra gate.
+    // `menu-submit` is seeded but hidden by 0075, so no mask projects it: the
+    // composer is entered from the 我的提交 header instead.
     expect(family(permissionMaskFor(["knowledge:read"]))).toEqual([]);
-    expect(family(permissionMaskFor(["knowledge:read", "submission:create"]))).toEqual(["menu-submit"]);
+    expect(family(permissionMaskFor(["knowledge:read", "submission:create"]))).toEqual([]);
     expect(family(permissionMaskFor(["knowledge:read", "submission:read-own"]))).toEqual(["menu-my-submissions"]);
     expect(family(permissionMaskFor(["knowledge:read", "search:use", "agent:use"]))).toEqual(["menu-search", "menu-agent"]);
-    // A full administrator mask reaches the whole family in seeded order.
-    expect(family(parsePermissionMask("0x7ffff"))).toEqual([...KNOWLEDGE_SEED_ORDER]);
+    // A full administrator mask reaches the whole visible family in seeded order.
+    expect(family(parsePermissionMask("0x7ffff"))).toEqual(["menu-search", "menu-agent", "menu-my-submissions"]);
+  });
+
+  it("hides the submit entry from navigation while keeping its route capability", async () => {
+    const rows = (await env.DB.prepare(
+      `SELECT id, parent_id AS parentId, key, label_key AS labelKey, path, icon, group_name AS groupName,
+              position, required_bits AS requiredBits, status, visible, is_system AS isSystem
+       FROM menus WHERE id = 'menu-submit'`,
+    ).all<MenuTreeRow>()).results;
+    // Only visibility changed: the row keeps its URL, label, mask, parent and
+    // position, so an administrator can still inspect it in the menu editor.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: "menu-submit", parentId: "menu-knowledge", key: "submit", labelKey: "NAV_SUBMIT",
+      path: "/submit", groupName: "workspace", position: 2, requiredBits: "0x40", status: "active", visible: 0, isSystem: 1,
+    });
+    // Neither role's projection carries the entry: the administrator's full mask
+    // and the contributor mask that can create submissions both skip it.
+    const allRows = (await env.DB.prepare(
+      `SELECT id, parent_id AS parentId, key, label_key AS labelKey, path, icon, group_name AS groupName,
+              position, required_bits AS requiredBits, status, visible, is_system AS isSystem
+       FROM menus`,
+    ).all<MenuTreeRow>()).results;
+    const projectedPaths = (mask: bigint): string[] => {
+      const paths: string[] = [];
+      const pending = [...buildMenuTree(allRows, mask)];
+      while (pending.length > 0) {
+        const node = pending.pop()!;
+        if (node.path !== null) paths.push(node.path);
+        pending.push(...node.children);
+      }
+      return paths;
+    };
+    expect(projectedPaths(parsePermissionMask("0x7ffff"))).not.toContain("/submit");
+    expect(projectedPaths(permissionMaskFor(["knowledge:read", "submission:create", "submission:read-own"]))).not.toContain("/submit");
+    // The route itself is unchanged: `/submit` stays a ready page gated by
+    // submission:create, and only its navigation entry is withheld.
+    const route = WORKSPACE_ROUTE_CAPABILITIES.find((candidate) => candidate.path === "/submit");
+    expect(route).toMatchObject({ id: "submit", pageKind: "submit", availability: "ready", capability: "submission:create" });
+    expect(route?.hiddenFromNavigation).toBe(true);
   });
 });

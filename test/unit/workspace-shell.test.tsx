@@ -397,16 +397,17 @@ describe("shadcn workspace shell", () => {
     const rows = Array.from(dialog.querySelectorAll("nav [data-nav-node]")) as HTMLElement[];
     const depthOf = (href: string) => rows.find((row) => row.getAttribute("href") === href)?.getAttribute("data-nav-depth");
 
-    // The knowledge entry keeps its own destination and the four related
+    // The knowledge entry keeps its own destination and its visible related
     // destinations are its children, so the mobile list shows one top-level
-    // entry instead of five siblings.
+    // entry instead of the old flat siblings. `/submit` has no entry at all now.
     expect(depthOf("/knowledge")).toBe("0");
-    for (const href of ["/search", "/agent", "/submit", "/my-submissions"]) expect(depthOf(href)).toBe("1");
+    for (const href of ["/search", "/agent", "/my-submissions"]) expect(depthOf(href)).toBe("1");
+    expect(depthOf("/submit")).toBeUndefined();
 
     // Indentation is presentation only: the children are rendered as rows rather
     // than hidden behind a disclosure, so the drawer still lists the whole family
     // and the top level keeps every destination it had.
-    expect(rows.filter((row) => row.getAttribute("data-nav-depth") === "1").length).toBeGreaterThanOrEqual(4);
+    expect(rows.filter((row) => row.getAttribute("data-nav-depth") === "1").length).toBeGreaterThanOrEqual(3);
     expect(rows.some((row) => row.getAttribute("href") === "/")).toBe(true);
     expect(rows.filter((row) => row.getAttribute("data-nav-depth") === "0").length).toBeGreaterThan(1);
   });

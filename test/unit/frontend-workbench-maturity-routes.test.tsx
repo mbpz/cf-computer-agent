@@ -328,6 +328,19 @@ async function waitForServerNavigation(journey: MountedApp, requests: readonly s
 
 async function navigateFromOwningEntry(journey: MountedApp, routeId: MaturityRouteId, pathname: string): Promise<void> {
   if (routeId === "home") return;
+  if (routeId === "submit") {
+    // `/submit` owns no sidebar entry: migrations/0075 hides the seeded row and
+    // the client fallback skips the registry entry. The owning page is now
+    // 我的提交, whose header carries the CTA into the composer, so the audit
+    // enters the route through that real affordance instead of the removed one.
+    await navigateFromOwningEntry(journey, "my-submissions", "/my-submissions");
+    const cta = journey.browser.document.querySelector('main [data-my-submissions-submit][href="/submit"]') as HTMLElement | null;
+    expect(cta, "submit CTA").not.toBeNull();
+    await act(async () => cta!.click());
+    await waitForApp(() => journey.browser.location.pathname === pathname);
+    expect(journey.browser.location.pathname).toBe(pathname);
+    return;
+  }
   if (routeId === "settings") {
     await act(async () => (journey.container.querySelector("[data-account-trigger]") as HTMLElement).click());
     await waitForApp(() => journey.browser.document.querySelector('[data-route-id="settings"]') !== null);

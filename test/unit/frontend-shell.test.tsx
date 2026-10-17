@@ -84,8 +84,9 @@ describe("frontend application shell", () => {
     const navigation = html.match(/<nav data-shell-sidebar-scroll[\s\S]*?<\/nav>/u)?.[0] ?? "";
     // The fallback tree derives the family from the shared registry's parentRouteId,
     // so it has to render the server tree's nesting: one depth-1 `/knowledge` entry
-    // with the four related entries as depth-2 children. A flat re-parenting that
-    // merely reordered the same rows would keep the DOM order but fail on the depth.
+    // with its visible related entries as depth-2 children. `/submit` owns no entry
+    // (migrations/0075 hides the row and the registry marks the route
+    // `hiddenFromNavigation`), so the composer is reached from 我的提交 instead.
     const nodes = navigation.split("data-nav-node").slice(1).map((segment) => ({
       depth: /data-nav-depth="(\d+)"/u.exec(segment)?.[1],
       routeId: /data-route-id="([^"]+)"/u.exec(segment)?.[1],
@@ -95,9 +96,9 @@ describe("frontend application shell", () => {
       { depth: "1", routeId: "knowledge" },
       { depth: "2", routeId: "search" },
       { depth: "2", routeId: "agent" },
-      { depth: "2", routeId: "submit" },
       { depth: "2", routeId: "my-submissions" },
     ]);
+    expect(navigation).not.toContain('href="/submit"');
   });
 
   it("hides the knowledge children the fallback session cannot reach", () => {

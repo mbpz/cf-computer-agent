@@ -172,4 +172,21 @@ describe("React read-only user pages", () => {
     expect(html).not.toContain('aria-label="Page 2"');
     expect(html).not.toContain("undefined");
   });
+
+  it("enters the submit composer from the my-submissions header in both locales", () => {
+    // `/submit` has no navigation entry (migrations/0075); the header CTA is the
+    // entry point, so its href, accessible name and mobile target are pinned.
+    const state = { kind: "ready" as const, items: [], pagination: { page: 1 as const, pageSize: 20 as const, total: 0, totalPages: 0 } };
+    for (const navigatorLanguage of ["en", "zh-CN"] as const) {
+      const locale = createLocaleRuntime({ navigatorLanguage });
+      const html = renderToStaticMarkup(<MySubmissionsPage locale={locale} state={state} />);
+      const cta = /<a[^>]*data-my-submissions-submit[^>]*>[\s\S]*?<\/a>/u.exec(html)?.[0] ?? "";
+      expect(cta, navigatorLanguage).not.toBe("");
+      expect(cta).toContain('href="/submit"');
+      // The link text is the accessible name; no extra translated key is needed.
+      expect(cta).toContain(frontendText(locale, "SUBMIT_TITLE"));
+      expect(cta).toContain("focus-visible:ring-2");
+      expect(cta).toContain("max-lg:h-11");
+    }
+  });
 });

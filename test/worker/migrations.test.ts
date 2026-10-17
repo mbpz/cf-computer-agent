@@ -1513,6 +1513,44 @@ describe("Phase 1 control-plane migrations", () => {
       .resolves.toEqual({ parent_id: "menu-workspace", position: 99 });
   });
 
+  it("hides the submit entry idempotently without touching the rest of the knowledge family", async () => {
+    const registration = MIGRATIONS.find((migration) => migration.name === "0075_hide_submit_menu_entry.sql")!;
+    expect(registration).toBeDefined();
+    const statements = registration.queries;
+    expect(statements).toHaveLength(1);
+    expect(statements.filter((statement) => /UPDATE menus/u.test(statement))).toHaveLength(1);
+    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, MIGRATIONS.indexOf(registration)));
+    const readSubmit = async () => env.DB.prepare(
+      "SELECT parent_id, position, path, label_key, required_bits, visible FROM menus WHERE id = 'menu-submit'",
+    ).first();
+    const visibleSubmit = { parent_id: "menu-knowledge", position: 2, path: "/submit", label_key: "NAV_SUBMIT", required_bits: "0x40", visible: 1 };
+    expect(await readSubmit()).toEqual(visibleSubmit);
+
+    const apply0075 = async () => { for (const statement of statements) await env.DB.prepare(statement).run(); };
+    await apply0075();
+    // Navigation only: the row keeps its URL, label, mask, parent and position,
+    // so `/submit` stays a reachable route and the editor still lists the row.
+    expect(await readSubmit()).toEqual({ ...visibleSubmit, visible: 0 });
+    // A rerun is a no-op because the guard requires the row to still be visible.
+    await apply0075();
+    expect(await readSubmit()).toEqual({ ...visibleSubmit, visible: 0 });
+
+    const family = (await env.DB.prepare(
+      `SELECT id, position, visible FROM menus WHERE parent_id = 'menu-knowledge' ORDER BY position, id`,
+    ).all<{ id: string; position: number; visible: number }>()).results;
+    expect(family).toEqual([
+      { id: "menu-search", position: 0, visible: 1 },
+      { id: "menu-agent", position: 1, visible: 1 },
+      { id: "menu-submit", position: 2, visible: 0 },
+      { id: "menu-my-submissions", position: 3, visible: 1 },
+    ]);
+
+    // A non-system row is administrator-managed and stays exactly as it is.
+    await env.DB.prepare("UPDATE menus SET is_system = 0, visible = 1 WHERE id = 'menu-submit'").run();
+    await apply0075();
+    expect(await readSubmit()).toMatchObject({ visible: 1 });
+  });
+
   it("realigns the 0062 contributor workspace.tasks mask without overriding managed roles", async () => {
     const registration = MIGRATIONS.find((migration) => migration.name === "0062_contributor_workspace_tasks_alignment.sql")!;
     expect(registration).toBeDefined();

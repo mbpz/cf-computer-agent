@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Files } from "@phosphor-icons/react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { ButtonLink } from "../components/motion/button/base";
 import { DataTable, type DataTablePage } from "../components/data-table";
 import { DateRangeInput, type DayRange } from "../components/ui/date-range-input";
 import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-filters";
@@ -42,8 +43,24 @@ export function MySubmissionsPage({ state, locale, pending = false, localError, 
     ...(range.from ? [{ id: "from", label: `${frontendText(locale, "CALENDAR_RANGE_FROM")}: ${dateFieldValue(range.from)}`, onRemove: () => applyRange({ from: "", to: range.to }) }] : []),
     ...(range.to ? [{ id: "to", label: `${frontendText(locale, "CALENDAR_RANGE_TO")}: ${dateFieldValue(range.to)}`, onRemove: () => applyRange({ from: range.from, to: "" }) }] : []),
   ];
+  // The composer owns no sidebar entry (migrations/0075 hides it), so the page
+  // header's primary action is the entry point to `/submit`. Its link text is the
+  // composer's own title (the accessible name), and it carries the app button's
+  // keyboard ring plus a 44px mobile target.
   return <section className="flex flex-col space-y-5 lg:h-full lg:min-h-0">
-    <PageHeader title={frontendText(locale, "SUBMISSIONS_TITLE")} description={frontendText(locale, "SUBMISSIONS_DESCRIPTION")} icon={<Files size={22} weight="duotone" className="text-primary" />} />
+    <PageHeader
+      title={frontendText(locale, "SUBMISSIONS_TITLE")}
+      description={frontendText(locale, "SUBMISSIONS_DESCRIPTION")}
+      icon={<Files size={22} weight="duotone" className="text-primary" />}
+      actions={<ButtonLink
+        data-my-submissions-submit
+        href="/submit"
+        variant="primary"
+        size="md"
+        className="max-lg:h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        onClick={(event) => { event.preventDefault(); writeWorkspaceHistory("push", "/submit"); }}
+      >{frontendText(locale, "SUBMIT_TITLE")}</ButtonLink>}
+    />
     <SubmissionRangeFilter locale={locale} range={range} pending={pending} />
     {!range.invalid && <AppliedFilters ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")} clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")} filters={appliedRange} onClear={() => applyRange({ from: "", to: "" })} />}
     {range.invalid ? null

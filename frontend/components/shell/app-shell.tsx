@@ -279,8 +279,11 @@ function navigationTree(group: "workspace" | "admin", session: SessionSnapshot):
     // children (0031), so those nested labels are kept here.
     const knowledgeChildLabels: Readonly<Record<string, string>> = { search: "NAV_KNOWLEDGE_SEARCH", agent: "NAV_KNOWLEDGE_AGENT" };
     const registered: readonly WorkspaceRouteCapability[] = WORKSPACE_ROUTE_CAPABILITIES;
+    // `hiddenFromNavigation` routes (today only `/submit`) keep their page kind
+    // and capability but own no entry; the composer is reached from the 我的提交
+    // header. migrations/0075 hides the seeded row for the server tree.
     const knowledgeChildren = registered
-      .filter((route) => route.parentRouteId === "knowledge")
+      .filter((route) => route.parentRouteId === "knowledge" && route.hiddenFromNavigation !== true)
       .map((route) => item(route.path, knowledgeChildLabels[route.id]))
       .filter(Boolean) as NavigationNode[];
     return [item("/"), item("/graph"), item("/today"), item("/focus"), item("/review"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: knowledgeChildren }, item("/tasks"), item("/environments"), item("/goals"), item("/projects"), item("/calendar"), item("/boards"), item("/notifications"), item("/messages")].filter(Boolean) as NavigationNode[];
