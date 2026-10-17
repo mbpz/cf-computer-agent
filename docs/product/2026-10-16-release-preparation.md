@@ -14,7 +14,9 @@
 
 生产实测（用户已登录标签，起点 `/tasks`）：`/notifications` 移动端披露触发器 44px；面板 `data-side="bottom"`、两个 `FilterSelect` 均 44px、焦点进入面板、`body` 滚动锁；Escape → 面板关闭、`aria-expanded="false"`、**焦点回到触发器**、滚动恢复；批量动作「标记可见为已读」留在**页面内**（不在面板内）且 44px。`/tasks` 移动端披露 44px；桌面 1440 **不渲染披露**、行内选择器仍 36px、页面横向溢出 0。英文边界测试用的语言偏好已切回 `zh-CN`。
 
-**未在 UI 核验**：`/admin` 维护区（需管理员会话，本轮不切角色以免打断 contributor 会话）——该面板由 6 条单测覆盖（未配置态不渲染任何按钮、点明缺 `MAINTENANCE_CONTROL_TOKEN`、手册链接、读取失败仍保留重试）。
+**未在 UI 核验**：无。管理端维护区已于 2026-10-17 在管理员会话下实测（`data-maintenance-control="unavailable"`、区域内零按钮、点名缺 `MAINTENANCE_CONTROL_TOKEN`、手册链接存在）。
+
+**2026-10-17 覆盖收尾（无新部署，均为生产数据操作与验证）**：按用户授权执行并验证了「可逆往返」写入集合——审核三类决策（`request-revision` / `publish` / `reject`）、知识回收→恢复（**关闭了本文件 §0 提到的待重测观察**）、成员禁用→恢复（带 `expectedStatus` 的 CAS）、菜单创建→删除、以及一次真实 AI 提问（`POST /api/knowledge/chat/stream` → 200，诚实弃答并标注低置信度）；深色覆盖补齐至 34 页。逐项操作身份、观测与遗留测试数据见 `docs/product/2026-10-16-beui-interaction-acceptance.md` §6。**仍未执行**：彻底清除（30 天守卫期内不允许）、维护排空/恢复（未配置控制令牌，生产不可执行）。
 
 ## 0. 2026-10-16 第二轮（首次部署后的追加）
 

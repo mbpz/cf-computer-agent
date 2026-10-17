@@ -137,11 +137,33 @@
 | `/tasks` 移动端 | 披露触发器 44px |
 | `/tasks` 桌面 1440 | **不渲染披露**、行内选择器仍 36px、页面横向溢出 0 |
 
-**未在 UI 核验**：`/admin` 维护区（需管理员会话；本轮不切角色以免打断 contributor 会话）——该面板由 6 条单测覆盖（未配置态不渲染任何按钮、点明 Worker secret `MAINTENANCE_CONTROL_TOKEN`、给出手册链接、读取失败仍保留重试）。
+**维护区界面核验（2026-10-17 补做，管理员会话）**：`/admin` 维护区实测 `data-maintenance-control="unavailable"`、`[data-maintenance-not-configured]` 存在、**区域内零个按钮**（死重试已消失）、文案点名缺 Worker secret `MAINTENANCE_CONTROL_TOKEN` 并说明"重试只会再次读到同一个未配置的实例"，同时给出 `data-maintenance-runbook` 链接（`github.com/mbpz/cf-computer-agent/.../2026-09-22-r14-production-activation-preflight.md`，标签「维护激活手册」）。503 语义不变；该面板读取失败态的重试保留（6 条单测覆盖）。
 
-## 6. 边界
+## 6. 写入面与真实生成覆盖（2026-10-17 完成）
 
-- 管理端 12 个页面已实拍并按同一判据评估；**不可逆写入面（审核决策、成员禁用、菜单编辑、回收站恢复）只评估了控件与文案，未真的执行写入**——那属运维验收，不属交互验收。
+用户授权「可逆往返」写入集合与一次真实 AI 提问后，本轮把这些面在生产上真的跑通了（不触碰既有内容：所有测试内容均为管理员自建，标题带「OMP 交互验收条目」）。
+
+| 面 | 操作身份（执行） | 观测结果 |
+| --- | --- | --- |
+| 审核决策 · 要求修改 | `POST /api/admin/submissions/:id/request-revision` | 状态 `review_pending → revision_requested`，投稿从待审队列消失（`total 1 → 0`）；三类决策都需要**二次确认**（模态「提交审核决定」或行内「确认退回修改/确认驳回」，后者需先选「审核原因」） |
+| 审核决策 · 发布 | `POST /api/admin/submissions/:id/publish` | `review_pending → published`，页面给出新知识项 id `39fd7d01-0642-48ad-910e-41b0d6abdf63`，可搜索 |
+| 审核决策 · 驳回 | `POST /api/admin/submissions/:id/reject` | `review_pending → rejected`，页面「提交已驳回。」，队列清空 |
+| 知识生命周期 · 回收 | `POST /api/admin/knowledge/:id/trash` | 状态 `active → trashed`，回收站列出并给出「恢复/彻底清除」，并明确**尚未允许彻底清除：还剩 30 天**（守卫可见） |
+| 知识生命周期 · 恢复 | `POST /api/admin/knowledge/:id/restore` | 回到 `default/shared/active`（可见性还原为 `shared`），回收站清空。**这关闭了上一轮挂着的观察项**（"回收→恢复往返需重测定论"） |
+| 成员禁用 → 恢复 | `PATCH /api/admin/members/:id/status`（带 `expectedStatus` 的 CAS） | 200 两次，观测 `active → disabled → active`，行内状态与动作随之切换（已恢复到原状） |
+| 菜单创建 → 删除 | `POST /api/admin/menus` → `DELETE /api/admin/menus/:id` | 201 → 200（删除前有「确认变更」确认）；编辑器出现/消失该节点，`/api/navigation` 顶级项始终为 2（未污染成员导航） |
+| 真实 AI 生成 | `POST /api/knowledge/chat/stream` | 200，前端到达终态：**诚实弃答**（「证据不足 尝试补充具体细节并重新表述问题」）而非编造，并给出重试、来源控件、每会话反馈与「引用有误」；重载后该提问出现在`会话历史`并标注**低置信度** |
+
+深色覆盖补齐至 **34 页**（22 workspace + 12 管理端）：全部 `html.dark` 生效，无 ≥1% 视口面积且亮度 >0.8 的浅色区块。
+
+**一处开放观察（需人工一键确认，不下断言）**：`/admin/members` 行内「禁用」按钮，在 relay 的 1440×900 仿真视口下**两种受信点击都无反应**（无请求、无对话框、无控制台错误），`document.elementFromPoint` 在该按钮自身中心返回的是 `SECTION`/`DIV` 容器而非按钮（同页右侧的 All/Active/Disabled 亦然，而左侧按钮正常）；**脚本化 `.click()` 能正常打开确认框**，说明处理器有效、问题在指针可达性。我无法用现有工具区分"粘性列遮挡的真实缺陷"与"relay 仿真坐标副作用"，故记为开放观察，建议你手动点一次该按钮即可定性（预期：能点开「确认禁用成员访问？」即为工具副作用）。
+
+**留下的测试数据（可逆）**：1 个已发布条目 `39fd7d01-0642-48ad-910e-41b0d6abdf63`（标题「OMP 交互验收条目（发布用）」，正文已注明可随时回收删除；当前为 active，可在回收站回收，30 天后可彻底清除）；2 条投稿：`2b119ddc-6602-497e-b10a-b1f033a7cb31`（`revision_requested`）、`8ecafacf-82f7-4b5e-b274-4fcc0db9ec1f`（`rejected`）。另有 1 次生命周期操作曾在极短时间内出现「结果未知」并给出「丢弃记录的操作」，随后**自行消解**（回到 active，无残留）——即回执机制按设计工作。
+
+## 7. 边界
+
+- 写入面已按「可逆往返」覆盖（见 §6）：审核三类决策、知识回收/恢复、成员禁用/恢复、菜单创建/删除、真实 AI 生成均在生产上实际执行。**仍未执行且本轮无法执行**：`彻底清除`（30 天守卫期内不允许，见回收站文案）、维护排空/恢复（`MAINTENANCE_CONTROL_TOKEN` 未配置，生产上该路径不可执行）、以及需管理员会话切换的撤权往返。
+- **未评估**：AI 回答的检索质量/语料覆盖（只验证了链路与诚实弃答；语料是否应命中该问题需要单独的语料核对）；深色下的对比度审计（只验证了无浅色残留与 `html.dark` 生效）。
 - 非缺陷记录（两处都是我的探针错，不是产品缺陷）：① `/api/admin/submissions?page=1&pageSize=1` 返回 `400`——`pageSize` 仅接受 20/50/100，与页面每页选择器一致；② `/projects/acct-project-1791803862816/timeline` 返回 `PROJECT_NOT_FOUND` 并使页面落到 `error` 态——`acct-project-…` 是列表行的显示名称，接口 id 是 UUID；点真实「时间线」按钮后到达 `/projects/93521135-547d-4463-97f6-00028dbc62f7/timeline` 并正常渲染。
 - `/admin` 概览首屏约 2.5 秒内有 2 张卡仍在 `loading`，6 秒内稳定为 `empty×2 + ready×3`；每个请求端到端约 0.9 秒（本地到边缘的网络时延），非应用侧慢查询。
 - 未做 320/375/768/1280 其余三档视口与英文下的交互评估；本轮为 1440×900 浅色 + 390×844 浅色 + 1440×900 深色（见 §4）。
