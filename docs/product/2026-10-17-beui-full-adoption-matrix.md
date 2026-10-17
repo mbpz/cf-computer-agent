@@ -1055,3 +1055,52 @@ Wave 1–3 的前后对比已按 §16 完成（同一 10 页、同一视口、`b
 外壳侧保留：`data-shell-collaboration-navigation`、逐链 `data-route-id`、`aria-current="page"`、未读徽标全套（`data-notification-summary`/`data-state`/`role="status"`/`aria-live`/`aria-label`/`title`/`…`/`—`）与错误时的 `data-notification-summary-retry`；`min-h-10` 桌面几何 + `max-lg:min-h-11` 44px 下限；`sm` 以下隐藏标签；减少动效由载荷自身处理。活动态改为载荷的静态高亮（`bg-muted/80`），旧的 `shell-collab-active` 滑行不再存在；`main` 里的路由过渡 `motion.div` 属应用级、保留。
 
 至此 `frontend/` 内**所有交互面均来自 beUI 源**（适配层内为 beUI 源 + §17 四类增量补丁）；页面上不再有手写 `motion/react`，唯一允许的应用级动效是 `main` 的路由过渡与移动抽屉所经的 `sheet.tsx` 适配层。
+
+
+## 26. Wave 4 · 成员管理双标签页（MembersTabs 切片，2026-10-17）
+
+`/admin/members` 的成员表与授权记录改为两个 beUI 标签页，各占满剩余高度。范围：`frontend/components/ui/tabs.tsx`、`frontend/pages/admin/members-page.tsx`、`frontend/components/motion/tabs.tsx`（仅 §17 透传补丁）、`test/unit/frontend-admin-invitations.test.tsx`（仅寻址）。
+
+### 26.1 tabs 基元改为 beUI 来源
+
+`ui/tabs.tsx` 之前是自研适配层（无 beUI 源）。现在它**组合**已装载荷 `motion/tabs.tsx` 的 `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent`，导出的四个组件与全部既有 props（`value`/`defaultValue`/`onValueChange`/`orientation`/`value` per trigger/`disabled`/`className`/rest）保持不变。载荷提供胶囊指示器的 layout 动画、可滚动标签列表与边缘箭头、聚焦自动显露、`useReducedMotion` 归零。
+
+适配层只补载荷不建模的部分：`tablist`/`tab`/`tabpanel` 的 `id` 与 `aria-controls`/`aria-labelledby`、roving `tabIndex`、`aria-selected`/`aria-disabled`/`data-state`、Home/End/方向键路径（仍走 `frontend/lib/tabs-keyboard.ts` 的 `tabsKeyAction`）、面板 `hidden` 语义、受控/非受控桥接、移动端 44px 下限（`max-lg:min-h-11`）。键盘提交仍通过适配层 `setValue` → 载荷受控 `value` 生效；点击仍由载荷自身 `onClick`（尊重 `preventDefault`）驱动。
+
+载荷两处 §17 补丁（文件头已记录）：**属性透传**——载荷 `Tabs` 的 rest 落在 layout root（`motion/tabs.tsx:101`），`TabsContent` 的 rest 落在面板（`:381`/`:387`，未激活分支改为 `motion.div` 以承载 motion 类型透传，`hidden` 语义不变）。因此 `aria-orientation`、`data-tab-value`、`data-state`、面板 `role`/`id`/`tabIndex` 都能到达同一元素。无文案/插槽/回调补丁。着陆页消费点 `pages/workbench-landing/public-workbench-page.tsx:114` 未改（只传 `value`/`onValueChange`/`variant`）。
+
+载荷的边缘滚动箭头仍带硬编码英文名（`motion/tabs.tsx` 的 `Scroll tabs left`/`Scroll tabs right`），只在标签列表真正溢出时渲染；本页两个本地化标签（「Members/成员」「Invitations/授权记录」）在全宽列表内不会溢出，因此该文案不进入无障碍树。未新增 i18n 键（任务约束），故不为其加 label props——若后续出现长标签列表，须按 §17 第 1 条补 `scrollLeftLabel`/`scrollRightLabel`。
+
+### 26.2 页面结构与高度机制
+
+页头（`PageHeader` + 状态筛选）、`AppliedFilters`、`data-member-status-record-blocked` 与 `pageError`/`actionError`/`readRequired` 提示仍在页面级；`<section inert aria-hidden>` 包住全部内容（含新 tabs 根与对话框触发行），对话框/确认层行为逐字保留。
+
+- tabs 根：`flex flex-col lg:min-h-0 lg:flex-1`（独占页面 `section` 的 `lg:h-full lg:min-h-0` 剩余高度）。
+- `TabsList`：`wrapperClassName="shrink-0"`，不参与高度分配。
+- 成员面板：`flex flex-col lg:min-h-0 lg:flex-1` + `DataTable fill`（保留 `className="lg:min-h-0 lg:flex-1"`）；表头固定、表体滚动、分页器固定不变。
+- 授权记录面板：`flex min-h-0 flex-col lg:flex-1 lg:overflow-y-auto`（面板内部滚动）；`data-admin-invitations` 的 `section` 改为 `flex flex-col gap-3`。
+
+移动端（`lg` 以下）页面仍是自然高度滚动，面板不加高度约束；`max-lg:min-h-11` 保证标签 44px 触控下限。
+
+### 26.3 钩子清单（全部保留）
+
+| 位置 | 钩子/语义 |
+| --- | --- |
+| 页面 `section` | `lg:h-full lg:min-h-0`、`inert` + `aria-hidden`（确认层/邀请对话框打开时） |
+| 标签列表 | `role="tablist"`、`aria-orientation`、逐项 `role="tab"`/`aria-selected`/`aria-controls`/`tabIndex`/`data-state`/`data-tab-value`（载荷另有 `data-tabs-value`） |
+| 成员面板 | `role="tabpanel"` + `aria-labelledby`、`DataTable` 的 `data-list-mode`、分页钩子（`data-admin-pagination-*` 等，未改）及行内 `aria-label="<启用/禁用> <target>"` |
+| 授权记录面板 | `role="tabpanel"`、`section[data-admin-invitations]`（含 `aria-busy`）、`[data-member-add-open]`（`aria-haspopup`/`aria-expanded`）、`[data-invitation-code]`、`[data-member-add-dialog]`、`[data-member-add-cancel]`、`#invitation-email` |
+| 页面级 | `[data-member-status-record-blocked]`、`[data-confirm-action]` |
+
+i18n：未新增键。标签「成员」用 `ADMIN_MEMBERS_TITLE`；「授权记录」用 `ADMIN_INVITATION_LIST_TITLE`（中文恰为「授权记录」，英文 `Invitations`）——原记录区块标题即此键，`ADMIN_INVITATION_SECTION_TITLE`（授权新成员）继续作为面板内邀请区块的 `h2` 与对话框标题，两个键都已存在且语义各归其位（任务描述把 `SECTION_TITLE` 记作「授权记录」，实际该键是「授权新成员」，故按实际取值选择）。
+
+### 26.4 测试寻址调整（断言不变）
+
+`test/unit/frontend-admin-invitations.test.tsx` 新增 `openInvitationsTab()`：点击 `[role="tab"][data-tab-value="invitations"]`。`openAddDialog()` 先切到授权记录页；「shows the code once…」与「revokes a pending invitation…」在断言前先切页。文字、数量、`data-*` 断言一字未改（未激活面板仍挂载但 `hidden`，因此切换只是把「可见」与用户路径对齐）。`fills the available height for the member list` 保持原断言（页面 `section` 仍是第一个 `section`，`data-list-mode` 表仍是 `lg:min-h-0 lg:flex-1`）。
+
+### 26.5 门禁
+
+- `npm run typecheck`（worker + frontend）干净。
+- 指定套件 **5 文件 / 43 测试全绿**：`frontend-tabs`、`frontend-admin-invitations`、`frontend-admin-member-confirmation`、`frontend-admin-member-identity`、`frontend-admin-member-refresh`。
+- 连带复核：`frontend-admin-pages`、`frontend-admin-pagination-routes`、`frontend-workbench-landing-scene`、`frontend-workbench-landing-page`、`frontend-a11y` **5 文件 / 138 测试全绿**（着陆页仍消费载荷 `Tabs`，未改其调用点）。
+- 未新增 i18n 键、未改 `frontend/lib/*`、未动 ledger 与 operation inventory。

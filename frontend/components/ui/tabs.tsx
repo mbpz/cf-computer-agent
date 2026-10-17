@@ -1,12 +1,37 @@
+// Tab primitive: beUI `tabs` (beui.dev/components/motion/tabs, landed at
+// `components/motion/tabs.tsx`) behind the repository's tab contract.
+//
+// Patches, per docs/product/2026-10-17-beui-full-adoption-matrix.md §17:
+//   1. labels — none needed: every visible tab label comes from the caller
+//      (`frontend/pages/admin/members-page.tsx`).
+//   2. attribute passthrough — `Tabs` accepts/forwards rest props onto the
+//      layout root (`motion/tabs.tsx:101`) and `TabsContent` accepts/forwards
+//      rest props, `hidden` and `data-state` onto its panel (`:381`/`:387`).
+//      The adapter needs those to carry `id`/`role`/`aria-controls`/
+//      `aria-labelledby`/`aria-orientation`/`data-*` (roving keys,
+//      `data-tab-value`, `data-admin-invitations`).
+//   3. slots — none: the payload already renders caller children.
+//   4. callbacks — none: the payload's `onValueChange`/trigger `onClick`
+//      (preventDefault aware) are the callbacks we need.
+//
+// The payload supplies the visual/interaction core: pill indicator layout
+// animation, scrollable list with edge controls, focus reveal, reduced-motion
+// collapse. This adapter only supplies what the payload does not model —
+// tablist/tab/tabpanel ids, `aria-controls`, roving tabIndex, Home/End/arrow
+// keyboard path (`lib/tabs-keyboard.ts`), `data-state`, the `hidden` panel, the
+// controlled/uncontrolled bridge and the 44px mobile hit target. Payload
+// behaviour (animation, layout projection) is left untouched.
 import * as React from "react";
+import { Tabs as MotionTabs, TabsContent as MotionTabsContent, TabsList as MotionTabsList, TabsTrigger as MotionTabsTrigger } from "../motion/tabs";
 import { cn } from "../../lib/utils";
 import { tabsKeyAction, type TabsOrientation } from "../../lib/tabs-keyboard";
+
+type TabsVariant = "pill" | "underline" | "segment";
 
 interface TabsContextValue {
   baseId: string;
   value: string | undefined;
   orientation: TabsOrientation;
-  firstValue: React.MutableRefObject<string | undefined>;
   setValue: (value: string) => void;
 }
 
@@ -18,58 +43,89 @@ function useTabsContext(): TabsContextValue {
   return context;
 }
 
-export function Tabs({ className, value: controlledValue, defaultValue, onValueChange, orientation = "horizontal", children, ...props }: React.HTMLAttributes<HTMLDivElement> & {
+type MotionTabsProps = React.ComponentProps<typeof MotionTabs>;
+type MotionTabsContentProps = React.ComponentProps<typeof MotionTabsContent>;
+
+export function Tabs({ className, value: controlledValue, defaultValue, onValueChange, orientation = "horizontal", variant = "pill", children, ...props }: Omit<MotionTabsProps, "value" | "defaultValue" | "onValueChange" | "variant" | "children" | "className"> & {
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
   orientation?: TabsOrientation;
+  variant?: TabsVariant;
+  className?: string;
+  children: React.ReactNode;
 }) {
   const [internalValue, setInternalValue] = React.useState(defaultValue);
-  const firstValue = React.useRef<string | undefined>(undefined);
   const baseId = React.useId().replace(/:/gu, "");
   const value = controlledValue ?? internalValue;
-  const setValue = (next: string) => {
+  const setValue = React.useCallback((next: string) => {
     if (controlledValue === undefined) setInternalValue(next);
     onValueChange?.(next);
-  };
-  return <TabsContext.Provider value={{ baseId, value, orientation, firstValue, setValue }}><div className={className} {...props}>{children}</div></TabsContext.Provider>;
+  }, [controlledValue, onValueChange]);
+  const contextValue = React.useMemo(() => ({ baseId, value, orientation, setValue }), [baseId, value, orientation, setValue]);
+  return <TabsContext.Provider value={contextValue}>
+    <MotionTabs value={value} onValueChange={setValue} variant={variant} className={className} {...props}>{children}</MotionTabs>
+  </TabsContext.Provider>;
 }
 
-export function TabsList({ className, onKeyDown, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export function TabsList({ className, wrapperClassName, onKeyDown, ...props }: React.HTMLAttributes<HTMLDivElement> & { wrapperClassName?: string }) {
   const context = useTabsContext();
-  return <div role="tablist" aria-orientation={context.orientation} className={cn("inline-flex items-center gap-1 rounded-md bg-muted p-1", className)} onKeyDown={(event) => {
-    onKeyDown?.(event);
-    if (event.defaultPrevented) return;
-    const action = tabsKeyAction(event.key, context.orientation);
-    if (!action) return;
-    const root = event.currentTarget;
-    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>("[role='tab']:not([aria-disabled='true'])"));
-    if (!tabs.length) return;
-    event.preventDefault();
-    const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
-    const index = action === "first" ? 0 : action === "last" ? tabs.length - 1 : (current + (action === "next" ? 1 : -1) + tabs.length) % tabs.length;
-    const next = tabs[index];
-    if (!next) return;
-    context.setValue(next.dataset.tabValue || "");
-    next.focus();
-  }} {...props} />;
+  return <MotionTabsList
+    aria-orientation={context.orientation}
+    wrapperClassName={wrapperClassName}
+    className={className}
+    {...props}
+    onKeyDown={(event) => {
+      onKeyDown?.(event);
+      if (event.defaultPrevented) return;
+      const action = tabsKeyAction(event.key, context.orientation);
+      if (!action) return;
+      const root = event.currentTarget;
+      const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>("[role='tab']:not([aria-disabled='true'])"));
+      if (!tabs.length) return;
+      event.preventDefault();
+      const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
+      const index = action === "first" ? 0 : action === "last" ? tabs.length - 1 : (current + (action === "next" ? 1 : -1) + tabs.length) % tabs.length;
+      const next = tabs[index];
+      if (!next) return;
+      context.setValue(next.dataset.tabValue || "");
+      next.focus();
+    }}
+  />;
 }
 
-export function TabsTrigger({ className, value, disabled = false, onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { value: string }) {
+export function TabsTrigger({ className, value, disabled = false, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { value: string }) {
   const context = useTabsContext();
-  if (!context.firstValue.current) context.firstValue.current = value;
-  const activeValue = context.value ?? context.firstValue.current;
-  const active = activeValue === value;
+  const active = context.value === value;
   const suffix = encodeURIComponent(value).replace(/%/gu, "_");
   const tabId = `${context.baseId}-tab-${suffix}`;
   const panelId = `${context.baseId}-panel-${suffix}`;
-  return <button type="button" role="tab" id={tabId} data-tab-value={value} aria-controls={panelId} aria-selected={active ? "true" : "false"} aria-disabled={disabled ? "true" : undefined} tabIndex={active ? 0 : -1} disabled={disabled} className={cn("rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground max-lg:min-h-11", className)} onClick={(event) => { onClick?.(event); if (!event.defaultPrevented && !disabled) context.setValue(value); }} {...props} data-state={active ? "active" : "inactive"} />;
+  return <MotionTabsTrigger
+    {...props}
+    value={value}
+    disabled={disabled}
+    id={tabId}
+    aria-controls={panelId}
+    aria-disabled={disabled ? "true" : undefined}
+    tabIndex={active ? 0 : -1}
+    data-tab-value={value}
+    data-state={active ? "active" : "inactive"}
+    className={cn("max-lg:min-h-11 focus-visible:ring-2 focus-visible:ring-ring", className)}
+  />;
 }
 
-export function TabsContent({ className, value, ...props }: React.HTMLAttributes<HTMLDivElement> & { value: string }) {
+export function TabsContent({ className, value, ...props }: Omit<MotionTabsContentProps, "value" | "className" | "children"> & { value: string; className?: string; children: React.ReactNode }) {
   const context = useTabsContext();
-  if (!context.firstValue.current) context.firstValue.current = value;
   const suffix = encodeURIComponent(value).replace(/%/gu, "_");
-  const active = (context.value ?? context.firstValue.current) === value;
-  return <div role="tabpanel" id={`${context.baseId}-panel-${suffix}`} aria-labelledby={`${context.baseId}-tab-${suffix}`} tabIndex={0} hidden={!active} data-state={active ? "active" : "inactive"} className={cn("mt-3 outline-none focus-visible:ring-2 focus-visible:ring-ring", className)} {...props} />;
+  const active = context.value === value;
+  return <MotionTabsContent
+    value={value}
+    role="tabpanel"
+    id={`${context.baseId}-panel-${suffix}`}
+    aria-labelledby={`${context.baseId}-tab-${suffix}`}
+    tabIndex={0}
+    data-state={active ? "active" : "inactive"}
+    className={cn("outline-none focus-visible:ring-2 focus-visible:ring-ring", className)}
+    {...props}
+  />;
 }

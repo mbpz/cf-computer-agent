@@ -33,6 +33,8 @@
 
 2026-10-17 beUI 全量采用（Wave 4，100%）后重新对账：本批采用此前被否决的载荷（矩阵 §17，逐片结果 §18–§20）——`motion/{animated-sidebar,combobox/**,magnetic}`、`motion/button/{magnetic,metallic}.tsx`、`motion/action-swap{,-roll}.tsx` 首次落地；`motion/center-morph-modal.tsx`（经 `ui/dialog.tsx`）与 `motion/popover.tsx`（经 `app-shell.tsx`）打补丁后接入，原先否决它们的理由随之消除；`ui/dropdown-menu.tsx` 因此在 shell 换用 beUI 菜单后失去唯一消费者。未归属候选由 162 增至 **192**：新增 36 条（`animated-sidebar` 13、`ui/dropdown-menu` 7、`combobox/**` 10、其余 6），旧行 6 条（`center-morph-modal` 4、`popover` 2）随打补丁接入归属并从本记录移除，无既有坐标位移。分类按**实际渲染面**而非按文件：经 `ui/filter-select.tsx` 挂载的 combobox 根监听、`inline` 面板、listbox 与 option 行记 `app-boundary`（静态图仍不跟随 barrel `motion/combobox.tsx` 的纯再导出），无人使用的部件与整组零 import 的载荷记 `unmounted-ui`。指纹新增 11 条、刷新 2 条（`environments-page.tsx`、`files-panel.tsx`），移除两条已归属来源的指纹。不扩大本记录的运行验收结论。
 
+2026-10-17 成员页双页签与 `ui/tabs` 改为组合 `motion/tabs` 后重新对账：`components/ui/tabs.tsx` 由自绘改为在已安装载荷 `motion/tabs.tsx` 外做适配器（导出名不变；§17 的两处 attribute-passthrough 补丁把 rest props 透到布局根、把 `hidden`/`data-state`/rest 透到面板），并由 `frontend/pages/admin/members-page.tsx:8` 渲染成「成员 / 授权记录」两页签。于是本文件原先 4 条未归属候选（`35:93`/`40:10`/`66:10`/`74:10`）随该路由归属，坐标变为 `67:5`/`73:10`/`103:10`/`121:10`，本节改写为“0，已归属”并撤下指纹；`motion/tabs.tsx` 的 8 条候选与 `members-page.tsx` 的重排都不产生未归属项。同一轮里 `components/ui/dropdown-menu.tsx` 作为死代码被删除（Wave 4 已记录它失去唯一消费者），其 7 条 `unmounted-ui` 行与指纹随之撤回。未归属候选 192 → **181**，分类计数按行实测改为 app-boundary 30、unmounted-ui 60（上轮表格里的 71 是早期估算，未随行数校正）。不扩大本记录的运行验收结论。
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
@@ -40,11 +42,11 @@
 | app-boundary | 30 | App 外层、history fault 与账户 owner 已有正式消费；2026-10-17 增记被 App/路由实际渲染、但声明侧不在 root 图内的边界（`StatefulButton`、Card 根与四个部件、`MessageBubble`/`MessageBubbleContent`、`MessageScroller` 的视口/内容区/根节点，以及经 barrel 挂载的 `combobox` 根监听、inline 面板、listbox 与 option 行） | 跨路由、真实身份/退出、导航故障旅程 |
 | public-dynamic | 5 | landing 动态导入的 WebGL 生命周期 | 原生浏览器可见性、超时、context loss 与回退验收 |
 | background | 3 | Service Worker 生命周期，不是可见控件 | 真实浏览器注册/缓存/离线行为 |
-| unmounted-ui | 71 | ContextRail / Tabs 无当前正式消费者；2026-10-17 的 beUI 副本里，库内动作与无调用点的部件都归此类：`motion/context-menu.tsx`、`motion/preview-rail.tsx`（仅在无人传入的 `navigation="rail"` 下渲染）、`motion/animated-sidebar.tsx` 的 13 个未用部件、`action-swap{,-roll}` 的按钮/图标、`button/{magnetic,metallic}.tsx` 与 `magnetic.tsx`、`combobox` 的空态/回退触发器/内部 input/portal 分支、`date-range-picker` 的便捷组合层、`agents/message*.tsx` 的无调用点部件、`ui/dropdown-menu.tsx`（shell 改用 beUI 菜单后零 import）、`AlertAction`、`CardAction`、`CardFooter` 与 card 的 interactive 按压路径 | 按实际需求保留或接线；不得直接认定缺失业务 |
+| unmounted-ui | 60 | ContextRail 无当前正式消费者；2026-10-17 的 beUI 副本里，库内动作与无调用点的部件都归此类：`motion/context-menu.tsx`、`motion/preview-rail.tsx`（仅在无人传入的 `navigation="rail"` 下渲染）、`motion/animated-sidebar.tsx` 的 13 个未用部件、`action-swap{,-roll}` 的按钮/图标、`button/{magnetic,metallic}.tsx` 与 `magnetic.tsx`、`combobox` 的空态/回退触发器/内部 input/portal 分支、`date-range-picker` 的便捷组合层、`agents/message*.tsx` 的无调用点部件、`AlertAction`、`CardAction`、`CardFooter` 与 card 的 interactive 按压路径。（`Tabs` 已在 2026-10-17 由成员页消费、`ui/dropdown-menu.tsx` 已删除，两者都不再属于本类。） | 按实际需求保留或接线；不得直接认定缺失业务 |
 | vm-runtime-unshipped | 77 | 正式 `/environments` 页面已挂载、创建或惰性加载文件面、运行时与本地快照；本版本**有意**不发布 VM 引擎与镜像（六件启动产物约 66 MiB，pin 不授权再分发、不构成许可证清单或签名发布清单），因此面向用户或面向 VM 的动作永久不可用：禁用、不渲染，或只存在于无法成功启动的路径。按状态命名而非按模块，引擎发布决策改变后自然翻转。 | 不要读成“未接线”，也不要当成按需修复的缺陷；待引擎发布决策改变后再重新分类 |
 | vm-not-mounted | 6 | 连接器、会话与网络 lifecycle 惰性路径仍无正式调用者：只有显式 connect/open 才创建，页面挂载不会 | 沿既有 G0 边界完成正式接线及身份/生命周期验收 |
 
-A01、A02、A05、D04 仍开放。源码人工分类覆盖这 192 项，但 A01 还缺每页实际可见性、动态 HTML/门户/第三方控件和触发状态的呈现核验；A02 还缺全操作到服务端授权/持久化及运行证据的闭合。禁止把文档行数、指纹或绿色测试当作上述父项验收通过。
+A01、A02、A05、D04 仍开放。源码人工分类覆盖这 181 项，但 A01 还缺每页实际可见性、动态 HTML/门户/第三方控件和触发状态的呈现核验；A02 还缺全操作到服务端授权/持久化及运行证据的闭合。禁止把文档行数、指纹或绿色测试当作上述父项验收通过。
 
 下表“条件”与组内共同守卫叠加。状态提示、role、option、props 转发和监听器均保留；不是每一行都对应一次用户操作。未挂载项的条件均是假设调用者接线之后的源码条件，不能误读为当前正式页面已可用。
 
@@ -349,23 +351,15 @@ beUI 预览轨的落地副本，唯一 import 来自 `components/agents/message-
 
 `components/ui/checkbox.tsx` 的唯一消费者原为未归属的 `frontend/pages/admin/role-detail-page.tsx`；admin-role-detail 登记为能力根 `workbench-admin-role-detail` 后，该消费者整页归入该路由，本文件的候选（原生 `input type=checkbox`，转发 ref 与其余 props）随之归属对应路由，2026-10-16 起从本记录移除。`components/motion/checkbox.tsx` 另有已归属消费者，两者不是同一实现，不重复计算。
 
-## `frontend/components/ui/dropdown-menu.tsx`（7）
+## `frontend/components/ui/dropdown-menu.tsx`（0，2026-10-17 文件已删除）
 
-本文件曾由 `app-shell.tsx` 消费；Wave 4 把 shell 菜单换成 beUI 的 `motion/popover.tsx`（打补丁后接受调用方语义）与 `motion/command-palette.tsx` 之后，第一方源码已无 import，整组候选变成无消费者的库内实现，全部记 `unmounted-ui`。它只是第一方自绘的菜单行为（Escape/外部点击关闭、roving focus、选中后关闭），没有网络写入。
+Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx` 与 `motion/command-palette.tsx`），因此按死代码移除，工作树中已不存在该源文件。上一轮为它的 7 条候选（document 层的 pointerdown/focusin/keydown 关闭、菜单根的 keydown、trigger 按钮、content 面板、item 按钮）记的 `unmounted-ui` 行与指纹一并撤回：源码删除后它们既不是未归属候选，也不再是需要防漂移的已审查文件。原先“删除属另一个决定”的判断现已执行，结论是删除而非保留。
 
-| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
-| --- | --- | --- | --- |
+## `frontend/components/ui/tabs.tsx`（0，2026-10-17 改为组合 `motion/tabs` 载荷并接入成员页后归属）
 
-## `frontend/components/ui/tabs.tsx`（4）
+本文件已改为在 beUI `motion/tabs.tsx` 载荷外做适配器（导出名不变），并被 `frontend/pages/admin/members-page.tsx:8` 用来把「成员 / 授权记录」渲染成两页签，因此原来 4 条未归属候选（根 Provider、TabsList 键盘、TabsTrigger 点击、TabsContent 面板）随该路由进入 root 图，坐标变为 `67:5`、`73:10`、`103:10`、`121:10`，不再计入未归属项。
 
-当前 frontend 未发现此 Tabs 模块消费；不将 role=tab 的可复用实现当作当前可见产品页面。
-
-| 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
-| --- | --- | --- | --- |
-| `frontend/components/ui/tabs.tsx:35:93` | unmounted-ui | 若 Tabs 根组件挂载 | Provider 提供 value、orientation 等上下文；div 转发 props。 |
-| `frontend/components/ui/tabs.tsx:40:10` | unmounted-ui | 若 TabsList 挂载且键盘动作未被 preventDefault | 按方向及 Home/End 选择未禁用 tab，调用 setValue 并移动焦点；当前为自动激活。 |
-| `frontend/components/ui/tabs.tsx:66:10` | unmounted-ui | 若 TabsTrigger 挂载、点击未被阻止且未 disabled | context.setValue(value)；受控状态由调用者负责。 |
-| `frontend/components/ui/tabs.tsx:74:10` | unmounted-ui | 若 TabsContent 挂载且其 value 为 active | 显示对应 panel；非 active 使用 hidden；这是语义/焦点候选而非写操作。 |
+适配器与载荷的分工值得单独记一笔，因为它决定了这些 handler 的归属变化：载荷负责视觉与交互核心（pill 指示器布局动画、可滚动列表与边缘按钮、focus reveal、reduced-motion 折叠），适配器补的是载荷没有建模的部分——tablist/tab/tabpanel 的 `id` 与 `aria-controls`、roving `tabIndex`、Home/End/方向键（`lib/tabs-keyboard.ts`）、`data-state`、`hidden` 面板、受控/非受控桥接与 44px 触控高度。§17 的两处 attribute-passthrough 补丁正是为此：`Tabs` 把 rest props 透到布局根（`motion/tabs.tsx:101`），`TabsContent` 透 `hidden`/`data-state`/rest 到面板（`:381`/`:387`）。因此这些动作在源码里仍是「本地选择 + 焦点管理」，没有网络写入；它们从 `unmounted-ui` 变成已归属，是因为有了真实消费者，而不是行为性质改变。
 
 ## `frontend/features/environments/account-network-owner.mjs`（2）
 
@@ -632,7 +626,6 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/components/shell/context-rail.tsx`: `9dcaa79e710f0b871c977e2251a71a4571124a861b4e9c9591bfa113398b184d`
 - `frontend/components/ui/button.tsx`: `13861f82b8222d50039381ec724df08c53d8c0c426b822027b54735463274d58`
 - `frontend/components/ui/card.tsx`: `972713b38d5e780ff782072f1a57f10e0b7aa07b0aff8e89b42fbdf7a7353b0c`
-- `frontend/components/ui/tabs.tsx`: `11da49213cc5fb1635dbe9c3b35af924189133976ef38b54e437a858d196db6c`
 - `frontend/features/environments/account-network-boundary.tsx`: `9835f50b5387cc2173e47a5dd4c4f85e0f64ec419d88926578b262bf971716b2`
 - `frontend/features/environments/account-network-owner.mjs`: `06943c97426e9b8df13e267ff0f668bbc2e3c80445905d2ac3a76591593f735f`
 - `frontend/features/environments/account-network.mjs`: `9e954525f93dc3b37b5d3d5b7755ad4c6c9d1ef56d6312337072299d9680501b`
@@ -770,3 +763,12 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - 归属后移除的 6 行：`center-morph-modal.tsx` 4 条（坐标随补丁移至 `337:5`/`354:15`/`388:19`/`432:23`，经 `ui/dialog.tsx` 进入 root 图）与 `popover.tsx` 2 条（`:420:7`/`:725:11`，经 `app-shell.tsx:9` 进入 root 图）。两节改写为“0，已归属”说明，其指纹行随之移除。
 - 指纹：新增 11 条（`action-swap{,-roll}`、`animated-sidebar`、`button/{magnetic,metallic}`、`combobox/{content,context,list,trigger}`、`magnetic`、`ui/dropdown-menu`），刷新 2 条（`features/environments/environments-page.tsx`、`.../files/files-panel.tsx`，均因本批对文件面的 props 变动）。`lib/hooks/use-slider.ts`、`combobox.tsx`（barrel）与 `date-range-picker/*` 辅助模块没有候选，不入表。
 - **门禁状态**：本记录相关的两条测试（覆盖 + 指纹）通过，索引新鲜度一条也通过（192/192，零漂移、零缺失）。第三条 `real repository includes exact-result controls and both secondary confirmation actions` 仍然失败，但原因是**源码断言**而非本记录：`scripts/frontend-operation-inventory.test.mjs:131` 断言 `frontend/components/shell/command-palette.tsx` 仍有一条 `kind === "listener"` 候选，而 Wave 4 把它的 `⌘/Ctrl K` 快捷键改成传给 beUI 载荷的 `shortcut="k"`，该文件现在只剩一个 toast 的 `useEffect`、没有 `addEventListener`；同一监听在索引里已落到 `frontend/components/motion/command-palette.tsx:148:5`（`listener`，owner `CommandPalette`）。因此该断言需要改指新位置（或让 shell 文件重新自持监听），属于测试/源码变更，本记录只做源码对账，不代为修改。
+
+### 2026-10-17 成员页双页签 / `ui/tabs` 组合载荷后重新对账
+
+- 触发变化：成员页把「成员 / 授权记录」拆成两个 beUI 页签，`components/ui/tabs.tsx` 同时由自绘实现改为在已安装载荷 `motion/tabs.tsx` 外做适配器（导出名、`TabsList` 的 `wrapperClassName` 等调用面保持不变）。索引里的未归属候选 192 → **181**：减少的 11 条全部来自本轮的两个变化（`ui/tabs.tsx` 4 条、`ui/dropdown-menu.tsx` 7 条），没有新增候选、也没有既有坐标位移。
+- `frontend/components/ui/tabs.tsx`：原先 4 条（根 `Provider`、`TabsList` 键盘、`TabsTrigger` 点击、`TabsContent` 面板）随 `members-page.tsx:8` 的正式使用进入 root 图，坐标重锚为 `67:5`、`73:10`、`103:10`、`121:10`；本节改为“0，已归属”，指纹行撤下。**适配器组合载荷后 handler 的归属含义要分清**：载荷负责 pill 指示器布局动画、可滚动列表与边缘按钮、focus reveal 与 reduced-motion 折叠；适配器补的是载荷未建模的 `id`/`aria-controls`、roving `tabIndex`、Home/End/方向键（`lib/tabs-keyboard.ts`）、`data-state`、`hidden` 面板与受控/非受控桥接。这些动作仍只是本地选择与焦点管理，没有网络写入——它们从 `unmounted-ui` 变成已归属，是因为有了真实消费者；若将来又失去消费者，按本记录的判据应记 `app-boundary`（只渲染调用方 props/children 的边界），而不是再记“未挂载”。
+- 两处 §17 attribute-passthrough 补丁：`motion/tabs.tsx:101`（`Tabs` 把 rest props 透到布局根）与 `:381`/`:387`（`TabsContent` 透 `hidden`/`data-state`/rest 到面板），适配器正是靠它们才能把 `id`/`role`/`aria-*`/`data-*` 送到语义节点。载荷自身 8 条候选（根 motion.div、列表 viewport 监听、两个边缘滚动按钮、列表 focus 捕获、trigger 的 underline/默认两个分支等）全部已归属，无需新增行。
+- `frontend/components/ui/dropdown-menu.tsx`：作为死代码删除（Wave 4 已判定它失去唯一消费者，是否删除当时留作单独决定；本轮已执行删除，工作树不再有该文件）。上一轮为它记的 7 条 `unmounted-ui` 行与指纹撤回，原因是**源码不存在**，不是被接线。
+- 指纹：撤下 2 条（`ui/tabs.tsx` 已归属、`ui/dropdown-menu.tsx` 已删除），本轮无新增、无刷新——`app-shell.tsx`、`members-page.tsx` 等参与接入的文件本身没有候选，不在指纹范围。行数与计数已按行实测对齐：app-boundary 30、public-dynamic 5、background 3、unmounted-ui 60、vm-runtime-unshipped 77、vm-not-mounted 6，合计 181。
+- 门禁：`node --test scripts/frontend-operation-inventory.test.mjs` 10/10 通过（含索引新鲜度），本轮仍只做源码对账，不改变 A01、A02、A05、D04 的开放状态。

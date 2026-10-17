@@ -38,7 +38,8 @@ describe("admin member invitations", () => {
   }
   function buttonByText(text: string) { return [...document.querySelectorAll("button")].find((item) => item.textContent === text) as HTMLButtonElement | undefined; }
   async function click(element: HTMLElement | undefined) { expect(element, "button").toBeTruthy(); await act(async () => element!.click()); }
-  async function openAddDialog() { await click(container.querySelector("[data-member-add-open]") as HTMLButtonElement); }
+  async function openInvitationsTab() { await click(document.querySelector('[role="tab"][data-tab-value="invitations"]') as HTMLButtonElement); }
+  async function openAddDialog() { await openInvitationsTab(); await click(container.querySelector("[data-member-add-open]") as HTMLButtonElement); }
 
   it("issues an invitation only after confirmation", async () => {
     const issue = vi.fn();
@@ -98,6 +99,7 @@ describe("admin member invitations", () => {
 
   it("shows the code once with copy, expiry, and the one-time notice", async () => {
     await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} issuedInvitation={{ email: "new@example.test", code: "CODE-ABCD-1234", expiresAt: pending.expiresAt }} />));
+    await openInvitationsTab();
     expect(container.querySelectorAll("[data-invitation-code]")).toHaveLength(1);
     expect(document.body.textContent).toContain("CODE-ABCD-1234");
     expect(document.body.textContent).toContain("Login code for new@example.test");
@@ -109,6 +111,7 @@ describe("admin member invitations", () => {
   it("revokes a pending invitation only after confirmation", async () => {
     const revoke = vi.fn();
     await act(async () => root.render(<MembersPage locale={locale} members={[]} invitations={[pending]} onRevokeInvitation={revoke} />));
+    await openInvitationsTab();
     expect(document.body.textContent).toContain("Pending");
     await click(buttonByText("Revoke"));
     expect(revoke).not.toHaveBeenCalled();

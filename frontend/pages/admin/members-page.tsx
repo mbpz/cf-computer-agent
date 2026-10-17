@@ -5,6 +5,7 @@ import { DataTable } from "../../components/data-table";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { FilterSelect } from "../../components/ui/filter-select";
 import { AppliedFilters } from "../../components/ui/applied-filters";
 import { Card, CardContent } from "../../components/ui/card";
@@ -133,45 +134,61 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
       : <>
     {statusRecordBlocked && <div role="alert" data-member-status-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardStatusRecord}>{frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD")}</Button></div>}
     {(actionError || pageError || readRequired) && <div role="alert" className="space-y-2 text-sm text-destructive">{(actionError || pageError) && <p>{actionError || pageError}</p>}{readRequired && <p>{frontendText(locale, "ADMIN_MEMBER_READ_REQUIRED")}</p>}{onLoadRetry && <Button type="button" variant="outline" disabled={pending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</div>}
-    <DataTable
-      locale={locale}
-      rows={members}
-      rowId={(member) => member.id}
-      ariaLabel={frontendText(locale, "ADMIN_MEMBERS_TITLE")}
-      loading={pending}
-      pagination={pagination}
-      onPageChange={onPageChange}
-      onPageSizeChange={onPageSizeChange}
-      emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_MEMBERS_EMPTY")} description={frontendText(locale, "ADMIN_MEMBERS_DESCRIPTION")} />}
-      hasMore={!!pagination && !pageError && pagination.page < pagination.totalPages}
-      onLoadMore={onLoadMore}
-      fill
-      className="lg:min-h-0 lg:flex-1"
-      rowHeight={64}
-      columns={[
-        { key: "email", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_EMAIL"), cellClassName: "whitespace-normal", cell: (member) => <p className="line-clamp-1 font-medium">{member.email || frontendText(locale, "ADMIN_EMAIL_UNAVAILABLE")}</p> },
-        { key: "role", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_ROLE"), width: "160px", cell: (member) => <span className="text-sm text-muted-foreground">{member.role || frontendText(locale, "ADMIN_ROLE_UNAVAILABLE")}</span> },
-        { key: "status", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_STATUS"), width: "160px", cell: (member) => { const disabled = member.status === "disabled"; return <Badge variant={disabled ? "destructive" : member.status === "active" ? "success" : "secondary"}>{disabled ? frontendText(locale, "ADMIN_DISABLED") : member.status === "active" ? frontendText(locale, "ADMIN_ACTIVE") : frontendText(locale, "ADMIN_MEMBER_STATUS_UNAVAILABLE")}</Badge>; } },
-        { key: "actions", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_ACTIONS"), align: "right", width: "160px", cell: (member) => { const disabled = member.status === "disabled"; const itemPending = pending || pendingIds.includes(member.id); const mutable = member.role === "contributor" && (member.status === "active" || member.status === "disabled"); const actionLabel = disabled ? frontendText(locale, "ADMIN_ENABLE") : frontendText(locale, "ADMIN_DISABLE"); const target = member.email || member.id; return mutable ? <Button aria-label={`${actionLabel} ${target}`} size="sm" variant="outline" disabled={itemPending || forbidden || !onStatusChange} onClick={() => requestStatusConfirmation(member)}>{actionLabel}</Button> : null; } },
-      ]}
-    />
-    <section data-admin-invitations aria-busy={(invitationWritePending || invitationsPending) || undefined} className="space-y-3 border-t pt-5">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{frontendText(locale, "ADMIN_INVITATION_SECTION_TITLE")}</h2><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_SECTION_DESCRIPTION")}</p></div><Button type="button" data-member-add-open aria-haspopup="dialog" aria-expanded={addOpen} disabled={pending || invitationWritePending || forbidden || !onIssueInvitation} onClick={() => setAddOpen(true)}>{frontendText(locale, "ADMIN_INVITATION_ADD")}</Button></div>
-      {invitationError && <p role="alert" className="text-sm text-destructive">{invitationError}</p>}
-      {issuedInvitation && <Card data-invitation-code className="border-primary/40"><CardContent className="space-y-2 p-4">
-        <p className="text-sm font-medium">{withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_TITLE"), "email", issuedInvitation.email)}</p>
-        <div className="flex flex-wrap items-center gap-3"><code className="rounded-md bg-muted px-3 py-2 font-mono text-sm break-all">{issuedInvitation.code}</code><Button type="button" size="sm" variant="outline" onClick={() => void copyCode(issuedInvitation.code)}>{frontendText(locale, copied ? "ADMIN_INVITATION_CODE_COPIED" : "ADMIN_INVITATION_CODE_COPY")}</Button></div>
-        {copyFailed && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "ADMIN_INVITATION_CODE_COPY_FAILED")}</p>}
-        <p className="text-xs text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_CODE_ONCE_NOTE")}</p>
-        <p className="text-xs text-muted-foreground">{withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_EXPIRES"), "expiresAt", issuedInvitation.expiresAt)}</p>
-      </CardContent></Card>}
-      {invitationsError
-        ? <div role="alert" className="space-y-2 text-sm text-destructive"><p>{invitationsError}</p>{onLoadInvitationsRetry && <Button type="button" variant="outline" disabled={invitationWritePending} onClick={onLoadInvitationsRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</div>
-        : <div className="space-y-2"><h3 className="text-sm font-medium">{frontendText(locale, "ADMIN_INVITATION_LIST_TITLE")}</h3>
-          {invitations.length ? invitations.map((invitation) => <Card key={invitation.id}><CardContent className="flex items-center justify-between gap-4 p-4"><div><p className="font-medium">{invitation.email}</p><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, invitationStatusKeys[invitation.status])} · {withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_EXPIRES"), "expiresAt", invitation.expiresAt)}</p></div>{invitation.status === "pending" && <Button size="sm" variant="outline" disabled={invitationWritePending || pending || forbidden || !onRevokeInvitation} onClick={() => requestRevokeConfirmation(invitation)}>{frontendText(locale, "ADMIN_INVITATION_REVOKE")}</Button>}</CardContent></Card>)
-            : <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_LIST_EMPTY")}</p>}
-        </div>}
-    </section>
+    <Tabs defaultValue="members" className="flex flex-col lg:min-h-0 lg:flex-1">
+      <TabsList wrapperClassName="shrink-0">
+        <TabsTrigger value="members">{frontendText(locale, "ADMIN_MEMBERS_TITLE")}</TabsTrigger>
+        <TabsTrigger value="invitations">{frontendText(locale, "ADMIN_INVITATION_LIST_TITLE")}</TabsTrigger>
+      </TabsList>
+      <TabsContent value="members" className="flex flex-col lg:min-h-0 lg:flex-1">
+        <DataTable
+          locale={locale}
+          rows={members}
+          rowId={(member) => member.id}
+          ariaLabel={frontendText(locale, "ADMIN_MEMBERS_TITLE")}
+          loading={pending}
+          pagination={pagination}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+          emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_MEMBERS_EMPTY")} description={frontendText(locale, "ADMIN_MEMBERS_DESCRIPTION")} />}
+          hasMore={!!pagination && !pageError && pagination.page < pagination.totalPages}
+          onLoadMore={onLoadMore}
+          fill
+          className="lg:min-h-0 lg:flex-1"
+          rowHeight={64}
+          columns={[
+            { key: "email", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_EMAIL"), cellClassName: "whitespace-normal", cell: (member) => <p className="line-clamp-1 font-medium">{member.email || frontendText(locale, "ADMIN_EMAIL_UNAVAILABLE")}</p> },
+            { key: "role", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_ROLE"), width: "160px", cell: (member) => <span className="text-sm text-muted-foreground">{member.role || frontendText(locale, "ADMIN_ROLE_UNAVAILABLE")}</span> },
+            { key: "status", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_STATUS"), width: "160px", cell: (member) => { const disabled = member.status === "disabled"; return <Badge variant={disabled ? "destructive" : member.status === "active" ? "success" : "secondary"}>{disabled ? frontendText(locale, "ADMIN_DISABLED") : member.status === "active" ? frontendText(locale, "ADMIN_ACTIVE") : frontendText(locale, "ADMIN_MEMBER_STATUS_UNAVAILABLE")}</Badge>; } },
+            { key: "actions", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_ACTIONS"), align: "right", width: "160px", cell: (member) => { const disabled = member.status === "disabled"; const itemPending = pending || pendingIds.includes(member.id); const mutable = member.role === "contributor" && (member.status === "active" || member.status === "disabled"); const actionLabel = disabled ? frontendText(locale, "ADMIN_ENABLE") : frontendText(locale, "ADMIN_DISABLE"); const target = member.email || member.id; return mutable ? <Button aria-label={`${actionLabel} ${target}`} size="sm" variant="outline" disabled={itemPending || forbidden || !onStatusChange} onClick={() => requestStatusConfirmation(member)}>{actionLabel}</Button> : null; } },
+          ]}
+        />
+      </TabsContent>
+      <TabsContent value="invitations" className="flex min-h-0 flex-col lg:flex-1 lg:overflow-y-auto">
+        <section data-admin-invitations aria-busy={(invitationWritePending || invitationsPending) || undefined} className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">{frontendText(locale, "ADMIN_INVITATION_SECTION_TITLE")}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_SECTION_DESCRIPTION")}</p>
+            </div>
+            <Button type="button" data-member-add-open aria-haspopup="dialog" aria-expanded={addOpen} disabled={pending || invitationWritePending || forbidden || !onIssueInvitation} onClick={() => setAddOpen(true)}>{frontendText(locale, "ADMIN_INVITATION_ADD")}</Button>
+          </div>
+          {invitationError && <p role="alert" className="text-sm text-destructive">{invitationError}</p>}
+          {issuedInvitation && <Card data-invitation-code className="border-primary/40"><CardContent className="space-y-2 p-4">
+            <p className="text-sm font-medium">{withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_TITLE"), "email", issuedInvitation.email)}</p>
+            <div className="flex flex-wrap items-center gap-3"><code className="rounded-md bg-muted px-3 py-2 font-mono text-sm break-all">{issuedInvitation.code}</code><Button type="button" size="sm" variant="outline" onClick={() => void copyCode(issuedInvitation.code)}>{frontendText(locale, copied ? "ADMIN_INVITATION_CODE_COPIED" : "ADMIN_INVITATION_CODE_COPY")}</Button></div>
+            {copyFailed && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "ADMIN_INVITATION_CODE_COPY_FAILED")}</p>}
+            <p className="text-xs text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_CODE_ONCE_NOTE")}</p>
+            <p className="text-xs text-muted-foreground">{withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_EXPIRES"), "expiresAt", issuedInvitation.expiresAt)}</p>
+          </CardContent></Card>}
+          {invitationsError
+            ? <div role="alert" className="space-y-2 text-sm text-destructive"><p>{invitationsError}</p>{onLoadInvitationsRetry && <Button type="button" variant="outline" disabled={invitationWritePending} onClick={onLoadInvitationsRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</div>
+            : <div className="space-y-2"><h3 className="text-sm font-medium">{frontendText(locale, "ADMIN_INVITATION_LIST_TITLE")}</h3>
+              {invitations.length ? invitations.map((invitation) => <Card key={invitation.id}><CardContent className="flex items-center justify-between gap-4 p-4"><div><p className="font-medium">{invitation.email}</p><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, invitationStatusKeys[invitation.status])} · {withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_EXPIRES"), "expiresAt", invitation.expiresAt)}</p></div>{invitation.status === "pending" && <Button size="sm" variant="outline" disabled={invitationWritePending || pending || forbidden || !onRevokeInvitation} onClick={() => requestRevokeConfirmation(invitation)}>{frontendText(locale, "ADMIN_INVITATION_REVOKE")}</Button>}</CardContent></Card>)
+                : <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_LIST_EMPTY")}</p>}
+            </div>}
+        </section>
+      </TabsContent>
+    </Tabs>
       </>}
   </section>
     <Dialog open={addOpen} onOpenChange={(next) => { if (!next) setAddOpen(false); }}>

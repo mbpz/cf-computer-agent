@@ -1,8 +1,21 @@
 "use client";
 // beui.dev/components/motion/tabs
+//
+// §17 controlled-localization patches (docs/product/2026-10-17-beui-full-adoption-matrix.md):
+//   2. attribute passthrough — `Tabs` forwards rest props onto the layout root
+//      and `TabsContent` forwards rest props (id/role/aria-*/data-*/hidden host)
+//      onto whichever panel it renders. The `frontend/components/ui/tabs.tsx`
+//      adapter needs `aria-controls`/`aria-labelledby`/`aria-orientation`/
+//      `data-state` on those nodes to keep the repository tab contract
+//      (`test/unit/frontend-tabs.test.tsx`). Animation, layout projection,
+//      scroll/edge controls and hidden-panel mounting are unchanged.
+//   4. callbacks — none added; `onValueChange` and trigger `onClick`
+//      (preventDefault aware) already carry the selection contract.
+// Landing-page consumer (`frontend/pages/workbench-landing/public-workbench-page.tsx:114`)
+// passes the same props as before; both patches are additive.
 
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
-import { cancelFrame, frame, motion, MotionConfig, useReducedMotion, type Transition } from "motion/react";
+import { cancelFrame, frame, motion, MotionConfig, useReducedMotion, type HTMLMotionProps, type Transition } from "motion/react";
 import {
   createContext,
   useCallback,
@@ -53,6 +66,7 @@ export function Tabs({
   variant = "pill",
   children,
   className,
+  ...props
 }: {
   defaultValue?: string;
   value?: string;
@@ -60,7 +74,7 @@ export function Tabs({
   variant?: Variant;
   children: ReactNode;
   className?: string;
-}) {
+} & Omit<HTMLMotionProps<"div">, "onChange" | "defaultValue">) {
   const [internal, setInternal] = useState(defaultValue ?? "");
   const layoutId = useId();
   const reduce = useReducedMotion();
@@ -84,7 +98,7 @@ export function Tabs({
             inside fixed/scrolled containers it would replay scroll offsets as
             movement. The pill only ever travels within the list, so scoping
             projection to the Tabs wrapper is always correct. */}
-        <motion.div layoutRoot className={className}>
+        <motion.div layoutRoot className={className} {...props}>
           {children}
         </motion.div>
       </TabsCtx.Provider>
@@ -355,7 +369,7 @@ export function TabsTrigger({
   );
 }
 
-export function TabsContent({ value, children, className }: { value: string; children: ReactNode; className?: string }) {
+export function TabsContent({ value, children, className, ...props }: { value: string; children: ReactNode; className?: string } & Omit<HTMLMotionProps<"div">, "children">) {
   const { value: current } = useTabs();
   const reduce = useReducedMotion();
   const active = current === value;
@@ -364,13 +378,14 @@ export function TabsContent({ value, children, className }: { value: string; chi
   // tech, instead of being dropped from the DOM.
   if (!active) {
     return (
-      <div hidden className={className}>
+      <motion.div {...props} hidden className={className}>
         {children}
-      </div>
+      </motion.div>
     );
   }
   return (
     <motion.div
+      {...props}
       key={value}
       initial={{ opacity: 0, y: reduce ? 0 : 4 }}
       animate={{ opacity: 1, y: 0 }}

@@ -3642,6 +3642,16 @@
         "frontend/components/motion/table/table-menu.tsx:86:15",
         "frontend/components/motion/table/table-menu.tsx:90:15",
         "frontend/components/motion/table/table-menu.tsx:103:19",
+        "frontend/components/motion/tabs.tsx:101:9",
+        "frontend/components/motion/tabs.tsx:174:5",
+        "frontend/components/motion/tabs.tsx:240:9",
+        "frontend/components/motion/tabs.tsx:244:7",
+        "frontend/components/motion/tabs.tsx:256:9",
+        "frontend/components/motion/tabs.tsx:267:9",
+        "frontend/components/motion/tabs.tsx:293:7",
+        "frontend/components/motion/tabs.tsx:340:7",
+        "frontend/components/motion/tabs.tsx:381:7",
+        "frontend/components/motion/tabs.tsx:387:5",
         "frontend/components/ui/alert.tsx:57:5",
         "frontend/components/ui/alert.tsx:66:3",
         "frontend/components/ui/alert.tsx:73:3",
@@ -3677,6 +3687,10 @@
         "frontend/components/ui/select.tsx:16:135",
         "frontend/components/ui/select.tsx:19:113",
         "frontend/components/ui/skeleton.tsx:18:3",
+        "frontend/components/ui/tabs.tsx:67:5",
+        "frontend/components/ui/tabs.tsx:73:10",
+        "frontend/components/ui/tabs.tsx:103:10",
+        "frontend/components/ui/tabs.tsx:121:10",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
         "frontend/lib/list-mode.ts:19:3",
         "frontend/lib/use-create-draft.tsx:55:5",
@@ -3686,28 +3700,30 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/admin/members-page.tsx:124:16",
-        "frontend/pages/admin/members-page.tsx:125:5",
-        "frontend/pages/admin/members-page.tsx:132:159",
-        "frontend/pages/admin/members-page.tsx:134:29",
-        "frontend/pages/admin/members-page.tsx:134:195",
-        "frontend/pages/admin/members-page.tsx:135:52",
-        "frontend/pages/admin/members-page.tsx:135:275",
-        "frontend/pages/admin/members-page.tsx:136:5",
-        "frontend/pages/admin/members-page.tsx:155:530",
-        "frontend/pages/admin/members-page.tsx:159:299",
-        "frontend/pages/admin/members-page.tsx:160:27",
-        "frontend/pages/admin/members-page.tsx:163:166",
-        "frontend/pages/admin/members-page.tsx:164:24",
-        "frontend/pages/admin/members-page.tsx:169:11",
-        "frontend/pages/admin/members-page.tsx:169:128",
-        "frontend/pages/admin/members-page.tsx:171:483",
-        "frontend/pages/admin/members-page.tsx:177:5",
-        "frontend/pages/admin/members-page.tsx:178:7",
-        "frontend/pages/admin/members-page.tsx:182:11",
-        "frontend/pages/admin/members-page.tsx:185:11",
-        "frontend/pages/admin/members-page.tsx:186:11",
-        "frontend/pages/admin/members-page.tsx:190:5"
+        "frontend/pages/admin/members-page.tsx:125:16",
+        "frontend/pages/admin/members-page.tsx:126:5",
+        "frontend/pages/admin/members-page.tsx:133:159",
+        "frontend/pages/admin/members-page.tsx:135:29",
+        "frontend/pages/admin/members-page.tsx:135:195",
+        "frontend/pages/admin/members-page.tsx:136:52",
+        "frontend/pages/admin/members-page.tsx:136:275",
+        "frontend/pages/admin/members-page.tsx:139:9",
+        "frontend/pages/admin/members-page.tsx:140:9",
+        "frontend/pages/admin/members-page.tsx:143:9",
+        "frontend/pages/admin/members-page.tsx:162:534",
+        "frontend/pages/admin/members-page.tsx:173:13",
+        "frontend/pages/admin/members-page.tsx:175:31",
+        "frontend/pages/admin/members-page.tsx:178:170",
+        "frontend/pages/admin/members-page.tsx:179:28",
+        "frontend/pages/admin/members-page.tsx:184:15",
+        "frontend/pages/admin/members-page.tsx:184:132",
+        "frontend/pages/admin/members-page.tsx:186:487",
+        "frontend/pages/admin/members-page.tsx:194:5",
+        "frontend/pages/admin/members-page.tsx:195:7",
+        "frontend/pages/admin/members-page.tsx:199:11",
+        "frontend/pages/admin/members-page.tsx:202:11",
+        "frontend/pages/admin/members-page.tsx:203:11",
+        "frontend/pages/admin/members-page.tsx:207:5"
       ],
       "unresolvedSymbols": [
         "frontend/components/motion/combobox.tsx#Combobox",
@@ -5518,13 +5534,14 @@
         "frontend/components/motion/select.tsx:247:5",
         "frontend/components/motion/select.tsx:386:5",
         "frontend/components/motion/select.tsx:448:7",
-        "frontend/components/motion/tabs.tsx:160:5",
-        "frontend/components/motion/tabs.tsx:226:9",
-        "frontend/components/motion/tabs.tsx:230:7",
-        "frontend/components/motion/tabs.tsx:242:9",
-        "frontend/components/motion/tabs.tsx:253:9",
-        "frontend/components/motion/tabs.tsx:279:7",
-        "frontend/components/motion/tabs.tsx:326:7",
+        "frontend/components/motion/tabs.tsx:101:9",
+        "frontend/components/motion/tabs.tsx:174:5",
+        "frontend/components/motion/tabs.tsx:240:9",
+        "frontend/components/motion/tabs.tsx:244:7",
+        "frontend/components/motion/tabs.tsx:256:9",
+        "frontend/components/motion/tabs.tsx:267:9",
+        "frontend/components/motion/tabs.tsx:293:7",
+        "frontend/components/motion/tabs.tsx:340:7",
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
         "frontend/pages/workbench-landing/public-workbench-page.tsx:67:5",
@@ -5690,10 +5707,6 @@
     "frontend/components/shell/context-rail.tsx:40:37",
     "frontend/components/shell/context-rail.tsx:47:60",
     "frontend/components/shell/context-rail.tsx:48:5",
-    "frontend/components/ui/tabs.tsx:35:93",
-    "frontend/components/ui/tabs.tsx:40:10",
-    "frontend/components/ui/tabs.tsx:66:10",
-    "frontend/components/ui/tabs.tsx:74:10",
     "frontend/features/environments/account-network-owner.mjs:23:3",
     "frontend/features/environments/account-network-owner.mjs:45:3",
     "frontend/features/environments/account-network.mjs:16:5",
@@ -24100,10 +24113,32 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/motion/tabs.tsx:160:5",
+      "id": "frontend/components/motion/tabs.tsx:101:9",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "Tabs",
+      "line": 101,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "motion.div",
+      "attributes": {
+        "layoutRoot": "true",
+        "className": "className"
+      },
+      "handlers": {},
+      "spreads": [
+        "props"
+      ],
+      "labels": [
+        "children"
+      ],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:174:5",
       "path": "frontend/components/motion/tabs.tsx",
       "owner": "TabsList",
-      "line": 160,
+      "line": 174,
       "column": 5,
       "kind": "listener",
       "tag": "viewport.addEventListener",
@@ -24126,10 +24161,10 @@
       ]
     },
     {
-      "id": "frontend/components/motion/tabs.tsx:226:9",
+      "id": "frontend/components/motion/tabs.tsx:240:9",
       "path": "frontend/components/motion/tabs.tsx",
       "owner": "TabsList",
-      "line": 226,
+      "line": 240,
       "column": 9,
       "kind": "jsx",
       "tag": "button",
@@ -24156,10 +24191,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/motion/tabs.tsx:230:7",
+      "id": "frontend/components/motion/tabs.tsx:244:7",
       "path": "frontend/components/motion/tabs.tsx",
       "owner": "TabsList",
-      "line": 230,
+      "line": 244,
       "column": 7,
       "kind": "jsx",
       "tag": "motion.div",
@@ -24180,10 +24215,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/motion/tabs.tsx:242:9",
+      "id": "frontend/components/motion/tabs.tsx:256:9",
       "path": "frontend/components/motion/tabs.tsx",
       "owner": "TabsList",
-      "line": 242,
+      "line": 256,
       "column": 9,
       "kind": "jsx",
       "tag": "div",
@@ -24203,10 +24238,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/motion/tabs.tsx:253:9",
+      "id": "frontend/components/motion/tabs.tsx:267:9",
       "path": "frontend/components/motion/tabs.tsx",
       "owner": "TabsList",
-      "line": 253,
+      "line": 267,
       "column": 9,
       "kind": "jsx",
       "tag": "button",
@@ -24233,10 +24268,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/motion/tabs.tsx:279:7",
+      "id": "frontend/components/motion/tabs.tsx:293:7",
       "path": "frontend/components/motion/tabs.tsx",
       "owner": "TabsTrigger",
-      "line": 279,
+      "line": 293,
       "column": 7,
       "kind": "jsx",
       "tag": "button",
@@ -24266,10 +24301,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/motion/tabs.tsx:326:7",
+      "id": "frontend/components/motion/tabs.tsx:340:7",
       "path": "frontend/components/motion/tabs.tsx",
       "owner": "TabsTrigger",
-      "line": 326,
+      "line": 340,
       "column": 7,
       "kind": "jsx",
       "tag": "button",
@@ -24295,6 +24330,64 @@
         {
           "condition": "variant === \"underline\"",
           "source": "if (variant === \"underline\") {\n    return (\n      <button\n        {...props}\n        type=\"button\"\n        role=\"tab\"\n        aria-selected={active}\n        onClick={(event) => {\n          onClick?.(event);\n          if (!event.defaultPrevented) setValue(value);\n        }}\n        className={cn(\n          \"relative isolate px-3 pb-2.5 pt-1 -mb-px text-sm font-medium transition-colors min-h-[44px] inline-flex items-center whitespace-nowrap shrink-0\",\n          active ? \"text-foreground\" : \"text-muted-foreground hover:text-foreground\",\n          className,\n        )}\n      >\n        {children}\n        {active ? (\n        <motion.span\n          layoutId={layoutId}\n          layout\n          className={cn(\n            \"absolute bottom-0 left-0 right-0 h-px bg-primary\",\n            indicatorClassName,\n          )}\n        />\n        ) : null}\n      </button>\n    );\n  }"
+        }
+      ]
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:381:7",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "TabsContent",
+      "line": 381,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "motion.div",
+      "attributes": {
+        "hidden": "true",
+        "className": "className"
+      },
+      "handlers": {},
+      "spreads": [
+        "props"
+      ],
+      "labels": [
+        "children"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "!active",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/tabs.tsx:387:5",
+      "path": "frontend/components/motion/tabs.tsx",
+      "owner": "TabsContent",
+      "line": 387,
+      "column": 5,
+      "kind": "jsx",
+      "tag": "motion.div",
+      "attributes": {
+        "key": "value",
+        "initial": "{ opacity: 0, y: reduce ? 0 : 4 }",
+        "animate": "{ opacity: 1, y: 0 }",
+        "transition": "{ duration: 0.18, ease: EASE_OUT }",
+        "className": "cn(\"mt-4\", className)"
+      },
+      "handlers": {},
+      "spreads": [
+        "props"
+      ],
+      "labels": [
+        "children"
+      ],
+      "context": [],
+      "earlyReturns": [
+        {
+          "condition": "!active",
+          "source": "if (!active) {\n    return (\n      <motion.div {...props} hidden className={className}>\n        {children}\n      </motion.div>\n    );\n  }"
         }
       ]
     },
@@ -34572,17 +34665,22 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/tabs.tsx:35:93",
+      "id": "frontend/components/ui/tabs.tsx:67:5",
       "path": "frontend/components/ui/tabs.tsx",
       "owner": "Tabs",
-      "line": 35,
-      "column": 93,
+      "line": 67,
+      "column": 5,
       "kind": "jsx",
-      "tag": "div",
+      "tag": "MotionTabs",
       "attributes": {
+        "value": "value",
+        "onValueChange": "setValue",
+        "variant": "variant",
         "className": "className"
       },
-      "handlers": {},
+      "handlers": {
+        "onValueChange": "setValue"
+      },
       "spreads": [
         "props"
       ],
@@ -34593,21 +34691,21 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/tabs.tsx:40:10",
+      "id": "frontend/components/ui/tabs.tsx:73:10",
       "path": "frontend/components/ui/tabs.tsx",
       "owner": "TabsList",
-      "line": 40,
+      "line": 73,
       "column": 10,
       "kind": "jsx",
-      "tag": "div",
+      "tag": "MotionTabsList",
       "attributes": {
-        "role": "\"tablist\"",
         "aria-orientation": "context.orientation",
-        "className": "cn(\"inline-flex items-center gap-1 rounded-md bg-muted p-1\", className)",
-        "onKeyDown": "(event) => {\n    onKeyDown?.(event);\n    if (event.defaultPrevented) return;\n    const action = tabsKeyAction(event.key, context.orientation);\n    if (!action) return;\n    const root = event.currentTarget;\n    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>(\"[role='tab']:not([aria-disabled='true'])\"));\n    if (!tabs.length) return;\n    event.preventDefault();\n    const current = tabs.indexOf(document.activeElement as HTMLButtonElement);\n    const index = action === \"first\" ? 0 : action === \"last\" ? tabs.length - 1 : (current + (action === \"next\" ? 1 : -1) + tabs.length) % tabs.length;\n    const next = tabs[index];\n    if (!next) return;\n    context.setValue(next.dataset.tabValue || \"\");\n    next.focus();\n  }"
+        "wrapperClassName": "wrapperClassName",
+        "className": "className",
+        "onKeyDown": "(event) => {\n      onKeyDown?.(event);\n      if (event.defaultPrevented) return;\n      const action = tabsKeyAction(event.key, context.orientation);\n      if (!action) return;\n      const root = event.currentTarget;\n      const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>(\"[role='tab']:not([aria-disabled='true'])\"));\n      if (!tabs.length) return;\n      event.preventDefault();\n      const current = tabs.indexOf(document.activeElement as HTMLButtonElement);\n      const index = action === \"first\" ? 0 : action === \"last\" ? tabs.length - 1 : (current + (action === \"next\" ? 1 : -1) + tabs.length) % tabs.length;\n      const next = tabs[index];\n      if (!next) return;\n      context.setValue(next.dataset.tabValue || \"\");\n      next.focus();\n    }"
       },
       "handlers": {
-        "onKeyDown": "(event) => {\n    onKeyDown?.(event);\n    if (event.defaultPrevented) return;\n    const action = tabsKeyAction(event.key, context.orientation);\n    if (!action) return;\n    const root = event.currentTarget;\n    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>(\"[role='tab']:not([aria-disabled='true'])\"));\n    if (!tabs.length) return;\n    event.preventDefault();\n    const current = tabs.indexOf(document.activeElement as HTMLButtonElement);\n    const index = action === \"first\" ? 0 : action === \"last\" ? tabs.length - 1 : (current + (action === \"next\" ? 1 : -1) + tabs.length) % tabs.length;\n    const next = tabs[index];\n    if (!next) return;\n    context.setValue(next.dataset.tabValue || \"\");\n    next.focus();\n  }"
+        "onKeyDown": "(event) => {\n      onKeyDown?.(event);\n      if (event.defaultPrevented) return;\n      const action = tabsKeyAction(event.key, context.orientation);\n      if (!action) return;\n      const root = event.currentTarget;\n      const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>(\"[role='tab']:not([aria-disabled='true'])\"));\n      if (!tabs.length) return;\n      event.preventDefault();\n      const current = tabs.indexOf(document.activeElement as HTMLButtonElement);\n      const index = action === \"first\" ? 0 : action === \"last\" ? tabs.length - 1 : (current + (action === \"next\" ? 1 : -1) + tabs.length) % tabs.length;\n      const next = tabs[index];\n      if (!next) return;\n      context.setValue(next.dataset.tabValue || \"\");\n      next.focus();\n    }"
       },
       "spreads": [
         "props"
@@ -34617,30 +34715,25 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/tabs.tsx:66:10",
+      "id": "frontend/components/ui/tabs.tsx:103:10",
       "path": "frontend/components/ui/tabs.tsx",
       "owner": "TabsTrigger",
-      "line": 66,
+      "line": 103,
       "column": 10,
       "kind": "jsx",
-      "tag": "button",
+      "tag": "MotionTabsTrigger",
       "attributes": {
-        "type": "\"button\"",
-        "role": "\"tab\"",
+        "value": "value",
+        "disabled": "disabled",
         "id": "tabId",
-        "data-tab-value": "value",
         "aria-controls": "panelId",
-        "aria-selected": "active ? \"true\" : \"false\"",
         "aria-disabled": "disabled ? \"true\" : undefined",
         "tabIndex": "active ? 0 : -1",
-        "disabled": "disabled",
-        "className": "cn(\"rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground max-lg:min-h-11\", className)",
-        "onClick": "(event) => { onClick?.(event); if (!event.defaultPrevented && !disabled) context.setValue(value); }",
-        "data-state": "active ? \"active\" : \"inactive\""
+        "data-tab-value": "value",
+        "data-state": "active ? \"active\" : \"inactive\"",
+        "className": "cn(\"max-lg:min-h-11 focus-visible:ring-2 focus-visible:ring-ring\", className)"
       },
-      "handlers": {
-        "onClick": "(event) => { onClick?.(event); if (!event.defaultPrevented && !disabled) context.setValue(value); }"
-      },
+      "handlers": {},
       "spreads": [
         "props"
       ],
@@ -34649,21 +34742,21 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/ui/tabs.tsx:74:10",
+      "id": "frontend/components/ui/tabs.tsx:121:10",
       "path": "frontend/components/ui/tabs.tsx",
       "owner": "TabsContent",
-      "line": 74,
+      "line": 121,
       "column": 10,
       "kind": "jsx",
-      "tag": "div",
+      "tag": "MotionTabsContent",
       "attributes": {
+        "value": "value",
         "role": "\"tabpanel\"",
         "id": "`${context.baseId}-panel-${suffix}`",
         "aria-labelledby": "`${context.baseId}-tab-${suffix}`",
         "tabIndex": "0",
-        "hidden": "!active",
         "data-state": "active ? \"active\" : \"inactive\"",
-        "className": "cn(\"mt-3 outline-none focus-visible:ring-2 focus-visible:ring-ring\", className)"
+        "className": "cn(\"outline-none focus-visible:ring-2 focus-visible:ring-ring\", className)"
       },
       "handlers": {},
       "spreads": [
@@ -42814,10 +42907,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:124:16",
+      "id": "frontend/pages/admin/members-page.tsx:125:16",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 124,
+      "line": 125,
       "column": 16,
       "kind": "jsx",
       "tag": "FilterSelect",
@@ -42846,10 +42939,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:125:5",
+      "id": "frontend/pages/admin/members-page.tsx:126:5",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 125,
+      "line": 126,
       "column": 5,
       "kind": "jsx",
       "tag": "AppliedFilters",
@@ -42876,10 +42969,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:132:159",
+      "id": "frontend/pages/admin/members-page.tsx:133:159",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 132,
+      "line": 133,
       "column": 159,
       "kind": "jsx",
       "tag": "Button",
@@ -42922,10 +43015,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:134:29",
+      "id": "frontend/pages/admin/members-page.tsx:135:29",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 134,
+      "line": 135,
       "column": 29,
       "kind": "jsx",
       "tag": "div",
@@ -42964,10 +43057,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:134:195",
+      "id": "frontend/pages/admin/members-page.tsx:135:195",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 134,
+      "line": 135,
       "column": 195,
       "kind": "jsx",
       "tag": "Button",
@@ -43010,10 +43103,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:135:52",
+      "id": "frontend/pages/admin/members-page.tsx:136:52",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 135,
+      "line": 136,
       "column": 52,
       "kind": "jsx",
       "tag": "div",
@@ -43051,10 +43144,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:135:275",
+      "id": "frontend/pages/admin/members-page.tsx:136:275",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 135,
+      "line": 136,
       "column": 275,
       "kind": "jsx",
       "tag": "Button",
@@ -43103,11 +43196,85 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:136:5",
+      "id": "frontend/pages/admin/members-page.tsx:139:9",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 136,
-      "column": 5,
+      "line": 139,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "TabsTrigger",
+      "attributes": {
+        "value": "\"members\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_MEMBERS_TITLE\")"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "section",
+          "attributes": {
+            "aria-hidden": "validConfirmation || addOpen || undefined"
+          }
+        },
+        {
+          "kind": "branch",
+          "expression": "loading",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "error",
+          "branch": "false"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/admin/members-page.tsx:140:9",
+      "path": "frontend/pages/admin/members-page.tsx",
+      "owner": "MembersPage",
+      "line": 140,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "TabsTrigger",
+      "attributes": {
+        "value": "\"invitations\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_INVITATION_LIST_TITLE\")"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "section",
+          "attributes": {
+            "aria-hidden": "validConfirmation || addOpen || undefined"
+          }
+        },
+        {
+          "kind": "branch",
+          "expression": "loading",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "error",
+          "branch": "false"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/admin/members-page.tsx:143:9",
+      "path": "frontend/pages/admin/members-page.tsx",
+      "owner": "MembersPage",
+      "line": 143,
+      "column": 9,
       "kind": "jsx",
       "tag": "DataTable",
       "attributes": {
@@ -43125,7 +43292,7 @@
         "fill": "true",
         "className": "\"lg:min-h-0 lg:flex-1\"",
         "rowHeight": "64",
-        "columns": "[\n        { key: \"email\", header: frontendText(locale, \"ADMIN_MEMBERS_COLUMN_EMAIL\"), cellClassName: \"whitespace-normal\", cell: (member) => <p className=\"line-clamp-1 font-medium\">{member.email || frontendText(locale, \"ADMIN_EMAIL_UNAVAILABLE\")}</p> },\n        { key: \"role\", header: frontendText(locale, \"ADMIN_MEMBERS_COLUMN_ROLE\"), width: \"160px\", cell: (member) => <span className=\"text-sm text-muted-foreground\">{member.role || frontendText(locale, \"ADMIN_ROLE_UNAVAILABLE\")}</span> },\n        { key: \"status\", header: frontendText(locale, \"ADMIN_MEMBERS_COLUMN_STATUS\"), width: \"160px\", cell: (member) => { const disabled = member.status === \"disabled\"; return <Badge variant={disabled ? \"destructive\" : member.status === \"active\" ? \"success\" : \"secondary\"}>{disabled ? frontendText(locale, \"ADMIN_DISABLED\") : member.status === \"active\" ? frontendText(locale, \"ADMIN_ACTIVE\") : frontendText(locale, \"ADMIN_MEMBER_STATUS_UNAVAILABLE\")}</Badge>; } },\n        { key: \"actions\", header: frontendText(locale, \"ADMIN_MEMBERS_COLUMN_ACTIONS\"), align: \"right\", width: \"160px\", cell: (member) => { const disabled = member.status === \"disabled\"; const itemPending = pending || pendingIds.includes(member.id); const mutable = member.role === \"contributor\" && (member.status === \"active\" || member.status === \"disabled\"); const actionLabel = disabled ? frontendText(locale, \"ADMIN_ENABLE\") : frontendText(locale, \"ADMIN_DISABLE\"); const target = member.email || member.id; return mutable ? <Button aria-label={`${actionLabel} ${target}`} size=\"sm\" variant=\"outline\" disabled={itemPending || forbidden || !onStatusChange} onClick={() => requestStatusConfirmation(member)}>{actionLabel}</Button> : null; } },\n      ]"
+        "columns": "[\n            { key: \"email\", header: frontendText(locale, \"ADMIN_MEMBERS_COLUMN_EMAIL\"), cellClassName: \"whitespace-normal\", cell: (member) => <p className=\"line-clamp-1 font-medium\">{member.email || frontendText(locale, \"ADMIN_EMAIL_UNAVAILABLE\")}</p> },\n            { key: \"role\", header: frontendText(locale, \"ADMIN_MEMBERS_COLUMN_ROLE\"), width: \"160px\", cell: (member) => <span className=\"text-sm text-muted-foreground\">{member.role || frontendText(locale, \"ADMIN_ROLE_UNAVAILABLE\")}</span> },\n            { key: \"status\", header: frontendText(locale, \"ADMIN_MEMBERS_COLUMN_STATUS\"), width: \"160px\", cell: (member) => { const disabled = member.status === \"disabled\"; return <Badge variant={disabled ? \"destructive\" : member.status === \"active\" ? \"success\" : \"secondary\"}>{disabled ? frontendText(locale, \"ADMIN_DISABLED\") : member.status === \"active\" ? frontendText(locale, \"ADMIN_ACTIVE\") : frontendText(locale, \"ADMIN_MEMBER_STATUS_UNAVAILABLE\")}</Badge>; } },\n            { key: \"actions\", header: frontendText(locale, \"ADMIN_MEMBERS_COLUMN_ACTIONS\"), align: \"right\", width: \"160px\", cell: (member) => { const disabled = member.status === \"disabled\"; const itemPending = pending || pendingIds.includes(member.id); const mutable = member.role === \"contributor\" && (member.status === \"active\" || member.status === \"disabled\"); const actionLabel = disabled ? frontendText(locale, \"ADMIN_ENABLE\") : frontendText(locale, \"ADMIN_DISABLE\"); const target = member.email || member.id; return mutable ? <Button aria-label={`${actionLabel} ${target}`} size=\"sm\" variant=\"outline\" disabled={itemPending || forbidden || !onStatusChange} onClick={() => requestStatusConfirmation(member)}>{actionLabel}</Button> : null; } },\n          ]"
       },
       "handlers": {
         "onPageChange": "onPageChange",
@@ -43156,11 +43323,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:155:530",
+      "id": "frontend/pages/admin/members-page.tsx:162:534",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 155,
-      "column": 530,
+      "line": 162,
+      "column": 534,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -43204,11 +43371,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:159:299",
+      "id": "frontend/pages/admin/members-page.tsx:173:13",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 159,
-      "column": 299,
+      "line": 173,
+      "column": 13,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -43255,11 +43422,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:160:27",
+      "id": "frontend/pages/admin/members-page.tsx:175:31",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 160,
-      "column": 27,
+      "line": 175,
+      "column": 31,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -43305,11 +43472,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:163:166",
+      "id": "frontend/pages/admin/members-page.tsx:178:170",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 163,
-      "column": 166,
+      "line": 178,
+      "column": 170,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -43359,11 +43526,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:164:24",
+      "id": "frontend/pages/admin/members-page.tsx:179:28",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 164,
-      "column": 24,
+      "line": 179,
+      "column": 28,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -43414,11 +43581,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:169:11",
+      "id": "frontend/pages/admin/members-page.tsx:184:15",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 169,
-      "column": 11,
+      "line": 184,
+      "column": 15,
       "kind": "jsx",
       "tag": "div",
       "attributes": {
@@ -43462,11 +43629,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:169:128",
+      "id": "frontend/pages/admin/members-page.tsx:184:132",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 169,
-      "column": 128,
+      "line": 184,
+      "column": 132,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -43521,11 +43688,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:171:483",
+      "id": "frontend/pages/admin/members-page.tsx:186:487",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 171,
-      "column": 483,
+      "line": 186,
+      "column": 487,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -43589,10 +43756,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:177:5",
+      "id": "frontend/pages/admin/members-page.tsx:194:5",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 177,
+      "line": 194,
       "column": 5,
       "kind": "jsx",
       "tag": "Dialog",
@@ -43609,10 +43776,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:178:7",
+      "id": "frontend/pages/admin/members-page.tsx:195:7",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 178,
+      "line": 195,
       "column": 7,
       "kind": "jsx",
       "tag": "DialogContent",
@@ -43639,10 +43806,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:182:11",
+      "id": "frontend/pages/admin/members-page.tsx:199:11",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 182,
+      "line": 199,
       "column": 11,
       "kind": "jsx",
       "tag": "Input",
@@ -43673,10 +43840,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:185:11",
+      "id": "frontend/pages/admin/members-page.tsx:202:11",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 185,
+      "line": 202,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -43705,10 +43872,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:186:11",
+      "id": "frontend/pages/admin/members-page.tsx:203:11",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 186,
+      "line": 203,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -43736,10 +43903,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:190:5",
+      "id": "frontend/pages/admin/members-page.tsx:207:5",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 190,
+      "line": 207,
       "column": 5,
       "kind": "jsx",
       "tag": "ConfirmAction",
