@@ -57,7 +57,7 @@ export function FilterSelect({ label, ariaLabel, value, options, onChange, disab
         </ComboboxTrigger>
         {/* Enum filters can be long (the audit action list runs past 40 entries): the panel
             scrolls instead of running the viewport. */}
-        <ComboboxContent inline className={alignEnd ? "left-auto right-0" : undefined}>
+        <ComboboxContent inline className={cn("min-w-0", alignEnd && "left-auto right-0")}>
           <ComboboxList className="max-h-80 overflow-y-auto">
             {options.map((option) => <ComboboxItem key={option.value} value={option.value}>{option.label}</ComboboxItem>)}
           </ComboboxList>

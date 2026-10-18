@@ -19,12 +19,11 @@
 
 ## 验证
 
-- `npm run typecheck:frontend`、`npm run typecheck`。
-- `npm test`（smoke + unit + worker）：5642+ 通过；仅 `test/worker/m1-publication.test.ts` 两条与 KB-011 新回滚契约不一致的过时用例失败，已用 stash 在基线上复跑确认同为失败，与本次改造无关。
-- `npm run build:ui`、`npm run verify:wcag`、`npm run verify:i18n`、`npm run verify:delivery-status`。
-- 生产部署后按 1280/375 抽查改动页（首页、统计、admin、tasks、reader、landing），记录 `scrollWidth - clientWidth = 0` 与关键交互。
-- 2026-10-18 生产扫站（zh-CN 会话）：31 个登录后入口 × 1280/375 全部 `scrollWidth - clientWidth = 0`、无 console error；深色 `.dark` 抽查首页/knowledge/tasks/admin/analytics/messages 亦无溢出。
-- 未覆盖：英文切换（会改写账户偏好）、768 中间档、逐页焦点顺序录像与真实 AT 语音。
+- `npm run typecheck`、`npm run build:ui`、`npm run verify:wcag`、`npm run verify:i18n`、`npm run verify:delivery-status`、`node scripts/frontend-legacy-audit.mjs` 全部通过。
+- `npm test`（smoke + unit + worker）最终 **78 files / 1310 tests 全绿**。为此对齐了两条 KB-011 契约的过时用例（回到当前修订返回 409；并发生命周期写入时指针/任务/审计原子不变），并删除引用已删 `ui/dropdown-menu` 的死测试。
+- 生产部署 `c26761ae-886d-4cc9-b361-41a3a15c6af8` 后扫站：33 个入口 × 375/768/1280 × zh/en × 浅/深 = **396 次 `scrollWidth - clientWidth = 0`**；焦点探针 33 路线均可 Tab 进入 skip link → 侧栏 → 内容。
+- 修复：768 宽下筛选下拉面板（audit/assets/members）溢出 80px；`filter-select` 关闭态去掉 `min-w-56`，靠近右缘时改为右对齐。
+- 空/错态由 focused tests 覆盖，生产未做故障注入；真实屏幕阅读器语音仍未作为本记录范围。
 
 ## 边界
 
