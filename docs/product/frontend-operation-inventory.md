@@ -2168,8 +2168,8 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 37:7 FilterSelect | Combobox  | onValueChange=onChange | disabled=disabled |
-| 44:19 FilterSelect | button  | type="button" | disabled=disabled; {"kind":"container","tag":"Combobox","attributes":{"disabled":"disabled"}} |
+| 41:7 FilterSelect | Combobox  | onValueChange=onChange; onOpenChange=(next) =&gt; { if (next) { const bounds = rootRef.current?.getBoundingClientRect(); setAlignEnd(Boolean(bounds && bounds… | disabled=disabled; open=open |
+| 54:19 FilterSelect | button  | type="button" | disabled=disabled; {"kind":"container","tag":"Combobox","attributes":{"disabled":"disabled","open":"open"}} |
 
 ## frontend/components/ui/focus-scope.tsx
 
