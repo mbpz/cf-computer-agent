@@ -118,7 +118,8 @@
 - [x] 4.2 `npm run typecheck && npm run build:ui && npm run verify:wcag && npm run verify:i18n && npm test`。
   - 已完成：typecheck / build / wcag / i18n / delivery-status / legacy audit 全通过；`npm test` 最终 **78 files / 1310 tests + smoke 全绿**。
 - [x] 4.3 生产 signed-browser 扫全部 34 个入口 × 375/768/1280 × 浅/深色 × 中/英；记录 `scrollWidth - clientWidth = 0`、焦点顺序、空/错态。
-  - 已完成：33 个入口 × 3 视口（375/768/1280）× 中/英 × 浅/深 = **396 次测量全部 `scrollWidth - clientWidth = 0`**（`.dark` 由页面注入，zh/en 由 localStorage 覆盖）；焦点探针 33 路线均能 Tab 进入 skip link → 侧栏 → 内容，无 body 焦点陷阱。修复了 768 下筛选下拉面板的 80px 溢出（`filter-select` 面板去掉关闭态 `min-w-56`，靠近右缘时右对齐）。
+  - 已完成：管理员 33 入口 + contributor 22 入口，各 3 视口（375/768/1280）× 中/英 × 浅/深，共 **660 次测量全部 `scrollWidth - clientWidth = 0`**（`.dark` 由页面注入，zh/en 由 localStorage 覆盖）。焦点探针 33 路线均能 Tab 进入 skip link → 侧栏 → 内容，无 body 焦点陷阱。修复了 768 下筛选下拉面板的 80px 溢出（`filter-select` 面板去掉关闭态 `min-w-56`，靠近右缘时右对齐）。
+  - contributor 使用一次性邀请创建，扫站后已禁用并删除隔离 profile；管理员与 contributor 两套矩阵均由生产 signed-browser 执行。
   - 空/错态由 focused 测试覆盖，未在生产做故障注入。
 - [x] 4.4 更新 `docs/product/2026-10-17-beui-full-adoption-matrix.md` 与交付总账证据；发布/验收状态按实际部署与浏览器证据单独记录。
   - 已完成：清单/矩阵/总账边界与 `docs/operations/evidence/2026-10-18-beui-page-adoption.md` 同步；不提升发布/验收状态。
