@@ -63,9 +63,10 @@
 ## 2026-10-18 复核：产物类型矩阵与测验缺陷
 
 - 通过 omp Chrome relay 在同一验收条目（用户真实登录会话）生产验证 `mindmap` 与 `flashcards`：生成后已保存列表出现 `打开 … 保存的思维导图/记忆卡`，`GET /artifacts/:id` 回读 `kind`、payload 与引用一致；随后按 id 删除，最终 `artifacts=[]`。
-- `quiz` 两次尝试均落在 `data-derivative-status=unavailable-degraded`；直接 `POST /api/knowledge/:id/quiz` 返回 503 `AI_UNAVAILABLE`，耗时 11.3s。
-- 根因（不是超时）：`src/ai/quiz-service.ts` 复用了 `APP_CONFIG.maxAnswerTokens=700`。用同一模型与同一 schema 复现，700 tokens 时 `finish_reason=length`，JSON 在 1652 字符处截断；`max_tokens=2200` 时 `finish_reason=stop` 并返回 6 题（约 35s）。
-- 本地修复（未部署）：测验专用 2,400 tokens 与 60s 超时，`test/unit/quiz-service.test.ts` 断言请求不再使用 700 上限。部署后需重跑生产测验，才能恢复 KB-013 的验收状态。
+- `quiz` 在生产稳定失败：UI 落在 `data-derivative-status=unavailable-degraded`，直接 `POST /api/knowledge/:id/quiz` 返回 503 `AI_UNAVAILABLE`，耗时 9–11s。
+- 诊断（临时诊断字段已移除）：Workers AI binding 在 464 字符处停止，`finish_reason=stop`、`completion_tokens=234`；把 `max_tokens` 从 2400 提到 8000、关闭 `strict`、移除 `response_format` 都未修复（移除后 913 字符，仍非完整 JSON）。同一份用户提示（373 字符）通过 REST 直连同一模型可完成并返回 1 题，但 `prompt_tokens` 为 370（binding 为 358），说明 binding 与 REST 不是同一条模型/分词路径。
+- 修复与部署：测验固定使用 `@cf/meta/llama-4-scout-17b-16e-instruct`，保留 2,400 tokens / 60s 预算；部署 `dc7487fb-d51b-46b3-a06b-cb22ab269e15` 后，生产 UI 生成 `quiz` 成功（200，1 题，1 条引用），`GET /artifacts/:id` 回读 `kind=quiz`，随后按 id 删除，`artifacts=[]`。
+- 更正：初版把根因写成"共享 700-token 截断"只对 REST 路径成立，不是 binding 的根因；上一条保留该更正。
 
 ## 边界
 
