@@ -20,10 +20,11 @@
 ## 验证
 
 - `npm run typecheck:frontend`、`npm run typecheck`。
-- `npm test`（smoke + unit + worker）在最终提交上通过。
+- `npm test`（smoke + unit + worker）：5642+ 通过；仅 `test/worker/m1-publication.test.ts` 两条与 KB-011 新回滚契约不一致的过时用例失败，已用 stash 在基线上复跑确认同为失败，与本次改造无关。
 - `npm run build:ui`、`npm run verify:wcag`、`npm run verify:i18n`、`npm run verify:delivery-status`。
 - 生产部署后按 1280/375 抽查改动页（首页、统计、admin、tasks、reader、landing），记录 `scrollWidth - clientWidth = 0` 与关键交互。
-- 未覆盖：深色主题与中英文全路由矩阵仍按既有边界单独验收，本记录不宣称完成。
+- 2026-10-18 生产扫站（zh-CN 会话）：31 个登录后入口 × 1280/375 全部 `scrollWidth - clientWidth = 0`、无 console error；深色 `.dark` 抽查首页/knowledge/tasks/admin/analytics/messages 亦无溢出。
+- 未覆盖：英文切换（会改写账户偏好）、768 中间档、逐页焦点顺序录像与真实 AT 语音。
 
 ## 边界
 

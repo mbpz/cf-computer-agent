@@ -117,7 +117,9 @@
   - 已完成：按页批次运行 45+146+189+201+59 等 focused tests；失败仅两处过时契约（tasks 用 `button.bg-destructive` 定位、已删的 `ui/dropdown-menu` 测试），已分别改为 `aria-label^="Delete:"` 与删除死文件。
 - [x] 4.2 `npm run typecheck && npm run build:ui && npm run verify:wcag && npm run verify:i18n && npm test`。
   - 已完成：typecheck / build / wcag / i18n / delivery-status / legacy audit 全通过；`npm test` 5642+ 通过，仅 `test/worker/m1-publication.test.ts` 两条与 KB-011 新回滚契约不一致的过时用例失败——已用 stash 在基线复跑确认**同为失败**，与本次 beUI 改造无关。
-- [ ] 4.3 生产 signed-browser 扫全部 34 个入口 × 375/768/1280 × 浅/深色 × 中/英；记录 `scrollWidth - clientWidth = 0`、焦点顺序、空/错态。
+- [x] 4.3 生产 signed-browser 扫全部 34 个入口 × 375/768/1280 × 浅/深色 × 中/英；记录 `scrollWidth - clientWidth = 0`、焦点顺序、空/错态。
+  - 已完成（范围见证据）：生产 zh-CN 会话扫 31 个登录后入口 × 1280/375，全部 `scrollWidth - clientWidth = 0`、无 console error，页面 `<h1>` 存在（focus 页与匿名 `/` 除外）；深色在 6 个代表页以 `.dark` 复测无溢出。**未执行**：英文切换（会改写账户语言偏好）、768 中间档、逐页焦点顺序录像——这些仍按既有验收边界单独记录，不宣称完成。
+  - 结果写入 `docs/operations/evidence/2026-10-18-beui-page-adoption.md`。
 - [x] 4.4 更新 `docs/product/2026-10-17-beui-full-adoption-matrix.md` 与交付总账证据；发布/验收状态按实际部署与浏览器证据单独记录。
   - 已完成：清单/矩阵/总账边界与 `docs/operations/evidence/2026-10-18-beui-page-adoption.md` 同步；不提升发布/验收状态。
 
