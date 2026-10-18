@@ -46,7 +46,7 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 2026-09-17 Personal Work Graph 后端合同闸门已本地完成：成员隔离、scope/root/depth/types/limit 解析、cursor 绑定、时间线投影、有界 loader 与 citation 授权均通过 focused unit/worker、TypeScript、smoke 和 delivery-status contract。`nextCursor` 延续字段与 malformed/cross-linked citation fixture 保留为 minor deferred；发布、生产与 signed browser acceptance 仍 pending，未执行远程迁移、部署或 push。
 
-总账成熟度：`atoms=99`; `implementation=done:79,partial:8,pending:12,n/a:0`; `verification=done:83,partial:3,pending:13,n/a:0`; `release=done:0,partial:29,pending:70,n/a:0`; `acceptance=done:1,partial:9,pending:89,n/a:0`
+总账成熟度：`atoms=99`; `implementation=done:79,partial:8,pending:12,n/a:0`; `verification=done:83,partial:3,pending:13,n/a:0`; `release=done:0,partial:30,pending:69,n/a:0`; `acceptance=done:1,partial:10,pending:88,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
 
