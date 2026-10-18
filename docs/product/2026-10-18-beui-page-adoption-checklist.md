@@ -30,9 +30,12 @@
 
 ## Phase 1 — 只读列表与看板（低风险快赢）
 
-- [ ] 1.1 `/admin` 仪表盘：趋势列表 → `composition-chart`（submissions vs publications）；活动流 → `notification-stack`；指标沿用 `number-ticker`。保留 `data-trend-point/-day/-submissions/-publications`。
-- [ ] 1.2 `/admin/roles`：`DataTable` 已是 beUI `table`；只做 `table-async` 语义审计与空态统一，不改行结构。
-- [ ] 1.3 `/admin/audit`：同上（只读分页表）；`filter-select`/`applied-filters` 已适配，无内容改造。
+- [x] 1.1 `/admin` 仪表盘：趋势列表 → `composition-chart`（submissions vs publications）；活动流 → `notification-stack`；指标沿用 `number-ticker`。保留 `data-trend-point/-day/-submissions/-publications`。
+  - 已完成：趋势改 `composition-chart`（bar，逐日混合占比 + tooltip），精确数值保留在 `sr-only` 表中供读屏与测试；活动流改用 `shared-layout-bg` 行悬停高亮（`notification-stack` 语义是收件箱，不套用）。`data-activity-*` 与 `data-trend-*` 全部保留。
+- [x] 1.2 `/admin/roles`：`DataTable` 已是 beUI `table`；只做 `table-async` 语义审计与空态统一，不改行结构。
+  - 审计完成：分页/空态/加载均由 `DataTable` + `PageState` 承担，无手写 table。
+- [x] 1.3 `/admin/audit`：同上（只读分页表）；`filter-select`/`applied-filters` 已适配，无内容改造。
+  - 审计完成：`filter-select` 是 beUI combobox 适配层，筛选 chip 与分页保持。
 - [ ] 1.4 `/admin/assets`：容量 `<dl>` → `donut-chart`（used/max）；预览卡 → `preview-rail`。保留 `data-asset-capacity-*`、`data-asset-preview`。
 - [ ] 1.5 `/admin/duplicates`：候选 vs 正本对比 → `preview-rail`（并排高亮）；行操作沿用 `overflow-actions`。
 - [ ] 1.6 `/admin/knowledge/trash`：清理动作 → `hold-action-button`；写入结果 → `notification-stack`。保留 `data-trash-feedback`、typed-id 门禁。

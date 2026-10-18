@@ -3,6 +3,8 @@ import { PageHeader } from "../../components/ui/page-header";
 import { ButtonLink } from "../../components/motion/button/base";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { NumberTicker } from "../../components/motion/number-ticker";
+import { CompositionChart } from "../../components/charts/composition-chart";
+import { SharedLayoutBg } from "../../components/motion/shared-layout-bg";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminDashboardActivityEvent, AdminDashboardTrendPoint } from "../../lib/admin-dashboard-data";
 
@@ -66,12 +68,17 @@ export function AdminDashboardPage({ metrics, trend, activity, locale, links, on
             <Button variant="outline" size="sm" data-dashboard-trend-retry onClick={onRetryTrend}>{frontendText(locale, "COMMON_RETRY")}</Button>
           </div>}
           {trend.kind === "ready" && <div data-page-state={trendTotal === 0 ? "empty" : "ready"}>
-            <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-              <span>{frontendText(locale, "ADMIN_SUMMARY_TREND_DAY")}</span>
-              <span>{frontendText(locale, "ADMIN_SUMMARY_TREND_SUBMISSIONS")}</span>
-              <span>{frontendText(locale, "ADMIN_SUMMARY_TREND_PUBLICATIONS")}</span>
-            </div>
-            <ul className="mt-1 space-y-1">{trend.items.map((point) => <li key={point.day} data-trend-point={point.day} className="grid grid-cols-3 gap-2 text-sm tabular-nums">
+            {trendTotal > 0 && <CompositionChart
+              view="bar"
+              periods={trend.items.map((point) => point.day)}
+              series={[
+                { id: "submissions", name: frontendText(locale, "ADMIN_SUMMARY_TREND_SUBMISSIONS"), color: "#2563eb", values: trend.items.map((point) => point.submissions) },
+                { id: "publications", name: frontendText(locale, "ADMIN_SUMMARY_TREND_PUBLICATIONS"), color: "#059669", values: trend.items.map((point) => point.publications) },
+              ]}
+              label={frontendText(locale, "ADMIN_SUMMARY_TREND_TITLE")}
+              formatValue={(value) => value.toLocaleString(locale?.locale === "zh-CN" ? "zh-CN" : "en")}
+            />}
+            <ul className="sr-only">{trend.items.map((point) => <li key={point.day} data-trend-point={point.day} className="grid grid-cols-3 gap-2 text-sm tabular-nums">
               <span data-trend-day>{point.day}</span>
               <span data-trend-submissions>{point.submissions}</span>
               <span data-trend-publications>{point.publications}</span>
@@ -91,7 +98,7 @@ export function AdminDashboardPage({ metrics, trend, activity, locale, links, on
             <Button variant="outline" size="sm" data-dashboard-activity-retry onClick={onRetryActivity}>{frontendText(locale, "COMMON_RETRY")}</Button>
           </div>}
           {activity.kind === "ready" && <div data-page-state={activity.items.length === 0 ? "empty" : "ready"}>
-            <ul>{activity.items.map((event) => <li key={event.id} data-activity-event={event.id} className="space-y-0.5 border-b py-2 text-sm last:border-b-0">
+            <SharedLayoutBg as="ul" className="space-y-1" inset={10}>{activity.items.map((event) => <li key={event.id} data-activity-event={event.id} className="space-y-0.5 px-2 py-2 text-sm">
               <p data-activity-action className="font-medium">{event.action}</p>
               <p className="text-xs text-muted-foreground">
                 <span data-activity-resource>{event.resourceType}{event.resourceId === null ? "" : ` · ${event.resourceId}`}</span>
@@ -100,7 +107,7 @@ export function AdminDashboardPage({ metrics, trend, activity, locale, links, on
                 {" · "}
                 <span data-activity-time>{event.createdAt}</span>
               </p>
-            </li>)}</ul>
+            </li>)}</SharedLayoutBg>
             {activity.items.length === 0 && <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_SUMMARY_ACTIVITY_EMPTY")}</p>}
           </div>}
         </CardContent>
