@@ -231,14 +231,14 @@ test("the application shell keeps account actions out of the topbar and removes 
   assert.doesNotMatch(locale, /SHELL_FREE_TIER_LABEL/u);
 });
 
-test("invitation management and code login keep both locale catalogs in parity", async () => {
+test("password login and registration keep both locale catalogs in parity", async () => {
   const locale = await localeSource();
-  const prefixes = ["ADMIN_INVITATION", "LOGIN"];
+  const prefixes = ["LOGIN"];
   const en = catalogEntriesForPrefixes(locale, "en", prefixes);
   const zh = catalogEntriesForPrefixes(locale, '"zh-CN"', prefixes);
-  assert.ok(en.size >= 40, `expected invitation and login copy in the en catalog, found ${en.size}`);
-  assert.ok(en.has("ADMIN_INVITATION_SECTION_TITLE") && en.has("LOGIN_CODE_SUBMIT"));
-  assert.deepEqual([...zh.keys()].sort(), [...en.keys()].sort(), "invitation/login keys differ between en and zh-CN");
+  assert.ok(en.size >= 25, `expected password login copy in the en catalog, found ${en.size}`);
+  assert.ok(en.has("LOGIN_PASSWORD_SUBMIT") && en.has("LOGIN_REGISTER_SUBMIT"));
+  assert.deepEqual([...zh.keys()].sort(), [...en.keys()].sort(), "login keys differ between en and zh-CN");
   for (const [key, value] of en) {
     assert.deepEqual(placeholderNames(zh.get(key)), placeholderNames(value), `placeholder mismatch for ${key}`);
   }

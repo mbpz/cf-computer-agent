@@ -143,7 +143,9 @@ describe("public knowledge studio authentication boundary", () => {
       await waitForApp(() => Boolean(app.container.querySelector("[data-login-page]")));
       expect(app.container.querySelector("[data-workbench-landing]")).toBeNull();
       expect(app.container.querySelector("#login-email")).not.toBeNull();
-      expect(app.container.textContent).toContain("Send code");
+      expect(app.container.querySelector("#login-password")).not.toBeNull();
+      expect(app.container.textContent).toContain("Sign in with email");
+      expect(app.container.textContent).toContain("Create an account");
       expect(app.container.textContent).toContain("Continue with GitHub");
     } finally { await app.unmount(); }
   });

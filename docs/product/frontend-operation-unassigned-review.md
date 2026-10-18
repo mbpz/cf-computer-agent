@@ -61,8 +61,11 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 181 项，但 A01 
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:236:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:263:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:234:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:261:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/components/motion/tabs.tsx:381:7` | unmounted-ui | `TabsContent` 的 value 不是当前选中页 | 面板保持挂载但 `hidden`；当前没有页面组合 `TabsContent`，载荷保留供后续/测试使用。 |
+| `frontend/components/motion/tabs.tsx:387:5` | unmounted-ui | `TabsContent` 的 value 是当前选中页 | 面板以 `motion.div` 显示并播放轻量入场；当前没有页面组合 `TabsContent`。 |
+| `frontend/components/ui/tabs.tsx:121:10` | unmounted-ui | `ui/tabs` 的 `TabsContent` 适配器被组合 | 转发 `value`/`className`/`children` 到已安装载荷；当前没有页面组合该适配器。 |
 
 ## `frontend/components/agents/agent-activity/activity-row.tsx`（0）
 
@@ -579,7 +582,9 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `238158f4f260c682fad7be96dac3c002a78f4d56fcb03dd0ba77d2f9acdcdf2a`
+- `frontend/app.tsx`: `30a90ba3e6e37b0c6230fae5a6733eb2fafb0aa60770827be5fb582d77495e3f`
+- `frontend/components/motion/tabs.tsx`: `f5510f664873212342f07a95f072d22922eb427940f4a485c6ca3123f0f6b86c`
+- `frontend/components/ui/tabs.tsx`: `a3ec44982431b22612da1bd8af511e98eb170d6c3f8380254e213acdc38adb9b`
 - `frontend/components/agent/answer-panel.tsx`: `d604801b674d21ef059a70f79cc367326ceccf60ba5e400c4d3480eca1e63586`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/agents/message-bubble.tsx`: `0fe1347583c44eee1d69e84aae80e2ea2097334ddc55a29469775616e0b7b43d`
@@ -630,7 +635,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/lib/use-toast.tsx`: `0b4f788931e28f9eb5d87d8d84414568187c35736094130452ad272891b950a8`
 - `frontend/lib/workspace-location.ts`: `8e5fd84e7f611784f46a05016808cb6c2a5a7b507d4be306ae490afcac31bd35`
 - `frontend/main.tsx`: `9ba6f443d0f7da037015cb7f1d1b3444777989588c66429d3630a0c5fb500391`
-- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `b618f593d164001e1765fc55e6e428c960357a83927fec5a70a6e3996b48ef82`
+- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `53e2a016b52688c382f1ed3ab1313a1ecd46eeb20ff4372e3f389f102ee542a8`
 - `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `19b47d756dd823d4934eacd11d364bb3602b7f8fa09e74e4e5db588affdd761b`
 - `frontend/pages/workbench-landing/workbench-scene.tsx`: `bd5def5c4ef683d0ae1422e26180a8feeca67de86ef4ccbea79b3605cb3fef5a`
 - `frontend/public/sw.js`: `703801312e5cccba0cf162837b97878185fe03e18cdc2182c2fc4c5215923bad`

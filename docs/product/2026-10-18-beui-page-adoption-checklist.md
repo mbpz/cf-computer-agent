@@ -102,8 +102,8 @@
   - 审计保留：文件列表已用 beUI `Table`；导入面板是冻结文件的“同意上传 + 审核预览 + 服务端解析/回执”状态机，通用 uploader 会绕过 consent 与 `data-import-*`/`data-vm-asset-*`。
 - [x] 3.8 `/` 公开落地页：场景导览进度 → `status-bar`（步骤状态）或 `scroll-progress`；来源引用 → `citations`；抽屉统一走 `ui/sheet`。场景与文案不动。
   - 已完成：引导面板改 `ui/sheet`（保留 `role=dialog`、`aria-label`、无 `aria-labelledby`、焦点恢复与全部 `data-*`）；审计白名单已移除，全仓不再有直接 overlay 导入。
-- [x] 3.9 `/login`：错误块 → `alert`（destructive）；邮箱验证码 → `@beui/otp-input`；GitHub 按钮沿用 `button-base`；保留 `#login-email` 与 OTP 门禁。
-  - 已完成：错误块改 `Alert`；邮箱步骤保留 `#login-email`，验证码步骤使用落盘的 `[data-otp-input]` 与 `StatefulButton`。
+- [x] 3.9 `/login`：错误块 → `alert`（destructive）；邮箱 + 密码登录/自注册沿用 `Input` 与 `StatefulButton`；GitHub 按钮沿用 `button-base`；保留 `#login-email`、`#login-password` 与 `#login-password-confirm` 门禁。
+  - 已完成：错误块改 `Alert`；登录与注册共用同一表单，切换按钮为 `[data-login-mode-toggle]`；不再有 OTP 输入。
 - [x] 3.10 `/settings`：语言选择从原生 `select` → `select`/`combobox`；主题切换保留 `aria-pressed` 分段按钮。
   - 审计保留：`settings-page.test.tsx` 依赖原生 `<select>` 的 change 事件与 `data-settings-save` 契约，换 `motion/select` 会破坏测试与表单语义。
 - [x] 3.11 404 / forbidden / coming-soon：统一 `not-found-glitch` 状态面 + `animated-badge`；补 `data-page-state` 与页面 `<h1>`。

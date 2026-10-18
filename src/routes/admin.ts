@@ -9,7 +9,7 @@ import type { MembersRepository } from "../members/repository";
 import type { MembersService } from "../members/service";
 import type { Member, MemberStatus } from "../members/types";
 import { parseNumberedPageRequest, parsePageRequest } from "../pagination";
-import { pageRequest, parseJsonRequestAs, record, strictRecord, stringValue } from "./member";
+import { pageRequest, record, strictRecord, stringValue } from "./member";
 import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
 import type { TagsService } from "../tags/service";
@@ -21,15 +21,12 @@ import type { DuplicateCandidatesService } from "../duplicates/service";
 import type { MaintenanceControlService } from "../maintenance/control";
 import type { CapacitySnapshot, Snapshot } from "../maintenance/contracts";
 import { AdminOperationReceipts, operationRequestHash, recordedOperation } from "../operations/receipts";
-import type { MemberInvitationsService } from "../member-invitations/service";
-import type { MemberInvitation } from "../member-invitations/types";
 
 export interface AdminRouteServices {
   assets: AssetService;
   audit: AuditRepository;
   members: MembersService;
   memberRecords: MembersRepository;
-  invitations: MemberInvitationsService;
   spaces: SpacesService;
   submissions: SubmissionsService;
   tags: TagsService;
@@ -380,39 +377,6 @@ export async function routeAdminApi(
     return jsonResponse({ member: memberDto(member) }, 200, context.requestId);
   }
 
-  if (url.pathname === "/api/admin/member-invitations") {
-    requireCapability(principal, "member:manage");
-    if (request.method === "GET") {
-      requireNoQuery(url);
-      return jsonResponse({ items: (await services.invitations.list()).map(invitationDto) }, 200, context.requestId);
-    }
-    if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
-    const actor = requireAdminMember(principal);
-    requireNoQuery(url);
-    const input = strictRecord(
-      await parseJsonRequestAs(request, "INVITATION_REQUEST_INVALID"),
-      ["email"],
-      "INVITATION_REQUEST_INVALID",
-    );
-    if (typeof input.email !== "string") {
-      throw new AppError("INVITATION_REQUEST_INVALID", "Invitation request is invalid", 400);
-    }
-    const invitation = await services.invitations.issue(actor.memberId, { email: input.email });
-    return jsonResponse({ invitation: invitationDto(invitation) }, 201, context.requestId);
-  }
-
-  const invitationRevoke = /^\/api\/admin\/member-invitations\/([^/]+)\/revoke$/.exec(url.pathname);
-  if (invitationRevoke) {
-    requireCapability(principal, "member:manage");
-    if (request.method !== "POST") return methodNotAllowed("POST", context);
-    const actor = requireAdminMember(principal);
-    requireNoQuery(url);
-    const revoked = await services.invitations.revoke(actor.memberId, decodePathId(invitationRevoke[1]!));
-    return jsonResponse({
-      invitation: { id: revoked.id, email: revoked.email, status: revoked.status },
-    }, 200, context.requestId);
-  }
-
   if (url.pathname === "/api/admin/spaces") {
     requireCapability(principal, "space:manage");
     if (request.method === "GET") return jsonResponse(await services.spaces.listSpaces(pageRequest(url)), 200, context.requestId);
@@ -584,22 +548,6 @@ function parseAnalyticsDays(url: URL): number {
   const days = Number(raw);
   if (!Number.isSafeInteger(days) || days < 1 || days > 31) throw new AppError("ANALYTICS_RANGE_INVALID", "Analytics range must be between 1 and 31 days", 400);
   return days;
-}
-
-function invitationDto(invitation: MemberInvitation): {
-  id: string;
-  email: string;
-  status: MemberInvitation["status"];
-  createdAt: string;
-  expiresAt: string;
-} {
-  return {
-    id: invitation.id,
-    email: invitation.email,
-    status: invitation.status,
-    createdAt: invitation.createdAt,
-    expiresAt: invitation.expiresAt,
-  };
 }
 
 function memberDto(member: Member): Omit<Member, "identitySubject"> {

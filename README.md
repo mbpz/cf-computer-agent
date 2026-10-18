@@ -27,7 +27,7 @@ The ledger records implementation, verification, release, and acceptance separat
 ## Product and architecture
 
 ```text
-Browser UI → GitHub OAuth / emailed one-time code → Worker API → D1 control plane
+Browser UI → GitHub OAuth / email + password → Worker API → D1 control plane
                                       └─ personal Durable Object
                                          ├─ source and note storage
                                          ├─ search index
@@ -36,7 +36,7 @@ Browser UI → GitHub OAuth / emailed one-time code → Worker API → D1 contro
 
 The knowledge-base core supports text, Markdown, and code submissions; controlled review and publication; owner-scoped lists; FTS search; reader/citation retrieval; and grounded answers. The workbench provides the shell, navigation, settings, Tasks, task-backed Boards, recipient-owned Notifications, contextual Messages, and admin areas for members, roles, menus, spaces, audit, and analytics. Collaboration correctness requires only Workers, D1, and static assets; it does not require Queue, KV, Durable Objects, WebSockets, or a paid scheduler.
 
-GitHub OAuth provides a primary, verified identity; `ALLOWED_MEMBER_EMAILS` authorizes login before any D1 member lookup. D1 then governs the member record, hashed session, role, active/disabled status, and capability. Email sign-in adds a second verified entry: a six-digit code is sent only when the address is allowlisted, already has an active member row, or has a pending administrator-issued invitation. Codes are HMAC-hashed at rest, expire after ten minutes, allow five attempts and are single-use. Automation requires both an HMAC signature and `APP_TOKEN`; it is limited to compatible legacy smoke routes and never acts as an administrator.
+GitHub OAuth provides a primary, verified identity; `ALLOWED_MEMBER_EMAILS` authorizes login before any D1 member lookup. D1 then governs the member record, hashed session, role, active/disabled status, and capability. New members can also self-register with an email and password. Passwords are stored as salted PBKDF2-SHA256 records, login locks an account for fifteen minutes after five failures, and registration is rate-limited per IP. Password accounts are always contributors. Registration rejects any email already owned by a member (including a GitHub-only member), so a public form cannot claim an existing account; there is no email verification and no self-service password reset. Automation requires both an HMAC signature and `APP_TOKEN`; it is limited to compatible legacy smoke routes and never acts as an administrator.
 
 `@cloudflare/computer` remains Preview, so it is kept behind storage boundaries rather than treated as a production-stability guarantee.
 
@@ -52,7 +52,7 @@ rtk npm run dev
 
 `rtk npm run check` is the full local gate: contracts, smoke, unit and Workerd tests, generated types, TypeScript, and a Wrangler dry build. It is evidence for local verification only. Use the [production environment handbook](./docs/operations/production-environment-handbook.md) for configuration, migration, deployment, rollback, and recorded release evidence.
 
-Do not place `GITHUB_OAUTH_CLIENT_SECRET`, `BOOTSTRAP_ADMIN_EMAIL`, `ALLOWED_MEMBER_EMAILS`, `AUTOMATION_SECRET`, `RESEND_API_KEY`, or `APP_TOKEN` in the repository, `wrangler.jsonc`, `.dev.vars`, command lines, logs, screenshots, or chat. Keep production values as Worker secrets. Email sign-in uses Resend: set `RESEND_API_KEY` and verify the sender domain (`login@memory.crgmhrc.asia`, or change `APP_CONFIG.emailLoginFrom`) in Resend. No other new variable is required.
+Do not place `GITHUB_OAUTH_CLIENT_SECRET`, `BOOTSTRAP_ADMIN_EMAIL`, `ALLOWED_MEMBER_EMAILS`, `AUTOMATION_SECRET`, or `APP_TOKEN` in the repository, `wrangler.jsonc`, `.dev.vars`, command lines, logs, screenshots, or chat. Keep production values as Worker secrets.
 
 ## Deployment and operations
 

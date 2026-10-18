@@ -24,7 +24,6 @@
 | `AUTOMATION_CLIENT_ID` | 本地随机生成 | 标识生产 smoke/自动化客户端 | 是，非敏感标识 |
 | `AUTOMATION_SECRET` | 本地 CSPRNG 生成 | HMAC-SHA256 请求签名 | 是，敏感 |
 | `APP_TOKEN` | 本地 CSPRNG 生成 | Bearer 第二因子和 legacy API 校验 | 是，敏感 |
-| `RESEND_API_KEY` | Resend 控制台 API Key | 发送邮箱登录验证码 | 是，敏感 |
 | `WECHAT_APP_ID` | 微信开放平台网站应用 | 微信 QR OAuth 应用标识 | 否 |
 | `WECHAT_APP_SECRET` | 微信开放平台网站应用生成 | 服务端 code 换取 access token | 是，敏感 |
 | `ALLOWED_WECHAT_SUBJECTS` | `wechat:<unionid/openid>` 逗号分隔 | 微信登录白名单 | 否 |
@@ -38,14 +37,13 @@
 
 若暂时不使用微信，无需添加任何微信 Secret；若要启用，按下文创建网站应用并将四项变量作为 Worker Secret 发布后再验证。
 
-### 邮箱验证码登录
+### 邮箱密码自注册
 
-登录页默认提供“邮箱验证码”路径。发信通过 Resend HTTP API；只新增 `RESEND_API_KEY` 一个 Secret，发件地址固定为 `login@memory.crgmhrc.asia`（`src/config.ts`），验证码 HMAC 使用既有 `APP_TOKEN`。
+登录页提供邮箱 + 密码登录和自注册，**不发送邮件，也不需要新增 Secret 或变量**。密码使用 PBKDF2-SHA256（100,000 次、随机盐）存储；连续 5 次失败锁定 15 分钟；注册按客户端 IP 每小时最多 5 个账户。
 
-1. 在 Resend 验证发件域名（默认 `memory.crgmhrc.asia`；如改用其他发件地址，同时修改 `APP_CONFIG.emailLoginFrom`）。
-2. 创建只允许发送邮件的 API Key，并作为 Worker Secret 发布：`npx wrangler secret put RESEND_API_KEY`。
-3. 应用 `0077_email_login_codes.sql` 后部署。未应用迁移时验证码接口会因缺少表而失败；未配置 `RESEND_API_KEY` 时返回 `503 EMAIL_LOGIN_UNAVAILABLE`。
-4. 验证码只发送给已授权地址：`ALLOWED_MEMBER_EMAILS` 中的邮箱、已有 active 成员，或管理员签发的 pending 邀请。接口对未授权地址也返回 `202`，不以响应区分地址是否存在。
+1. 应用 `0078_password_auth.sql` 后部署。该迁移增加密码列与 canonical email 唯一索引，并删除旧验证码/邀请表。
+2. 注册是开放的：任何未占用的邮箱都可以创建 contributor 账户；已有成员（包括 GitHub 成员）的邮箱不能注册。
+3. 没有邮箱验证与自助找回密码。忘记密码需要管理员处理；管理员仍可禁用账户。
 
 ## 2. 创建 GitHub OAuth App
 

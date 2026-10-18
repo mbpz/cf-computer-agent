@@ -15,13 +15,13 @@ describe("production 0032 catch-up rehearsal (synthetic data only)", () => {
   });
 
   it("preserves old member/task/tag/role rows and can repeat the tracked upgrade", async () => {
-    const members = (await env.DB.prepare("SELECT * FROM members ORDER BY id").all()).results;
+    const members = (await env.DB.prepare("SELECT id, access_sub, email, role, status, created_at, updated_at, last_seen_at FROM members ORDER BY id").all()).results;
     const roles = (await env.DB.prepare("SELECT * FROM roles ORDER BY id").all()).results;
     const tags = (await env.DB.prepare("SELECT * FROM task_tags ORDER BY task_id, tag").all()).results;
     const task = await env.DB.prepare("SELECT * FROM tasks WHERE id = 'catchup-task'").first();
 
     await applyD1Migrations(env.DB, MIGRATIONS);
-    expect((await env.DB.prepare("SELECT * FROM members ORDER BY id").all()).results).toEqual(members);
+    expect((await env.DB.prepare("SELECT id, access_sub, email, role, status, created_at, updated_at, last_seen_at FROM members ORDER BY id").all()).results).toEqual(members);
     expect((await env.DB.prepare("SELECT * FROM roles ORDER BY id").all()).results).toEqual(roles.map((row) => row.id === "role-admin" ? { ...row, allow_bits: "0x37ffff" } : row));
     expect((await env.DB.prepare("SELECT * FROM task_tags ORDER BY task_id, tag").all()).results).toEqual(tags);
     expect(await env.DB.prepare("SELECT * FROM tasks WHERE id = 'catchup-task'").first()).toEqual({ ...task, status_version: 0 });

@@ -25,7 +25,7 @@
   → 只能访问 legacy health/notes/search/chat，不能成为管理员
 ```
 
-D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 nonce；`KnowledgeBase` Durable Object 保存已发布笔记和索引。D1 migration 与 Durable Object `v1` 都只能向前兼容，不能靠删表、删数据或重置 DO 回滚。当前登录入口为 GitHub 与邮箱验证码；微信 OAuth 适配器暂不在前端开放。邮箱验证码通过 Resend 发信；需要 `RESEND_API_KEY` 并在 Resend 验证发件域名。未配置时该入口返回 `503 EMAIL_LOGIN_UNAVAILABLE`，GitHub 不受影响。
+D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 nonce；`KnowledgeBase` Durable Object 保存已发布笔记和索引。D1 migration 与 Durable Object `v1` 都只能向前兼容，不能靠删表、删数据或重置 DO 回滚。当前登录入口为 GitHub 与邮箱密码；微信 OAuth 适配器暂不在前端开放。邮箱密码账户可自行注册，密码以 PBKDF2-SHA256 加盐存储，连续失败 5 次锁定 15 分钟，注册按 IP 限流；GitHub 仍受 allowlist 限制。新方案不发送邮件，也没有自助找回密码。
 
 ## 2. 生产配置
 
@@ -40,7 +40,6 @@ D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 n
 | `AUTOMATION_CLIENT_ID` | 本地随机生成 | 标识自动化客户端；本身不是密码 |
 | `AUTOMATION_SECRET` | 本地 CSPRNG 独立生成 | HMAC-SHA256 请求签名 |
 | `APP_TOKEN` | 本地 CSPRNG 独立生成 | 自动化 Bearer 第二因子及 legacy API 校验 |
-| `RESEND_API_KEY` | Resend 控制台 API Key | 发送邮箱验证码；敏感 |
 | `WECHAT_APP_ID` | 微信开放平台已审核网站应用 | 微信 QR OAuth 应用标识 |
 | `WECHAT_APP_SECRET` | 微信开放平台网站应用生成 | 服务端 code exchange；敏感 |
 | `ALLOWED_WECHAT_SUBJECTS` | `wechat:<unionid/openid>` 逗号分隔 | 微信登录白名单 |
@@ -48,7 +47,7 @@ D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 n
 
 禁止把这些值写入仓库、`wrangler.jsonc`、`.dev.vars`、命令参数、URL、日志、截图或聊天。已经公开过的值必须轮换。
 
-邮箱验证码登录还需要 `0077_email_login_codes.sql`、`RESEND_API_KEY`，以及 Resend 中已验证的发件域名（发件地址固定为 `login@memory.crgmhrc.asia`，见 `src/config.ts`）。该迁移重建 `member_login_invitations`（去掉管理员转发码的列）并新建 `email_login_codes`；它只向前兼容，不能靠删除表回滚。发信失败会作废当次验证码；Resend 密钥或发件域名不可用时返回 `503 EMAIL_LOGIN_UNAVAILABLE`，其他发送失败返回可重试的 `503 EMAIL_LOGIN_DELIVERY_FAILED`。
+邮箱密码登录还需要 `0078_password_auth.sql`：为 `members` 增加密码哈希与登录锁定列，建立 canonical email 唯一索引，并删除已废弃的验证码/邀请表。该迁移只向前兼容；应用前需备份 D1。注册是开放的，现有邮箱（包括仅 GitHub 成员）不能被注册覆盖；忘记密码没有自助重置，只能由管理员禁用/处理。
 
 ## 3. GitHub OAuth App
 

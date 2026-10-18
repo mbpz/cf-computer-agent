@@ -12,8 +12,6 @@ const CANONICAL_ORIGIN = "https://memory.crgmhrc.asia";
 
 export const APP_CONFIG = {
   canonicalOrigin: CANONICAL_ORIGIN,
-  /** Fixed sender on the canonical domain; the Resend account must verify this domain. */
-  emailLoginFrom: `login@${new URL(CANONICAL_ORIGIN).hostname}`,
   githubOAuthCallbackUrl: `${CANONICAL_ORIGIN}/auth/github/callback`,
   githubApiVersion: "2022-11-28",
   githubOAuthUserAgent: "memory-garden-agent",

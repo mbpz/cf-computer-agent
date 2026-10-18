@@ -13,7 +13,6 @@ export async function sessionSnapshot(fetcher?: Fetcher): Promise<SessionSnapsho
 export interface AuthProviderCapabilities {
   github: boolean;
   wechat: boolean;
-  emailCode: boolean;
 }
 
 export async function authProviderCapabilities(): Promise<AuthProviderCapabilities> {
@@ -26,6 +25,6 @@ export async function authProviderCapabilities(): Promise<AuthProviderCapabiliti
   const payload: unknown = await response.json();
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("AUTH_PROVIDERS_INVALID");
   const value = payload as Record<string, unknown>;
-  if (typeof value.github !== "boolean" || typeof value.wechat !== "boolean" || typeof value.emailCode !== "boolean") throw new Error("AUTH_PROVIDERS_INVALID");
-  return { github: value.github, wechat: value.wechat, emailCode: value.emailCode };
+  if (typeof value.github !== "boolean" || typeof value.wechat !== "boolean") throw new Error("AUTH_PROVIDERS_INVALID");
+  return { github: value.github, wechat: value.wechat };
 }

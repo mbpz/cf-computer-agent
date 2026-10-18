@@ -24,7 +24,6 @@ describe("numbered admin routes", () => {
     browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2&pageSize=50");
     const requests: Array<{ url: string; signal?: AbortSignal }> = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).startsWith("/api/admin/member-invitations")) return Response.json({ items: [] });
       requests.push({ url: String(input), signal: init?.signal || undefined });
       const status = new URL(String(input), "https://app.test").searchParams.get("status") === "active" ? "active" : "disabled";
       return Response.json({ items: [{ id: `member-${status}`, email: "member@example.test", role: "contributor", status }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
@@ -676,7 +675,6 @@ function memberRequests() {
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     // These journeys probe member operations only; the invitation list loads
     // alongside the page, so answer it here to keep the request census unchanged.
-    if (String(input).startsWith("/api/admin/member-invitations")) return Promise.resolve(Response.json({ items: [] }));
     const pending = deferred<Response>();
     requests.push({ url: String(input), method: init?.method || "GET", body: init?.body, signal: init?.signal || undefined, pending });
     return pending.promise;

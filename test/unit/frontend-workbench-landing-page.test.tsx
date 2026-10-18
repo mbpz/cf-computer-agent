@@ -141,7 +141,7 @@ describe("public knowledge studio", () => {
     expect(html).toContain("体验知识之旅");
     expect(html).toContain('href="/login"');
     expect(html).not.toContain('href="/auth/github"');
-    expect(html).toContain("邀请制");
+    expect(html).toContain("使用邮箱和密码创建账户");
     expect(html).toContain("<picture ");
     expect(html).not.toContain("<canvas");
   });

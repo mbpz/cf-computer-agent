@@ -78,8 +78,8 @@ export function PublicWorkbenchPage({ locale }: { locale: LocaleRuntime }) {
   useEffect(() => syncDocumentLanguage(locale, document), [locale]);
   const text = (key: LandingCopyKey) => landingText(locale, key);
   const gated = (state.step === "capture" && !state.captured) || (state.step === "action" && !state.taskDone);
-  // The landing always routes to the sign-in page, which offers the emailed-code
-  // path and GitHub, and itself reports when either provider is unavailable.
+  // The landing always routes to the sign-in page, which offers email/password
+  // sign-in, self-registration and GitHub, and reports when GitHub is unavailable.
   const login = <ButtonLink variant="secondary" size="md" href="/login">{text("LOGIN")}</ButtonLink>;
 
   return <main data-public-workbench-page data-workbench-landing className="workbench-landing min-h-dvh bg-background text-foreground" lang={language}>

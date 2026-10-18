@@ -1,3 +1,5 @@
+> **已被取代（2026-10-18）：** 邮箱验证码/Resend 方案已改为邮箱密码自注册，相关代码与表已删除。本文保留为历史证据；当前行为见[密码自注册设计](../../superpowers/specs/2026-10-18-password-self-registration-design.md)和[本地证据](./2026-10-18-password-auth-local.md)。
+
 # 证据：邮箱验证码登录（本地实现、Workerd 与 React 验证）
 
 - 日期：2026-10-18

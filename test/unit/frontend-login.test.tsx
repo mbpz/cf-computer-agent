@@ -8,11 +8,17 @@ describe("login page", () => {
   it("renders GitHub login and keeps deferred WeChat login hidden", () => {
     const english = renderToStaticMarkup(<LoginPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />);
     expect(english).toContain("Continue with GitHub");
+    expect(english).toContain("Sign in with email");
+    expect(english).toContain("Create an account");
     expect(english).not.toContain("Scan with WeChat");
+    expect(english).not.toContain("verification code");
     expect(english).not.toContain("undefined");
     const chinese = renderToStaticMarkup(<LoginPage locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })} />);
     expect(chinese).toContain("使用 GitHub 登录");
+    expect(chinese).toContain("使用邮箱登录");
+    expect(chinese).toContain("创建账户");
     expect(chinese).not.toContain("微信扫码登录");
+    expect(chinese).not.toContain("验证码");
     expect(chinese).not.toContain("undefined");
   });
 

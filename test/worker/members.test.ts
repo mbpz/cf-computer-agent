@@ -21,25 +21,27 @@ describe("members D1 control plane", () => {
       ALLOWED_MEMBER_EMAILS: "bootstrap@example.test",
     }, { waitUntil: () => undefined });
 
-    const members = await Promise.all([
+    const results = await Promise.allSettled([
       service().resolveGitHubLogin({ subject: "github:101", githubUserId: "101", email: "bootstrap@example.test" }),
       service().resolveGitHubLogin({ subject: "github:102", githubUserId: "102", email: "bootstrap@example.test" }),
     ]);
 
-    expect(members.map((member) => member.role).sort()).toEqual(["admin", "contributor"]);
-    const activeAdmins = await env.DB.prepare(
-      "SELECT id FROM members WHERE role = 'admin' AND status = 'active'",
-    ).all<{ id: string }>();
-    expect(activeAdmins.results).toHaveLength(1);
+    // One canonical email now owns exactly one member. The losing concurrent
+    // GitHub subject is rejected rather than creating a second account.
+    const fulfilled = results.filter((result): result is PromiseFulfilledResult<Member> => result.status === "fulfilled");
+    const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(fulfilled[0]!.value.role).toBe("admin");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toMatchObject({ code: "MEMBER_IDENTITY_CONFLICT" });
+    const members = await env.DB.prepare("SELECT role, status FROM members").all<{ role: string; status: string }>();
+    expect(members.results).toEqual([{ role: "admin", status: "active" }]);
     const loginAudits = await env.DB.prepare(
-      "SELECT actor_id, action, resource_type, resource_id, metadata FROM audit_events WHERE action = 'member.login' ORDER BY resource_id",
+      "SELECT actor_id, action, resource_type, resource_id, metadata FROM audit_events WHERE action = 'member.login'",
     ).all<{ actor_id: string; action: string; resource_type: string; resource_id: string; metadata: string }>();
-    expect(loginAudits.results).toHaveLength(2);
-    expect(loginAudits.results.every((event) => event.actor_id === event.resource_id && event.resource_type === "member")).toBe(true);
-    expect(loginAudits.results.map((event) => JSON.parse(event.metadata))).toEqual(expect.arrayContaining([
-      { role: "admin" },
-      { role: "contributor" },
-    ]));
+    expect(loginAudits.results).toHaveLength(1);
+    expect(loginAudits.results[0]).toMatchObject({ actor_id: fulfilled[0]!.value.id, resource_type: "member", resource_id: fulfilled[0]!.value.id });
+    expect(JSON.parse(loginAudits.results[0]!.metadata)).toEqual({ role: "admin" });
   });
 
   it("audits only first account creation and not repeat login or last_seen work", async () => {

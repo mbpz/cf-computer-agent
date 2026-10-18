@@ -1097,7 +1097,7 @@ Wave 1–3 的前后对比已按 §16 完成（同一 10 页、同一视口、`b
 | 授权记录面板 | `role="tabpanel"`、`section[data-admin-invitations]`（含 `aria-busy`）、`[data-member-add-open]`（`aria-haspopup`/`aria-expanded`）、`[data-invitation-issued]`、`[data-member-add-dialog]`、`[data-member-add-cancel]`、`#invitation-email` |
 | 页面级 | `[data-member-status-record-blocked]`、`[data-confirm-action]` |
 
-i18n：2026-10-18 邮箱验证码改造后新增 `LOGIN_EMAIL_*`/`LOGIN_CODE_*`/`ADMIN_INVITATION_ISSUED_*` 键；原记录段落的以下说明保留其历史语境。标签「成员」用 `ADMIN_MEMBERS_TITLE`；「授权记录」用 `ADMIN_INVITATION_LIST_TITLE`（中文恰为「授权记录」，英文 `Invitations`）——原记录区块标题即此键，`ADMIN_INVITATION_SECTION_TITLE`（授权新成员）继续作为面板内邀请区块的 `h2` 与对话框标题，两个键都已存在且语义各归其位（任务描述把 `SECTION_TITLE` 记作「授权记录」，实际该键是「授权新成员」，故按实际取值选择）。
+i18n：2026-10-18 登录已改为邮箱密码自注册，`LOGIN_EMAIL_*`/`LOGIN_CODE_*`/`ADMIN_INVITATION_*` 键已移除；本节其余内容为历史语境。标签「成员」用 `ADMIN_MEMBERS_TITLE`；「授权记录」用 `ADMIN_INVITATION_LIST_TITLE`（中文恰为「授权记录」，英文 `Invitations`）——原记录区块标题即此键，`ADMIN_INVITATION_SECTION_TITLE`（授权新成员）继续作为面板内邀请区块的 `h2` 与对话框标题，两个键都已存在且语义各归其位（任务描述把 `SECTION_TITLE` 记作「授权记录」，实际该键是「授权新成员」，故按实际取值选择）。
 
 ### 26.4 测试寻址调整（断言不变）
 
@@ -1268,7 +1268,7 @@ i18n：新增 2 个键（`COMMON_CHIP_SELECTED`、`COMMON_CHIP_REMOVED`，中英
 | `node scripts/frontend-legacy-audit.mjs` | 通过（无原生选择器/复选框/文本输入/textarea） |
 | `npm run audit:frontend-operations` | 通过（476 文件 / 1772 候选）；索引与复核台账已重生成，未归属 164 → 159（5 条原生 `<option>` 候选随实现消失） |
 
-**未做**：生产浏览器逐页验收（`/settings` 语言切换、`/notifications` 读数、对比产物展开、`/admin/members` 与 `/admin/audit` 筛选、`/submit` 输入与草稿、`/login` 验证码）需在已登录的真实会话上人工执行；本轮的运行证据是套件、构建与四道静态门禁。
+**未做**：生产浏览器逐页验收（`/settings` 语言切换、`/notifications` 读数、对比产物展开、`/admin/members` 与 `/admin/audit` 筛选、`/submit` 输入与草稿、`/login` 密码表单）需在已登录的真实会话上人工执行；本轮的运行证据是套件、构建与四道静态门禁。
 
 ### 29.7 页面级终态（2026-10-18）
 

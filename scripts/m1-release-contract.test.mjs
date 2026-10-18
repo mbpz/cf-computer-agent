@@ -103,6 +103,7 @@ const expectedLocalMigrations = [...expectedMigrations,
   ["0075_hide_submit_menu_entry.sql", "d39116ce16a9555224ca985d803c8759afce12a5ba5cb7a7e765458ce7f23301"],
   ["0076_studio_artifacts.sql", "3e28f537fc4970acc8fcdccd32fb418729bf295c493b27db38c0ea9674588d91"],
   ["0077_email_login_codes.sql", "0fb3065bb59de272f2ad27c1fa7785fbc0a89c18680f886b332b8683d9558524"],
+  ["0078_password_auth.sql", "16c553f8fb6b2d775ea77ceadd8d10bc689237e9d8d2a2705faeca7940a96eb7"],
 ];
 
 const requiredEvidenceBlocks = [
@@ -257,7 +258,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^\[pass\] migration-files count=77$/mu);
+  assert.match(result.output, /^\[pass\] migration-files count=78$/mu);
 });
 
 test("keeps asset pairing migration compatible with remote D1 statement execution", async () => {
