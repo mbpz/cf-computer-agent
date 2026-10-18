@@ -9,6 +9,7 @@
 - 每个条目完成后的验收固定为：focused tests + `npm run typecheck` + `npm run build:ui` + 生产 signed-browser 目视（1280 宽 + hover/键盘）；改动图表时加 375 宽与深色。
 - 明确 **keep-in-repo**（不是遗漏，是契约原因）：`ui/page-header`（唯一 `<h1>`）、`ui/pagination`、`ui/expandable-tabs`（页内面板语义与 payload 不符）、`ui/applied-filters`、`ui/summary-row`、`ui/input`/`ui/select`（原生表单语义）、`components/data-table.tsx`（已是 beUI `table` 适配层）。
 - 已接 beUI、只需审计不改的适配层：`ui/alert`、`ui/badge`、`ui/button`、`ui/card`、`ui/confirm-action`、`ui/typed-confirm-action`、`ui/dialog`、`ui/sheet`、`ui/tabs`、`ui/tooltip`、`ui/filter-select`、`ui/search-chips-field`、`ui/date-range-input`。
+- **表格口径**：页面数据表一律走 `components/motion/table`；`components/data-table.tsx` 是其适配层，`/environments` 的文件列表已直接改用 `Table`。例外：`date-range-picker` 内部日历表、图表内 `sr-only` 可读表、对比产物的语义矩阵（需要 `<th scope="row">` 与可变行高，beUI table 的固定行高会裁切内容）。
 
 ## Phase 0 — 共享内容原语（先统一，避免每页各做一套）
 
@@ -63,6 +64,7 @@
 - [ ] 3.5 `/graph`：检查器动作 → `dock`；建议卡 → `preview-rail`；Cytoscape 画布与 fallback 不动。
 - [ ] 3.6 `/messages/:id`：消息 → `message-bubble`；滚动跟随 → `message-scroller`；回复框 → `prompt-input`（保留 operation-key 去重）。
 - [ ] 3.7 `/environments`：文件导入面板 → `file-upload`/`attachment-upload`；下载预览 → `preview-rail`；表格/弹层已适配。保留 `data-vm-start` 的禁用语义。
+  - 文件列表已改用 beUI `Table`（2026-10-18）；行内动作收回 `overflow-actions` 图标栏，`data-file-*` 钩子保留；`browser-vm-file-panel` 的两条 dialog-portal 断言为既有失败，与本次替换无关。
 - [ ] 3.8 `/` 公开落地页：场景导览进度 → `status-bar`（步骤状态）或 `scroll-progress`；来源引用 → `citations`；抽屉统一走 `ui/sheet`。场景与文案不动。
 - [ ] 3.9 `/login`：错误块 → `alert`（destructive）；GitHub 按钮沿用 `button-base`；保留 `#login-code-*` 门禁。
 - [ ] 3.10 `/settings`：语言选择从原生 `select` → `select`/`combobox`；主题切换保留 `aria-pressed` 分段按钮。
