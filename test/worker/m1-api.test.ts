@@ -1905,8 +1905,17 @@ describe("M1 trusted knowledge HTTP journey", () => {
       method: "POST", body: JSON.stringify({ citationIds: [hit!.citationId] }),
     });
     expect(response.status).toBe(200);
-    const result = await response.json() as { nodes: Array<{ citations: Array<{ citationId: string }> }> };
+    const result = await response.json() as {
+      nodes: Array<{ citations: Array<{ citationId: string }> }>;
+      artifact: { id: string; kind: string };
+    };
     expect(result.nodes[0]?.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
+    expect(result.artifact.kind).toBe("mindmap");
+    const retained = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/artifacts/${result.artifact.id}`);
+    expect(retained.status).toBe(200);
+    const detail = await retained.json() as { artifact: { kind: string; payload: { nodes: unknown[] } } };
+    expect(detail.artifact.kind).toBe("mindmap");
+    expect(detail.artifact.payload.nodes.length).toBe(result.nodes.length);
     expect(JSON.stringify(result)).not.toContain("mindmapmarker source evidence");
   });
 
@@ -1990,9 +1999,18 @@ describe("M1 trusted knowledge HTTP journey", () => {
       method: "POST", body: JSON.stringify({ citationIds: [hit!.citationId] }),
     });
     expect(response.status).toBe(200);
-    const result = await response.json() as { questions: Array<{ answerIndex: number | null; explanationCitations: Array<{ citationId: string }> }> };
+    const result = await response.json() as {
+      questions: Array<{ answerIndex: number | null; explanationCitations: Array<{ citationId: string }> }>;
+      artifact: { id: string; kind: string };
+    };
     expect(result.questions[0]?.answerIndex).toBe(0);
     expect(result.questions[0]?.explanationCitations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
+    expect(result.artifact.kind).toBe("quiz");
+    const retained = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/artifacts/${result.artifact.id}`);
+    expect(retained.status).toBe(200);
+    const detail = await retained.json() as { artifact: { kind: string; payload: { questions: unknown[] } } };
+    expect(detail.artifact.kind).toBe("quiz");
+    expect(detail.artifact.payload.questions.length).toBe(result.questions.length);
     expect(JSON.stringify(result)).not.toContain("quizmarker source evidence");
   });
 
