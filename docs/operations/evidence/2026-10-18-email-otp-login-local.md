@@ -7,8 +7,8 @@
 ## 实现范围
 
 - `migrations/0077_email_login_codes.sql`：重建 `member_login_invitations`（去掉 `code_hash`/`attempt_count`）并新建 `email_login_codes`。
-- `src/email-login/`：Cloudflare Email Sending 发信、HMAC-SHA-256 验证码存储、请求/验证服务与 D1 仓库。
-- 不新增环境变量：`EMAIL` 是 Worker 绑定，发件地址固定在 `APP_CONFIG.emailLoginFrom`，HMAC pepper 复用既有 `APP_TOKEN`。
+- `src/email-login/`：Resend 发信、HMAC-SHA-256 验证码存储、请求/验证服务与 D1 仓库。
+- 只新增 `RESEND_API_KEY`；发件地址固定在 `APP_CONFIG.emailLoginFrom`，HMAC pepper 复用既有 `APP_TOKEN`，区分大小写。
 - `src/routes/auth.ts`：新增 `POST /auth/email/code`、`POST /auth/email/code/verify`；移除 `POST /auth/code`。
 - `src/routes/admin.ts`：邀请签发返回授权记录，不再返回明文码。
 - `frontend/pages/login-page.tsx`：邮箱 → 发送验证码 → 六位 OTP → 登录；保留 GitHub。
@@ -23,8 +23,8 @@
 | `npm run build:ui` | 通过（Vite 产物 + browser-vm build isolation） |
 | `npm run verify:m1:migrations -- --files` | `[pass] migration-files count=77` |
 | `npx vitest run test/worker` | **79 文件 / 1318 测试通过** |
-| `npx vitest run test/unit` | **410 文件 / 5653 测试通过** |
-| `npx vitest run test/unit/email-login-mailer.test.ts test/unit/frontend-email-login-data.test.ts` | **2 文件 / 6 测试通过** |
+| `npx vitest run test/unit` | **410 文件 / 5654 测试通过** |
+| `npx vitest run test/unit/email-login-mailer.test.ts test/unit/frontend-email-login-data.test.ts` | **2 文件 / 7 测试通过** |
 | `npm run test:i18n` | 14 测试通过，双语 key/placeholder 对等 |
 | `npm run test:smoke` | 30 测试通过 |
 | `node --test scripts/frontend-app-contract.test.mjs scripts/frontend-legacy-audit.test.mjs scripts/frontend-typecheck-contract.test.mjs` | 13 测试通过 |
@@ -53,7 +53,7 @@
 | 撤销邀请 | 撤销后不再发信；撤销前签发的码验证 `401`，不创建成员 |
 | 禁用成员 | 请求不发信；禁用后验证 `403 MEMBER_DISABLED`，无 cookie |
 | 发信失败 | 普通传输错误：`503 EMAIL_LOGIN_DELIVERY_FAILED`（`retryable`）；发送方未验证/域名未开通：`503 EMAIL_LOGIN_UNAVAILABLE`；挑战均立即 `consumed_at` |
-| 未绑定 `EMAIL` | 请求/验证均 `503 EMAIL_LOGIN_UNAVAILABLE`；`/api/auth/providers.emailCode=false` |
+| 未配置 `RESEND_API_KEY` | 请求/验证均 `503 EMAIL_LOGIN_UNAVAILABLE`；`/api/auth/providers.emailCode=false` |
 | 并发验证 | 同一码两个请求 → 一个 `200`、一个 `401`，只创建一个成员 |
 | 管理员邀请签发 | `201 { invitation }`，响应与列表均无 `code`；表结构不含旧码列 |
 
@@ -71,11 +71,11 @@
 - 最新部署 `73e75fec`（11:23:07Z）已包含 `emailCode:true`；远程 D1 无待应用迁移。
 - 11:23:38Z 的请求为 `apples398@163.com` 生成了 `email_login_codes` 行，`created_at` 与 `consumed_at` 同为 `11:23:38.788Z`——发送绑定抛错后按设计立即作废。
 - 同一时间 `wrangler email sending list` / `settings` 均返回 `Unauthorized [code: 2036]`；`crgmhrc.asia` 与 `memory.crgmhrc.asia` 均无 Email Sending 所需的 MX/DKIM/DMARC 记录。
-- 结论：验证码逻辑已执行到发信步骤，但 Cloudflare Email Sending 尚未为该域名开通；不是收件箱、垃圾邮件或前端提交失败。
+- 结论：验证码逻辑已执行到发信步骤，但 Cloudflare Email Sending 尚未为该域名开通；不是收件箱、垃圾邮件或前端提交失败。该次观察后按方案 2 改用 Resend，代码不再依赖 Email Sending 绑定。
 
 ## 未覆盖 / 非声明
 
-- **未发起真实投递**：本机未开通 Cloudflare Email Sending，Workerd 测试注入 `EmailLoginMailer`，单测用假 `SendEmail` 绑定核对消息体。真实收件箱、退信、SPF/DKIM/DMARC 与域名开通未验证。
+- **未发起真实投递**：本机没有 `RESEND_API_KEY` 且发件域名未在 Resend 验证。Workerd 测试注入 `EmailLoginMailer`，单测用捕获 fetch 核对 Resend 请求体与错误分类。真实收件箱、退信、SPF/DKIM/DMARC 未验证。
 - **未应用远程迁移**：`0077` 只在本地 D1/Workerd 测试库执行；生产仍是 `0063` 之后的状态，新端点/前端未部署。
 - **无真实浏览器/设备验收**：仅有 happy-dom DOM 测试与静态渲染；未覆盖真实 Chrome/Safari、移动键盘、OTP 自动填充（SMS/iOS）和视觉对比。
 - **无回滚点**：`0077` 是向前迁移；它重建邀请表，不能靠删表回滚。生产应用前需按手册备份并记录回滚点。

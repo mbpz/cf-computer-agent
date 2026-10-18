@@ -52,7 +52,7 @@ rtk npm run dev
 
 `rtk npm run check` is the full local gate: contracts, smoke, unit and Workerd tests, generated types, TypeScript, and a Wrangler dry build. It is evidence for local verification only. Use the [production environment handbook](./docs/operations/production-environment-handbook.md) for configuration, migration, deployment, rollback, and recorded release evidence.
 
-Do not place `GITHUB_OAUTH_CLIENT_SECRET`, `BOOTSTRAP_ADMIN_EMAIL`, `ALLOWED_MEMBER_EMAILS`, `AUTOMATION_SECRET`, or `APP_TOKEN` in the repository, `wrangler.jsonc`, `.dev.vars`, command lines, logs, screenshots, or chat. Keep production values as Worker secrets. Email sign-in uses the Cloudflare Email Sending `EMAIL` binding; enable Email Sending for `memory.crgmhrc.asia` and no additional secret or variable is required.
+Do not place `GITHUB_OAUTH_CLIENT_SECRET`, `BOOTSTRAP_ADMIN_EMAIL`, `ALLOWED_MEMBER_EMAILS`, `AUTOMATION_SECRET`, `RESEND_API_KEY`, or `APP_TOKEN` in the repository, `wrangler.jsonc`, `.dev.vars`, command lines, logs, screenshots, or chat. Keep production values as Worker secrets. Email sign-in uses Resend: set `RESEND_API_KEY` and verify the sender domain (`login@memory.crgmhrc.asia`, or change `APP_CONFIG.emailLoginFrom`) in Resend. No other new variable is required.
 
 ## Deployment and operations
 

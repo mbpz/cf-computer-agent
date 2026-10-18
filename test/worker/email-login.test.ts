@@ -265,11 +265,11 @@ describe("email one-time-code login", () => {
   });
 
   it("reports a sender onboarding error as unavailable and records only the provider code", async () => {
-    mailer.failure = Object.assign(new Error("sender not verified"), { code: "E_SENDER_NOT_VERIFIED" });
+    mailer.failure = Object.assign(new Error("sender not verified"), { code: "EMAIL_SENDER_NOT_VERIFIED" });
     const response = await requestCode(ALLOWLISTED);
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "EMAIL_LOGIN_UNAVAILABLE" } });
-    expect(deliveryDiagnostics).toEqual([{ code: "E_SENDER_NOT_VERIFIED", name: "Error" }]);
+    expect(deliveryDiagnostics).toEqual([{ code: "EMAIL_SENDER_NOT_VERIFIED", name: "Error" }]);
     expect(JSON.stringify(deliveryDiagnostics)).not.toContain(ALLOWLISTED);
     expect(await env.DB.prepare("SELECT consumed_at FROM email_login_codes").first()).toEqual({ consumed_at: expect.any(String) });
   });

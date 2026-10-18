@@ -384,7 +384,7 @@ function createRequestServices(
   const invitations = new MemberInvitationsService(new MemberInvitationsRepository(env.DB, audit));
   const emailLoginMailer = dependencies.emailLogin?.mailer === null
     ? undefined
-    : (dependencies.emailLogin?.mailer ?? createEmailLoginMailer(env));
+    : (dependencies.emailLogin?.mailer ?? createEmailLoginMailer({ RESEND_API_KEY: env.RESEND_API_KEY }));
   const emailLogin = new EmailLoginService(
     new EmailLoginRepository(env.DB),
     members,

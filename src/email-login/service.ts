@@ -117,12 +117,14 @@ export class EmailLoginService {
       await this.repository.consume(challenge.id, createdAt, this.maxAttempts);
       // Sender/onboarding problems are configuration, not a transient outage:
       // the page should stop asking the user to retry blindly.
-      if (providerCode === "E_SENDER_NOT_VERIFIED"
+      if (providerCode === "EMAIL_SENDER_NOT_VERIFIED"
+        || providerCode === "E_SENDER_NOT_VERIFIED"
         || providerCode === "E_SENDER_DOMAIN_NOT_AVAILABLE"
         || providerCode === "E_RECIPIENT_NOT_ALLOWED") {
         throw new AppError("EMAIL_LOGIN_UNAVAILABLE", "Email sign-in is not configured", 503);
       }
-      throw error instanceof AppError ? error : new AppError("EMAIL_LOGIN_DELIVERY_FAILED", "The sign-in email could not be sent", 503, true);
+      const retryable = !(error && typeof error === "object" && "retryable" in error && error.retryable === false);
+      throw error instanceof AppError ? error : new AppError("EMAIL_LOGIN_DELIVERY_FAILED", "The sign-in email could not be sent", 503, retryable);
     }
   }
 
