@@ -43,7 +43,13 @@ rtk npm run test:frontend-operations
 
 ## 4. 边界
 
-- 未部署，未做生产验收；`KB-013` 发布/验收保持 pending。
 - 列表固定 50 条，无分页；超出后需后续设计。
 - 产物是个人保留物，不进入公共知识或 FTS；其他成员看不到同一产物。
 - 旧修订的产物仍可打开，只要该修订对调用者仍可读；当前修订切换不会删除旧产物。
+
+## 5. 生产核验（2026-10-18）
+
+- 远程迁移 `0076` 已应用，远程表 `studio_artifacts` 存在。
+- 部署 `75ec5046-8fc8-418d-954e-69b0f5287483`（100%）后前端资源与本地构建一致；阅读器 `/knowledge/39fd7d01…` 正常渲染"已保存内容"空态；`GET /api/knowledge/:id/artifacts` 返回 200 `{"artifacts":[]}`。
+- 写入验收被上游阻断：两次生成闪卡均返回 `AI_UNAVAILABLE`，远程 `studio_artifacts` 与产物审计均为 0 行，未产生副作用。
+- 根因：`APP_CONFIG.model` 使用 `@cf/meta/llama-3.1-8b-instruct-fp8-fast`，该 ID 不在 `wrangler ai models list` 目录中；已改为存在的 `@cf/meta/llama-3.1-8b-instruct-fp8`。写入验收待重新部署后重试；`KB-013` 发布/验收保持 pending。
