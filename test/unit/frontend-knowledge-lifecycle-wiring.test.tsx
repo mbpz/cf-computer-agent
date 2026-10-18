@@ -28,7 +28,7 @@ function knowledgeItemPayload(id: string) {
   return {
     knowledge: {
       id, spaceId: "space-route-audit", collectionId: null, title: "Ready item", tagIds: [],
-      visibility: "shared", searchStatus: "indexed", publishedAt, updatedAt: publishedAt,
+      visibility: "shared", searchStatus: "indexed", publishedAt, updatedAt: publishedAt, status: "active",
       currentRevision: {
         id: `${id}-revision`, knowledgeItemId: id, title: "Ready item", visibility: "shared",
         publishedAt, isCurrent: true, previousRevisionId: null, indexStatus: "indexed",

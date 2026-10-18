@@ -309,6 +309,22 @@ export async function routeAdminApi(
     ), 200, context.requestId);
   }
 
+  // The selector's source of truth: a bounded, content-free history so an
+  // administrator can name any earlier revision as the rollback target. The
+  // rollback itself still re-authorizes the item and its state.
+  const revisionHistory = /^\/api\/admin\/knowledge\/([^/]+)\/revisions$/.exec(url.pathname);
+  if (revisionHistory) {
+    requireCapability(principal, "knowledge:review");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requirePageQuery(url);
+    const member = requireAdminMember(principal);
+    return jsonResponse(await services.library.revisionHistory(
+      { memberId: member.memberId, role: member.role },
+      decodePathId(revisionHistory[1]!),
+      url.searchParams.get("cursor") ?? undefined,
+    ), 200, context.requestId);
+  }
+
   if (url.pathname === "/api/admin/tags") {
     requireCapability(principal, "space:manage");
     if (request.method === "GET") {

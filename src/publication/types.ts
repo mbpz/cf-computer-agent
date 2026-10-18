@@ -153,6 +153,17 @@ export interface GovernedKnowledgeItem {
 export type GovernedKnowledgePage = Page<GovernedKnowledgeItem>;
 
 /**
+ * Administrator read of one item, active or trashed: the governed identity plus
+ * the current revision's tags and predecessor, without content. Trashed items
+ * are readable here so the item surface can show what it is before restore.
+ */
+export interface AdminKnowledgeItemView extends GovernedKnowledgeItem {
+  tagIds: string[];
+  previousRevisionId: string | null;
+  indexStatus: SearchStatus;
+}
+
+/**
  * The recycle bin's retained-window facts for one trashed item. `trashedAt` is
  * the item's own lifecycle timestamp — the exact anchor the purge path compares
  * against the retention cutoff — so the surface never has to guess a window.
@@ -263,10 +274,11 @@ export interface PublicationRepositoryPort {
   markContentWritten(submissionId: string, receipt: PublishedContentReceipt): Promise<void>;
   markIntentFailedTerminal(submissionId: string): Promise<void>;
   finalize(intent: PublicationIntent, chunks: ChunkDraft[]): Promise<PublishedRevision>;
-  rollback(knowledgeItemId: string, revisionId: string, reviewerId: string): Promise<RollbackResult>;
+  rollback(knowledgeItemId: string, revisionId: string, reviewerId: string, operationId?: string): Promise<RollbackResult>;
   trash(knowledgeItemId: string, reviewerId: string): Promise<GovernedKnowledgeItem>;
   restore(knowledgeItemId: string, reviewerId: string): Promise<GovernedKnowledgeItem>;
   listTrashed(request: PageRequest): Promise<GovernedKnowledgePage>;
+  findAdminKnowledgeItem(knowledgeItemId: string): Promise<AdminKnowledgeItemView | null>;
   preparePurge(knowledgeItemId: string, cutoff: string): Promise<PurgePlan | { alreadyPurged: true }>;
   finalizePurge(plan: PurgePlan, reviewerId: string): Promise<PurgeResult>;
   processIndexJob(revisionId: string): Promise<SearchStatus>;
@@ -289,6 +301,10 @@ export interface PublicationRepositoryPort {
     response: T,
   ): Promise<T>;
   findLifecycleReceipt(knowledgeItemId: string, operationId: string): Promise<DecisionReceipt | null>;
+  findLifecycleOperation(
+    knowledgeItemId: string,
+    operationId: string,
+  ): Promise<{ kind: KnowledgeLifecycleOperationKind; actorId: string; requestHash: string; responseJson: string } | null>;
   recordLifecycleReceipt<T extends GovernedKnowledgeItem | RollbackResult | PurgeResult>(
     write: LifecycleReceiptWrite,
     response: T,

@@ -25,6 +25,7 @@ import type {
   SearchHit,
   SearchPage,
   ChunkStatusMutation,
+  RevisionSummary,
 } from "../../src/library/types";
 export { M1_SEARCH_RANKING_CASES, M1_SEARCH_RANKING_DOCUMENTS } from "./m1-search-ranking";
 export { M1_EVIDENCE_CONFIDENCE_CASES, M1_CORPUS_GROWTH_FIXTURE } from "./m1-evidence-confidence";
@@ -486,6 +487,10 @@ class EvaluationRepository implements LibraryRepositoryPort {
   }
 
   async findRevision(): Promise<AuthorizedRevisionRecord | null> {
+    return null;
+  }
+
+  async listRevisions(): Promise<{ revisions: RevisionSummary[]; hasMore: boolean } | null> {
     return null;
   }
 

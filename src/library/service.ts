@@ -31,6 +31,8 @@ import type {
   LibraryScope,
   RevisionDetail,
   RevisionDownload,
+  RevisionHistoryPage,
+  RevisionSummary,
   RelatedKnowledgePage,
   BacklinkPage,
   SearchPage,
@@ -103,6 +105,27 @@ export class LibraryService {
     const record = await this.repository.findRevision(scope, knowledgeItemId, revisionId);
     if (!record) throw knowledgeNotFound();
     return this.readRevision(record);
+  }
+
+  /**
+   * Bounded revision history for the item selector. The list is newest-first and
+   * deliberately content-free: the admin can name a target, and the server still
+   * re-checks the rollback itself. `nextCursor` continues older rows.
+   */
+  async revisionHistory(scope: LibraryScope, knowledgeItemId: string, cursor?: string): Promise<RevisionHistoryPage> {
+    await this.authorize(scope);
+    assertLookupId(knowledgeItemId);
+    const before = cursor === undefined ? undefined : revisionHistoryCursor(decodeOpaqueCursor(cursor));
+    if (before === null) throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+    const page = await this.repository.listRevisions(scope, knowledgeItemId, 50, before);
+    if (!page) throw knowledgeNotFound();
+    const last = page.revisions.at(-1);
+    return {
+      revisions: page.revisions,
+      ...(page.hasMore && last
+        ? { nextCursor: encodeOpaqueCursor({ v: 1, publishedAt: last.publishedAt, id: last.id }) }
+        : {}),
+    };
   }
 
   async diff(
@@ -525,6 +548,15 @@ function isLibraryScope(value: LibraryScope): boolean {
   return Boolean(value && typeof value === "object"
     && isLookupId(value.memberId)
     && (value.role === "admin" || value.role === "contributor"));
+}
+
+/** Decoded revision cursor; null for anything that is not exactly version 1. */
+function revisionHistoryCursor(value: unknown): { publishedAt: string; id: string } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (Object.keys(record).length !== 3 || record.v !== 1) return null;
+  if (typeof record.publishedAt !== "string" || !isCanonicalTimestamp(record.publishedAt)) return null;
+  return isLookupId(record.id) ? { publishedAt: record.publishedAt, id: record.id } : null;
 }
 
 function assertLookupId(value: string): void {

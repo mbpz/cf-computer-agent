@@ -29,6 +29,7 @@ export interface AdminKnowledgeItem {
   readonly searchStatus: string;
   readonly publishedAt: string;
   readonly updatedAt: string;
+  readonly status: "active" | "trashed";
   readonly currentRevision: KnowledgeItemRevision;
 }
 
@@ -88,7 +89,22 @@ export type KnowledgeLifecycleSendResult =
   | { readonly kind: "trash"; readonly knowledge: GovernedKnowledgeItem }
   | { readonly kind: "rollback"; readonly receipt: RollbackReceipt };
 
+/** One row of the item's revision history: identity and publication facts only. */
+export interface KnowledgeRevisionSummary {
+  readonly id: string;
+  readonly title: string;
+  readonly visibility: KnowledgeVisibility;
+  readonly publishedAt: string;
+  readonly isCurrent: boolean;
+}
+
+/** What an authoritative readback found for a stored operation number. */
+export type KnowledgeLifecycleResolution =
+  | { readonly kind: "rollback"; readonly receipt: RollbackReceipt }
+  | { readonly kind: "trash"; readonly knowledge: GovernedKnowledgeItem };
+
 const idPattern = /^[A-Za-z0-9_-]+$/u;
+const operationIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -132,22 +148,102 @@ export function normalizeAdminKnowledgeItem(value: unknown): AdminKnowledgeItem 
   const searchStatus = typeof record.searchStatus === "string" && record.searchStatus.length > 0 ? record.searchStatus : null;
   const rawCollection = record.collectionId;
   const collectionId = rawCollection === null ? null : (typeof rawCollection === "string" && rawCollection.length > 0 ? rawCollection : undefined);
-  if (!id || !spaceId || typeof record.title !== "string" || !view || !tags || !searchStatus || collectionId === undefined) return null;
+  const status = record.status === "active" || record.status === "trashed" ? record.status : null;
+  if (!id || !spaceId || typeof record.title !== "string" || !view || !tags || !searchStatus || !status || collectionId === undefined) return null;
   if (!isCanonicalTimestamp(record.publishedAt) || !isCanonicalTimestamp(record.updatedAt)) return null;
   const revisionRecord = asRecord(record.currentRevision);
   const revision = normalizeKnowledgeItemRevision(record.currentRevision);
   // `isCurrent` and the revision's own item id are the server's own claims about
   // which revision this item is on; a mismatch means the read cannot be trusted.
   if (!revision || !revisionRecord || revisionRecord.knowledgeItemId !== id) return null;
-  return { id, spaceId, collectionId, title: record.title, tagIds: tags, visibility: view, searchStatus, publishedAt: record.publishedAt, updatedAt: record.updatedAt, currentRevision: revision };
+  return { id, spaceId, collectionId, title: record.title, tagIds: tags, visibility: view, searchStatus, publishedAt: record.publishedAt, updatedAt: record.updatedAt, status, currentRevision: revision };
 }
 
 export async function loadAdminKnowledgeItem(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<AdminKnowledgeItem> {
   if (!idPattern.test(knowledgeItemId)) throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
-  const payload = await apiFetch<unknown>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}`, { requester, signal });
+  const payload = await apiFetch<unknown>(`/api/admin/knowledge/${encodeURIComponent(knowledgeItemId)}`, { requester, signal });
   const item = normalizeAdminKnowledgeItem(asRecord(payload)?.knowledge);
   if (!item || item.id !== knowledgeItemId) throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
   return item;
+}
+
+export function normalizeKnowledgeRevisionSummary(value: unknown): KnowledgeRevisionSummary | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const id = nonEmptyId(record.id);
+  const view = visibility(record.visibility);
+  if (!id || typeof record.title !== "string" || !view) return null;
+  if (typeof record.isCurrent !== "boolean" || !isCanonicalTimestamp(record.publishedAt)) return null;
+  return { id, title: record.title, visibility: view, publishedAt: record.publishedAt, isCurrent: record.isCurrent };
+}
+
+/** One page of revision history; `nextCursor` continues older rows. */
+export interface KnowledgeRevisionHistory {
+  readonly revisions: readonly KnowledgeRevisionSummary[];
+  readonly nextCursor?: string;
+}
+
+/**
+ * The bounded revision history the rollback selector names. Null means the
+ * server answered with something other than a 1–50 row list of unique rows, so
+ * the page can refuse to offer a target it could not verify.
+ */
+export async function loadAdminKnowledgeRevisions(
+  knowledgeItemId: string,
+  cursor?: string,
+  requester: Fetcher = fetch,
+  signal?: AbortSignal,
+): Promise<KnowledgeRevisionHistory | null> {
+  if (!idPattern.test(knowledgeItemId)) throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
+  if (cursor !== undefined && !/^[A-Za-z0-9_-]{1,512}$/u.test(cursor)) throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
+  const query = cursor === undefined ? "" : `?cursor=${encodeURIComponent(cursor)}`;
+  const payload = await apiFetch<unknown>(`/api/admin/knowledge/${encodeURIComponent(knowledgeItemId)}/revisions${query}`, { requester, signal });
+  const record = asRecord(payload);
+  const rows = record?.revisions;
+  if (!record || !Array.isArray(rows) || rows.length < 1 || rows.length > 50) return null;
+  const revisions = rows.map(normalizeKnowledgeRevisionSummary);
+  if (revisions.some((revision) => revision === null)) return null;
+  const ids = new Set(revisions.map((revision) => revision!.id));
+  if (ids.size !== revisions.length) return null;
+  const nextCursor = record.nextCursor;
+  if (nextCursor !== undefined && (typeof nextCursor !== "string" || !/^[A-Za-z0-9_-]{1,512}$/u.test(nextCursor))) return null;
+  return {
+    revisions: revisions as KnowledgeRevisionSummary[],
+    ...(typeof nextCursor === "string" ? { nextCursor } : {}),
+  };
+}
+
+/**
+ * Reads back the recorded answer for one stored operation after an unknown
+ * outcome. Null means the server holds no receipt for it yet, so the only safe
+ * next step is replaying the same operation number.
+ */
+export async function loadKnowledgeLifecycleResolution(
+  knowledgeItemId: string,
+  operationId: string,
+  requester: Fetcher = fetch,
+): Promise<KnowledgeLifecycleResolution | null> {
+  if (!idPattern.test(knowledgeItemId) || !operationIdPattern.test(operationId)) throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
+  const payload = await apiFetch<unknown>(`/api/admin/knowledge/${encodeURIComponent(knowledgeItemId)}/operations/${encodeURIComponent(operationId)}`, { requester });
+  const record = asRecord(payload);
+  if (!record || !Object.hasOwn(record, "operation")) throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
+  if (record.operation === null) return null;
+  const operation = asRecord(record.operation);
+  if (!operation) throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
+  if (operation.kind === "knowledge.rollback") {
+    const response = asRecord(operation.response);
+    const previousRevisionId = response ? nonEmptyId(response.previousRevisionId) : null;
+    if (!response || !previousRevisionId) throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
+    const receipt = normalizeRollbackReceipt({ revision: response, previousRevisionId });
+    if (!receipt || receipt.revision.knowledgeItemId !== knowledgeItemId) throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
+    return { kind: "rollback", receipt };
+  }
+  if (operation.kind === "knowledge.trash") {
+    const knowledge = normalizeGovernedKnowledgeItem(operation.response);
+    if (!knowledge || knowledge.id !== knowledgeItemId || knowledge.status !== "trashed") throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
+    return { kind: "trash", knowledge };
+  }
+  throw new Error("KNOWLEDGE_ITEM_RESPONSE_INVALID");
 }
 
 export function normalizeGovernedKnowledgeItem(value: unknown): GovernedKnowledgeItem | null {

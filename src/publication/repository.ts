@@ -14,6 +14,7 @@ import type {
   PublicationIntent,
   PublicationRepositoryPort,
   GovernedKnowledgeItem,
+  AdminKnowledgeItemView,
   KnowledgeVisibility,
   PurgePlan,
   PurgeResult,
@@ -23,6 +24,7 @@ import type {
   RejectionReasonCode,
   DecisionReceipt,
   DecisionReceiptWrite,
+  KnowledgeLifecycleOperationKind,
   LifecycleReceiptWrite,
   ReviewDecision,
   ReviewDecisionOperation,
@@ -571,25 +573,35 @@ export class PublicationRepository implements PublicationRepositoryPort {
     knowledgeItemId: string,
     revisionId: string,
     reviewerId: string,
+    operationId?: string,
   ): Promise<RollbackResult> {
     const target = await this.db.prepare(
-      `SELECT k.current_revision_id AS previous_revision_id
+      `SELECT k.current_revision_id AS current_revision_id
        FROM knowledge_items k
        JOIN revisions target ON target.id = ? AND target.knowledge_item_id = k.id
        WHERE k.id = ? AND k.status = 'active' LIMIT 1`,
-    ).bind(revisionId, knowledgeItemId).first<{ previous_revision_id: string | null }>();
-    if (!target || target.previous_revision_id === null) {
+    ).bind(revisionId, knowledgeItemId).first<{ current_revision_id: string | null }>();
+    if (!target || target.current_revision_id === null) {
       throw new PublicationRepositoryConflictError("rollback_target_invalid");
     }
+    // Rolling back to the revision that is already current is not a write: it
+    // would bump timestamps and claim a replacement that never happened.
+    if (target.current_revision_id === revisionId) {
+      throw new PublicationRepositoryConflictError("rollback_conflict");
+    }
     const timestamp = this.now().toISOString();
+    // One audit id per operation, not per target: rolling back to the same
+    // revision again later is a new write and must not collide with the first.
     const audit: CreateAuditEvent = {
-      id: `rollback-${knowledgeItemId}-${revisionId}`,
+      id: operationId === undefined
+        ? `rollback-${knowledgeItemId}-${revisionId}-${this.id()}`
+        : `rollback-${knowledgeItemId}-${revisionId}-${operationId}`,
       actorKind: "member",
       actorId: reviewerId,
       action: "knowledge.rolled_back",
       resourceType: "knowledge",
       resourceId: knowledgeItemId,
-      metadata: { fromRevisionId: target.previous_revision_id, toRevisionId: revisionId },
+      metadata: { fromRevisionId: target.current_revision_id, toRevisionId: revisionId },
       createdAt: timestamp,
     };
     try {
@@ -606,9 +618,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
         ),
         this.db.prepare(
           `UPDATE knowledge_items SET current_revision_id = ?, search_status = 'pending', updated_at = ?
-           WHERE id = ? AND current_revision_id = ? AND status = 'active'
+           WHERE id = ? AND current_revision_id = ? AND current_revision_id != ? AND status = 'active'
              AND EXISTS (SELECT 1 FROM revisions target WHERE target.id = ? AND target.knowledge_item_id = ?)`
-        ).bind(revisionId, timestamp, knowledgeItemId, target.previous_revision_id, revisionId, knowledgeItemId),
+        ).bind(revisionId, timestamp, knowledgeItemId, target.current_revision_id, revisionId, revisionId, knowledgeItemId),
         this.db.prepare(
           `INSERT INTO audit_events (
              id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at
@@ -631,8 +643,10 @@ export class PublicationRepository implements PublicationRepositoryPort {
       const current = await this.db.prepare(
         "SELECT current_revision_id FROM knowledge_items WHERE id = ? LIMIT 1",
       ).bind(knowledgeItemId).first<{ current_revision_id: string | null }>();
+      // A racing write that left the item on this same revision is a replay at
+      // the service layer, not a success here: the caller must read the receipt.
       if (current?.current_revision_id === revisionId) {
-        return { ...(await this.requireRevision(revisionId)), previousRevisionId: target.previous_revision_id };
+        throw new PublicationRepositoryConflictError("rollback_conflict");
       }
       throw error;
     }
@@ -642,7 +656,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
     if (current?.current_revision_id !== revisionId) {
       throw new PublicationRepositoryConflictError("rollback_conflict");
     }
-    return { ...(await this.requireRevision(revisionId)), previousRevisionId: target.previous_revision_id };
+    return { ...(await this.requireRevision(revisionId)), previousRevisionId: target.current_revision_id };
   }
 
   async trash(knowledgeItemId: string, reviewerId: string): Promise<GovernedKnowledgeItem> {
@@ -680,6 +694,64 @@ export class PublicationRepository implements PublicationRepositoryPort {
           v: 1, key: "governed-trash-v1", updatedAt: last.updatedAt, id: last.id,
         }),
       } : {}),
+    };
+  }
+
+  /**
+   * One administrator read that works for active and trashed items. It never
+   * reads published content, so a trashed item stays inspectable after its
+   * reader access is gone.
+   */
+  async findAdminKnowledgeItem(knowledgeItemId: string): Promise<AdminKnowledgeItemView | null> {
+    const row = await this.db.prepare(
+      `SELECT k.id, k.space_id, k.collection_id, k.current_revision_id AS revision_id,
+         r.title, r.tags_json, r.visibility, r.published_at, k.status, k.search_status, k.updated_at,
+         (SELECT previous.id FROM revisions previous
+          WHERE previous.knowledge_item_id = k.id AND previous.id != r.id
+            AND (previous.published_at < r.published_at
+              OR (previous.published_at = r.published_at AND previous.id < r.id))
+          ORDER BY previous.published_at DESC, previous.id DESC LIMIT 1) AS previous_revision_id,
+         CASE job.state
+           WHEN 'completed' THEN 'indexed'
+           WHEN 'failed_retryable' THEN 'search_degraded'
+           WHEN 'failed_terminal' THEN 'failed'
+           ELSE 'pending'
+         END AS index_status
+       FROM knowledge_items k
+       JOIN revisions r ON r.id = k.current_revision_id
+       JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+       LEFT JOIN jobs job ON job.kind = 'index_revision' AND job.resource_id = r.id
+       WHERE k.id = ? LIMIT 1`,
+    ).bind(knowledgeItemId).first<{
+      id: string;
+      space_id: string;
+      collection_id: string | null;
+      revision_id: string;
+      title: string;
+      tags_json: string;
+      visibility: KnowledgeVisibility;
+      published_at: string;
+      status: "active" | "trashed";
+      search_status: SearchStatus;
+      updated_at: string;
+      previous_revision_id: string | null;
+      index_status: SearchStatus;
+    }>();
+    if (!row) return null;
+    return {
+      id: row.id,
+      spaceId: row.space_id,
+      collectionId: row.collection_id,
+      revisionId: row.revision_id,
+      title: row.title,
+      tagIds: parseStringArray(row.tags_json),
+      visibility: row.visibility,
+      publishedAt: row.published_at,
+      status: row.status,
+      searchStatus: row.search_status,
+      updatedAt: row.updated_at,
+      previousRevisionId: row.previous_revision_id,
+      indexStatus: row.index_status,
     };
   }
 
@@ -1187,6 +1259,33 @@ export class PublicationRepository implements PublicationRepositoryPort {
        WHERE knowledge_item_id = ? AND operation_id = ? LIMIT 1`,
     ).bind(knowledgeItemId, operationId).first<{ request_hash: string; response_json: string }>()
       .then((row) => (row ? { requestHash: row.request_hash, responseJson: row.response_json } : null));
+  }
+
+  /**
+   * The recorded kind and answer of an operation, with the identity that claimed
+   * it. Used only by an explicit readback after an unknown outcome; the write
+   * path keeps using `findLifecycleReceipt` with its request hash.
+   */
+  async findLifecycleOperation(
+    knowledgeItemId: string,
+    operationId: string,
+  ): Promise<{ kind: KnowledgeLifecycleOperationKind; actorId: string; requestHash: string; responseJson: string } | null> {
+    const row = await this.db.prepare(
+      `SELECT kind, actor_id, request_hash, response_json
+       FROM knowledge_lifecycle_operation_receipts
+       WHERE knowledge_item_id = ? AND operation_id = ? LIMIT 1`,
+    ).bind(knowledgeItemId, operationId).first<{
+      kind: KnowledgeLifecycleOperationKind;
+      actor_id: string;
+      request_hash: string;
+      response_json: string;
+    }>();
+    return row ? {
+      kind: row.kind,
+      actorId: row.actor_id,
+      requestHash: row.request_hash,
+      responseJson: row.response_json,
+    } : null;
   }
 
   /**

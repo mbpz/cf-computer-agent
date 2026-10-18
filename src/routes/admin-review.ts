@@ -102,6 +102,42 @@ export async function routeAdminReviewApi(
     }, 200, context.requestId);
   }
 
+  // The item surface's own read: active and trashed items, no published content.
+  const adminItem = /^\/api\/admin\/knowledge\/([^/]+)$/.exec(url.pathname);
+  if (adminItem) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const reviewer = requireAdminMember(principal);
+    requireNoQuery(url);
+    const item = await services.publication.adminKnowledgeItem(
+      reviewerDto(reviewer),
+      decodePathId(adminItem[1]!),
+    );
+    return jsonResponse({
+      knowledge: {
+        id: item.id,
+        spaceId: item.spaceId,
+        collectionId: item.collectionId,
+        title: item.title,
+        tagIds: item.tagIds,
+        visibility: item.visibility,
+        searchStatus: item.searchStatus,
+        publishedAt: item.publishedAt,
+        updatedAt: item.updatedAt,
+        status: item.status,
+        currentRevision: {
+          id: item.revisionId,
+          knowledgeItemId: item.id,
+          title: item.title,
+          visibility: item.visibility,
+          publishedAt: item.publishedAt,
+          isCurrent: true,
+          previousRevisionId: item.previousRevisionId,
+          indexStatus: item.indexStatus,
+        },
+      },
+    }, 200, context.requestId);
+  }
+
   if (url.pathname === "/api/admin/submissions/batch-review") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     const reviewer = requireAdminMember(principal);
@@ -159,6 +195,22 @@ export async function routeAdminReviewApi(
       { operationId: input.operationId },
     );
     return jsonResponse({ purge: result }, 200, context.requestId);
+  }
+
+  // The recorded answer of one lifecycle operation. A client that lost the
+  // response reads this instead of guessing or resending a fresh operation.
+  const operationReadback = /^\/api\/admin\/knowledge\/([^/]+)\/operations\/([^/]+)$/.exec(url.pathname);
+  if (operationReadback) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const reviewer = requireAdminMember(principal);
+    requireNoQuery(url);
+    return jsonResponse({
+      operation: await services.publication.findLifecycleOperation(
+        reviewerDto(reviewer),
+        decodePathId(operationReadback[1]!),
+        decodePathId(operationReadback[2]!),
+      ),
+    }, 200, context.requestId);
   }
 
   const rollback = /^\/api\/admin\/knowledge\/([^/]+)\/rollback$/.exec(url.pathname);

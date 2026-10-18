@@ -354,10 +354,12 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
         { items: [trashedKnowledge("ready-admin-knowledge-trash", "READY::admin-knowledge-trash")] });
       return null;
     case "admin-knowledge-item":
-      // loadAdminKnowledgeItem reads the item the path names; the page fails closed
-      // unless the current revision names that same item and claims to be current.
-      if (path === "/api/knowledge/knowledge-route-audit") return probeResponse(state, {},
+      // The item surface reads its own endpoint, active or trashed; the page
+      // fails closed unless the current revision names that same item.
+      if (path === "/api/admin/knowledge/knowledge-route-audit") return probeResponse(state, {},
         { knowledge: adminKnowledgeItem("knowledge-route-audit", "READY::admin-knowledge-item") });
+      if (pathname(path) === "/api/admin/knowledge/knowledge-route-audit/revisions") return probeResponse(state, {},
+        { revisions: [{ id: "knowledge-route-audit-revision", title: "READY::admin-knowledge-item", visibility: "shared", publishedAt: NOW, isCurrent: true }] });
       return null;
     case "admin-spaces":
       if (path === "/api/admin/spaces?limit=50") return probeResponse(state, { items: [] }, { items: [{ id: "ready-admin-spaces", name: "READY::admin-spaces", slug: "ready-space", status: "active", kind: "shared", readOnly: false, description: "", position: 0, impact: { collections: 0, knowledgeItems: 0, revisions: 0, links: 0 }, createdAt: "2026-09-28T00:00:00.000Z", updatedAt: "2026-09-28T00:00:00.000Z" }] });
@@ -432,7 +434,7 @@ function trashedKnowledge(id: string, title: string) {
 function adminKnowledgeItem(id: string, title: string) {
   return {
     id, spaceId: "space-route-audit", collectionId: null, title, tagIds: [], visibility: "shared", searchStatus: "indexed",
-    publishedAt: NOW, updatedAt: NOW,
+    publishedAt: NOW, updatedAt: NOW, status: "active",
     currentRevision: { id: `${id}-revision`, knowledgeItemId: id, title, visibility: "shared", publishedAt: NOW, isCurrent: true, previousRevisionId: null, indexStatus: "indexed" },
   };
 }

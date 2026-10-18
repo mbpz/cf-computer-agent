@@ -29,6 +29,7 @@ import type {
   KnowledgePage,
   LibraryFilters,
   LibraryScope,
+  RevisionSummary,
   SearchHit,
   SearchPage,
 } from "./types";
@@ -123,6 +124,12 @@ export interface LibraryRepositoryPort {
     knowledgeItemId: string,
     revisionId: string,
   ): Promise<AuthorizedRevisionRecord | null>;
+  listRevisions(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    limit: number,
+    before?: { publishedAt: string; id: string },
+  ): Promise<{ revisions: RevisionSummary[]; hasMore: boolean } | null>;
   search(scope: LibraryScope, request: RepositorySearchRequest): Promise<SearchPage>;
   findCitation(
     scope: LibraryScope,
@@ -440,6 +447,64 @@ export class LibraryRepository implements LibraryRepositoryPort {
     revisionId: string,
   ): Promise<AuthorizedRevisionRecord | null> {
     return this.findAuthorizedRevision(scope, knowledgeItemId, revisionId);
+  }
+
+  /**
+   * The item's readable revisions, newest first, bounded by the caller's limit.
+   * `null` means the item is not readable (missing, trashed, or out of scope);
+   * an existing item always has at least its current revision.
+   */
+  async listRevisions(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    limit: number,
+    before?: { publishedAt: string; id: string },
+  ): Promise<{ revisions: RevisionSummary[]; hasMore: boolean } | null> {
+    const cursorSql = before === undefined
+      ? ""
+      : "AND (r.published_at < ? OR (r.published_at = ? AND r.id < ?))";
+    const cursorBindings = before === undefined ? [] : [before.publishedAt, before.publishedAt, before.id];
+    const rows = await this.db.prepare(
+      `WITH ${authorizedKnowledgeMemberCteSql(true)}
+       SELECT r.id, r.title, r.visibility, r.published_at,
+         CASE WHEN r.id = k.current_revision_id THEN 1 ELSE 0 END AS is_current
+       FROM authorized_member am
+       JOIN knowledge_items k ON k.id = ?
+       JOIN revisions r ON r.knowledge_item_id = k.id
+       ${ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL}
+       WHERE ${ACTIVE_KNOWLEDGE_ITEM_SQL}
+         AND ${readableKnowledgeRevisionSql("r")}
+         ${cursorSql}
+       ORDER BY r.published_at DESC, r.id DESC
+       LIMIT ?`,
+    ).bind(
+      scope.memberId,
+      scope.role,
+      knowledgeItemId,
+      ...cursorBindings,
+      limit + 1,
+    ).all<{
+      id: string;
+      title: string;
+      visibility: string;
+      published_at: string;
+      is_current: number;
+    }>();
+    if (rows.results.length === 0) return null;
+    const hasMore = rows.results.length > limit;
+    const revisions = rows.results.slice(0, limit).map((row): RevisionSummary => {
+      const visibility = row.visibility === "shared" || row.visibility === "admin_only" ? row.visibility : null;
+      if (!visibility || typeof row.title !== "string" || !isCanonicalTimestamp(row.published_at)
+        || (row.is_current !== 0 && row.is_current !== 1)) throw invalidKnowledgeData();
+      return {
+        id: requireString(row.id),
+        title: row.title,
+        visibility,
+        publishedAt: row.published_at,
+        isCurrent: row.is_current === 1,
+      };
+    });
+    return { revisions, hasMore };
   }
 
   async search(scope: LibraryScope, request: RepositorySearchRequest): Promise<SearchPage> {

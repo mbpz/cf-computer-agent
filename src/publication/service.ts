@@ -8,6 +8,7 @@ import { analyzeSensitiveContent } from "./sensitive-advisor";
 import type { ChunkDraft } from "../sources/chunker";
 import type {
   KnowledgeVisibility,
+  AdminKnowledgeItemView,
   DecisionReceipt,
   KnowledgeLifecycleOperation,
   KnowledgeLifecycleOperationKind,
@@ -332,7 +333,7 @@ export class PublicationService {
     if (recorded) return recorded;
     let result: RollbackResult;
     try {
-      result = await this.repository.rollback(itemId, targetRevisionId, reviewer.id);
+      result = await this.repository.rollback(itemId, targetRevisionId, reviewer.id, identity?.operationId);
     } catch (error) {
       const concurrent = await this.replayLifecycle<RollbackResult>(itemId, identity);
       if (concurrent) return concurrent;
@@ -350,6 +351,43 @@ export class PublicationService {
     // Recorded only after the rolled-back Revision and its index job exist, so a
     // replay answers with the rollback that actually committed.
     return this.recordLifecycle(itemId, "knowledge.rollback", reviewer.id, identity, answer);
+  }
+
+  /**
+   * Authoritative readback for a client that never learned a write's outcome.
+   * Only the administrator who claimed the operation may read it back, and the
+   * answer is the recorded receipt, not a fresh evaluation of current state.
+   */
+  async findLifecycleOperation(
+    reviewer: PublicationReviewer,
+    knowledgeItemId: string,
+    operationId: string,
+  ): Promise<{ kind: KnowledgeLifecycleOperationKind; response: unknown } | null> {
+    requireActiveAdmin(reviewer);
+    const itemId = requireId(knowledgeItemId);
+    if (typeof operationId !== "string" || !STABLE_OPERATION_ID.test(operationId)) throw invalidLifecycleRequest();
+    const receipt = await this.repository.findLifecycleOperation(itemId, operationId);
+    if (!receipt || receipt.actorId !== reviewer.id) return null;
+    let response: unknown;
+    try {
+      response = JSON.parse(receipt.responseJson) as unknown;
+    } catch {
+      throw new AppError("KNOWLEDGE_DATA_INVALID", "Published knowledge data is invalid", 500);
+    }
+    return { kind: receipt.kind, response };
+  }
+
+  /**
+   * Content-free administrator read of one item, active or trashed. It is the
+   * item surface's own read, so a trashed item stays inspectable without the
+   * reader path and without its published content.
+   */
+  async adminKnowledgeItem(reviewer: PublicationReviewer, knowledgeItemId: string): Promise<AdminKnowledgeItemView> {
+    requireActiveAdmin(reviewer);
+    const itemId = requireId(knowledgeItemId);
+    const item = await this.repository.findAdminKnowledgeItem(itemId);
+    if (!item || item.id !== itemId) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
+    return item;
   }
 
   async trash(

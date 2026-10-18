@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：445；操作/转发候选：1806。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：445；操作/转发候选：1810。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -400,7 +400,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/admin/audit-page.tsx | 6 |
 | frontend/pages/admin/create-role-page.tsx | 17 |
 | frontend/pages/admin/duplicate-queue-page.tsx | 8 |
-| frontend/pages/admin/knowledge-item-page.tsx | 11 |
+| frontend/pages/admin/knowledge-item-page.tsx | 15 |
 | frontend/pages/admin/knowledge-item-route.tsx | 2 |
 | frontend/pages/admin/members-page.tsx | 25 |
 | frontend/pages/admin/menu-editor.tsx | 11 |
@@ -501,7 +501,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /admin/roles/:id | frontend/app.tsx#AdminRoleDetailRoute; frontend/pages/admin/role-detail-page.tsx#AdminRoleDetailPage | 70 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 86 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 86 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /admin/knowledge/:id | frontend/pages/admin/knowledge-item-route.tsx#AdminKnowledgeItemRoute | 35 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /admin/knowledge/:id | frontend/pages/admin/knowledge-item-route.tsx#AdminKnowledgeItemRoute | 39 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 184 | 无（不代表动态边界已核对） |
 | &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 61 | frontend/components/ui/card.tsx#Card |
 | &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 13 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
@@ -2585,24 +2585,28 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 38:17 KnowledgeItemPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | disabled=pending |
-| 52:9 KnowledgeItemPage | ItemBody  | onTrash=onTrash; onRollback=onRollback | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"branch","e… |
-| 54:23 KnowledgeItemPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
-| 56:7 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
-| 58:5 KnowledgeItemPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}} |
-| 61:39 KnowledgeItemPage | p frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_WRITE_REFUSED") / feedback.message ? &#96; (${feedback.message})&#96; : "" |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
-| 64:9 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_RETRY") | onClick=onRetryOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
-| 68:9 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
-| 71:17 KnowledgeItemPage | p phase / … |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
-| 110:17 ItemBody | Button rollbackLabel | onClick=() =&gt; onRollback?.(previousRevisionId); type="button" | disabled=locked; {"kind":"branch","expression":"previousRevisionId === null","branch":"false"}; {"kind":"logical","expression":"canWrite","operator":"&&"} |
-| 116:11 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_TRASH") | onClick=onTrash; type="button" | disabled=locked; {"kind":"logical","expression":"canWrite","operator":"&&"} |
+| 42:17 KnowledgeItemPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | disabled=pending |
+| 56:9 KnowledgeItemPage | ItemBody  | onTrash=onTrash; onLoadMoreRevisions=onLoadMoreRevisions; onSelectRollback=onSelectRollback; onConfirmRollback=onConfirmRollback; onCancelRollback=onCancelRo… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"branch","e… |
+| 61:23 KnowledgeItemPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
+| 63:7 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
+| 65:5 KnowledgeItemPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}} |
+| 68:39 KnowledgeItemPage | p frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_WRITE_REFUSED") / feedback.message ? &#96; (${feedback.message})&#96; : "" |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
+| 72:11 KnowledgeItemPage | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_RESOLVE") | onClick=onResolveOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
+| 73:11 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_RETRY") | onClick=onRetryOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
+| 79:9 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
+| 82:17 KnowledgeItemPage | p phase / … |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
+| 133:33 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_SELECT") | onClick=() =&gt; onSelectRollback?.(entry.id); type="button" | disabled=locked; {"kind":"branch","expression":"revisions.length === 0","branch":"false"}; {"kind":"repeat","expression":"revisions"}; {"kind":"branch","expr… |
+| 139:32 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_HISTORY_MORE") | onClick=onLoadMoreRevisions; type="button" | disabled=locked &#124;&#124; historyPending; {"kind":"logical","expression":"hasMoreRevisions","operator":"&&"} |
+| 146:13 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_CONFIRM") | onClick=onConfirmRollback; type="button" | disabled=locked; {"kind":"logical","expression":"confirmTarget !== null && canWrite","operator":"&&"} |
+| 147:13 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_CANCEL") | onClick=onCancelRollback; type="button" | disabled=locked; {"kind":"logical","expression":"confirmTarget !== null && canWrite","operator":"&&"} |
+| 151:11 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_TRASH") | onClick=onTrash; type="button" | disabled=locked; {"kind":"logical","expression":"canWrite","operator":"&&"} |
 
 ## frontend/pages/admin/knowledge-item-route.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
 | 14:10 AdminKnowledgeItemRoute | KnowledgeItemSession  |  | spread: props |
-| 135:10 KnowledgeItemSession | KnowledgeItemPage  | onRetry=() =&gt; { void read(); }; onTrash=() =&gt; { void write("trash"); }; onRollback=(revisionId) =&gt; { void write("rollback", revisionId); }; onRetryO… |  |
+| 208:10 KnowledgeItemSession | KnowledgeItemPage  | onLoadMoreRevisions=() =&gt; { void loadOlderRevisions(); }; onRetry=() =&gt; { void read(); }; onTrash=() =&gt; { void write("trash"); }; onSelectRollback=s… |  |
 
 ## frontend/pages/admin/members-page.tsx
 

@@ -5310,19 +5310,23 @@
         "frontend/components/ui/page-state.tsx:24:10",
         "frontend/components/ui/skeleton.tsx:18:3",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
-        "frontend/pages/admin/knowledge-item-page.tsx:38:17",
-        "frontend/pages/admin/knowledge-item-page.tsx:52:9",
-        "frontend/pages/admin/knowledge-item-page.tsx:54:23",
-        "frontend/pages/admin/knowledge-item-page.tsx:56:7",
-        "frontend/pages/admin/knowledge-item-page.tsx:58:5",
-        "frontend/pages/admin/knowledge-item-page.tsx:61:39",
-        "frontend/pages/admin/knowledge-item-page.tsx:64:9",
-        "frontend/pages/admin/knowledge-item-page.tsx:68:9",
-        "frontend/pages/admin/knowledge-item-page.tsx:71:17",
-        "frontend/pages/admin/knowledge-item-page.tsx:110:17",
-        "frontend/pages/admin/knowledge-item-page.tsx:116:11",
+        "frontend/pages/admin/knowledge-item-page.tsx:42:17",
+        "frontend/pages/admin/knowledge-item-page.tsx:56:9",
+        "frontend/pages/admin/knowledge-item-page.tsx:61:23",
+        "frontend/pages/admin/knowledge-item-page.tsx:63:7",
+        "frontend/pages/admin/knowledge-item-page.tsx:65:5",
+        "frontend/pages/admin/knowledge-item-page.tsx:68:39",
+        "frontend/pages/admin/knowledge-item-page.tsx:72:11",
+        "frontend/pages/admin/knowledge-item-page.tsx:73:11",
+        "frontend/pages/admin/knowledge-item-page.tsx:79:9",
+        "frontend/pages/admin/knowledge-item-page.tsx:82:17",
+        "frontend/pages/admin/knowledge-item-page.tsx:133:33",
+        "frontend/pages/admin/knowledge-item-page.tsx:139:32",
+        "frontend/pages/admin/knowledge-item-page.tsx:146:13",
+        "frontend/pages/admin/knowledge-item-page.tsx:147:13",
+        "frontend/pages/admin/knowledge-item-page.tsx:151:11",
         "frontend/pages/admin/knowledge-item-route.tsx:14:10",
-        "frontend/pages/admin/knowledge-item-route.tsx:135:10"
+        "frontend/pages/admin/knowledge-item-route.tsx:208:10"
       ],
       "unresolvedSymbols": [
         "frontend/components/ui/card.tsx#Card",
@@ -42868,10 +42872,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:38:17",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:42:17",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "KnowledgeItemPage",
-      "line": 38,
+      "line": 42,
       "column": 17,
       "kind": "jsx",
       "tag": "Button",
@@ -42893,10 +42897,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:52:9",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:56:9",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "KnowledgeItemPage",
-      "line": 52,
+      "line": 56,
       "column": 9,
       "kind": "jsx",
       "tag": "ItemBody",
@@ -42908,11 +42912,21 @@
         "previousRevisionId": "previousRevisionId",
         "trashed": "trashed",
         "onTrash": "onTrash",
-        "onRollback": "onRollback"
+        "revisions": "revisions",
+        "confirmTarget": "confirmTarget",
+        "hasMoreRevisions": "hasMoreRevisions",
+        "historyPending": "historyPending",
+        "onLoadMoreRevisions": "onLoadMoreRevisions",
+        "onSelectRollback": "onSelectRollback",
+        "onConfirmRollback": "onConfirmRollback",
+        "onCancelRollback": "onCancelRollback"
       },
       "handlers": {
         "onTrash": "onTrash",
-        "onRollback": "onRollback"
+        "onLoadMoreRevisions": "onLoadMoreRevisions",
+        "onSelectRollback": "onSelectRollback",
+        "onConfirmRollback": "onConfirmRollback",
+        "onCancelRollback": "onCancelRollback"
       },
       "spreads": [],
       "labels": [],
@@ -42938,10 +42952,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:54:23",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:61:23",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "KnowledgeItemPage",
-      "line": 54,
+      "line": 61,
       "column": 23,
       "kind": "jsx",
       "tag": "div",
@@ -42970,10 +42984,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:56:7",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:63:7",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "KnowledgeItemPage",
-      "line": 56,
+      "line": 63,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -43007,10 +43021,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:58:5",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:65:5",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "KnowledgeItemPage",
-      "line": 58,
+      "line": 65,
       "column": 5,
       "kind": "jsx",
       "tag": "div",
@@ -43035,10 +43049,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:61:39",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:68:39",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "KnowledgeItemPage",
-      "line": 61,
+      "line": 68,
       "column": 39,
       "kind": "jsx",
       "tag": "p",
@@ -43069,11 +43083,49 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:64:9",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:72:11",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "KnowledgeItemPage",
-      "line": 64,
-      "column": 9,
+      "line": 72,
+      "column": 11,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "data-knowledge-resolve-operation": "true",
+        "disabled": "pending",
+        "onClick": "onResolveOperation"
+      },
+      "handlers": {
+        "onClick": "onResolveOperation"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_KNOWLEDGE_ITEM_RESOLVE\")"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "section",
+          "attributes": {
+            "aria-busy": "state.kind === \"loading\" || pending || undefined"
+          }
+        },
+        {
+          "kind": "logical",
+          "expression": "feedback.kind === \"unknown\"",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:73:11",
+      "path": "frontend/pages/admin/knowledge-item-page.tsx",
+      "owner": "KnowledgeItemPage",
+      "line": 73,
+      "column": 11,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -43107,10 +43159,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:68:9",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:79:9",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "KnowledgeItemPage",
-      "line": 68,
+      "line": 79,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -43145,10 +43197,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:71:17",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:82:17",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "KnowledgeItemPage",
-      "line": 71,
+      "line": 82,
       "column": 17,
       "kind": "jsx",
       "tag": "p",
@@ -43180,32 +43232,42 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:110:17",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:133:33",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "ItemBody",
-      "line": 110,
-      "column": 17,
+      "line": 133,
+      "column": 33,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
         "type": "\"button\"",
         "variant": "\"outline\"",
-        "data-knowledge-rollback": "true",
+        "size": "\"sm\"",
         "disabled": "locked",
-        "aria-label": "rollbackLabel",
-        "onClick": "() => onRollback?.(previousRevisionId)"
+        "data-knowledge-rollback-target": "entry.id",
+        "aria-label": "frontendText(locale, \"ADMIN_KNOWLEDGE_ITEM_ROLLBACK\").replace(\"{revisionId}\", entry.id)",
+        "onClick": "() => onSelectRollback?.(entry.id)"
       },
       "handlers": {
-        "onClick": "() => onRollback?.(previousRevisionId)"
+        "onClick": "() => onSelectRollback?.(entry.id)"
       },
       "spreads": [],
       "labels": [
-        "rollbackLabel"
+        "frontendText(locale, \"ADMIN_KNOWLEDGE_ITEM_SELECT\")"
       ],
       "context": [
         {
           "kind": "branch",
-          "expression": "previousRevisionId === null",
+          "expression": "revisions.length === 0",
+          "branch": "false"
+        },
+        {
+          "kind": "repeat",
+          "expression": "revisions"
+        },
+        {
+          "kind": "branch",
+          "expression": "entry.isCurrent",
           "branch": "false"
         },
         {
@@ -43217,10 +43279,103 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-page.tsx:116:11",
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:139:32",
       "path": "frontend/pages/admin/knowledge-item-page.tsx",
       "owner": "ItemBody",
-      "line": 116,
+      "line": 139,
+      "column": 32,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "size": "\"sm\"",
+        "data-knowledge-history-more": "true",
+        "disabled": "locked || historyPending",
+        "onClick": "onLoadMoreRevisions"
+      },
+      "handlers": {
+        "onClick": "onLoadMoreRevisions"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_KNOWLEDGE_ITEM_HISTORY_MORE\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "hasMoreRevisions",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:146:13",
+      "path": "frontend/pages/admin/knowledge-item-page.tsx",
+      "owner": "ItemBody",
+      "line": 146,
+      "column": 13,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "data-knowledge-confirm-rollback": "true",
+        "disabled": "locked",
+        "onClick": "onConfirmRollback"
+      },
+      "handlers": {
+        "onClick": "onConfirmRollback"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_KNOWLEDGE_ITEM_CONFIRM\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "confirmTarget !== null && canWrite",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:147:13",
+      "path": "frontend/pages/admin/knowledge-item-page.tsx",
+      "owner": "ItemBody",
+      "line": 147,
+      "column": 13,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "data-knowledge-cancel-rollback": "true",
+        "disabled": "locked",
+        "onClick": "onCancelRollback"
+      },
+      "handlers": {
+        "onClick": "onCancelRollback"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_KNOWLEDGE_ITEM_CANCEL\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "confirmTarget !== null && canWrite",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/admin/knowledge-item-page.tsx:151:11",
+      "path": "frontend/pages/admin/knowledge-item-page.tsx",
+      "owner": "ItemBody",
+      "line": 151,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -43268,10 +43423,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/knowledge-item-route.tsx:135:10",
+      "id": "frontend/pages/admin/knowledge-item-route.tsx:208:10",
       "path": "frontend/pages/admin/knowledge-item-route.tsx",
       "owner": "KnowledgeItemSession",
-      "line": 135,
+      "line": 208,
       "column": 10,
       "kind": "jsx",
       "tag": "KnowledgeItemPage",
@@ -43283,17 +43438,30 @@
         "pendingAction": "pendingAction",
         "feedback": "feedback",
         "recordBlocked": "recordBlocked",
+        "revisions": "revisions",
+        "confirmTarget": "confirmTarget",
+        "resolutionMissed": "resolutionMissed",
+        "hasMoreRevisions": "nextRevisionCursor !== null",
+        "historyPending": "historyPending",
+        "onLoadMoreRevisions": "() => { void loadOlderRevisions(); }",
         "onRetry": "() => { void read(); }",
         "onTrash": "() => { void write(\"trash\"); }",
-        "onRollback": "(revisionId) => { void write(\"rollback\", revisionId); }",
+        "onSelectRollback": "setConfirmTarget",
+        "onConfirmRollback": "() => { if (confirmTarget !== null) void write(\"rollback\", confirmTarget); }",
+        "onCancelRollback": "() => setConfirmTarget(null)",
         "onRetryOperation": "() => { void retryOperation(); }",
+        "onResolveOperation": "() => { void resolveOperation(); }",
         "onDiscardOperation": "discardOperation"
       },
       "handlers": {
+        "onLoadMoreRevisions": "() => { void loadOlderRevisions(); }",
         "onRetry": "() => { void read(); }",
         "onTrash": "() => { void write(\"trash\"); }",
-        "onRollback": "(revisionId) => { void write(\"rollback\", revisionId); }",
+        "onSelectRollback": "setConfirmTarget",
+        "onConfirmRollback": "() => { if (confirmTarget !== null) void write(\"rollback\", confirmTarget); }",
+        "onCancelRollback": "() => setConfirmTarget(null)",
         "onRetryOperation": "() => { void retryOperation(); }",
+        "onResolveOperation": "() => { void resolveOperation(); }",
         "onDiscardOperation": "discardOperation"
       },
       "spreads": [],

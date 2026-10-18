@@ -17,7 +17,7 @@ import {
   LibraryService,
   normalizeSearchQuery,
 } from "../../src/library/service";
-import type { ChatScope, KnowledgePage, KnowledgePageRequest, LibraryScope, SearchPage } from "../../src/library/types";
+import type { ChatScope, KnowledgePage, KnowledgePageRequest, LibraryScope, RevisionSummary, SearchPage } from "../../src/library/types";
 
 const contributor: LibraryScope = { memberId: "member-1", role: "contributor" };
 const admin: LibraryScope = { memberId: "admin-1", role: "admin" };
@@ -58,6 +58,38 @@ describe("LibraryService", () => {
     });
     expect(detail).not.toHaveProperty("normalizedPath");
     expect(detail.currentRevision).not.toHaveProperty("contentSha256");
+  });
+
+  it("pages revision history with an opaque cursor and rejects a forged one", async () => {
+    const seen: Array<{ limit: number; before?: { publishedAt: string; id: string } }> = [];
+    const current: RevisionSummary = {
+      id: "revision-1", title: "Trusted", visibility: "shared",
+      publishedAt: "2026-08-02T00:00:00.000Z", isCurrent: true,
+    };
+    const service = new LibraryService(repositoryFixture({
+      async listRevisions(_scope, _knowledgeItemId, limit, before) {
+        seen.push({ limit, before });
+        return before === undefined
+          ? { revisions: [current], hasMore: true }
+          : {
+            revisions: [{ ...current, id: "revision-0", publishedAt: "2026-08-01T00:00:00.000Z", isCurrent: false }],
+            hasMore: false,
+          };
+      },
+    }), noContentReader);
+
+    const first = await service.revisionHistory(contributor, "knowledge-1");
+    expect(first.revisions).toEqual([current]);
+    expect(first.nextCursor).toBeTruthy();
+    expect(seen[0]).toEqual({ limit: 50, before: undefined });
+
+    const second = await service.revisionHistory(contributor, "knowledge-1", first.nextCursor);
+    // The cursor names the last row of the previous page, not a page number.
+    expect(seen[1]?.before).toEqual({ publishedAt: current.publishedAt, id: current.id });
+    expect(second.nextCursor).toBeUndefined();
+
+    await expect(service.revisionHistory(contributor, "knowledge-1", "forged"))
+      .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
   });
 
   it("never calls the content reader for an absent or invisible item", async () => {
@@ -598,6 +630,7 @@ function repositoryFixture(overrides: Partial<LibraryRepositoryPort> = {}): Libr
     async findCurrent() { return revisionRecord(); },
     async listBacklinkCandidates() { return []; },
     async findRevision() { return revisionRecord(); },
+    async listRevisions() { return null; },
     async listRevisionChunks() { return { items: [] }; },
     async setChunkStatus(_scope, _knowledgeItemId, _revisionId, chunkId, status) { return { id: chunkId, status }; },
     async search() { return emptySearchPage; },

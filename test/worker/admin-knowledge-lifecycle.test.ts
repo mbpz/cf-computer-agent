@@ -36,6 +36,7 @@ interface ErrorBody { error: { code: string; message: string; details?: unknown 
 
 describe("administrator knowledge lifecycle over HTTP", () => {
   let admin: string;
+  let contributor: string;
 
   beforeEach(async () => {
     await reset();
@@ -47,6 +48,7 @@ describe("administrator knowledge lifecycle over HTTP", () => {
     const members = new MembersRepository(env.DB);
     const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     admin = (await sessions.create((await members.findById("admin-1"))!)).token;
+    contributor = (await sessions.create((await members.findById("member-1"))!)).token;
   });
 
   it("replays one trash and one restore from their recorded operations and audits each transition once", async () => {
@@ -194,6 +196,114 @@ describe("administrator knowledge lifecycle over HTTP", () => {
     expect(await count("SELECT COUNT(*) AS count FROM audit_events WHERE resource_id = ? AND action = 'knowledge.rolled_back'", first.knowledgeItemId)).toBe(1);
     expect(await count("SELECT COUNT(*) AS count FROM knowledge_lifecycle_operation_receipts WHERE knowledge_item_id = ? AND operation_id = 'lifecycle-rollback-1' AND kind = 'knowledge.rollback'", first.knowledgeItemId)).toBe(1);
     expect(await count("SELECT COUNT(*) AS count FROM knowledge_items WHERE id = ? AND current_revision_id = ?", first.knowledgeItemId, first.revisionId)).toBe(1);
+  });
+
+  it("lists revision history, rolls back to any named target repeatedly, and reads back a recorded operation", async () => {
+    const first = await publishedItem(admin, "submission-lifecycle-history-1");
+    const second = await publishSecondRevision(admin, first.knowledgeItemId, "submission-lifecycle-history-2");
+    const path = `/api/admin/knowledge/${first.knowledgeItemId}`;
+
+    const history = await json<{ revisions: Array<{ id: string; isCurrent: boolean; publishedAt: string }> }>(admin, `${path}/revisions`);
+    expect(history.revisions.map((revision) => revision.id).sort()).toEqual([first.revisionId, second.revisionId].sort());
+    expect(history.revisions.filter((revision) => revision.isCurrent).map((revision) => revision.id)).toEqual([second.revisionId]);
+
+    // A forged cursor is rejected instead of silently starting over.
+    const forged = await api(admin, `${path}/revisions?cursor=forged`);
+    expect(forged.status).toBe(400);
+    expect((await forged.json<ErrorBody>()).error.code).toBe("PAGE_CURSOR_INVALID");
+
+    const rollbackTo = (revisionId: string, operationId: string) => api(admin, `${path}/rollback`, {
+      method: "POST", body: JSON.stringify({ revisionId, operationId }),
+    });
+
+    const firstRoll = await rollbackTo(first.revisionId, "lifecycle-history-rb-1");
+    expect(firstRoll.status).toBe(200);
+    const firstAnswer = await firstRoll.json<RevisionBody>();
+    expect(firstAnswer.revision).toMatchObject({ id: first.revisionId, knowledgeItemId: first.knowledgeItemId });
+    expect(firstAnswer.previousRevisionId).toBe(second.revisionId);
+
+    // Moving away and back to the same revision is a new write. It must not
+    // collide with the first write's audit identity.
+    expect((await rollbackTo(second.revisionId, "lifecycle-history-rb-2")).status).toBe(200);
+    expect((await rollbackTo(first.revisionId, "lifecycle-history-rb-3")).status).toBe(200);
+    const audits = await env.DB.prepare(
+      "SELECT id FROM audit_events WHERE resource_id = ? AND action = 'knowledge.rolled_back' ORDER BY id",
+    ).bind(first.knowledgeItemId).all<{ id: string }>();
+    expect(audits.results).toHaveLength(3);
+    expect(new Set(audits.results.map((row) => row.id)).size).toBe(3);
+    expect(await count("SELECT COUNT(*) AS count FROM knowledge_items WHERE id = ? AND current_revision_id = ?", first.knowledgeItemId, first.revisionId)).toBe(1);
+
+    // Rolling back to the revision that is already current is a state conflict,
+    // never a silent no-op that bumps timestamps and claims a replacement.
+    const noop = await rollbackTo(first.revisionId, "lifecycle-history-rb-4");
+    expect(noop.status).toBe(409);
+    expect((await noop.json<ErrorBody>()).error.code).toBe("ROLLBACK_STATE_CONFLICT");
+    expect(await count("SELECT COUNT(*) AS count FROM audit_events WHERE resource_id = ? AND action = 'knowledge.rolled_back'", first.knowledgeItemId)).toBe(3);
+
+    // A client that lost the response reads the recorded answer back.
+    const recorded = await json<{
+      operation: { kind: string; response: { id: string; knowledgeItemId: string; previousRevisionId: string } } | null;
+    }>(admin, `${path}/operations/lifecycle-history-rb-1`);
+    expect(recorded.operation?.kind).toBe("knowledge.rollback");
+    // The receipt stores the flattened rollback result; the HTTP write wraps it
+    // as { revision, previousRevisionId } but the readback is the recorded value.
+    expect(recorded.operation?.response).toMatchObject({
+      id: first.revisionId,
+      knowledgeItemId: first.knowledgeItemId,
+      previousRevisionId: second.revisionId,
+    });
+    const missing = await json<{ operation: null }>(admin, `${path}/operations/lifecycle-history-missing`);
+    expect(missing.operation).toBeNull();
+
+    // The same number with a different target stays a conflict, not a replay.
+    const reused = await rollbackTo(second.revisionId, "lifecycle-history-rb-1");
+    expect(reused.status).toBe(409);
+    expect((await reused.json<ErrorBody>()).error.code).toBe("KNOWLEDGE_OPERATION_CONFLICT");
+  });
+
+  it("reads an item for administration whether active or trashed, and refuses contributors", async () => {
+    const item = await publishedItem(admin, "submission-admin-read");
+    const path = `/api/admin/knowledge/${item.knowledgeItemId}`;
+    const active = await json<{
+      knowledge: { id: string; status: string; currentRevision: { id: string; knowledgeItemId: string; previousRevisionId: string | null } };
+    }>(admin, path);
+    expect(active.knowledge).toMatchObject({
+      id: item.knowledgeItemId,
+      status: "active",
+      currentRevision: { id: item.revisionId, knowledgeItemId: item.knowledgeItemId },
+    });
+
+    const forbidden = await api(contributor, path);
+    expect(forbidden.status).toBe(403);
+
+    await api(admin, `${path}/trash`, {
+      method: "POST", body: JSON.stringify({ operationId: "admin-read-trash" }),
+    });
+    const trashed = await json<{ knowledge: { id: string; status: string; currentRevision: { id: string } } }>(admin, path);
+    expect(trashed.knowledge).toMatchObject({ id: item.knowledgeItemId, status: "trashed", currentRevision: { id: item.revisionId } });
+  });
+
+  it("keeps concurrent rollbacks to one target safe and convergent", async () => {
+    const first = await publishedItem(admin, "submission-lifecycle-concurrent-1");
+    await publishSecondRevision(admin, first.knowledgeItemId, "submission-lifecycle-concurrent-2");
+    const path = `/api/admin/knowledge/${first.knowledgeItemId}/rollback`;
+    const call = (operationId: string) => api(admin, path, {
+      method: "POST", body: JSON.stringify({ revisionId: first.revisionId, operationId }),
+    });
+    const [left, right] = await Promise.all([call("lifecycle-concurrent-a"), call("lifecycle-concurrent-b")]);
+    const statuses = [left.status, right.status].sort((a, b) => a - b);
+    // Either the loser observes the winner's target and converges, or it reports
+    // the state conflict; it must never apply a second, different transition.
+    expect(statuses[0]).toBe(200);
+    expect(statuses[1] === 200 || statuses[1] === 409).toBe(true);
+    if (statuses[1] === 409) {
+      const conflicted = left.status === 409 ? left : right;
+      expect((await conflicted.json<ErrorBody>()).error.code).toBe("ROLLBACK_STATE_CONFLICT");
+    }
+    expect(await count("SELECT COUNT(*) AS count FROM knowledge_items WHERE id = ? AND current_revision_id = ?", first.knowledgeItemId, first.revisionId)).toBe(1);
+    const audits = await count("SELECT COUNT(*) AS count FROM audit_events WHERE resource_id = ? AND action = 'knowledge.rolled_back'", first.knowledgeItemId);
+    expect(audits).toBe(1);
+    expect(await count("SELECT COUNT(*) AS count FROM knowledge_lifecycle_operation_receipts WHERE knowledge_item_id = ? AND kind = 'knowledge.rollback'", first.knowledgeItemId)).toBeGreaterThanOrEqual(1);
   });
 
   it("applies the successful items of a partially failed batch and replays a retried item once", async () => {

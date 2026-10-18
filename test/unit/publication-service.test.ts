@@ -662,6 +662,8 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
     async findDecisionReceipt() { return null; },
     async recordDecisionReceipt(_write, response) { return response; },
     async findLifecycleReceipt() { return null; },
+    async findAdminKnowledgeItem() { return null; },
+    async findLifecycleOperation() { return null; },
     async recordLifecycleReceipt(_write, response) { return response; },
     async listPendingIntents(limit) {
       return limit > 0 && intent.state !== "completed" && intent.state !== "failed_terminal" ? [intent] : [];

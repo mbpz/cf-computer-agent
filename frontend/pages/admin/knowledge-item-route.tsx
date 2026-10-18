@@ -6,7 +6,7 @@ import {
   loadKnowledgeLifecycleOperation, prepareKnowledgeLifecycleOperation,
   saveKnowledgeLifecycleOperation, type KnowledgeLifecycleOperation,
 } from "../../lib/knowledge-lifecycle-intent";
-import { knowledgeItemWriteOutcome, loadAdminKnowledgeItem, sendKnowledgeLifecycleOperation } from "../../lib/admin-knowledge-item-data";
+import { knowledgeItemWriteOutcome, loadAdminKnowledgeItem, loadAdminKnowledgeRevisions, loadKnowledgeLifecycleResolution, sendKnowledgeLifecycleOperation, type KnowledgeRevisionSummary } from "../../lib/admin-knowledge-item-data";
 import { KnowledgeItemPage, type KnowledgeItemFeedback, type KnowledgeItemPageState, type KnowledgeItemPendingAction } from "./knowledge-item-page";
 
 export function AdminKnowledgeItemRoute(props: { locale: LocaleRuntime; knowledgeItemId: string; memberId?: string; canReview: boolean }) {
@@ -25,6 +25,11 @@ function KnowledgeItemSession({ locale, knowledgeItemId, memberId, canReview }: 
   const [feedback, setFeedback] = useState<KnowledgeItemFeedback>(adopted ? { kind: "unknown", message: "" } : { kind: "idle" });
   const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
   const [trashed, setTrashed] = useState(false);
+  const [revisions, setRevisions] = useState<readonly KnowledgeRevisionSummary[]>([]);
+  const [nextRevisionCursor, setNextRevisionCursor] = useState<string | null>(null);
+  const [historyPending, setHistoryPending] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
+  const [resolutionMissed, setResolutionMissed] = useState(false);
   const operationRef = useRef<KnowledgeLifecycleOperation | null>(adopted);
   const writeRef = useRef(false);
   const readRef = useRef<AbortController | null>(null);
@@ -34,9 +39,15 @@ function KnowledgeItemSession({ locale, knowledgeItemId, memberId, canReview }: 
     readRef.current?.abort(); readRef.current = controller;
     setState({ kind: "loading" });
     try {
-      const item = await loadAdminKnowledgeItem(knowledgeItemId, undefined, controller.signal);
+      const [item, history] = await Promise.all([
+        loadAdminKnowledgeItem(knowledgeItemId, undefined, controller.signal),
+        loadAdminKnowledgeRevisions(knowledgeItemId, undefined, undefined, controller.signal).catch(() => null),
+      ]);
       if (controller.signal.aborted) return;
       setState({ kind: "ready", item });
+      setTrashed(item.status === "trashed");
+      setRevisions(history?.revisions ?? []);
+      setNextRevisionCursor(history?.nextCursor ?? null);
     } catch (error: unknown) {
       if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
       if (error instanceof ApiRequestError && error.status === 404) {
@@ -55,6 +66,30 @@ function KnowledgeItemSession({ locale, knowledgeItemId, memberId, canReview }: 
     return () => { readRef.current?.abort(); };
   }, [read]);
 
+  /**
+   * Appends the next older page. A new page replaces whatever the first read
+   * loaded only when it resolves after that read; ids are merged so a rollback
+   * that changed `isCurrent` cannot duplicate a row.
+   */
+  async function loadOlderRevisions() {
+    if (nextRevisionCursor === null || historyPending) return;
+    const cursor = nextRevisionCursor;
+    setHistoryPending(true);
+    try {
+      const page = await loadAdminKnowledgeRevisions(knowledgeItemId, cursor);
+      if (!page) return;
+      setRevisions((current) => {
+        const seen = new Set(current.map((revision) => revision.id));
+        return [...current, ...page.revisions.filter((revision) => !seen.has(revision.id))];
+      });
+      setNextRevisionCursor(page.nextCursor ?? null);
+    } catch {
+      // A failed older page leaves the verified rows untouched; the button stays.
+    } finally {
+      setHistoryPending(false);
+    }
+  }
+
   // Sends a frozen operation byte for byte, so a retry replays its recorded result.
   const deliver = useCallback(async (operation: KnowledgeLifecycleOperation) => {
     if (!memberId) return;
@@ -62,6 +97,8 @@ function KnowledgeItemSession({ locale, knowledgeItemId, memberId, canReview }: 
       const result = await sendKnowledgeLifecycleOperation(operation);
       clearKnowledgeLifecycleOperation(memberId, operation);
       operationRef.current = null;
+      setConfirmTarget(null);
+      setResolutionMissed(false);
       if (result.kind === "trash") {
         setTrashed(true);
         setFeedback({ kind: "trashed" });
@@ -73,7 +110,7 @@ function KnowledgeItemSession({ locale, knowledgeItemId, memberId, canReview }: 
       const outcome = knowledgeItemWriteOutcome(error);
       // An unknown outcome keeps the record: the retry must resend this same
       // operation, never a freshly minted one.
-      if (outcome.kind === "unknown-outcome") { setFeedback({ kind: "unknown", message: outcome.code }); return; }
+      if (outcome.kind === "unknown-outcome") { setResolutionMissed(false); setFeedback({ kind: "unknown", message: outcome.code }); return; }
       operationRef.current = null;
       const discarded = clearKnowledgeLifecycleOperation(memberId, operation);
       if (!discarded) setRecordBlocked(true);
@@ -121,6 +158,42 @@ function KnowledgeItemSession({ locale, knowledgeItemId, memberId, canReview }: 
     try { await deliver(operation); } finally { writeRef.current = false; setPendingAction(null); }
   }
 
+  /**
+   * Resolves a stored operation by reading its recorded answer. This never
+   * sends the write again: if no receipt exists the page says so and keeps the
+   * retry option, so an unknown outcome is never silently turned into success.
+   */
+  async function resolveOperation() {
+    const operation = operationRef.current;
+    if (!memberId || !operation || writeRef.current) return;
+    const operationNumber = frozenOperationNumber(operation);
+    if (operationNumber === null) { setResolutionMissed(true); return; }
+    writeRef.current = true;
+    setPendingAction(operation.action === "trash" ? "trash" : "rollback");
+    try {
+      const resolution = await loadKnowledgeLifecycleResolution(knowledgeItemId, operationNumber);
+      if (!resolution) { setResolutionMissed(true); return; }
+      const matches = operation.action === "trash" ? resolution.kind === "trash" : resolution.kind === "rollback";
+      if (!matches) { setResolutionMissed(true); return; }
+      if (!clearKnowledgeLifecycleOperation(memberId, operation)) { setRecordBlocked(true); return; }
+      operationRef.current = null;
+      setResolutionMissed(false);
+      setConfirmTarget(null);
+      if (resolution.kind === "trash") {
+        setTrashed(true);
+        setFeedback({ kind: "trashed" });
+      } else {
+        setFeedback({ kind: "rolled-back", revisionId: resolution.receipt.revision.id, previousRevisionId: resolution.receipt.previousRevisionId });
+        void read();
+      }
+    } catch {
+      setResolutionMissed(true);
+    } finally {
+      writeRef.current = false;
+      setPendingAction(null);
+    }
+  }
+
   function discardOperation() {
     const operation = operationRef.current;
     if (operation && memberId) clearKnowledgeLifecycleOperation(memberId, operation);
@@ -134,9 +207,25 @@ function KnowledgeItemSession({ locale, knowledgeItemId, memberId, canReview }: 
 
   return <KnowledgeItemPage state={state} locale={locale} canReview={canReview} trashed={trashed}
     pendingAction={pendingAction} feedback={feedback} recordBlocked={recordBlocked}
+    revisions={revisions} confirmTarget={confirmTarget} resolutionMissed={resolutionMissed}
+    hasMoreRevisions={nextRevisionCursor !== null} historyPending={historyPending}
+    onLoadMoreRevisions={() => { void loadOlderRevisions(); }}
     onRetry={() => { void read(); }}
     onTrash={() => { void write("trash"); }}
-    onRollback={(revisionId) => { void write("rollback", revisionId); }}
+    onSelectRollback={setConfirmTarget}
+    onConfirmRollback={() => { if (confirmTarget !== null) void write("rollback", confirmTarget); }}
+    onCancelRollback={() => setConfirmTarget(null)}
     onRetryOperation={() => { void retryOperation(); }}
+    onResolveOperation={() => { void resolveOperation(); }}
     onDiscardOperation={discardOperation} />;
+}
+
+/** The operation number frozen inside the stored body; never re-minted on read. */
+function frozenOperationNumber(operation: KnowledgeLifecycleOperation): string | null {
+  try {
+    const parsed: unknown = JSON.parse(operation.body);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const value = (parsed as Record<string, unknown>).operationId;
+    return typeof value === "string" ? value : null;
+  } catch { return null; }
 }

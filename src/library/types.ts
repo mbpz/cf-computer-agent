@@ -153,6 +153,25 @@ export interface KnowledgeDetail extends Omit<KnowledgeListItem, "revisionId"> {
   currentRevision: RevisionDetail;
 }
 
+/**
+ * One row of an item's revision history. Only identity and publication facts
+ * are listed; the list never carries content, so a selector cannot leak a
+ * revision the reader could not otherwise open.
+ */
+export interface RevisionSummary {
+  id: string;
+  title: string;
+  visibility: KnowledgeVisibility;
+  publishedAt: string;
+  isCurrent: boolean;
+}
+
+/** One bounded page of revision history; `nextCursor` continues older rows. */
+export interface RevisionHistoryPage {
+  revisions: RevisionSummary[];
+  nextCursor?: string;
+}
+
 export interface RevisionDownload {
   markdown: string;
   filename: string;
