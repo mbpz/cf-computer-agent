@@ -12,7 +12,7 @@
 
 ## 范围
 
-在真实生产部署上，用已登录管理员会话对一个验收条目完成"生成闪卡 → 自动保留 → 列表出现 → 再次打开 → 删除 → 审计核对"。未覆盖贡献者、键盘/读屏、多视口或音频/视频类产物。
+在真实生产部署上，用已登录管理员会话对一个验收条目完成"生成闪卡 → 自动保留 → 列表出现 → 再次打开 → 删除 → 审计核对"；并补充贡献者会话旅程、375/768/1280 三档视口、纯键盘操作，以及浏览器 AX 树中的可访问名称核对。未覆盖真实屏幕阅读器语音播放、音频/视频类产物，以及闪卡以外的产物类型。
 
 验收对象：`39fd7d01-0642-48ad-910e-41b0d6abdf63`，当前修订 `252113a9-abbe-430f-a057-de48183068f7`。
 
@@ -58,7 +58,7 @@
 
   这是 Chrome 通过 CDP 暴露、并进一步映射到 macOS `NSAccessibility` 的同一棵树；VoiceOver 消费的正是这里的 role/name。为完成该检查临时创建的产物 `949e277c…` 已在捕获后删除，不留残置。
 - **原生 AX 路径被系统权限阻塞**：`rea observe-native-ui` 返回 `screen-recording-denied`。修复步骤：系统设置 → 隐私与安全性 → 屏幕录制（以及辅助功能）勾选 omp/终端宿主，然后重试：
-  `rea observe-native-ui "/Applications/Google Chrome.app" --pid <Chrome PID> --window-id <CGWindowID> --max-accessibility-nodes 800`
+  `rea observe-native-ui "/Applications/Google Chrome.app" --pid <Chrome PID> --window-id <CGWindowID> --max-nodes 800`
 - VoiceOver 的语音输出没有可靠的程序化抓取方式；授予权限后可用 REA 捕获同一窗口的原生 AX 树，作为屏幕阅读器读取面的直接证据。真正的语音播报仍需人工旁听。
 
 ## 边界
