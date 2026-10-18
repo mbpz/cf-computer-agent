@@ -55,6 +55,7 @@
 | 外壳 | `animated-sidebar`（I6 复核：包一层适配层而不是 fork）＋ `command-palette`（I5 复核）＋ 移动端 `dynamic-island` 视需要 |
 | 知识阅读器 | `collapsible` / `bouncy-accordion`（章节）、`morphing-lightbox`（图片）、`file-tree`（已装，目录） |
 | 移动列表 | `swipeable-list`、`pull-to-refresh` |
+| 站点统计 | `status-bar`（每日活动的分层条形与逐日 tooltip）＋ `donut-chart`（热门页面/地区/国家占比）＋ `tabs`（维度切换） |
 
 ### Wave 3 — 一致性锁定与验收
 

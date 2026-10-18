@@ -1,8 +1,12 @@
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { Select } from "../../components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { StatusBar, StatusBarLegend, StatusBarPlot, StatusBarTooltip, type StatusBarDatum, type StatusBarStatus } from "../../components/charts/status-bar";
+import { DonutChart, DonutChartCenter, DonutChartLegend, DonutChartPlot } from "../../components/charts/donut-chart";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminAnalyticsOverview } from "../../lib/admin-analytics-data";
 import { NumberTicker } from "../../components/motion/number-ticker";
@@ -24,8 +28,8 @@ export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, l
     <p data-analytics-range className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_RANGE_UTC").replace("{from}", state.data.range.from).replace("{to}", state.data.range.to)}</p>
     {(pending || localError) && <p data-analytics-stale role="status" className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_STALE")}</p>}
     <div className="grid gap-4 md:grid-cols-3"><Metric label={frontendText(locale, "ADMIN_ANALYTICS_PAGE_VIEWS")} value={state.data.totals.pageViews} /><Metric label={frontendText(locale, "ADMIN_ANALYTICS_UNIQUE_VISITORS")} value={state.data.totals.uniqueVisitors} /><Metric label={frontendText(locale, "ADMIN_ANALYTICS_LOGIN_USERS")} value={state.data.totals.loginUsers} /></div>
-    <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_ANALYTICS_TRENDS")}</CardTitle></CardHeader><CardContent><DailyChart rows={state.data.daily} locale={locale} /></CardContent></Card>
-    <div className="grid gap-4 lg:grid-cols-3"><BreakdownCard title={frontendText(locale, "ADMIN_ANALYTICS_PATHS")} rows={state.data.breakdowns.paths} empty={frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")} /><BreakdownCard title={frontendText(locale, "ADMIN_ANALYTICS_REGIONS")} rows={state.data.breakdowns.regions} empty={frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")} /><BreakdownCard title={frontendText(locale, "ADMIN_ANALYTICS_COUNTRIES")} rows={state.data.breakdowns.countries} empty={frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")} /></div>
+    <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_ANALYTICS_DAILY_TITLE")}</CardTitle></CardHeader><CardContent><DailyStatus rows={state.data.daily} locale={locale} /></CardContent></Card>
+    <BreakdownPanel breakdowns={state.data.breakdowns} locale={locale} />
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_ANALYTICS_VISITORS")}</CardTitle></CardHeader><CardContent className="space-y-3">{localError ? <div role="alert" className="space-y-2"><p className="text-sm text-destructive">{frontendText(locale, "ADMIN_ANALYTICS_UNAVAILABLE")}</p>{retry}</div> : null}<DataTable
       locale={locale}
       rows={state.data.recentVisitors.items}
@@ -58,17 +62,65 @@ function Metric({ label, value }: { label: string; value: number }) {
   return <Card><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-semibold tabular-nums"><NumberTicker value={value} startOnView={false} /></p></CardContent></Card>;
 }
 
-function DailyChart({ rows, locale }: { rows: AdminAnalyticsOverview["daily"]; locale: LocaleRuntime }) {
-  if (rows.length === 0) return <p className="py-4 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_EMPTY")}</p>;
-  const max = Math.max(...rows.map((row) => row.pageViews), 1);
-  return <div className="grid grid-cols-[repeat(auto-fit,minmax(2.5rem,1fr))] items-end gap-2" role="img" aria-label={frontendText(locale, "ADMIN_ANALYTICS_TRENDS")}>
-    {rows.map((row) => <div key={row.day} className="group flex min-w-0 flex-col items-center gap-2"><span className="text-[10px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{row.pageViews}</span><div className="flex h-32 w-full items-end"><div className="w-full rounded-t-sm bg-primary/80 transition-[height]" style={{ height: `${Math.max((row.pageViews / max) * 100, row.pageViews > 0 ? 4 : 0)}%` }} title={`${row.day}: ${row.pageViews}`} /></div><time className="truncate text-[10px] text-muted-foreground" dateTime={row.day}>{row.day.slice(5)}</time></div>)}
-  </div>;
+const BREAKDOWN_TABS = [
+  { id: "paths", labelKey: "ADMIN_ANALYTICS_PATHS" },
+  { id: "regions", labelKey: "ADMIN_ANALYTICS_REGIONS" },
+  { id: "countries", labelKey: "ADMIN_ANALYTICS_COUNTRIES" },
+] as const;
+type BreakdownId = (typeof BREAKDOWN_TABS)[number]["id"];
+const SEGMENT_COLORS = ["#2563eb", "#0ea5e9", "#059669", "#d97706", "#e11d48", "#7c3aed"];
+
+/** Volume tiers keep one hue; the exact counts live in the tooltip and the screen-reader table. */
+function volumeStatus(pageViews: number, max: number): string {
+  if (pageViews <= 0) return "none";
+  if (pageViews >= max * 0.66) return "high";
+  if (pageViews >= max * 0.33) return "medium";
+  return "low";
 }
 
-function BreakdownCard({ title, rows, empty }: { title: string; rows: Array<{ key: string; pageViews: number }>; empty: string }) {
+function DailyStatus({ rows, locale }: { rows: AdminAnalyticsOverview["daily"]; locale: LocaleRuntime }) {
+  const statuses = useMemo<StatusBarStatus[]>(() => [
+    { id: "none", label: frontendText(locale, "ADMIN_ANALYTICS_VOLUME_NONE"), color: "color-mix(in oklch, var(--muted-foreground) 28%, transparent)" },
+    { id: "low", label: frontendText(locale, "ADMIN_ANALYTICS_VOLUME_LOW"), color: "color-mix(in oklch, var(--primary) 40%, transparent)" },
+    { id: "medium", label: frontendText(locale, "ADMIN_ANALYTICS_VOLUME_MEDIUM"), color: "color-mix(in oklch, var(--primary) 65%, transparent)" },
+    { id: "high", label: frontendText(locale, "ADMIN_ANALYTICS_VOLUME_HIGH"), color: "var(--primary)" },
+  ], [locale]);
+  if (rows.length === 0) return <p className="py-4 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_EMPTY")}</p>;
   const max = Math.max(...rows.map((row) => row.pageViews), 1);
-  return <Card><CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader><CardContent>{rows.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : <div className="space-y-3">{rows.map((row) => <div key={row.key} className="space-y-1"><div className="flex items-center justify-between gap-2 text-sm"><span className="truncate" title={row.key}>{row.key}</span><span className="tabular-nums text-muted-foreground">{row.pageViews}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.max((row.pageViews / max) * 100, 4)}%` }} /></div></div>)}</div>}</CardContent></Card>;
+  const data: StatusBarDatum[] = rows.map((row) => ({
+    id: row.day,
+    label: row.day.slice(5),
+    status: volumeStatus(row.pageViews, max),
+    description: `${row.pageViews} ${frontendText(locale, "ADMIN_ANALYTICS_PAGE_VIEWS")} · ${row.uniqueVisitors} ${frontendText(locale, "ADMIN_ANALYTICS_UNIQUE_VISITORS")} · ${row.loginUsers} ${frontendText(locale, "ADMIN_ANALYTICS_LOGIN_USERS")}`,
+  }));
+  return <StatusBar data={data} statuses={statuses} label={frontendText(locale, "ADMIN_ANALYTICS_TRENDS")}>
+    <StatusBarPlot barClassName="h-10" />
+    <StatusBarTooltip />
+    <StatusBarLegend />
+  </StatusBar>;
+}
+
+function BreakdownPanel({ breakdowns, locale }: { breakdowns: AdminAnalyticsOverview["breakdowns"]; locale: LocaleRuntime }) {
+  const [dimension, setDimension] = useState<BreakdownId>("paths");
+  const rows = breakdowns[dimension];
+  const activeTab = BREAKDOWN_TABS.find((tab) => tab.id === dimension) ?? BREAKDOWN_TABS[0];
+  const segments = rows.map((row, index) => ({ id: row.key, name: row.key, value: row.pageViews, color: SEGMENT_COLORS[index % SEGMENT_COLORS.length] }));
+  return <Card>
+    <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+      <CardTitle>{frontendText(locale, "ADMIN_ANALYTICS_BREAKDOWN")}</CardTitle>
+      <Tabs value={dimension} onValueChange={(value) => setDimension(value as BreakdownId)} variant="segment">
+        <TabsList>{BREAKDOWN_TABS.map((tab) => <TabsTrigger key={tab.id} value={tab.id}>{frontendText(locale, tab.labelKey)}</TabsTrigger>)}</TabsList>
+      </Tabs>
+    </CardHeader>
+    <CardContent>
+      {segments.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_NO_DATA")}</p> : <DonutChart segments={segments} label={frontendText(locale, activeTab.labelKey)} formatValue={(value) => value.toLocaleString(locale.locale === "zh-CN" ? "zh-CN" : "en")}>
+        <div className="grid items-center gap-6 sm:grid-cols-[minmax(0,16rem)_1fr]">
+          <DonutChartPlot><DonutChartCenter totalLabel={frontendText(locale, "ADMIN_ANALYTICS_PAGE_VIEWS")} /></DonutChartPlot>
+          <DonutChartLegend />
+        </div>
+      </DonutChart>}
+    </CardContent>
+  </Card>;
 }
 
 function formatLocation(row: AdminAnalyticsOverview["recentVisitors"]["items"][number]): string {

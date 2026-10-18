@@ -47,6 +47,31 @@ describe("AdminAnalyticsRoute", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders the beUI status strip and donut, and switches breakdown dimensions", async () => {
+    const data: AdminAnalyticsOverview = {
+      range: { from: "2026-10-12", to: "2026-10-18", days: 7 },
+      totals: { pageViews: 12, uniqueVisitors: 5, loginUsers: 1 },
+      daily: [
+        { day: "2026-10-12", pageViews: 5, uniqueVisitors: 2, loginUsers: 0 },
+        { day: "2026-10-13", pageViews: 7, uniqueVisitors: 3, loginUsers: 1 },
+      ],
+      breakdowns: { paths: [{ key: "/a", pageViews: 12 }], regions: [{ key: "Tokyo", pageViews: 12 }], countries: [{ key: "Japan", pageViews: 12 }] },
+      recentVisitors: { items: [], pagination: { page: 1, pageSize: 20, total: 12, totalPages: 1 } },
+    };
+    await renderRoute(async () => data);
+    expect(container.querySelector('[data-slot="status-bar"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-status-period]').length).toBe(2);
+    expect(container.querySelectorAll('[data-donut-legend]').length).toBe(1);
+    expect(container.textContent).toContain("/a");
+
+    const regions = Array.from(container.querySelectorAll('[role="tab"]')).find((tab) => tab.textContent?.includes("Regions"));
+    expect(regions).toBeTruthy();
+    await act(async () => { (regions as HTMLElement).click(); });
+    await flush();
+    expect(container.textContent).toContain("Tokyo");
+    expect(container.textContent).not.toContain("/a");
+  });
+
   it("loads the first window from the days filter and ignores URL page params", async () => {
     browser.history.replaceState({}, "", "/admin/analytics?days=14&page=3&pageSize=50");
     const inputs: LoadAdminAnalyticsInput[] = [];
