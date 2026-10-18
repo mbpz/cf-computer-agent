@@ -4,6 +4,7 @@ import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { ButtonLink } from "../../components/motion/button/base";
+import { OverflowActions, type OverflowActionItem } from "../../components/motion/overflow-actions";
 import { DataPagination } from "../../components/data-pagination";
 import { TodoList, type TodoItem, type TodoItemStatus } from "../../components/agents/todo-list";
 import { Input } from "../../components/ui/input";
@@ -101,7 +102,17 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
     : pending && state.kind === "ready" && state.items.length > 0 ? frontendText(locale, "LIST_LOADING_MORE")
       : state.kind === "ready" && state.pagination.page >= state.pagination.totalPages && state.items.length > 0 ? frontendText(locale, "LIST_END_OF_LIST")
         : "";
-  /** One beUI row per task: title, badges, due date and the row's own controls. */
+  /** Row actions share one beUI rail so inline buttons stop wrapping on narrow rows. */
+  const taskActions = (task: TaskItem): OverflowActionItem[] => {
+    const trimmedTitle = task.title.trim();
+    const taskLabel = trimmedTitle ? `${trimmedTitle} (${task.id})` : task.id;
+    const statusAction = frontendText(locale, task.status === "done" ? "TASKS_REOPEN" : "TASKS_COMPLETE");
+    const actions: OverflowActionItem[] = [];
+    if (onOpen) actions.push({ id: "edit", label: frontendText(locale, "TASKS_EDIT"), ariaLabel: `${frontendText(locale, "TASKS_EDIT")}: ${taskLabel}`, disabled: Boolean(actionPendingId), onClick: () => onOpen(task.id) });
+    actions.push({ id: "status", label: statusAction, ariaLabel: `${statusAction}: ${taskLabel}`, disabled: validConfirmation || actionPendingId != null, onClick: () => { if (!confirmationRef.current) onStatusChange?.(task.id, task.status === "done" ? "todo" : "done"); } });
+    actions.push({ id: "delete", label: frontendText(locale, "TASKS_DELETE"), ariaLabel: `${frontendText(locale, "TASKS_DELETE")}: ${taskLabel}`, tone: "destructive", disabled: validConfirmation || deleteBlocked, onClick: () => requestDelete(task) });
+    return actions;
+  };
   const taskRow = (task: TaskItem): TodoItem => {
     const trimmedTitle = task.title.trim();
     const taskLabel = trimmedTitle ? `${trimmedTitle} (${task.id})` : task.id;
@@ -119,11 +130,9 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
       status: todoStatus(task.status),
       progress: task.progress,
       detail: <span className="flex flex-wrap items-center gap-2"><Badge variant="outline">{frontendText(locale, taskStatusKey(task.status))}</Badge><Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge><span className="text-xs text-muted-foreground"><span className="sr-only">{frontendText(locale, "TASKS_DUE")}: </span>{due}</span></span>,
-      actions: <div role="group" aria-label={frontendText(locale, "TASKS_COLUMN_ACTIONS")} className="flex flex-wrap gap-2">
+      actions: <div role="group" aria-label={frontendText(locale, "TASKS_COLUMN_ACTIONS")} className="flex flex-wrap items-center gap-2">
         <ButtonLink variant="outline" size="sm" href={contextDiscussionHref({ kind: "task", id: task.id })}>{frontendText(locale, "MESSAGES_DISCUSS")}</ButtonLink>
-        {onOpen && <Button variant="outline" size="sm" disabled={Boolean(actionPendingId)} aria-label={`${frontendText(locale, "TASKS_EDIT")}: ${task.title ? `${task.title} (${task.id})` : task.id}`} onClick={() => onOpen(task.id)}>{frontendText(locale, "TASKS_EDIT")}</Button>}
-        <Button aria-label={`${statusAction}: ${taskLabel}`} size="sm" variant="outline" disabled={validConfirmation || actionPendingId != null} onClick={() => { if (!confirmationRef.current) onStatusChange?.(task.id, task.status === "done" ? "todo" : "done"); }}>{statusAction}</Button>
-        <Button aria-label={`${frontendText(locale, "TASKS_DELETE")}: ${taskLabel}`} size="sm" variant="destructive" disabled={validConfirmation || deleteBlocked} onClick={() => requestDelete(task)}>{frontendText(locale, "TASKS_DELETE")}</Button>
+        <OverflowActions size="sm" primaryActions={taskActions(task)} openLabel={frontendText(locale, "COMMON_MORE_ACTIONS")} closeLabel={frontendText(locale, "COMMON_FEWER_ACTIONS")} />
       </div>,
     };
   };

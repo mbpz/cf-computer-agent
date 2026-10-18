@@ -45,7 +45,7 @@ describe("review traceable member-private targets through App", () => {
   it("labels sample counts, bounds lists and exposes every view-all filter", async () => {
     await mount();
     expect(main().textContent).toContain("Task totals cover the period");
-    expect([...main().querySelectorAll(".tabular-nums")].slice(0,3).map(node => node.textContent)).toEqual(["26","31","24"]);
+    expect([...main().querySelectorAll(".tabular-nums")].slice(0,3).map(node => node.querySelector(".sr-only")?.textContent ?? node.textContent)).toEqual(["26","31","24"]);
     expect(main().querySelectorAll('[data-review-target="task"]')).toHaveLength(10);
     for (const [kind,href] of Object.entries({completed:"/tasks?status=done&page=1&pageSize=20",overdue:"/tasks?due=overdue&page=1&pageSize=20",blocked:"/tasks?status=blocked&page=1&pageSize=20",inbox:"/inbox?status=inbox&page=1&pageSize=20",projects:"/projects?status=active&page=1&pageSize=20"})) {
       expect(main().querySelector(`a[data-review-all="${kind}"]`)?.getAttribute("href")).toBe(href);

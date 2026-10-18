@@ -12,9 +12,12 @@
 
 ## Phase 0 — 共享内容原语（先统一，避免每页各做一套）
 
-- [ ] 0.1 **数字与指标**：内容区的计数统一 `animated-number`（进入视图）或 `number-ticker`（原地滚动）；清掉手写大数字。验收：admin dashboard / today / review / notifications 四处不再出现裸 `<p>{count}</p>`。
-- [ ] 0.2 **行操作**：所有表格/列表行内动作统一 `context-menu` 或 `overflow-actions`（二选一按行宽），保留 `aria-label` 与 `data-confirm-action`。首个落地页：tasks、inbox。
-- [ ] 0.3 **图表**：把 `composition-chart`、`heat-calendar` 以 registry 源补进 `components/charts/`；仅在有对应数据语义的页面使用（见各页条目），禁止用占比图表达不可加总的 UV。
+- [x] 0.1 **数字与指标**：内容区的计数统一 `animated-number`（进入视图）或 `number-ticker`（原地滚动）；清掉手写大数字。验收：admin dashboard / today / review / notifications 四处不再出现裸 `<p>{count}</p>`。
+  - 已完成：`/admin`（此前已用 `number-ticker`）、`/today`、`/review`（均 `startOnView={false}`）。`/notifications` 的未读总数保留裸文本：它是 `aria-live` 状态且服务端渲染测试要求连续文案，动画会切断文本节点。
+- [x] 0.2 **行操作**：所有表格/列表行内动作统一 `context-menu` 或 `overflow-actions`（二选一按行宽），保留 `aria-label` 与 `data-confirm-action`。首个落地页：tasks、inbox。
+  - 已完成：`/tasks` 与 `/inbox` 行操作改走 `overflow-actions`，逐项 `ariaLabel` 与原测试查询一致（`Delete/Complete/Reopen/Archive/Restore/Turn into task`）。
+- [x] 0.3 **图表**：把 `composition-chart`、`heat-calendar` 以 registry 源补进 `components/charts/`；仅在有对应数据语义的页面使用（见各页条目），禁止用占比图表达不可加总的 UV。
+  - 已完成：两组 registry 源落地 `frontend/components/charts/{composition-chart,heat-calendar}/`，typecheck 通过；按页面条目再接线。
 - [ ] 0.4 **表单段落**：多段表单统一 `bouncy-accordion` 分组 + `button-stateful` 提交；保留草稿/失败/未知结果三态。
 - [ ] 0.5 **加载与空态**：内容区 loading 统一 `loader`（表格行用 `skeleton` 行）；长任务用 `agent-progress`，推理/搜索阶段用 `thinking-shimmer`。移除手写 `<p aria-busy>` 文案块。
 - [ ] 0.6 **浮层**：一律走 `ui/sheet`（drawer/bottom-sheet）或 `ui/dialog`（center-morph-modal）；landing 里直接挂 `motion/drawer` 的一处并入适配层。

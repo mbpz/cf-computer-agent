@@ -5,6 +5,7 @@ import { frontendText } from "../lib/i18n";
 import type { WorkbenchReviewSnapshot } from "../lib/workbench-review-data";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { NumberTicker } from "../components/motion/number-ticker";
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { ReviewPeriodControl } from "../components/review-period-control";
@@ -53,7 +54,7 @@ export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onR
   </section>;
 }
 
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) { return <Card><CardContent className="flex items-center gap-3 p-4"><span className="text-primary">{icon}</span><div><p className="text-2xl font-semibold tabular-nums">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div></CardContent></Card>; }
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) { return <Card><CardContent className="flex items-center gap-3 p-4"><span className="text-primary">{icon}</span><div><p className="text-2xl font-semibold"><NumberTicker value={value} startOnView={false} /></p><p className="text-xs text-muted-foreground">{label}</p></div></CardContent></Card>; }
 function ListCard({locale, kind, title, items, href, empty, onOpen}: {locale: LocaleRuntime; kind: string; title: string; items: (ReviewTarget & {title: string})[]; href: string; empty: string; onOpen?: (target: ReviewTarget) => void}) {
   return <Card><CardHeader><CardTitle>{title}</CardTitle><a className="text-sm underline underline-offset-4" data-review-all={kind} href={href} onClick={event => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
