@@ -56,9 +56,9 @@
   - `button` name=`删除已保存内容`，`ignored=false`
   - `StaticText` name=`已保存内容`
 
-  这是 Chrome 通过 CDP 暴露、并进一步映射到 macOS `NSAccessibility` 的同一棵树；VoiceOver 消费的正是这里的 role/name。为完成该检查临时创建的产物 `949e277c…` 已在捕获后删除，不留残置。
-- **原生 AX 路径（2026-10-18 复核后已可读）**：授予辅助功能后 `AXIsProcessTrusted=true`。`rea observe-native-ui` 在 VoiceOver 运行时捕获到 `AXWebArea` 与 Web 内容（362 节点，含导航、衍生命令与可访问名称）；VoiceOver 退出后同一窗口只剩 98 个浏览器壳节点，说明 Chrome 仅在存在 AT 客户端时启用渲染端无障碍。授权绑定宿主二进制路径（本次为 `/opt/homebrew/Cellar/omp/18.11.3/bin/omp`），升级 omp 后需重新授权。
-- **语音文本仍无程序化来源**：`VoiceOver.sdef` 声明了 `last phrase`、`vo cursor`、`caption window` 与 `commander`，但运行中的 VoiceOver 对 `get content of last phrase`、`get vo cursor` 返回 -1728（`get name`/`get version` 正常），该套件在当前 macOS 27 未生效。语音取证只剩两条路：打开 VoiceOver 字幕面板后读窗口文本（AX/OCR），或采集音频后转写。
+  这是 Chrome 通过 CDP 暴露、并进一步映射到 macOS `NSAccessibility` 的同一棵树。为完成该检查临时创建的产物 `949e277c…` 已在捕获后删除，不留残置。
+- **原生 AX 路径（2026-10-18 复核后已可读）**：授予辅助功能后 `AXIsProcessTrusted=true`。`rea observe-native-ui` 在 AT 客户端运行时捕获到 `AXWebArea` 与 Web 内容（362 节点，含导航、衍生命令与可访问名称）；AT 客户端退出后同一窗口只剩 98 个浏览器壳节点，说明 Chrome 仅在存在 AT 客户端时启用渲染端无障碍。授权绑定宿主二进制路径（本次为 `/opt/homebrew/Cellar/omp/18.11.3/bin/omp`），升级 omp 后需重新授权。
+- **屏幕阅读器语音不在本次范围**：语音取证依赖音频采集或读屏辅助技术，本次不执行。
 
 ## 2026-10-18 复核：产物类型矩阵与测验缺陷
 
