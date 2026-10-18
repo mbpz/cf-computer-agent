@@ -14,11 +14,16 @@ test("legacy audit retains rollback files and rejects frontend references", asyn
     await writeFile(join(root, "frontend", "dist", "index.js"), "const app = true;");
     await assert.doesNotReject(async () => {
       const result = await auditLegacyFrontend(root);
-      assert.deepEqual(result, { missingRollbackFiles: [], sourceRefs: [], distRefs: [] });
+      assert.deepEqual(result, { missingRollbackFiles: [], sourceRefs: [], distRefs: [], contentViolations: [] });
     });
     await writeFile(join(root, "frontend", "dist", "bad.js"), "import './app.js';");
     const failed = await auditLegacyFrontend(root);
     assert.deepEqual(failed.distRefs, [{ file: "frontend/dist/bad.js", reference: "app.js" }]);
+    await mkdir(join(root, "frontend", "pages"), { recursive: true });
+    await writeFile(join(root, "frontend", "pages", "raw.tsx"), "export const X = () => <table><tbody /></table>;");
+    await writeFile(join(root, "frontend", "pages", "drawer.tsx"), "import { Drawer } from '../components/motion/drawer';");
+    const content = await auditLegacyFrontend(root);
+    assert.deepEqual(content.contentViolations, [{ file: "frontend/pages/drawer.tsx", kind: "overlay" }, { file: "frontend/pages/raw.tsx", kind: "table" }]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

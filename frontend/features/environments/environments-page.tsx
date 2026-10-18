@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { EnvironmentMetadata, EnvironmentType } from '../../../shared/environments';
 import type { SessionSnapshot } from '../../contracts/api';
 import { DataTable } from '../../components/data-table';
+import { Alert, AlertDescription } from '../../components/ui/alert';
+import { PageState } from '../../components/ui/page-state';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/motion/input';
 import { AppliedFilters } from '../../components/ui/applied-filters';
@@ -22,14 +24,14 @@ import { WORKSPACE_LOCATION_CHANGE_EVENT } from '../../lib/workspace-location';
 import type { SupportedPageSize } from '../../lib/numbered-page';
 
 export function EnvironmentsPage({locale,session}: {locale:LocaleRuntime;session:SessionSnapshot}) {
-  if (!routeAccessAllowed(session,{capability:null,requiredPermission:'workspace.vm'})) return <p data-environments-forbidden role="alert">{frontendText(locale,'ENV_FORBIDDEN')}</p>;
+  if (!routeAccessAllowed(session,{capability:null,requiredPermission:'workspace.vm'})) return <div data-environments-forbidden><PageState kind="forbidden" title={frontendText(locale,'ENV_FORBIDDEN')} /></div>;
   return <AccountEnvironments locale={locale} />;
 }
 function AccountEnvironments({locale}:{locale:LocaleRuntime}) {
   const owner=useAccountNetworkOwner();
   const [manager,setManager]=useState<EnvironmentManager | null>(null);
   useEffect(()=>{const next=getEnvironmentManager(owner);setManager(next);if(!owner.signal.aborted)void next.load();},[owner]);
-  return manager ? <EnvironmentVmProvider><EnvironmentView manager={manager} locale={locale} /></EnvironmentVmProvider> : <section className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0"><PageHeader title={frontendText(locale,'NAV_ENVIRONMENTS')} description={frontendText(locale,'ENV_METADATA_ONLY')} /><p aria-busy="true">{frontendText(locale,'ENV_LOADING')}</p></section>;
+  return manager ? <EnvironmentVmProvider><EnvironmentView manager={manager} locale={locale} /></EnvironmentVmProvider> : <section className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0"><PageHeader title={frontendText(locale,'NAV_ENVIRONMENTS')} description={frontendText(locale,'ENV_METADATA_ONLY')} /><PageState kind="loading" title={frontendText(locale,'ENV_LOADING')} /></section>;
 }
 /** The runtime object exists independently of any environment being started, so
  * its state is reported once for the page instead of per row. */
@@ -137,11 +139,11 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   // A row that left the loaded pages keeps its last verified identity rather than
   // silently retargeting another environment.
   const selectedRow=selected ? rows.find(row=>row.id===selected.id) ?? selected : null;
-  if(state.closed)return <section data-environments-page className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0"><PageHeader title={t('NAV_ENVIRONMENTS')} description={t('ENV_METADATA_ONLY')} /><p data-environments-closed role="alert">{t('ENV_ACCOUNT_CLOSED')}</p></section>;
+  if(state.closed)return <section data-environments-page className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0"><PageHeader title={t('NAV_ENVIRONMENTS')} description={t('ENV_METADATA_ONLY')} /><Alert variant="destructive" data-environments-closed><AlertDescription>{t('ENV_ACCOUNT_CLOSED')}</AlertDescription></Alert></section>;
   return <section data-environments-page className="mx-auto flex max-w-5xl flex-col space-y-6 lg:h-full lg:min-h-0">
     {draft.confirmation}
     <PageHeader title={t('NAV_ENVIRONMENTS')} description={t('ENV_METADATA_ONLY')} actions={<Button type="button" data-environment-create-open aria-haspopup="dialog" aria-expanded={createOpen} disabled={blocked} onClick={()=>{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current)setCreateOpen(true);}}>{t('ENV_CREATE')}</Button>} />
-    {(state.error || localError) && <div role="alert" className="rounded-md border p-4"><p>{t(localError?'ENV_INVALID_INPUT':`ENV_${state.error}`)}</p></div>}
+    {(state.error || localError) && <Alert variant="destructive"><AlertDescription>{t(localError?'ENV_INVALID_INPUT':`ENV_${state.error}`)}</AlertDescription></Alert>}
     {state.recoveryBlocked && <div className="space-y-3 rounded-md border p-4" role="alert">
       <p>{t('ENV_RECOVERY_BLOCKED')}</p>
       <Button data-environment-recheck-recovery disabled={state.writing} onClick={()=>void run(()=>manager.recheckRecovery())}>{t('ENV_RECHECK_RECOVERY')}</Button>
@@ -160,7 +162,7 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
     <Dialog open={createOpen} onOpenChange={open=>{if(!open)setCreateOpen(false);}}><DialogContent aria-labelledby="environment-create-title" dismissLabel={t('COMMON_DISMISS')} data-environment-create-dialog className="max-h-[90dvh] overflow-y-auto">
       <DialogTitle id="environment-create-title">{t('ENV_CREATE')}</DialogTitle>
       {recordBlocked && <div role="alert" data-environment-draft-blocked className="mt-3 space-y-2 text-sm"><p>{t('ENV_DRAFT_RECORD_BLOCKED')}</p><Button type="button" variant="outline" onClick={discardRecord}>{t('ENV_DRAFT_RECORD_DISCARD')}</Button></div>}
-      {recordNotice && <p role="alert" className="mt-3 text-sm">{recordNotice}</p>}
+      {recordNotice && <Alert variant="destructive"><AlertDescription>{recordNotice}</AlertDescription></Alert>}
       <form data-environment-create className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={event=>{event.preventDefault();if(!alive.current || operationBlocked() || draft.isConfirming() || editRef.current || removeRef.current)return;const input={...draft.current.current};void run(async()=>{const request=manager.create({...input,type:input.type as EnvironmentType});const pending=manager.getSnapshot().pending;if(pending?.kind==='create'){submitted.current={operationId:pending.operationId,fields:{name:input.name,type:input.type as EnvironmentType,taskId:input.taskId}};if(!recordBlocked)persistEnvironmentDraft(scope.origin,scope.memberId,{create:blank,rename:null});}await request;if(alive.current)setCreateOpen(false);});}}>
         <Input label={t('ENV_NAME')} name="name" required maxLength={120} value={title} disabled={blocked} onChange={value=>draft.edit('name',value)} />
         <div className="flex flex-col gap-1.5"><span className="px-1 text-sm font-medium">{t('ENV_TYPE')}</span><MotionSelect value={type} disabled={blocked} onValueChange={value=>draft.edit('type',value==='temporary'?'temporary':'personal')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="personal">{t('ENV_PERSONAL')}</SelectItem><SelectItem value="temporary">{t('ENV_TEMPORARY')}</SelectItem></SelectContent></MotionSelect></div>
