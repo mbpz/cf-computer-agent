@@ -78,6 +78,8 @@ describe("saved Studio artifacts", () => {
     await settle();
 
     expect(container.querySelector('[data-saved-artifact="artifact-a"]')).toBeTruthy();
+    expect(container.querySelector('[data-saved-artifact-open="artifact-a"]')?.getAttribute("aria-label")).toContain("Open saved");
+    expect(container.querySelector('[data-saved-artifact-delete="artifact-a"]')?.getAttribute("aria-label")).toContain("Delete saved content");
     await click('[data-saved-artifact-open="artifact-a"]');
     expect(container.textContent).toContain("What is retained?");
     expect(container.textContent).toContain("The saved cards.");
