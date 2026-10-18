@@ -23,10 +23,10 @@
   - 已完成：`/submit` 与 `/login` 的提交改 `StatefulButton`（loading 文案与 disabled 语义不变）；`bouncy-accordion` 只用于可选分组（FAQ 已用），必填字段表单不折叠——折叠会让字段进入 `inert`，破坏草稿恢复、校验与既有键盘测试；按页在 2.2/2.9 的可选段再接。
 - [x] 0.5 **加载与空态**：内容区 loading 统一 `loader`（表格行用 `skeleton` 行）；长任务用 `agent-progress`，推理/搜索阶段用 `thinking-shimmer`。移除手写 `<p aria-busy>` 文案块。
   - 已完成：`/login`、`/settings` 的手写 `role="alert"` 换 beUI `Alert`；`/environments` 的 loading/forbidden/closed/error 换 `PageState` 与 `Alert`；app bootstrap 已是 beUI `loader`。`ui/skeleton` 保留为 block 占位并在注释中说明（表格行已用 beUI `skeleton-rows`）。
-- [ ] 0.6 **浮层**：一律走 `ui/sheet`（drawer/bottom-sheet）或 `ui/dialog`（center-morph-modal）；landing 里直接挂 `motion/drawer` 的一处并入适配层。
-  - 进行中：全仓仅剩 landing `workbench-feature-panel.tsx` 直接使用 `motion/drawer`；它承载 citation 焦点恢复契约，随 3.8 落地页改造一起并入 `ui/sheet`，已在审计白名单中显式登记。
+- [x] 0.6 **浮层**：一律走 `ui/sheet`（drawer/bottom-sheet）或 `ui/dialog`（center-morph-modal）；landing 里直接挂 `motion/drawer` 的一处并入适配层。
+  - 已完成：landing `workbench-feature-panel.tsx` 改 `ui/sheet`，保留 `role=dialog`/`aria-label`/无 `aria-labelledby`/焦点恢复与全部 `data-*`；审计白名单删除，全仓无直接 overlay 导入。
 - [x] 0.7 **契约闸门**：扩展前端遗留审计脚本，禁止页面内容区新增手写 `motion/react` 图表/列表/浮层；`keep-in-repo` 列表加入白名单。
-  - 已完成：`scripts/frontend-legacy-audit.mjs` 新增 `contentViolations`（`frontend/pages`、`frontend/features` 下禁止 `<table>`、直接 `motion/drawer|center-morph-modal|bottom-sheet|morphing-modal` 导入、直接 `motion/react` 导入；landing drawer 为唯一白名单），并有对应单测。
+  - 已完成：`scripts/frontend-legacy-audit.mjs` 新增 `contentViolations`（`frontend/pages`、`frontend/features` 下禁止 `<table>`、直接 `motion/drawer|center-morph-modal|bottom-sheet|morphing-modal` 导入、直接 `motion/react` 导入），全仓零白名单，并有对应单测。
 
 ## Phase 1 — 只读列表与看板（低风险快赢）
 
