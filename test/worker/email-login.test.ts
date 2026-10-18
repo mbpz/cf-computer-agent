@@ -24,7 +24,8 @@ describe("email one-time-code login", () => {
   let randomValue: number;
   let challengeId: number;
   let sent: SentMail[];
-  let mailer: EmailLoginMailer & { fail: boolean };
+  let deliveryDiagnostics: Array<{ code?: string; name?: string }>;
+  let mailer: EmailLoginMailer & { failure: unknown };
 
   beforeEach(async () => {
     await reset();
@@ -37,10 +38,11 @@ describe("email one-time-code login", () => {
     randomValue = 1;
     challengeId = 0;
     sent = [];
+    deliveryDiagnostics = [];
     mailer = {
-      fail: false,
+      failure: null,
       async send(input) {
-        if (mailer.fail) throw new Error("provider unavailable");
+        if (mailer.failure) throw mailer.failure;
         sent.push(input);
       },
     };
@@ -57,6 +59,7 @@ describe("email one-time-code login", () => {
           return bytes;
         },
         id: () => `challenge-${++challengeId}`,
+        onDeliveryFailure: (diagnostic) => deliveryDiagnostics.push(diagnostic),
         ...overrides,
       },
     });
@@ -253,11 +256,21 @@ describe("email one-time-code login", () => {
   });
 
   it("hides delivery failures behind a retryable 503 and invalidates the undelivered challenge", async () => {
-    mailer.fail = true;
+    mailer.failure = new Error("provider unavailable");
     const response = await requestCode(ALLOWLISTED);
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "EMAIL_LOGIN_DELIVERY_FAILED", retryable: true } });
     expect(sent).toHaveLength(0);
+    expect(await env.DB.prepare("SELECT consumed_at FROM email_login_codes").first()).toEqual({ consumed_at: expect.any(String) });
+  });
+
+  it("reports a sender onboarding error as unavailable and records only the provider code", async () => {
+    mailer.failure = Object.assign(new Error("sender not verified"), { code: "E_SENDER_NOT_VERIFIED" });
+    const response = await requestCode(ALLOWLISTED);
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "EMAIL_LOGIN_UNAVAILABLE" } });
+    expect(deliveryDiagnostics).toEqual([{ code: "E_SENDER_NOT_VERIFIED", name: "Error" }]);
+    expect(JSON.stringify(deliveryDiagnostics)).not.toContain(ALLOWLISTED);
     expect(await env.DB.prepare("SELECT consumed_at FROM email_login_codes").first()).toEqual({ consumed_at: expect.any(String) });
   });
 

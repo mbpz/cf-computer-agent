@@ -22,7 +22,7 @@
 | `npm run types:check` | 通过（重新生成 `worker-configuration.d.ts`） |
 | `npm run build:ui` | 通过（Vite 产物 + browser-vm build isolation） |
 | `npm run verify:m1:migrations -- --files` | `[pass] migration-files count=77` |
-| `npx vitest run test/worker` | **79 文件 / 1317 测试通过** |
+| `npx vitest run test/worker` | **79 文件 / 1318 测试通过** |
 | `npx vitest run test/unit` | **410 文件 / 5653 测试通过** |
 | `npx vitest run test/unit/email-login-mailer.test.ts test/unit/frontend-email-login-data.test.ts` | **2 文件 / 6 测试通过** |
 | `npm run test:i18n` | 14 测试通过，双语 key/placeholder 对等 |
@@ -52,7 +52,7 @@
 | 邀请授权新地址 | 管理员签发后请求/验证成功；邀请变 `redeemed`；`member.code_login` 审计 1 条 |
 | 撤销邀请 | 撤销后不再发信；撤销前签发的码验证 `401`，不创建成员 |
 | 禁用成员 | 请求不发信；禁用后验证 `403 MEMBER_DISABLED`，无 cookie |
-| 发信失败 | `503 EMAIL_LOGIN_DELIVERY_FAILED`（`retryable`）；挑战立即 `consumed_at` |
+| 发信失败 | 普通传输错误：`503 EMAIL_LOGIN_DELIVERY_FAILED`（`retryable`）；发送方未验证/域名未开通：`503 EMAIL_LOGIN_UNAVAILABLE`；挑战均立即 `consumed_at` |
 | 未绑定 `EMAIL` | 请求/验证均 `503 EMAIL_LOGIN_UNAVAILABLE`；`/api/auth/providers.emailCode=false` |
 | 并发验证 | 同一码两个请求 → 一个 `200`、一个 `401`，只创建一个成员 |
 | 管理员邀请签发 | `201 { invitation }`，响应与列表均无 `code`；表结构不含旧码列 |
@@ -65,6 +65,13 @@
 - `401` 统一显示“验证码无效”；`403` 显示禁用；`503` 显示未配置/发送失败。
 - 重发按钮 60 秒倒计时并禁用；“使用其他邮箱”返回邮箱步骤。
 - 成员管理页授权回执使用 `[data-invitation-issued]`，不再显示/复制明文码。
+
+## 生产观察（2026-10-18，只读）
+
+- 最新部署 `73e75fec`（11:23:07Z）已包含 `emailCode:true`；远程 D1 无待应用迁移。
+- 11:23:38Z 的请求为 `apples398@163.com` 生成了 `email_login_codes` 行，`created_at` 与 `consumed_at` 同为 `11:23:38.788Z`——发送绑定抛错后按设计立即作废。
+- 同一时间 `wrangler email sending list` / `settings` 均返回 `Unauthorized [code: 2036]`；`crgmhrc.asia` 与 `memory.crgmhrc.asia` 均无 Email Sending 所需的 MX/DKIM/DMARC 记录。
+- 结论：验证码逻辑已执行到发信步骤，但 Cloudflare Email Sending 尚未为该域名开通；不是收件箱、垃圾邮件或前端提交失败。
 
 ## 未覆盖 / 非声明
 

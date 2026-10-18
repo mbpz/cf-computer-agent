@@ -36,6 +36,8 @@ export interface EmailLoginServiceOptions {
   now?: () => Date;
   randomBytes?: (length: number) => Uint8Array;
   id?: () => string;
+  /** Server-side diagnostic; never receives the recipient or plaintext code. */
+  onDeliveryFailure?: (diagnostic: { code?: string; name?: string }) => void;
   resendIntervalMs?: number;
   hourlyLimit?: number;
   codeTtlMs?: number;
@@ -107,8 +109,19 @@ export class EmailLoginService {
     try {
       await mailer.send({ to: email, code, expiresAt: challenge.expiresAt });
     } catch (error) {
+      const providerCode = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+        ? error.code
+        : undefined;
+      this.options.onDeliveryFailure?.({ code: providerCode, name: error instanceof Error ? error.name : undefined });
       // A stored challenge that was never delivered must not stay redeemable.
       await this.repository.consume(challenge.id, createdAt, this.maxAttempts);
+      // Sender/onboarding problems are configuration, not a transient outage:
+      // the page should stop asking the user to retry blindly.
+      if (providerCode === "E_SENDER_NOT_VERIFIED"
+        || providerCode === "E_SENDER_DOMAIN_NOT_AVAILABLE"
+        || providerCode === "E_RECIPIENT_NOT_ALLOWED") {
+        throw new AppError("EMAIL_LOGIN_UNAVAILABLE", "Email sign-in is not configured", 503);
+      }
       throw error instanceof AppError ? error : new AppError("EMAIL_LOGIN_DELIVERY_FAILED", "The sign-in email could not be sent", 503, true);
     }
   }

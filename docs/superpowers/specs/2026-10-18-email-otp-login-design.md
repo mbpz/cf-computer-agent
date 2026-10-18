@@ -25,7 +25,8 @@
   - 成功或地址未授权/冷却中：`202 { "status": "accepted" }`
   - 畸形：`400 EMAIL_LOGIN_REQUEST_INVALID`
   - 未绑定 `EMAIL`：`503 EMAIL_LOGIN_UNAVAILABLE`
-  - 已授权但发信失败：`503 EMAIL_LOGIN_DELIVERY_FAILED`（`retryable: true`；该挑战立即作废）
+  - 已授权但普通传输失败：`503 EMAIL_LOGIN_DELIVERY_FAILED`（`retryable: true`；该挑战立即作废）
+  - 发送方未验证、域名未开通或收件人受限：`503 EMAIL_LOGIN_UNAVAILABLE`（配置问题，不引导盲目重试；同样作废挑战）
 - `POST /auth/email/code/verify`，请求体精确为 `{ "email": string, "code": string }`
   - 成功：`200 { "member": { id, email, role } }` + `__Host-memory-session`
   - 畸形/非六位：`400 EMAIL_LOGIN_REQUEST_INVALID`

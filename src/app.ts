@@ -164,6 +164,7 @@ export interface AppDependencies {
     now?: () => Date;
     randomBytes?: (length: number) => Uint8Array;
     id?: () => string;
+    onDeliveryFailure?: (diagnostic: { code?: string; name?: string }) => void;
   };
   onBackgroundFailure?: (reason: UncertaintyReason) => void;
 }
@@ -395,6 +396,12 @@ function createRequestServices(
       now: dependencies.emailLogin?.now,
       randomBytes: dependencies.emailLogin?.randomBytes,
       id: dependencies.emailLogin?.id,
+      onDeliveryFailure: dependencies.emailLogin?.onDeliveryFailure ?? ((diagnostic) => emitStructuredLog("warn", {
+        event: "email_login_delivery_failed",
+        requestId: context.requestId,
+        providerCode: diagnostic.code ?? "unknown",
+        providerName: diagnostic.name ?? "unknown",
+      })),
     },
   );
   return {
