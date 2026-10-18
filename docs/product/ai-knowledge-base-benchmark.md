@@ -28,6 +28,8 @@
 - [Add or discover sources](https://support.google.com/notebooklm/answer/16215270)
 - [Audio Overview](https://support.google.com/notebooklm/answer/16212820)
 
+2026-10-18 当日页面证据：`notebook.google.com` 已改名为 **Gemini Notebook**；匿名落地页 `/trynow` 与已登录笔记本界面均由 REA/omp 只读捕获，证据与端点形态见 [`Gemini Notebook 逆向捕获与 AI 知识库对账`](./2026-10-18-gemini-notebook-capture.md)。Studio 当日在架产物为：音频概览、演示文稿、视频概览、思维导图、报告（互动式）、闪卡、测验、信息图、数据表格；来源面板提供上传、网站、Play 图书、云端硬盘、复制的文字、Web 发现与 Fast Research，界面上限 `2/50`。
+
 强项：
 
 - Notebook/Project 作为持续上下文。
@@ -45,6 +47,10 @@ Memory Garden 取舍：
 | Notes | 复刻 | 低成本、高价值 |
 | FAQ/时间线/Brief/学习卡 | Cloudflare 适配 | 异步生成、可重建 |
 | Audio/Video/Slide Deck | P3 延期 | Workers AI 免费额度和模型能力不足以作为核心 |
+| 信息图 | P3 延期 | 同为生成式媒体产物，依赖图像模型与额度 |
+| 数据表格 | 比较表覆盖 | 逐单元格 citation 的比较表已满足证据对照，不另立产物 |
+| Web 发现 / Fast Research | 范围外 | 需要外部检索索引与配额，免费层不引入 |
+| Drive / Play 图书来源 | 范围外 | 外部授权与同步依赖 |
 | 公共 Notebook | 拒绝 | 私有产品边界 |
 
 ### 2.2 Glean
