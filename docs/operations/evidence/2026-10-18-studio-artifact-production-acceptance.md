@@ -57,13 +57,14 @@
   - `StaticText` name=`已保存内容`
 
   这是 Chrome 通过 CDP 暴露、并进一步映射到 macOS `NSAccessibility` 的同一棵树；VoiceOver 消费的正是这里的 role/name。为完成该检查临时创建的产物 `949e277c…` 已在捕获后删除，不留残置。
-- **原生 AX 路径被系统权限阻塞**：`rea observe-native-ui` 返回 `screen-recording-denied`。修复步骤：系统设置 → 隐私与安全性 → 屏幕录制（以及辅助功能）勾选 omp/终端宿主，然后重试：
+- **原生 AX 路径被系统权限阻塞（2026-10-18 复核）**：`AXIsProcessTrusted=false`；`rea observe-native-ui` 在 AX 与 `--accessibility false` 两种模式下均返回 `accessibility-denied`（宿主二进制 `/opt/homebrew/Cellar/omp/18.11.3/bin/omp`）。修复步骤：系统设置 → 隐私与安全性 → 辅助功能，勾选 omp，然后重试：
   `rea observe-native-ui "/Applications/Google Chrome.app" --pid <Chrome PID> --window-id <CGWindowID> --max-nodes 800`
-- VoiceOver 的语音输出没有可靠的程序化抓取方式；授予权限后可用 REA 捕获同一窗口的原生 AX 树，作为屏幕阅读器读取面的直接证据。真正的语音播报仍需人工旁听。
+- **语音文本可程序化取证，无需音频转录**：`VoiceOver.sdef` 暴露 `last phrase`（只读 `content`，另有 `copy to pasteboard`、`save`）、`vo cursor.text under cursor`、`caption window.enabled` 与 `commander.perform command`。启用 VoiceOver 后，每步读取 `content of last phrase` 即为该步播报文本；这需要给 omp 追加 Apple Events 自动化授权。该路径待授权后执行。
 
 ## 边界
 
 - 未使用真实屏幕阅读器；本记录只证明键盘路径、可访问名称与三档视口，不宣称 AT 全矩阵。
 - 管理员与贡献者各自完成一次单产物旅程；跨成员拒绝由 Workerd 用例覆盖（其他成员列表为空、读取 404）。
+- 产物类型矩阵：仓库只定义 `mindmap | flashcards | quiz`（`src/studio/artifacts.ts`），不存在音视频产物；生产仅验证 `flashcards`，`mindmap`/`quiz` 的保留与回读目前由 Workerd 用例覆盖。
 - 最终删除产物；审计保留创建/删除记录。临时贡献者已禁用。
 - 本文不含正文、Cookie、Session、邮箱或令牌。
