@@ -1,5 +1,7 @@
 # 全量 beUI 采用矩阵（2026-10-17）
 
+> 逐页顺序执行清单：`docs/product/2026-10-18-beui-page-adoption-checklist.md`。
+
 用户要求：**全部使用 beUI 组件、统一整体 UI 风格**（当前"风格过于凌乱"）。依据：beUI skill 的组件选择表 + 其组合规则；registry 为唯一权威（本轮 `curl https://beui.dev/r/registry.json` → **143 个 slug**）。design-taste skill 只取其中适用于产品 UI 的条目（一致性锁、对比度、状态完备、动效纪律），其落地页/作品集规则不适用于本产品界面。
 
 ## 0. 现状诊断（可判定）
