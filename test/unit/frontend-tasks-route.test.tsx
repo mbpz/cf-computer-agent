@@ -84,7 +84,7 @@ describe("private tasks route", () => {
     const urls: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); urls.push(url); if (init?.method === "DELETE") return new Response(null, { status: 204 }); return taskPage(url); });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    const button = container.querySelector("button.bg-destructive") as HTMLButtonElement; expect(button).toBeTruthy();
+    const button = container.querySelector('button[aria-label^="Delete:"]') as HTMLButtonElement; expect(button).toBeTruthy();
     await act(async () => button.click()); await flush();
     expect(urls.filter((url) => url.startsWith("/api/tasks?")).length).toBe(1);
     await clickButton("Delete permanently"); await flush();

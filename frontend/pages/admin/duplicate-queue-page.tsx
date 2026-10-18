@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { OverflowActions, type OverflowActionItem } from "../../components/motion/overflow-actions";
+import { SharedLayoutBg } from "../../components/motion/shared-layout-bg";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
@@ -79,13 +80,15 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
         fill
         rowHeight={104}
         columns={[
-          { key: "candidate", header: frontendText(locale, "ADMIN_DUPLICATE_COLUMN_CANDIDATE"), cellClassName: "whitespace-normal", cell: (item) => <div className="py-1">
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="line-clamp-1 font-medium">{item.submissionTitle}</h2>
-              <Badge variant="warning">{frontendText(locale, "ADMIN_DUPLICATE_PENDING")}</Badge>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">{item.submissionId}</p>
-          </div> },
+          { key: "candidate", header: frontendText(locale, "ADMIN_DUPLICATE_COLUMN_CANDIDATE"), cellClassName: "whitespace-normal", cell: (item) => <SharedLayoutBg as="ul" className="space-y-1 py-1" inset={8}>
+            <li>
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="line-clamp-1 font-medium">{item.submissionTitle}</h2>
+                <Badge variant="warning">{frontendText(locale, "ADMIN_DUPLICATE_PENDING")}</Badge>
+              </div>
+            </li>
+            <li className="text-xs text-muted-foreground">{item.submissionId}</li>
+          </SharedLayoutBg> },
           { key: "canonical", header: frontendText(locale, "ADMIN_DUPLICATE_CANONICAL"), width: "40%", cellClassName: "whitespace-normal", cell: (item) => <div className="space-y-1 py-1">
             <p className="line-clamp-1 text-sm"><span className="font-medium">{frontendText(locale, "ADMIN_DUPLICATE_CANONICAL")}: </span>{item.canonicalTitle}</p>
             <p className="line-clamp-1 text-xs text-muted-foreground">{item.canonicalSubmissionId} · {item.canonicalSourceId} · {item.canonicalSourceVersionId}</p>

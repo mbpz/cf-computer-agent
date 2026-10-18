@@ -13,6 +13,7 @@ import { Input } from "../components/ui/input";
 import { FocusTaskPicker } from "../components/focus-task-picker";
 import { useCreateDraft } from "../lib/use-create-draft";
 import { PageState } from "../components/ui/page-state";
+import { AnimatedNumber } from "../components/motion/animated-number";
 
 export type FocusPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; session: FocusSession | null };
 
@@ -82,5 +83,8 @@ function FocusElapsed({session, locale}: {session: FocusSession; locale: LocaleR
   const elapsed = session.elapsedMs + (session.status === "active" ? Math.max(0, now - Date.parse(session.startedAt)) : 0);
   const seconds = Math.floor(elapsed / 1000);
   const display = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60].map(n => String(n).padStart(2, "0")).join(":");
-  return <p className="text-sm">{frontendText(locale, "FOCUS_ELAPSED")}: <output data-focus-elapsed aria-label={frontendText(locale, "FOCUS_ELAPSED")} aria-live="off" className="font-mono tabular-nums">{display}</output></p>;
+  return <div className="space-y-1">
+    <p className="text-sm">{frontendText(locale, "FOCUS_ELAPSED")}: <output data-focus-elapsed aria-label={frontendText(locale, "FOCUS_ELAPSED")} aria-live="off" className="font-mono tabular-nums">{display}</output></p>
+    <p className="text-xs text-muted-foreground">{frontendText(locale, "REVIEW_FOCUS_TIME")}: <AnimatedNumber value={Math.floor(seconds / 60)} startOnView={false} format={n => String(Math.floor(n))} /></p>
+  </div>;
 }

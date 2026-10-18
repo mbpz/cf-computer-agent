@@ -1,5 +1,7 @@
+import { Alert, AlertTitle } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import { DataTable } from "../../components/data-table";
+import { HoldActionButton } from "../../components/motion/hold-action-button";
 import { Input } from "../../components/ui/input";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
@@ -65,6 +67,13 @@ function feedbackText(locale: LocaleRuntime, feedback: TrashFeedback): string {
   return frontendText(locale, "ADMIN_TRASH_OPERATION_UNKNOWN");
 }
 
+function feedbackVariant(feedback: TrashFeedback) {
+  if (feedback.kind === "restored" || feedback.kind === "purged") return "success" as const;
+  if (feedback.kind === "purge-nothing") return "info" as const;
+  if (feedback.kind === "unknown") return "warning" as const;
+  return "destructive" as const;
+}
+
 /**
  * The administrator recycle bin. It renders only what the server's page and the
  * server's retention facts state: no total is invented, a purge is reachable only
@@ -94,18 +103,20 @@ export function RecycleBinPage({
     </div>}
     {recordNotice && <p role="alert" className="text-sm text-destructive">{recordNotice}</p>}
     <div role="status" aria-live="polite" data-trash-feedback className="space-y-2 text-sm">
-      {feedback && <p>{feedbackText(locale, feedback)}</p>}
-      {feedback?.kind === "unknown" && <Button type="button" variant="outline" size="sm" data-trash-retry-operation onClick={onRetryOperation}>{frontendText(locale, "ADMIN_TRASH_RETRY")}</Button>}
-      {/* Restoring is what makes an item administrative again, so the useful way
-          into its page is offered from this success, not from a trashed row. */}
-      {feedback?.kind === "restored" && <a href={`/admin/knowledge/${encodeURIComponent(feedback.knowledgeItemId)}`} data-trash-open-restored={feedback.knowledgeItemId}
-        aria-label={formatText(locale, "ADMIN_TRASH_OPEN_RESTORED", { id: feedback.knowledgeItemId })}
-        onClick={(event) => {
-          if (!onOpenItem || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-          event.preventDefault();
-          onOpenItem(feedback.knowledgeItemId);
-        }}
-        className="inline-block underline hover:text-foreground">{formatText(locale, "ADMIN_TRASH_OPEN_RESTORED", { id: feedback.knowledgeItemId })}</a>}
+      {feedback && <Alert variant={feedbackVariant(feedback)} role="status">
+        <AlertTitle>{feedbackText(locale, feedback)}</AlertTitle>
+        {feedback.kind === "unknown" && <Button type="button" variant="outline" size="sm" className="mt-3" data-trash-retry-operation onClick={onRetryOperation}>{frontendText(locale, "ADMIN_TRASH_RETRY")}</Button>}
+        {/* Restoring is what makes an item administrative again, so the useful way
+            into its page is offered from this success, not from a trashed row. */}
+        {feedback.kind === "restored" && <a href={`/admin/knowledge/${encodeURIComponent(feedback.knowledgeItemId)}`} data-trash-open-restored={feedback.knowledgeItemId}
+          aria-label={formatText(locale, "ADMIN_TRASH_OPEN_RESTORED", { id: feedback.knowledgeItemId })}
+          onClick={(event) => {
+            if (!onOpenItem || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            onOpenItem(feedback.knowledgeItemId);
+          }}
+          className="mt-3 inline-block underline hover:text-foreground">{formatText(locale, "ADMIN_TRASH_OPEN_RESTORED", { id: feedback.knowledgeItemId })}</a>}
+      </Alert>}
     </div>
     <DataTable
       locale={locale}
@@ -153,12 +164,19 @@ export function RecycleBinPage({
               <Input id={`trash-purge-${item.id}`} data-trash-purge-confirm={item.id} aria-label={confirmLabel} value={typed} disabled={writesLocked}
                 onChange={(event) => onPurgeConfirmChange?.(item.id, event.target.value)} />
               {mismatch && <p role="alert" className="text-xs text-destructive">{frontendText(locale, "ADMIN_TRASH_PURGE_CONFIRM_MISMATCH")}</p>}
-              <Button type="button" variant="destructive" size="sm" data-trash-purge={item.id} disabled={!canPurge} onClick={() => { if (canPurge) onPurge?.(item.id); }}>
+              <HoldActionButton type="horizontal" data-trash-purge={item.id} disabled={!canPurge}
+                onActivate={() => { if (canPurge) onPurge?.(item.id); }}
+                fillClassName="bg-destructive/30" labelClassName="text-xs"
+                className="[height:2.25rem] [min-width:0] rounded-lg px-3 [background-color:var(--destructive)] text-white">
                 {frontendText(locale, "ADMIN_TRASH_PURGE")}
-              </Button>
+              </HoldActionButton>
             </> : <>
               <p data-trash-retention-blocked={item.id} className="text-xs text-destructive">{frontendText(locale, "ADMIN_TRASH_RETENTION_BLOCKED")}</p>
-              <Button type="button" variant="destructive" size="sm" data-trash-purge={item.id} disabled>{frontendText(locale, "ADMIN_TRASH_PURGE")}</Button>
+              <HoldActionButton type="horizontal" data-trash-purge={item.id} disabled
+                fillClassName="bg-destructive/30" labelClassName="text-xs"
+                className="[height:2.25rem] [min-width:0] rounded-lg px-3 [background-color:var(--destructive)] text-white">
+                {frontendText(locale, "ADMIN_TRASH_PURGE")}
+              </HoldActionButton>
             </>}
           </div>;
         } },

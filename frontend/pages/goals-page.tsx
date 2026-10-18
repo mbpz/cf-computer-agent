@@ -16,6 +16,7 @@ import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { loadPlanningIntent } from "../lib/planning-create-intent";
 import { loadPlanningDraft } from "../lib/planning-draft";
+import { DonutChart, DonutChartCenter, DonutChartLegend, DonutChartPlot } from "../components/charts/donut-chart";
 
 export type GoalsPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; items: readonly Goal[]; pagination?: FrontendPageMetadata };
 
@@ -57,6 +58,7 @@ export function GoalsPage({ locale, state, pending = false, actionError, onRetry
       actions={<Button type="button" data-goals-create-open aria-haspopup="dialog" aria-expanded={createOpen} disabled={createBlocked} onClick={() => setCreateOpen(true)}><Plus size={16} weight="bold" className="mr-1" aria-hidden="true" />{frontendText(locale, "GOALS_CREATE_TITLE")}</Button>}
     />
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
+    {state.kind === "ready" && state.items.length > 0 && <GoalsCompletionSummary items={state.items} locale={locale} />}
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "GOALS_LOADING")} />
       : state.kind === "error" ? <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GOALS_RETRY")}</Button></PageState>
       : <DataTable
@@ -91,4 +93,30 @@ export function GoalsPage({ locale, state, pending = false, actionError, onRetry
       ]}
     />}
   </section></>;
+}
+
+/**
+ * Completion mix across the loaded goals window. The four statuses are
+ * additive, so a donut reads them honestly; a zero-count status is omitted by
+ * the chart itself. The summary never replaces the table or its hooks.
+ */
+function GoalsCompletionSummary({ items, locale }: { items: readonly Goal[]; locale: LocaleRuntime }) {
+  const counts = { active: 0, paused: 0, completed: 0, archived: 0 };
+  for (const goal of items) counts[goal.status] += 1;
+  const segments = [
+    { id: "completed", name: frontendText(locale, "GOALS_STATUS_COMPLETED"), color: "var(--primary)", value: counts.completed },
+    { id: "active", name: frontendText(locale, "GOALS_STATUS_ACTIVE"), color: "var(--ring)", value: counts.active },
+    { id: "paused", name: frontendText(locale, "GOALS_STATUS_PAUSED"), color: "var(--muted-foreground)", value: counts.paused },
+    { id: "archived", name: frontendText(locale, "GOALS_STATUS_ARCHIVED"), color: "color-mix(in srgb, var(--muted-foreground) 45%, transparent)", value: counts.archived },
+  ];
+  return <section data-goals-summary aria-label={frontendText(locale, "GOALS_PROGRESS")} className="shrink-0 rounded-lg border p-4">
+    <DonutChart segments={segments} thickness={16} gap={2} label={frontendText(locale, "GOALS_PROGRESS")}>
+      <div className="flex flex-wrap items-center gap-5">
+        <DonutChartPlot className="w-36 max-w-36 shrink-0">
+          <DonutChartCenter totalLabel={frontendText(locale, "GOALS_TITLE")} />
+        </DonutChartPlot>
+        <DonutChartLegend className="min-w-48 flex-1" />
+      </div>
+    </DonutChart>
+  </section>;
 }

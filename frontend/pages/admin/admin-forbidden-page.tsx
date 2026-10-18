@@ -9,7 +9,7 @@ import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 export function AdminForbiddenPage({ locale, title, description }: { locale?: LocaleRuntime; title?: string; description?: string }) {
   return <section data-page-state="forbidden" role="alert" className="mx-auto max-w-xl py-16">
     <Alert variant="destructive">
-      <AlertTitle>{title ?? frontendText(locale, "ADMIN_FORBIDDEN_TITLE")}</AlertTitle>
+      <AlertTitle><h1 className="text-base font-semibold leading-5">{title ?? frontendText(locale, "ADMIN_FORBIDDEN_TITLE")}</h1></AlertTitle>
       <AlertDescription>{description ?? frontendText(locale, "ADMIN_FORBIDDEN_DESCRIPTION")}</AlertDescription>
     </Alert>
   </section>;

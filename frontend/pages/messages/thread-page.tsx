@@ -6,7 +6,8 @@ import { Alert, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { ButtonLink } from "../../components/motion/button/base";
 import { Button } from "../../components/ui/button";
-import { Card, CardContent } from "../../components/ui/card";
+import { MessageBubble, MessageBubbleContent } from "../../components/agents/message-bubble";
+import { MessageScroller } from "../../components/agents/message-scroller";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { Select, SelectOption } from "../../components/ui/select";
@@ -78,6 +79,9 @@ export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending,
     draft.edit("replyId", message?.id ?? "");
     draft.edit("replyAuthor", message?.authorMemberId ?? "");
   };
+  // The data hook belongs to the scrollable viewport, not the scroller shell.
+  // A typed variable keeps the attribute off the object-literal excess check.
+  const threadViewportProps = { "data-thread-scroll": "true", "aria-busy": pending || undefined };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!alive.current || recoveryBlocked || state.kind !== "ready" || submitPendingRef.current || draft.isConfirming()) return;
@@ -141,9 +145,17 @@ export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending,
     </div>}
     {recoveryBlocked && <PageState kind="error" title={frontendText(locale, "MESSAGES_RECOVERY_BLOCKED")} />}
     {state.kind === "ready" && !recoveryBlocked && <>
-    <div data-thread-scroll="true" className="min-h-48 max-h-[calc(100vh-25rem)] flex-1 space-y-3 overflow-y-auto pr-1" aria-busy={pending || undefined}>
-      {state.messages.length === 0 ? <PageState kind="empty" title={frontendText(locale, "MESSAGES_THREAD_EMPTY")} /> : state.messages.map((message) => <Card key={message.id} data-message-id={message.id}><CardContent className="space-y-2 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{message.authorMemberId}</p><time className="text-xs text-muted-foreground" dateTime={message.createdAt}>{message.createdAt}</time></div>{message.replyToMessageId && <p className="text-xs text-muted-foreground">{frontendText(locale, "MESSAGES_REPLYING_TO")} {message.replyToMessageId}</p>}<p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>{message.mentionMemberIds.length > 0 && <div className="flex flex-wrap gap-1">{message.mentionMemberIds.map((memberId) => <Badge key={memberId} variant="secondary">@{memberId}</Badge>)}</div>}<Button size="sm" variant="ghost" disabled={locked} onClick={() => selectReply(message)}>{frontendText(locale, "MESSAGES_REPLY")}</Button></CardContent></Card>)}
-    </div>
+    <MessageScroller
+      className="min-h-48 max-h-[calc(100vh-25rem)] flex-1"
+      viewportClassName="pr-1"
+      contentClassName="space-y-3"
+      label={frontendText(locale, "MESSAGES_THREAD_TITLE")}
+      busy={pending || undefined}
+      followOutput={false}
+      viewportProps={threadViewportProps}
+    >
+      {state.messages.length === 0 ? <PageState kind="empty" title={frontendText(locale, "MESSAGES_THREAD_EMPTY")} /> : state.messages.map((message) => <MessageBubble key={message.id} data-message-id={message.id} variant="ghost"><MessageBubbleContent className="space-y-2 rounded-lg border bg-card p-4 text-card-foreground"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{message.authorMemberId}</p><time className="text-xs text-muted-foreground" dateTime={message.createdAt}>{message.createdAt}</time></div>{message.replyToMessageId && <p className="text-xs text-muted-foreground">{frontendText(locale, "MESSAGES_REPLYING_TO")} {message.replyToMessageId}</p>}<p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>{message.mentionMemberIds.length > 0 && <div className="flex flex-wrap gap-1">{message.mentionMemberIds.map((memberId) => <Badge key={memberId} variant="secondary">@{memberId}</Badge>)}</div>}<Button size="sm" variant="ghost" disabled={locked} onClick={() => selectReply(message)}>{frontendText(locale, "MESSAGES_REPLY")}</Button></MessageBubbleContent></MessageBubble>)}
+    </MessageScroller>
     <DiscussionCursorPagination locale={locale} page={page} limit={limit} pending={pending} hasNext={Boolean(state.nextCursor)} onPrevious={onPrevious} onNext={() => state.nextCursor && onNext(state.nextCursor)} onLimitChange={onLimitChange} />
     <DiscussionComposer operationKey={submitControllerRef.current.operationKey()} onLookup={onLookup ? checkResult : undefined} locale={locale} body={body} status={status} locked={locked} replyTo={replyTo} onBodyChange={(value) => draft.edit("body", value)} onCancelReply={() => selectReply(null)} onSubmit={submit} />
     </>}

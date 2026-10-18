@@ -4,9 +4,6 @@ import { join, relative } from "node:path";
 const LEGACY_FILES = Object.freeze(["public/app.js", "public/workspace-ui.js", "public/navigation.js", "public/styles.css"]);
 const SCAN_EXTENSIONS = new Set([".css", ".js", ".jsx", ".ts", ".tsx"]);
 const CONTENT_ROOTS = Object.freeze(["frontend/pages", "frontend/features"]);
-// The landing guide still mounts the beUI drawer directly for its citation
-// focus contract; it moves onto ui/sheet with the landing page item (3.8).
-const CONTENT_ALLOW = new Set(["frontend/pages/workbench-landing/workbench-feature-panel.tsx"]);
 const DIRECT_OVERLAY_IMPORT = /from\s+["'][^"']*components\/motion\/(drawer|center-morph-modal|bottom-sheet|morphing-modal)["']/u;
 const DIRECT_MOTION_IMPORT = /from\s+["']motion\/react["']/u;
 const RAW_TABLE = /<table[\s>]/u;
@@ -26,7 +23,6 @@ async function scanContent(root) {
   const violations = [];
   for (const directory of CONTENT_ROOTS) {
     for (const { file, content } of await readSources(join(root, directory), root)) {
-      if (CONTENT_ALLOW.has(file)) continue;
       if (RAW_TABLE.test(content)) violations.push({ file, kind: "table" });
       if (DIRECT_OVERLAY_IMPORT.test(content)) violations.push({ file, kind: "overlay" });
       if (DIRECT_MOTION_IMPORT.test(content)) violations.push({ file, kind: "motion" });

@@ -2,6 +2,7 @@ import { AgentFeedback, type AgentFeedbackAdmission } from "../components/agent/
 import { useEffect, useState } from "react";
 import type { useCreateDraft } from "../lib/use-create-draft";
 import { AnswerPanel } from "../components/agent/answer-panel";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -106,11 +107,11 @@ export function AgentPage({ scope, state, locale, question = "", onQuestionChang
  * page states the refusal instead of rendering an empty or placeholder answer. */
 function AgentRefusal({ state, locale, onRetry }: { state: Extract<AgentTurnState, { kind: "refused" }>; locale?: LocaleRuntime; onRetry?: () => void }) {
   const suggestions = state.suggestions ?? [];
-  return <div data-agent-refused role="status" className="space-y-2 rounded-md border p-4">
-    <h3 className="font-medium">{frontendText(locale, "AGENT_INSUFFICIENT")}</h3>
-    {suggestions.length > 0 && <ul className="list-disc pl-5 text-sm text-muted-foreground">{suggestions.map((suggestion) => <li key={suggestion}>{frontendText(locale, suggestion === "rewrite" ? "AGENT_SUGGEST_REWRITE" : "AGENT_SUGGEST_SOURCES")}</li>)}</ul>}
+  return <Alert data-agent-refused role="status" variant="warning" className="space-y-2">
+    <AlertTitle>{frontendText(locale, "AGENT_INSUFFICIENT")}</AlertTitle>
+    {suggestions.length > 0 && <AlertDescription><ul className="list-disc pl-5">{suggestions.map((suggestion) => <li key={suggestion}>{frontendText(locale, suggestion === "rewrite" ? "AGENT_SUGGEST_REWRITE" : "AGENT_SUGGEST_SOURCES")}</li>)}</ul></AlertDescription>}
     {onRetry && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button>}
-  </div>;
+  </Alert>;
 }
 
 function AgentSourceControls({ draft, locale, disabled, onStartScope, isWriteBlocked }: { draft: SourceDraft; locale?: LocaleRuntime; disabled: boolean; isWriteBlocked?: () => boolean; onStartScope: (scope: AgentScope, onCommit: () => void, onSettled: () => void) => void }) {

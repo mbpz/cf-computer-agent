@@ -21,7 +21,7 @@ export type SheetSide = "left" | "right" | "bottom";
  *
  * It stays an adapter because `Drawer` cannot carry the modal contract the
  * shell's mobile navigation and the task editor rely on. Its props stop at
- * `open`/`onOpenChange`/`side`/`className`/`ariaLabel`, so a caller has no way
+ * `open`/`onOpenChange`/`side`/`className`/`backdropClassName`/`ariaLabel`, so a caller has no way
  * to reach the panel element: the focus scope (transfer into the panel, the Tab
  * trap, focus restore), `data-focus-scope` and the `data-sheet-*` hooks the
  * shell suites select on have to be layered on its children instead. Doing that
@@ -42,7 +42,7 @@ export type SheetSide = "left" | "right" | "bottom";
  * sheet's default surface (`w-72 p-6`) is preserved for the call sites that do
  * not override it.
  */
-export function SheetContent({ className, side = "left", ariaLabel, children }: { className?: string; side?: SheetSide; ariaLabel?: string; children: React.ReactNode }) {
+export function SheetContent({ className, backdropClassName, side = "left", ariaLabel, children }: { className?: string; backdropClassName?: string; side?: SheetSide; ariaLabel?: string; children: React.ReactNode }) {
   const { open, onOpenChange } = React.useContext(SheetContext);
   // `bottom-sheet` portals only from its own mount effect onward, so the focus
   // scope must not arm on the render that first passes `open`: its effect is
@@ -63,7 +63,7 @@ export function SheetContent({ className, side = "left", ariaLabel, children }: 
     return <BottomSheet open onOpenChange={(next) => { onOpenChange?.(next); }} title={ariaLabel} snapPoints={["auto"]} className={className}>{scope}</BottomSheet>;
   }
   return (
-    <Drawer open onOpenChange={(next) => { onOpenChange?.(next); }} side={side} ariaLabel={ariaLabel} className={cn("w-72 p-6", className)}>
+    <Drawer open onOpenChange={(next) => { onOpenChange?.(next); }} side={side} ariaLabel={ariaLabel} backdropClassName={backdropClassName} className={cn("w-72 p-6", className)}>
       {scope}
     </Drawer>
   );

@@ -7,6 +7,8 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "../compone
 import { Collapsible, CollapsibleContent, CollapsibleIndicator, CollapsibleTrigger, useCollapsible } from "../components/motion/collapsible";
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
+import { ScrollProgress } from "../components/motion/scroll-progress";
+import { SharedLayoutBg } from "../components/motion/shared-layout-bg";
 import { Button } from "../components/ui/button";
 import { Select } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
@@ -63,6 +65,7 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
     visibility: revision.visibility,
     chunks: Array.isArray(revision.chunks) ? revision.chunks : [],
   };
+  const articleRef = useRef<HTMLElement | null>(null);
   const [selectedChunkId, setSelectedChunkId] = useState<string | null>(revision.selectedChunkId ?? null);
   const [mobilePanel, setMobilePanel] = useState<"outline" | "sources" | null>(revision.selectedChunkId ? "sources" : null);
   useEffect(() => {
@@ -115,12 +118,13 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
         : state.kind === "forbidden" ? <PageState kind="forbidden" title={frontendText(locale, "KNOWLEDGE_READER_REVOKED")} description={frontendText(locale, "KNOWLEDGE_READER_REVOKED_DESCRIPTION")}>
           <Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>
         </PageState>
-        : <article data-reader-layout className="space-y-5">
+        : <article ref={articleRef} data-reader-layout className="space-y-5">
     <ExpandableTabs className="lg:hidden" ariaLabel={frontendText(locale, "KNOWLEDGE_READER_MOBILE_PANELS")} value={mobilePanel} onValueChange={setMobilePanel} items={[
       { id: "outline", label: frontendText(locale, "KNOWLEDGE_READER_TAB_OUTLINE"), controls: "reader-outline-panel", icon: <ListBulletsIcon size={16} aria-hidden="true" /> },
       { id: "sources", label: frontendText(locale, "KNOWLEDGE_READER_TAB_SOURCES"), controls: "reader-sources-panel", icon: <LinkSimpleIcon size={16} aria-hidden="true" /> },
     ]} />
     <div className="grid gap-5 lg:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_minmax(17rem,22rem)] lg:items-start">
+      <ScrollProgress target={articleRef} />
       <aside id="reader-outline-panel" data-reader-outline className={(mobilePanel === "outline" ? "block" : "hidden") + " lg:sticky lg:top-6 lg:block lg:self-start"}>
         <ReaderOutlinePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} onSelectChunk={setSelectedChunkId} />
       </aside>
@@ -233,7 +237,7 @@ function RelatedKnowledgePanel({ locale, state, onRetry }: { locale?: LocaleRunt
       ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "KNOWLEDGE_RELATED_UNREAD")}</p>{onRetry && <Button className="mt-3" size="sm" variant="outline" onClick={onRetry}>{frontendText(locale, "KNOWLEDGE_RELATED_RETRY")}</Button>}</>
       : state.items.length === 0
         ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_EMPTY")}</p>
-        : <div className="grid gap-2">{state.items.map((item) => { const reasons = item.reasonFields.map((field) => relatedFieldLabel(field, locale)).join(", "); return <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span>{reasons && <span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_MATCHED")} {reasons}</span>}</a>; })}</div>;
+        : <SharedLayoutBg className="grid gap-2" inset={6} pillClassName="rounded-md bg-muted/60">{state.items.map((item) => { const reasons = item.reasonFields.map((field) => relatedFieldLabel(field, locale)).join(", "); return <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span>{reasons && <span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_MATCHED")} {reasons}</span>}</a>; })}</SharedLayoutBg>;
   return <ReaderSection locale={locale} title={frontendText(locale, "KNOWLEDGE_RELATED_TITLE")} data-related-knowledge="true">{body}</ReaderSection>;
 }
 
@@ -245,7 +249,7 @@ function BacklinkPanel({ locale, state, onRetry }: { locale?: LocaleRuntime; sta
       ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "KNOWLEDGE_BACKLINKS_UNREAD")}</p>{onRetry && <Button className="mt-3" size="sm" variant="outline" onClick={onRetry}>{frontendText(locale, "KNOWLEDGE_BACKLINKS_RETRY")}</Button>}</>
       : state.items.length === 0
         ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_EMPTY")}</p>
-        : <div className="grid gap-2">{state.items.map((item) => <a key={item.id} href={"/knowledge/" + encodeURIComponent(item.id)} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span><span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_LINES")} {item.startLine}–{item.endLine}</span></a>)}</div>;
+        : <SharedLayoutBg className="grid gap-2" inset={6} pillClassName="rounded-md bg-muted/60">{state.items.map((item) => <a key={item.id} href={"/knowledge/" + encodeURIComponent(item.id)} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span><span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_BACKLINKS_LINES")} {item.startLine}–{item.endLine}</span></a>)}</SharedLayoutBg>;
   return <ReaderSection locale={locale} title={frontendText(locale, "KNOWLEDGE_BACKLINKS_TITLE")} data-backlinks="true">{body}</ReaderSection>;
 }
 

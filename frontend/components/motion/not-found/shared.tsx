@@ -80,12 +80,11 @@ export function NotFoundActions({
 export function NotFoundStage({
   className,
   children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) {
+  ...props
+}: React.ComponentProps<"div">) {
   return (
     <div
+      {...props}
       className={cn(
         "flex min-h-[420px] w-full flex-col items-center justify-center gap-8 px-4 text-center",
         className,

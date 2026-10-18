@@ -1,5 +1,6 @@
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
+import { CodeBlock } from "../../components/agents/code-block";
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
 import { ButtonLink } from "../../components/motion/button/base";
@@ -46,7 +47,7 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
   </section>
       : <>
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_REVIEW_CONTENT")}</CardTitle></CardHeader><CardContent>
-      <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-4 text-sm leading-7">{state.detail.content || frontendText(locale, "ADMIN_REVIEW_NO_CONTENT")}</pre>
+      <CodeBlock code={state.detail.content || frontendText(locale, "ADMIN_REVIEW_NO_CONTENT")} language="text" wrap showLineNumbers={false} maxHeight={512} />
     </CardContent></Card>
     {state.detail.warnings.length ? <Alert><AlertDescription><strong>{frontendText(locale, "ADMIN_REVIEW_WARNINGS")}:</strong> {state.detail.warnings.join(" · ")}</AlertDescription></Alert> : null}
     {comments}

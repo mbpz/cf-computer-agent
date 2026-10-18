@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
 import { Input } from "../../components/motion/input";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
+import { SharedLayoutBg } from "../../components/motion/shared-layout-bg";
 import type { AdminMemberInvitation, AdminMemberInvitationStatus } from "../../lib/admin-member-invitations-data";
 import { isAdminMembersTab, type AdminMembersTab } from "../../lib/admin-members-query";
 import type { FrontendPageMetadata, SupportedPageSize } from "../../lib/numbered-page";
@@ -192,7 +193,7 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
           {invitationsError
             ? <div role="alert" className="space-y-2 text-sm text-destructive"><p>{invitationsError}</p>{onLoadInvitationsRetry && <Button type="button" variant="outline" disabled={invitationWritePending} onClick={onLoadInvitationsRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</div>
             : <div className="space-y-2"><h3 className="text-sm font-medium">{frontendText(locale, "ADMIN_INVITATION_LIST_TITLE")}</h3>
-              {invitations.length ? invitations.map((invitation) => <Card key={invitation.id}><CardContent className="flex items-center justify-between gap-4 p-4"><div><p className="font-medium">{invitation.email}</p><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, invitationStatusKeys[invitation.status])} · {withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_EXPIRES"), "expiresAt", invitation.expiresAt)}</p></div>{invitation.status === "pending" && <Button size="sm" variant="outline" disabled={invitationWritePending || pending || forbidden || !onRevokeInvitation} onClick={() => requestRevokeConfirmation(invitation)}>{frontendText(locale, "ADMIN_INVITATION_REVOKE")}</Button>}</CardContent></Card>)
+              {invitations.length ? <SharedLayoutBg as="ul" className="space-y-2" inset={10}>{invitations.map((invitation) => <li key={invitation.id} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-3"><div><p className="font-medium">{invitation.email}</p><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, invitationStatusKeys[invitation.status])} · {withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_EXPIRES"), "expiresAt", invitation.expiresAt)}</p></div>{invitation.status === "pending" && <Button size="sm" variant="outline" disabled={invitationWritePending || pending || forbidden || !onRevokeInvitation} onClick={() => requestRevokeConfirmation(invitation)}>{frontendText(locale, "ADMIN_INVITATION_REVOKE")}</Button>}</li>)}</SharedLayoutBg>
                 : <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_LIST_EMPTY")}</p>}
             </div>}
         </section>

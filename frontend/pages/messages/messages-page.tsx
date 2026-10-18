@@ -1,7 +1,7 @@
 import { ChatCircle } from "@phosphor-icons/react";
 import { ButtonLink } from "../../components/motion/button/base";
+import { SharedLayoutBg } from "../../components/motion/shared-layout-bg";
 import { Button } from "../../components/ui/button";
-import { Card, CardContent } from "../../components/ui/card";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -49,12 +49,14 @@ export function MessagesPage({ locale, state, page, limit, pending, onRetry, onN
     </PageState>}
     {state.kind === "ready" && <>
     <div data-messages-scroll="true" className="min-h-0 max-h-[calc(100vh-18rem)] flex-1 space-y-3 overflow-y-auto pr-1" aria-busy={pending || undefined}>
-      {state.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "MESSAGES_EMPTY")} /> : state.items.map((thread) => <Card key={thread.id}>
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0"><p className="font-medium">{frontendText(locale, thread.contextKind === "task" ? "MESSAGES_CONTEXT_TASK" : "MESSAGES_CONTEXT_KNOWLEDGE")}</p><p className="truncate text-sm text-muted-foreground">{thread.contextId}</p><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, "MESSAGES_MESSAGE_COUNT")} {thread.lastSequence}</p></div>
-          <div className="flex flex-wrap gap-2"><ButtonLink variant="outline" size="md" href={discussionContextHref({ kind: thread.contextKind, id: thread.contextId })}>{frontendText(locale, "MESSAGES_OPEN_CONTEXT")}</ButtonLink><ButtonLink variant="primary" size="md" href={threadDiscussionHref(thread.id)}>{frontendText(locale, "MESSAGES_OPEN_THREAD")}</ButtonLink></div>
-        </CardContent>
-      </Card>)}
+      {state.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "MESSAGES_EMPTY")} /> : <SharedLayoutBg as="ul" className="space-y-3" inset={10}>
+        {state.items.map((thread) => <li key={thread.id} className="rounded-lg border bg-card">
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0"><p className="font-medium">{frontendText(locale, thread.contextKind === "task" ? "MESSAGES_CONTEXT_TASK" : "MESSAGES_CONTEXT_KNOWLEDGE")}</p><p className="truncate text-sm text-muted-foreground">{thread.contextId}</p><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, "MESSAGES_MESSAGE_COUNT")} {thread.lastSequence}</p></div>
+            <div className="flex flex-wrap gap-2"><ButtonLink variant="outline" size="md" href={discussionContextHref({ kind: thread.contextKind, id: thread.contextId })}>{frontendText(locale, "MESSAGES_OPEN_CONTEXT")}</ButtonLink><ButtonLink variant="primary" size="md" href={threadDiscussionHref(thread.id)}>{frontendText(locale, "MESSAGES_OPEN_THREAD")}</ButtonLink></div>
+          </div>
+        </li>)}
+      </SharedLayoutBg>}
     </div>
     <DiscussionCursorPagination locale={locale} page={page} limit={limit} pending={pending} hasNext={Boolean(state.nextCursor)} onPrevious={onPrevious} onNext={() => state.nextCursor && onNext(state.nextCursor)} onLimitChange={onLimitChange} />
     </>}

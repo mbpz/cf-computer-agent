@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
+import { BouncyAccordion } from "../../components/motion/bouncy-accordion";
 import { Sheet, SheetContent, SheetTitle } from "../../components/ui/sheet";
 import { Input } from "../../components/ui/input";
 import { Select } from "../../components/ui/select";
@@ -300,21 +301,51 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
           <label>{t("TASKS_FIELD_TAGS")}<Input aria-label={t("TASKS_FIELD_TAGS")} value={tags} disabled={locked} onChange={(event) => edit("tags", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_TAGS")}</Button>
         </form>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"], op: { op: "link", taskId, knowledgeItemId: id, expectedUpdatedAt: detail.task.updatedAt } }); }}>
-          <label>{t("TASKS_LINK_ID")}<Input aria-label={t("TASKS_LINK_ID")} value={knowledgeId} required maxLength={128} disabled={locked} onChange={(event) => edit("knowledgeId", event.currentTarget.value)} /></label>
-          <Button type="submit" disabled={locked || detail.links.length >= 5}>{t("TASKS_LINK_ADD")}</Button>
-        </form>
-        <ul className="space-y-2">{detail.links.map((link) => <li key={link.id} className="break-words rounded border p-2"><p>{link.knowledgeTitle ?? t("TASKS_LINK_UNAVAILABLE")}</p><p className="text-xs text-muted-foreground">{link.knowledgeItemId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_LINK_REMOVE")}: ${link.id}`} onClick={() => void perform({ op: { op: "unlink", taskId, linkId: link.id, expectedUpdatedAt: detail.task.updatedAt } })}>{t("TASKS_LINK_REMOVE")}</Button></li>)}</ul>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); const position = nextSubtaskPosition(subtasks); if (locked || position === null || !title || [...title].length > 240 || /[\u0000-\u001f\u007f-\u009f]/u.test(title)) { setError(true); return; } void perform({ clean: ["subtaskTitle"], op: { op: "subtask-create", taskId, subtaskId: crypto.randomUUID(), title, status: "todo", position } }); }}>
-          <label>{t("TASKS_SUBTASK_TITLE")}<Input aria-label={t("TASKS_SUBTASK_TITLE")} value={subtaskTitle} maxLength={480} disabled={locked} onChange={(event) => edit("subtaskTitle", event.currentTarget.value)} /></label>
-          <Button type="submit" disabled={locked}>{t("TASKS_SUBTASK_ADD")}</Button>
-        </form>
-        <ul className="space-y-2">{subtasks.map((item) => <li key={item.id} className="break-words rounded border p-2"><p>{item.title}</p><label className="mt-2 block text-xs text-muted-foreground">{t("TASKS_SUBTASK_STATUS")}<Select className="mt-1" aria-label={`${t("TASKS_SUBTASK_STATUS")}: ${item.title}`} disabled={locked} value={item.status} onChange={(event) => { const status = event.currentTarget.value as TaskSubtask["status"]; if (status !== item.status) void perform({ op: { op: "subtask-update", taskId, subtaskId: item.id, title: item.title, status, position: item.position, expectedUpdatedAt: item.updatedAt } }); }}>{(["todo", "doing", "done", "canceled"] as const).map((status) => <option key={status} value={status}>{t(taskStatusKey(status))}</option>)}</Select></label><div className="mt-2 flex flex-wrap gap-2"><Button variant="outline" disabled={locked} aria-label={`${item.status === "done" ? t("TASKS_SUBTASK_REOPEN") : t("TASKS_SUBTASK_DONE")}: ${item.title}`} onClick={() => void perform({ op: { op: "subtask-update", taskId, subtaskId: item.id, title: item.title, status: item.status === "done" ? "todo" : "done", position: item.position, expectedUpdatedAt: item.updatedAt } })}>{item.status === "done" ? t("TASKS_SUBTASK_REOPEN") : t("TASKS_SUBTASK_DONE")}</Button><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_SUBTASK_REMOVE")}: ${item.title}`} onClick={() => void perform({ op: { op: "subtask-delete", taskId, subtaskId: item.id, expectedUpdatedAt: item.updatedAt } })}>{t("TASKS_SUBTASK_REMOVE")}</Button></div></li>)}</ul>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const dependsOnTaskId = currentDraft.current.dependsOnTaskId.trim(); if (locked || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(dependsOnTaskId) || dependsOnTaskId === taskId) { setError(true); return; } void perform({ clean: ["dependsOnTaskId"], op: { op: "dependency-add", taskId, dependsOnTaskId, expectedUpdatedAt: detail.task.updatedAt } }); }}>
-          <label>{t("TASKS_DEPENDENCY_ID")}<Input aria-label={t("TASKS_DEPENDENCY_ID")} value={dependsOnTaskId} maxLength={128} disabled={locked} onChange={(event) => edit("dependsOnTaskId", event.currentTarget.value)} /></label>
-          <Button type="submit" disabled={locked}>{t("TASKS_DEPENDENCY_ADD")}</Button>
-        </form>
-        <ul className="space-y-2">{dependencies.map((item) => <li key={item.dependsOnTaskId} className="break-words rounded border p-2"><p className="text-xs text-muted-foreground">{item.dependsOnTaskId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_DEPENDENCY_REMOVE")}: ${item.dependsOnTaskId}`} onClick={() => void perform({ op: { op: "dependency-remove", taskId, dependsOnTaskId: item.dependsOnTaskId, expectedUpdatedAt: detail.task.updatedAt } })}>{t("TASKS_DEPENDENCY_REMOVE")}</Button></li>)}</ul>
+        {/* The optional subforms stay mounted inside beUI's accordion: every input keeps
+            its own aria-label and every list stays in the DOM, so the existing field
+            queries and draft bookkeeping are unchanged, while the required task fields
+            above remain outside the disclosure. Each row reuses its group's existing
+            field label as the heading — the shared catalogue has no separate heading key,
+            and this file must not add one. */}
+        <BouncyAccordion
+          className="overflow-hidden rounded-lg border"
+          classNames={{ description: "space-y-2 text-foreground" }}
+          items={[
+            {
+              id: "links",
+              title: t("TASKS_LINK_ID"),
+              description: <>
+                <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"], op: { op: "link", taskId, knowledgeItemId: id, expectedUpdatedAt: detail.task.updatedAt } }); }}>
+                  <label>{t("TASKS_LINK_ID")}<Input aria-label={t("TASKS_LINK_ID")} value={knowledgeId} required maxLength={128} disabled={locked} onChange={(event) => edit("knowledgeId", event.currentTarget.value)} /></label>
+                  <Button type="submit" disabled={locked || detail.links.length >= 5}>{t("TASKS_LINK_ADD")}</Button>
+                </form>
+                <ul className="space-y-2">{detail.links.map((link) => <li key={link.id} className="break-words rounded border p-2"><p>{link.knowledgeTitle ?? t("TASKS_LINK_UNAVAILABLE")}</p><p className="text-xs text-muted-foreground">{link.knowledgeItemId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_LINK_REMOVE")}: ${link.id}`} onClick={() => void perform({ op: { op: "unlink", taskId, linkId: link.id, expectedUpdatedAt: detail.task.updatedAt } })}>{t("TASKS_LINK_REMOVE")}</Button></li>)}</ul>
+              </>,
+            },
+            {
+              id: "subtasks",
+              title: t("TASKS_SUBTASK_TITLE"),
+              description: <>
+                <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); const position = nextSubtaskPosition(subtasks); if (locked || position === null || !title || [...title].length > 240 || /[\u0000-\u001f\u007f-\u009f]/u.test(title)) { setError(true); return; } void perform({ clean: ["subtaskTitle"], op: { op: "subtask-create", taskId, subtaskId: crypto.randomUUID(), title, status: "todo", position } }); }}>
+                  <label>{t("TASKS_SUBTASK_TITLE")}<Input aria-label={t("TASKS_SUBTASK_TITLE")} value={subtaskTitle} maxLength={480} disabled={locked} onChange={(event) => edit("subtaskTitle", event.currentTarget.value)} /></label>
+                  <Button type="submit" disabled={locked}>{t("TASKS_SUBTASK_ADD")}</Button>
+                </form>
+                <ul className="space-y-2">{subtasks.map((item) => <li key={item.id} className="break-words rounded border p-2"><p>{item.title}</p><label className="mt-2 block text-xs text-muted-foreground">{t("TASKS_SUBTASK_STATUS")}<Select className="mt-1" aria-label={`${t("TASKS_SUBTASK_STATUS")}: ${item.title}`} disabled={locked} value={item.status} onChange={(event) => { const status = event.currentTarget.value as TaskSubtask["status"]; if (status !== item.status) void perform({ op: { op: "subtask-update", taskId, subtaskId: item.id, title: item.title, status, position: item.position, expectedUpdatedAt: item.updatedAt } }); }}>{(["todo", "doing", "done", "canceled"] as const).map((status) => <option key={status} value={status}>{t(taskStatusKey(status))}</option>)}</Select></label><div className="mt-2 flex flex-wrap gap-2"><Button variant="outline" disabled={locked} aria-label={`${item.status === "done" ? t("TASKS_SUBTASK_REOPEN") : t("TASKS_SUBTASK_DONE")}: ${item.title}`} onClick={() => void perform({ op: { op: "subtask-update", taskId, subtaskId: item.id, title: item.title, status: item.status === "done" ? "todo" : "done", position: item.position, expectedUpdatedAt: item.updatedAt } })}>{item.status === "done" ? t("TASKS_SUBTASK_REOPEN") : t("TASKS_SUBTASK_DONE")}</Button><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_SUBTASK_REMOVE")}: ${item.title}`} onClick={() => void perform({ op: { op: "subtask-delete", taskId, subtaskId: item.id, expectedUpdatedAt: item.updatedAt } })}>{t("TASKS_SUBTASK_REMOVE")}</Button></div></li>)}</ul>
+              </>,
+            },
+            {
+              id: "dependencies",
+              title: t("TASKS_DEPENDENCY_ID"),
+              description: <>
+                <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const dependsOnTaskId = currentDraft.current.dependsOnTaskId.trim(); if (locked || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(dependsOnTaskId) || dependsOnTaskId === taskId) { setError(true); return; } void perform({ clean: ["dependsOnTaskId"], op: { op: "dependency-add", taskId, dependsOnTaskId, expectedUpdatedAt: detail.task.updatedAt } }); }}>
+                  <label>{t("TASKS_DEPENDENCY_ID")}<Input aria-label={t("TASKS_DEPENDENCY_ID")} value={dependsOnTaskId} maxLength={128} disabled={locked} onChange={(event) => edit("dependsOnTaskId", event.currentTarget.value)} /></label>
+                  <Button type="submit" disabled={locked}>{t("TASKS_DEPENDENCY_ADD")}</Button>
+                </form>
+                <ul className="space-y-2">{dependencies.map((item) => <li key={item.dependsOnTaskId} className="break-words rounded border p-2"><p className="text-xs text-muted-foreground">{item.dependsOnTaskId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_DEPENDENCY_REMOVE")}: ${item.dependsOnTaskId}`} onClick={() => void perform({ op: { op: "dependency-remove", taskId, dependsOnTaskId: item.dependsOnTaskId, expectedUpdatedAt: detail.task.updatedAt } })}>{t("TASKS_DEPENDENCY_REMOVE")}</Button></li>)}</ul>
+              </>,
+            },
+          ]}
+        />
       </>}
     </>}
     <Button variant="outline" disabled={locked} onClick={close}>{t("TASKS_CLOSE")}</Button>

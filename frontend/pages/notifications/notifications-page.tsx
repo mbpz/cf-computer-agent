@@ -6,6 +6,7 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { DataPagination } from "../../components/data-pagination";
 import { NotificationStack } from "../../components/motion/notification-stack";
+import { OverflowActions, type OverflowActionItem } from "../../components/motion/overflow-actions";
 import { FilterSelect } from "../../components/ui/filter-select";
 import { FilterDisclosure } from "../../components/ui/filter-disclosure";
 import { PageHeader } from "../../components/ui/page-header";
@@ -133,10 +134,14 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
                   <Badge variant={item.readAt === null ? "default" : "outline"}>{frontendText(locale, item.readAt === null ? "NOTIFICATIONS_UNREAD" : "NOTIFICATIONS_READ")}</Badge>
                 </span>,
                 data: { "data-notification-id": item.id, "data-read": item.readAt === null ? "false" : "true" },
-                actions: <div className="flex flex-wrap items-center gap-2">
-                  {href ? <Button variant="outline" disabled={actionsDisabled} onClick={() => onOpen(item.id)}>{frontendText(locale, "NOTIFICATIONS_OPEN")}</Button> : <p className="text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")}</p>}
-                  {item.readAt === null && <Button variant="outline" disabled={actionsDisabled} onClick={() => onMarkRead(item.id)}>{frontendText(locale, "NOTIFICATIONS_MARK_READ")}</Button>}
-                </div>,
+                actions: (() => {
+                  const actions: OverflowActionItem[] = [];
+                  if (href) actions.push({ id: "open", label: frontendText(locale, "NOTIFICATIONS_OPEN"), disabled: actionsDisabled, onClick: () => onOpen(item.id) });
+                  if (item.readAt === null) actions.push({ id: "mark-read", label: frontendText(locale, "NOTIFICATIONS_MARK_READ"), disabled: actionsDisabled, onClick: () => onMarkRead(item.id) });
+                  return actions.length
+                    ? <OverflowActions size="sm" primaryActions={actions} openLabel={frontendText(locale, "COMMON_MORE_ACTIONS")} closeLabel={frontendText(locale, "COMMON_FEWER_ACTIONS")} />
+                    : <p className="text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")}</p>;
+                })(),
               };
             })}
             interactive={false}

@@ -4,6 +4,7 @@ import type { LocaleRuntime } from "../lib/i18n";
 import { frontendText } from "../lib/i18n";
 import type { WorkbenchReviewSnapshot } from "../lib/workbench-review-data";
 import { Button } from "../components/ui/button";
+import { CompositionChart } from "../components/charts/composition-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { NumberTicker } from "../components/motion/number-ticker";
 import { PageHeader } from "../components/ui/page-header";
@@ -14,6 +15,7 @@ export type ReviewTarget = {kind: "task" | "inbox" | "project"; id: string};
 export type WorkbenchReviewPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; snapshot: WorkbenchReviewSnapshot };
 export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onRetry, onOpen, periodBlocked = false, periodNotice, onDiscardPeriod }: { locale: LocaleRuntime; period: "daily" | "weekly"; state: WorkbenchReviewPageState; onPeriodChange?: (period: "daily" | "weekly") => void; onRetry?: () => void; onOpen?: (target: ReviewTarget) => void; periodBlocked?: boolean; periodNotice?: string; onDiscardPeriod?: () => void }) {
   const s = state.kind === "ready" ? state.snapshot : null;
+  const mixTotal = s ? s.taskSummary.done + s.taskSummary.overdue + s.taskSummary.blocked : 0;
   return <section className="space-y-5" aria-busy={state.kind === "loading"}>
     <PageHeader
       title={frontendText(locale, "REVIEW_TITLE")}
@@ -42,6 +44,28 @@ export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onR
         <Metric icon={<ArrowsClockwise size={18} />} label={frontendText(locale, "REVIEW_BLOCKED")} value={s.taskSummary.blocked} />
         <Metric icon={<Timer size={18} />} label={frontendText(locale, "REVIEW_FOCUS_TIME")} value={Math.round(s.focusElapsedMs / 60000)} />
       </div>
+      {mixTotal > 0 && <Card>
+        <CardContent className="space-y-3 pt-6">
+          <CompositionChart
+            view="bar"
+            periods={[s.periodKey]}
+            series={[
+              { id: "done", name: frontendText(locale, "REVIEW_COMPLETED"), color: "#059669", values: [s.taskSummary.done] },
+              { id: "overdue", name: frontendText(locale, "REVIEW_OVERDUE"), color: "#d97706", values: [s.taskSummary.overdue] },
+              { id: "blocked", name: frontendText(locale, "REVIEW_BLOCKED"), color: "#dc2626", values: [s.taskSummary.blocked] },
+            ]}
+            label={`${frontendText(locale, "REVIEW_COMPLETED")} · ${frontendText(locale, "REVIEW_OVERDUE")} · ${frontendText(locale, "REVIEW_BLOCKED")}`}
+            formatValue={(value) => value.toLocaleString(locale.locale === "zh-CN" ? "zh-CN" : "en")}
+          />
+          {/* The chart paints shares; the exact period counts stay available to
+              assistive technology as text rather than a second visual chart. */}
+          <ul className="sr-only">
+            <li>{frontendText(locale, "REVIEW_COMPLETED")}: {s.taskSummary.done}</li>
+            <li>{frontendText(locale, "REVIEW_OVERDUE")}: {s.taskSummary.overdue}</li>
+            <li>{frontendText(locale, "REVIEW_BLOCKED")}: {s.taskSummary.blocked}</li>
+          </ul>
+        </CardContent>
+      </Card>}
       <p className="text-sm text-muted-foreground">{frontendText(locale, "REVIEW_BOUNDED_HINT")}</p>
       <div className="grid gap-4 lg:grid-cols-2">
         <ListCard locale={locale} kind="completed" title={frontendText(locale, "REVIEW_COMPLETED_LIST")} items={s.completed.map(item => ({kind: "task", id: item.id, title: item.title}))} href="/tasks?status=done&page=1&pageSize=20" empty={frontendText(locale, "REVIEW_EMPTY_COMPLETED")} onOpen={onOpen} />

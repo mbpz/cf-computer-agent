@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：446；操作/转发候选：1812。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：475；操作/转发候选：1811。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -50,6 +50,30 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/calendar-cancel-confirmation.tsx | 1 |
 | frontend/components/calendar-create-form.tsx | 15 |
 | frontend/components/calendar-range-filter.tsx | 7 |
+| frontend/components/charts/composition-chart.tsx | 0 |
+| frontend/components/charts/composition-chart/context.tsx | 0 |
+| frontend/components/charts/composition-chart/legend.tsx | 1 |
+| frontend/components/charts/composition-chart/model.ts | 0 |
+| frontend/components/charts/composition-chart/plot.tsx | 3 |
+| frontend/components/charts/composition-chart/tooltip-content.tsx | 0 |
+| frontend/components/charts/donut-chart.tsx | 0 |
+| frontend/components/charts/donut-chart/center.tsx | 0 |
+| frontend/components/charts/donut-chart/context.tsx | 0 |
+| frontend/components/charts/donut-chart/legend.tsx | 1 |
+| frontend/components/charts/donut-chart/model.ts | 0 |
+| frontend/components/charts/donut-chart/plot.tsx | 3 |
+| frontend/components/charts/heat-calendar.tsx | 0 |
+| frontend/components/charts/heat-calendar/context.ts | 0 |
+| frontend/components/charts/heat-calendar/grid.tsx | 2 |
+| frontend/components/charts/heat-calendar/legend.tsx | 2 |
+| frontend/components/charts/heat-calendar/tooltip.tsx | 1 |
+| frontend/components/charts/heat-calendar/types.ts | 0 |
+| frontend/components/charts/heat-calendar/utils.ts | 0 |
+| frontend/components/charts/status-bar.tsx | 1 |
+| frontend/components/charts/status-bar/context.ts | 0 |
+| frontend/components/charts/status-bar/legend.tsx | 1 |
+| frontend/components/charts/status-bar/plot.tsx | 1 |
+| frontend/components/charts/status-bar/tooltip.tsx | 1 |
 | frontend/components/data-pagination.tsx | 5 |
 | frontend/components/data-table.tsx | 3 |
 | frontend/components/focus-action-confirmation.tsx | 1 |
@@ -69,6 +93,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/motion/action-swap.tsx | 1 |
 | frontend/components/motion/alert.tsx | 7 |
 | frontend/components/motion/animated-badge.tsx | 1 |
+| frontend/components/motion/animated-number.tsx | 0 |
 | frontend/components/motion/animated-sidebar.tsx | 24 |
 | frontend/components/motion/animated-toast-stack.tsx | 4 |
 | frontend/components/motion/bottom-sheet.tsx | 4 |
@@ -96,6 +121,8 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/motion/date-range-picker/date-utils.ts | 0 |
 | frontend/components/motion/date-range-picker/types.ts | 0 |
 | frontend/components/motion/date-range-picker/use-date-range-picker.ts | 0 |
+| frontend/components/motion/digit-swap.tsx | 0 |
+| frontend/components/motion/dock.tsx | 1 |
 | frontend/components/motion/drawer.tsx | 3 |
 | frontend/components/motion/expandable-action-bar.tsx | 3 |
 | frontend/components/motion/feedback-widget.tsx | 11 |
@@ -109,7 +136,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/motion/morphing-modal.tsx | 2 |
 | frontend/components/motion/morphing-search-chips.tsx | 11 |
 | frontend/components/motion/not-found/glitch.tsx | 0 |
-| frontend/components/motion/not-found/shared.tsx | 2 |
+| frontend/components/motion/not-found/shared.tsx | 3 |
 | frontend/components/motion/notification-stack.tsx | 4 |
 | frontend/components/motion/number-ticker.tsx | 0 |
 | frontend/components/motion/overflow-actions.tsx | 4 |
@@ -119,6 +146,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/motion/preview-rail.tsx | 4 |
 | frontend/components/motion/radio.tsx | 2 |
 | frontend/components/motion/range-slider.tsx | 2 |
+| frontend/components/motion/scroll-progress.tsx | 1 |
 | frontend/components/motion/scroll-reveal.tsx | 0 |
 | frontend/components/motion/select.tsx | 5 |
 | frontend/components/motion/shared-layout-bg.tsx | 2 |
@@ -141,6 +169,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/motion/tabs.tsx | 10 |
 | frontend/components/motion/text-scramble.tsx | 0 |
 | frontend/components/motion/text-shimmer.tsx | 0 |
+| frontend/components/motion/tilt-card.tsx | 1 |
 | frontend/components/motion/tooltip-surface.tsx | 1 |
 | frontend/components/motion/tooltip.tsx | 15 |
 | frontend/components/motion/tooltip/grace.ts | 2 |
@@ -217,11 +246,11 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/features/environments/environment-rename-dialog.tsx | 7 |
 | frontend/features/environments/environment-vm-composition.ts | 0 |
 | frontend/features/environments/environment-vm-provider.tsx | 0 |
-| frontend/features/environments/environments-page.tsx | 33 |
+| frontend/features/environments/environments-page.tsx | 29 |
 | frontend/features/environments/files/asset-import-panel.tsx | 23 |
 | frontend/features/environments/files/asset-import.ts | 0 |
 | frontend/features/environments/files/file-manager.mjs | 0 |
-| frontend/features/environments/files/files-panel.tsx | 34 |
+| frontend/features/environments/files/files-panel.tsx | 26 |
 | frontend/features/environments/files/knowledge-import-panel.tsx | 14 |
 | frontend/features/environments/files/knowledge-import.ts | 0 |
 | frontend/features/environments/files/stream-download.mjs | 2 |
@@ -396,17 +425,17 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/admin/admin-dashboard-page.tsx | 12 |
 | frontend/pages/admin/admin-dashboard-route.tsx | 1 |
 | frontend/pages/admin/admin-forbidden-page.tsx | 1 |
-| frontend/pages/admin/analytics-page.tsx | 11 |
+| frontend/pages/admin/analytics-page.tsx | 12 |
 | frontend/pages/admin/asset-queue-page.tsx | 13 |
 | frontend/pages/admin/audit-page.tsx | 6 |
 | frontend/pages/admin/create-role-page.tsx | 17 |
 | frontend/pages/admin/duplicate-queue-page.tsx | 8 |
-| frontend/pages/admin/knowledge-item-page.tsx | 15 |
+| frontend/pages/admin/knowledge-item-page.tsx | 14 |
 | frontend/pages/admin/knowledge-item-route.tsx | 2 |
 | frontend/pages/admin/members-page.tsx | 25 |
 | frontend/pages/admin/menu-editor.tsx | 11 |
 | frontend/pages/admin/menus-page.tsx | 16 |
-| frontend/pages/admin/recycle-bin-page.tsx | 14 |
+| frontend/pages/admin/recycle-bin-page.tsx | 15 |
 | frontend/pages/admin/recycle-bin-route.tsx | 1 |
 | frontend/pages/admin/review-detail-page.tsx | 7 |
 | frontend/pages/admin/review-detail-route.tsx | 2 |
@@ -424,25 +453,25 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/goals-page.tsx | 9 |
 | frontend/pages/graph-page.tsx | 33 |
 | frontend/pages/home-page.tsx | 18 |
-| frontend/pages/inbox-page.tsx | 14 |
+| frontend/pages/inbox-page.tsx | 12 |
 | frontend/pages/knowledge-page.tsx | 39 |
 | frontend/pages/knowledge-reader-page.tsx | 53 |
-| frontend/pages/login-page.tsx | 7 |
+| frontend/pages/login-page.tsx | 5 |
 | frontend/pages/messages/discussion-model.ts | 0 |
 | frontend/pages/messages/messages-page.tsx | 6 |
 | frontend/pages/messages/thread-page.tsx | 20 |
-| frontend/pages/my-submissions-page.tsx | 12 |
+| frontend/pages/my-submissions-page.tsx | 11 |
 | frontend/pages/notifications/notification-model.ts | 0 |
-| frontend/pages/notifications/notifications-page.tsx | 14 |
+| frontend/pages/notifications/notifications-page.tsx | 12 |
 | frontend/pages/project-timeline-page.tsx | 9 |
 | frontend/pages/projects-page.tsx | 10 |
 | frontend/pages/search-page.tsx | 30 |
-| frontend/pages/settings-page.tsx | 8 |
+| frontend/pages/settings-page.tsx | 7 |
 | frontend/pages/submit-page.tsx | 18 |
 | frontend/pages/tasks/task-editor.tsx | 50 |
 | frontend/pages/tasks/task-types.ts | 0 |
 | frontend/pages/tasks/tasks-model.ts | 0 |
-| frontend/pages/tasks/tasks-page.tsx | 20 |
+| frontend/pages/tasks/tasks-page.tsx | 17 |
 | frontend/pages/today-page.tsx | 6 |
 | frontend/pages/workbench-landing/public-workbench-page.tsx | 15 |
 | frontend/pages/workbench-landing/workbench-copy.ts | 0 |
@@ -464,50 +493,50 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 路由/入口 | root symbol | 候选数 | 未解析符号 |
 | --- | --- | ---: | --- |
-| /graph | frontend/pages/graph-page.tsx#GraphRoute; frontend/pages/graph-page.tsx#GraphPage | 91 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /projects/:id/timeline | frontend/app.tsx#ProjectTimelineRoute | 146 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /inbox | frontend/app.tsx#InboxRoute | 203 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /goals | frontend/app.tsx#GoalsRoute | 142 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /projects | frontend/app.tsx#ProjectsRoute | 140 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /calendar | frontend/app.tsx#CalendarRoute | 144 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /today | frontend/app.tsx#TodayRoute | 45 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /graph | frontend/pages/graph-page.tsx#GraphRoute; frontend/pages/graph-page.tsx#GraphPage | 93 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /projects/:id/timeline | frontend/app.tsx#ProjectTimelineRoute | 148 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /inbox | frontend/app.tsx#InboxRoute | 208 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /goals | frontend/app.tsx#GoalsRoute | 146 | frontend/components/charts/donut-chart.tsx#DonutChartCenter; frontend/components/charts/donut-chart.tsx#DonutChartLegend; frontend/components/charts/donut-chart.tsx#DonutChartPlot; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /projects | frontend/app.tsx#ProjectsRoute | 142 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /calendar | frontend/app.tsx#CalendarRoute | 149 | frontend/components/charts/heat-calendar.tsx#HeatCalendarGrid; frontend/components/charts/heat-calendar.tsx#HeatCalendarTooltip; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /today | frontend/app.tsx#TodayRoute | 47 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /focus | frontend/app.tsx#FocusRoute | 125 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /review | frontend/app.tsx#WorkbenchReviewRoute | 54 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| / | frontend/app.tsx#HomeRoute | 35 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /submit | frontend/app.tsx#SubmitRoute | 120 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /knowledge | frontend/app.tsx#KnowledgeRoute | 123 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /search | frontend/app.tsx#SearchRoute; frontend/lib/search-data.ts#* | 185 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /review | frontend/app.tsx#WorkbenchReviewRoute | 58 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| / | frontend/app.tsx#HomeRoute | 71 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /submit | frontend/app.tsx#SubmitRoute | 120 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /knowledge | frontend/app.tsx#KnowledgeRoute | 125 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /search | frontend/app.tsx#SearchRoute; frontend/lib/search-data.ts#* | 187 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /agent | frontend/app.tsx#AgentRoute; frontend/app.tsx#AgentConversationRoute; frontend/lib/agent-data.ts#*; frontend/lib/agent-turn-intent.ts#*; frontend/components/agent/agent-feedback.tsx#AgentFeedback; frontend/components/agent/agent-history-list.tsx#AgentHistoryList | 136 | frontend/components/agents/message.tsx#MessageBubble; frontend/components/agents/message.tsx#MessageBubbleContent; frontend/components/agents/message.tsx#MessageScroller; frontend/components/motion/button/index.tsx#Button; frontend/components/motion/button/index.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /my-submissions | frontend/app.tsx#MySubmissionsRoute | 116 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /tasks | frontend/app.tsx#TasksRoute; frontend/lib/tasks-data.ts#*; frontend/pages/tasks/task-editor.tsx#TaskEditor | 164 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /my-submissions | frontend/app.tsx#MySubmissionsRoute | 119 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /tasks | frontend/app.tsx#TasksRoute; frontend/lib/tasks-data.ts#*; frontend/pages/tasks/task-editor.tsx#TaskEditor | 168 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /boards | frontend/app.tsx#BoardsRoute | 92 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /environments | frontend/features/environments/environments-page.tsx#EnvironmentsPage; frontend/features/environments/environment-manager.ts#getEnvironmentManager | 133 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger |
-| /settings | frontend/pages/settings-page.tsx#SettingsPage | 13 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /admin | frontend/pages/admin/admin-dashboard-route.tsx#AdminDashboardRoute | 42 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /environments | frontend/features/environments/environments-page.tsx#EnvironmentsPage; frontend/features/environments/environment-manager.ts#getEnvironmentManager | 145 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /settings | frontend/pages/settings-page.tsx#SettingsPage | 20 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /admin | frontend/pages/admin/admin-dashboard-route.tsx#AdminDashboardRoute | 48 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/submissions | frontend/app.tsx#ReviewQueueRoute | 142 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /admin/duplicates | frontend/app.tsx#AdminDuplicateRoute; frontend/lib/admin-duplicates-data.ts#* | 106 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /admin/assets | frontend/app.tsx#AdminAssetsRoute; frontend/lib/admin-assets-data.ts#* | 134 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /admin/members | frontend/app.tsx#AdminMembersRoute; frontend/lib/admin-members-data.ts#* | 141 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /admin/duplicates | frontend/app.tsx#AdminDuplicateRoute; frontend/lib/admin-duplicates-data.ts#* | 108 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /admin/assets | frontend/app.tsx#AdminAssetsRoute; frontend/lib/admin-assets-data.ts#* | 138 | frontend/components/charts/donut-chart.tsx#DonutChartCenter; frontend/components/charts/donut-chart.tsx#DonutChartLegend; frontend/components/charts/donut-chart.tsx#DonutChartPlot; frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /admin/members | frontend/app.tsx#AdminMembersRoute; frontend/lib/admin-members-data.ts#* | 143 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /admin/roles | frontend/app.tsx#AdminRolesRoute; frontend/lib/admin-roles-data.ts#* | 77 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /admin/menus | frontend/app.tsx#AdminMenusRoute; frontend/lib/admin-menus-data.ts#* | 86 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/spaces | frontend/app.tsx#AdminSpacesRoute; frontend/lib/admin-spaces-data.ts#* | 104 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/audit | frontend/app.tsx#AdminAuditRoute | 83 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /admin/analytics | frontend/app.tsx#AdminAnalyticsRoute | 83 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /notifications | frontend/app.tsx#NotificationsRoute; frontend/lib/notifications-data.ts#* | 88 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /messages | frontend/app.tsx#MessagesRoute | 37 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 183 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardAction; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 71 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 106 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /admin/analytics | frontend/app.tsx#AdminAnalyticsRoute | 103 | frontend/components/charts/donut-chart.tsx#DonutChartCenter; frontend/components/charts/donut-chart.tsx#DonutChartLegend; frontend/components/charts/donut-chart.tsx#DonutChartPlot; frontend/components/charts/status-bar.tsx#StatusBarLegend; frontend/components/charts/status-bar.tsx#StatusBarPlot; frontend/components/charts/status-bar.tsx#StatusBarTooltip; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /notifications | frontend/app.tsx#NotificationsRoute; frontend/lib/notifications-data.ts#* | 90 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /messages | frontend/app.tsx#MessagesRoute | 39 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 184 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardAction; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 87 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 108 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/roles/new | frontend/app.tsx#AdminRoleNewRoute; frontend/pages/admin/create-role-page.tsx#AdminRoleCreatePage | 49 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/roles/:id | frontend/app.tsx#AdminRoleDetailRoute; frontend/pages/admin/role-detail-page.tsx#AdminRoleDetailPage | 70 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 86 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 86 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /admin/knowledge/:id | frontend/pages/admin/knowledge-item-route.tsx#AdminKnowledgeItemRoute | 39 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 89 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 89 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
+| /admin/knowledge/:id | frontend/pages/admin/knowledge-item-route.tsx#AdminKnowledgeItemRoute | 40 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 184 | 无（不代表动态边界已核对） |
-| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 61 | frontend/components/ui/card.tsx#Card |
-| &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 13 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 68 | frontend/components/ui/card.tsx#Card |
+| &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 19 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 
-尚未归入上述入口的候选：181。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
+尚未归入上述入口的候选：164。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
 
 ## frontend/app.tsx
 
@@ -782,21 +811,21 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 168:9 AssetHygienePanel | Button frontendText(locale, "ADMIN_ASSET_CAPACITY_READ") | onClick=readCapacity; type="button" | {"kind":"branch","expression":"capacity.kind === \"idle\"","branch":"true"} |
-| 171:39 AssetHygienePanel | div  |  | {"kind":"branch","expression":"capacity.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"capacity.kind === \"loading\"","branch":"false"}… |
-| 173:11 AssetHygienePanel | Button frontendText(locale, "COMMON_RETRY") | onClick=readCapacity; type="button" | {"kind":"branch","expression":"capacity.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"capacity.kind === \"loading\"","branch":"false"}… |
-| 195:9 AssetHygienePanel | FilterSelect  | onChange=(value) =&gt; { setPrefix(value === "parsed" ? "parsed" : "staging"); setSelected([]); } | disabled=pending &#124;&#124; scan.kind === "loading" |
-| 199:9 AssetHygienePanel | FilterSelect  | onChange=(value) =&gt; { setLimit(Number(value) === ADMIN_ORPHAN_MAX_LIMIT ? ADMIN_ORPHAN_MAX_LIMIT : ADMIN_ORPHAN_DEFAULT_LIMIT); setSelected([]); } | disabled=pending &#124;&#124; scan.kind === "loading" |
-| 203:9 AssetHygienePanel | Button frontendText(locale, scan.kind === "loading" ? "ADMIN_ASSET_ORPHAN_SCANNING" : "ADMIN_ASSET_ORPHAN_SCAN") | onClick=scanOrphans; type="button" | disabled=pending &#124;&#124; scan.kind === "loading" |
-| 210:35 AssetHygienePanel | div  |  | {"kind":"branch","expression":"scan.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"scan.kind === \"loading\"","branch":"false"}; {"kind… |
-| 212:11 AssetHygienePanel | Button frontendText(locale, "COMMON_RETRY") | onClick=scanOrphans; type="button" | {"kind":"branch","expression":"scan.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"scan.kind === \"loading\"","branch":"false"}; {"kind… |
-| 222:17 AssetHygienePanel | Checkbox  | onChange=() =&gt; toggle(item.key) | disabled=pending; {"kind":"branch","expression":"scan.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"scan.kind === \"loading\"","branch… |
-| 237:13 AssetHygienePanel | Button frontendText(locale, "ADMIN_ASSET_ORPHAN_RECLAIM") | onClick=() =&gt; setConfirming(true); type="button" | disabled=pending &#124;&#124; selected.length === 0 &#124;&#124; !memberId; {"kind":"branch","expression":"scan.kind === \"idle\"","branch":"false"}; {"kind"… |
-| 248:11 AssetHygienePanel | Button frontendText(locale, "ADMIN_ASSET_ORPHAN_RETRY_SAME") | onClick=() =&gt; void send(storedReclaim.operationId, storedReclaim.keys); type="button" | disabled=pending; {"kind":"logical","expression":"storedReclaim","operator":"&&"} |
-| 254:19 AssetHygienePanel | div  |  | {"kind":"logical","expression":"blocked","operator":"&&"} |
-| 256:22 AssetHygienePanel | Button frontendText(locale, "ADMIN_ASSET_ORPHAN_RECORD_DISCARD") | onClick=() =&gt; { discardBlockedAdminOperation(memberId); setRecord(loadAdminOperation(memberId)); }; type="button" | {"kind":"logical","expression":"blocked","operator":"&&"}; {"kind":"logical","expression":"memberId","operator":"&&"} |
-| 260:18 AssetHygienePanel | p notice |  | {"kind":"logical","expression":"notice","operator":"&&"} |
-| 269:5 AssetHygienePanel | TypedConfirmAction  | onCancel=() =&gt; setConfirming(false); onConfirm=confirmReclaim | open=confirming |
+| 169:9 AssetHygienePanel | Button frontendText(locale, "ADMIN_ASSET_CAPACITY_READ") | onClick=readCapacity; type="button" | {"kind":"branch","expression":"capacity.kind === \"idle\"","branch":"true"} |
+| 172:39 AssetHygienePanel | div  |  | {"kind":"branch","expression":"capacity.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"capacity.kind === \"loading\"","branch":"false"}… |
+| 174:11 AssetHygienePanel | Button frontendText(locale, "COMMON_RETRY") | onClick=readCapacity; type="button" | {"kind":"branch","expression":"capacity.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"capacity.kind === \"loading\"","branch":"false"}… |
+| 208:9 AssetHygienePanel | FilterSelect  | onChange=(value) =&gt; { setPrefix(value === "parsed" ? "parsed" : "staging"); setSelected([]); } | disabled=pending &#124;&#124; scan.kind === "loading" |
+| 212:9 AssetHygienePanel | FilterSelect  | onChange=(value) =&gt; { setLimit(Number(value) === ADMIN_ORPHAN_MAX_LIMIT ? ADMIN_ORPHAN_MAX_LIMIT : ADMIN_ORPHAN_DEFAULT_LIMIT); setSelected([]); } | disabled=pending &#124;&#124; scan.kind === "loading" |
+| 216:9 AssetHygienePanel | Button frontendText(locale, scan.kind === "loading" ? "ADMIN_ASSET_ORPHAN_SCANNING" : "ADMIN_ASSET_ORPHAN_SCAN") | onClick=scanOrphans; type="button" | disabled=pending &#124;&#124; scan.kind === "loading" |
+| 223:35 AssetHygienePanel | div  |  | {"kind":"branch","expression":"scan.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"scan.kind === \"loading\"","branch":"false"}; {"kind… |
+| 225:11 AssetHygienePanel | Button frontendText(locale, "COMMON_RETRY") | onClick=scanOrphans; type="button" | {"kind":"branch","expression":"scan.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"scan.kind === \"loading\"","branch":"false"}; {"kind… |
+| 235:17 AssetHygienePanel | Checkbox  | onChange=() =&gt; toggle(item.key) | disabled=pending; {"kind":"branch","expression":"scan.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"scan.kind === \"loading\"","branch… |
+| 250:13 AssetHygienePanel | Button frontendText(locale, "ADMIN_ASSET_ORPHAN_RECLAIM") | onClick=() =&gt; setConfirming(true); type="button" | disabled=pending &#124;&#124; selected.length === 0 &#124;&#124; !memberId; {"kind":"branch","expression":"scan.kind === \"idle\"","branch":"false"}; {"kind"… |
+| 261:11 AssetHygienePanel | Button frontendText(locale, "ADMIN_ASSET_ORPHAN_RETRY_SAME") | onClick=() =&gt; void send(storedReclaim.operationId, storedReclaim.keys); type="button" | disabled=pending; {"kind":"logical","expression":"storedReclaim","operator":"&&"} |
+| 267:19 AssetHygienePanel | div  |  | {"kind":"logical","expression":"blocked","operator":"&&"} |
+| 269:22 AssetHygienePanel | Button frontendText(locale, "ADMIN_ASSET_ORPHAN_RECORD_DISCARD") | onClick=() =&gt; { discardBlockedAdminOperation(memberId); setRecord(loadAdminOperation(memberId)); }; type="button" | {"kind":"logical","expression":"blocked","operator":"&&"}; {"kind":"logical","expression":"memberId","operator":"&&"} |
+| 273:18 AssetHygienePanel | p notice |  | {"kind":"logical","expression":"notice","operator":"&&"} |
+| 282:5 AssetHygienePanel | TypedConfirmAction  | onCancel=() =&gt; setConfirming(false); onConfirm=confirmReclaim | open=confirming |
 
 ## frontend/components/assets/asset-upload-panel.tsx
 
@@ -861,6 +890,78 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 66:13 CalendarRangeFilter | Input  | onChange=event =&gt; setTo(event.currentTarget.value); type="datetime-local" | disabled=pending; {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
 | 70:11 CalendarRangeFilter | Button frontendText(locale, "CALENDAR_RANGE_APPLY") | onClick=() =&gt; { if (!valid) return; triggerRef.current?.focus({ preventScroll: true }); setOpen(false); onChange({ from: fromInstant!, to: toInstant! }); … | disabled=pending &#124;&#124; !valid; {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
 | 77:20 CalendarRangeFilter | p frontendText(locale, "CALENDAR_RANGE_INVALID") |  | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"}; {"kind":"logical","expression":"!v… |
+
+## frontend/components/charts/composition-chart/legend.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 18:9 CompositionChartLegend | button  | onClick=() =&gt; setPinned(pinned === row.id ? null : row.id); onPointerEnter=() =&gt; { if (canHover) setHovered(row.id); }; onPointerLeave=() =&gt; setHove… | {"kind":"repeat","expression":"column.segments"}; earlier return: !column |
+
+## frontend/components/charts/composition-chart/plot.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 45:7 CompositionChartPlot | div  | onPointerLeave=() =&gt; setTooltipOpen(false); onPointerEnter=(event) =&gt; { if (event.pointerType !== "touch" && !event.buttons) { inspectPointer(event); s… | earlier return: !columns.length &#124;&#124; !rows.length |
+| 140:9 CompositionChartPlot | input  | onFocus=() =&gt; setTooltipOpen(true); onBlur=() =&gt; { pointerDriven.current = false; setTooltipOpen(false); }; onPointerDown=() =&gt; setTooltipOpen(true)… | earlier return: !columns.length &#124;&#124; !rows.length |
+| 169:7 CompositionChartPlot | Tooltip  | onOpenChange=setTooltipOpen | open=tooltipOpen; earlier return: !columns.length &#124;&#124; !rows.length |
+
+## frontend/components/charts/donut-chart/legend.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 31:13 DonutChartLegend | button  | onClick=() =&gt; onSelect?.(segment.id); onPointerEnter=canHover ? () =&gt; setActive(segment.id) : undefined; onPointerLeave=canHover ? () =&gt; setActive(n… | {"kind":"repeat","expression":"placed"} |
+
+## frontend/components/charts/donut-chart/plot.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 42:7 DonutChartPlot | svg  |  |  |
+| 57:9 DonutChartPlot | motion.g  | onAnimationComplete=() =&gt; setEntered(true) |  |
+| 105:13 DonutChartPlot | path  | onPointerEnter=canHover ? () =&gt; setActive(segment.id) : undefined; onPointerLeave=canHover ? () =&gt; setActive(null) : undefined | {"kind":"repeat","expression":"placed"} |
+
+## frontend/components/charts/heat-calendar/grid.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 36:5 HeatCalendarGrid | div children | onPointerLeave=() =&gt; setHover(null) |  |
+| 92:15 HeatCalendarGrid | motion.button  | onPointerEnter=() =&gt; setHover({ w, d }); onFocus=() =&gt; setHover({ w, d }); onBlur=() =&gt; setHover(null); onClick=() =&gt; select({ w, d }); onKeyDown… | {"kind":"repeat","expression":"cols"}; {"kind":"repeat","expression":"DAYS"}; earlier return: future(w, d) |
+
+## frontend/components/charts/heat-calendar/legend.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 15:7 HeatCalendarLegend | span  | onPointerLeave=() =&gt; setStep(null) |  |
+| 18:11 HeatCalendarLegend | button  | onPointerEnter=() =&gt; { if (canHover) setStep(i); }; onFocus=() =&gt; setStep(i); onBlur=() =&gt; setStep(null); onClick=() =&gt; setStep(step === i ? null… | {"kind":"repeat","expression":"STEPS"} |
+
+## frontend/components/charts/heat-calendar/tooltip.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 22:5 HeatCalendarTooltip | Tooltip  | onOpenChange=(open) =&gt; { if (!open) setDismissed(tip); } | open=tooltip !== null && dismissed !== tip |
+
+## frontend/components/charts/status-bar.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 32:7 StatusBar | section  |  | spread: props |
+
+## frontend/components/charts/status-bar/legend.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 19:5 StatusBarLegend | ul  |  | spread: props |
+
+## frontend/components/charts/status-bar/plot.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 104:9 StatusBarPlot | input  | onFocus=() =&gt; { focused.current = true; if (!pointerDriven.current) { setActive(row.datum.id); setTooltipOpen(true); } }; onBlur=() =&gt; { focused.curren… | earlier return: !rows.length |
+
+## frontend/components/charts/status-bar/tooltip.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 24:5 StatusBarTooltip | Tooltip  | onOpenChange=setTooltipOpen | open=tooltipOpen && active !== null |
 
 ## frontend/components/data-pagination.tsx
 
@@ -1303,6 +1404,12 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 872:5 DateRangePickerDropdown | DateRangePicker  |  | spread: props |
 | 971:9 CalendarChoices | motion.button choice.label | onFocus=() =&gt; setCursor(choice.id); onKeyDown=onKey; onClick=() =&gt; onSelect(choice.id); type="button" | disabled=choice.disabled; {"kind":"repeat","expression":"choices"} |
 
+## frontend/components/motion/dock.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 80:7 DockItem | button pill / children | onClick=onClick; type="button" | {"kind":"branch","expression":"onClick","branch":"true"} |
+
 ## frontend/components/motion/drawer.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
@@ -1431,6 +1538,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | --- | --- | --- | --- |
 | 55:7 NotFoundActions | motion.a homeLabel | href=homeHref |  |
 | 65:9 NotFoundActions | motion.a browseLabel | href=browseHref | {"kind":"branch","expression":"browseHref","branch":"true"} |
+| 86:5 NotFoundStage | div children |  | spread: props |
 
 ## frontend/components/motion/notification-stack.tsx
 
@@ -1495,6 +1603,12 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | --- | --- | --- | --- |
 | 76:5 RangeSlider | div  |  | spread: trackProps |
 | 106:7 RangeSlider | motion.div  |  | spread: sliderProps |
+
+## frontend/components/motion/scroll-progress.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 59:5 useScrollContainer | query?.addEventListener  | "change", update | earlier return: typeof document === "undefined"; earlier return: !node |
 
 ## frontend/components/motion/select.tsx
 
@@ -1602,6 +1716,12 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 340:7 TabsTrigger | button children | onClick=(event) =&gt; { onClick?.(event); if (!event.defaultPrevented) setValue(value); }; type="button" | earlier return: variant === "underline"; spread: props |
 | 381:7 TabsContent | motion.div children |  | hidden=true; {"kind":"branch","expression":"!active","branch":"true"}; spread: props |
 | 387:5 TabsContent | motion.div children |  | earlier return: !active; spread: props |
+
+## frontend/components/motion/tilt-card.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 52:5 TiltCard | motion.div children | onMouseMove=onMove; onMouseLeave=onLeave |  |
 
 ## frontend/components/motion/tooltip-surface.tsx
 
@@ -2225,39 +2345,35 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 25:96 EnvironmentsPage | p frontendText(locale,'ENV_FORBIDDEN') |  | {"kind":"branch","expression":"!routeAccessAllowed(session,{capability:null,requiredPermission:'workspace.vm'})","branch":"true"} |
-| 40:39 EnvironmentRuntimeNotice | div  |  | {"kind":"branch","expression":"vm.status==='unavailable'","branch":"true"}; earlier return: vm.status==='preparing' |
-| 110:5 EnvironmentView | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
-| 140:214 EnvironmentView | p t('ENV_ACCOUNT_CLOSED') |  | {"kind":"branch","expression":"state.closed","branch":"true"} |
-| 143:93 EnvironmentView | Button t('ENV_CREATE') | onClick=()=&gt;{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current)setCreateOpen(true);}; type="button" | aria-expanded=createOpen; disabled=blocked; earlier return: state.closed |
-| 144:37 EnvironmentView | div  |  | {"kind":"logical","expression":"(state.error &#124;&#124; localError)","operator":"&&"}; earlier return: state.closed |
-| 145:31 EnvironmentView | div  |  | {"kind":"logical","expression":"state.recoveryBlocked","operator":"&&"}; earlier return: state.closed |
-| 147:7 EnvironmentView | Button t('ENV_RECHECK_RECOVERY') | onClick=()=&gt;void run(()=&gt;manager.recheckRecovery()) | disabled=state.writing; {"kind":"logical","expression":"state.recoveryBlocked","operator":"&&"}; earlier return: state.closed |
-| 151:45 EnvironmentView | Button t('ENV_LOOKUP_RESULT') | onClick=()=&gt;void run(()=&gt;manager.lookup()) | disabled=state.writing; {"kind":"logical","expression":"state.pending","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.wri… |
-| 151:180 EnvironmentView | Button t('ENV_RETRY_WRITE') | onClick=()=&gt;void run(()=&gt;manager.retry()) | disabled=state.writing; {"kind":"logical","expression":"state.pending","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.wri… |
-| 153:25 EnvironmentView | div  |  | {"kind":"logical","expression":"state.confirmed","operator":"&&"}; earlier return: state.closed |
-| 160:5 EnvironmentView | Dialog  | onOpenChange=open=&gt;{if(!open)setCreateOpen(false);} | open=createOpen; earlier return: state.closed |
-| 162:25 EnvironmentView | div  |  | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"logical","expression":"recordBlocked","operator":"&&"}; earlier return: stat… |
-| 162:147 EnvironmentView | Button t('ENV_DRAFT_RECORD_DISCARD') | onClick=discardRecord; type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"logical","expression":"recordBlocked","operator":"&&"}; earlier return: stat… |
-| 163:24 EnvironmentView | p recordNotice |  | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"logical","expression":"recordNotice","operator":"&&"}; earlier return: state… |
-| 164:7 EnvironmentView | form  | onSubmit=event=&gt;{event.preventDefault();if(!alive.current &#124;&#124; operationBlocked() &#124;&#124; draft.isConfirming() &#124;&#124; editRef.current &… | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; earlier return: state.closed |
-| 165:9 EnvironmentView | Input  | onChange=value=&gt;draft.edit('name',value) | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attributes":{}}; earlier return: … |
-| 166:113 EnvironmentView | MotionSelect  | onValueChange=value=&gt;draft.edit('type',value==='temporary'?'temporary':'personal') | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attributes":{}}; earlier return: … |
-| 167:9 EnvironmentView | Input  | onChange=value=&gt;draft.edit('taskId',value) | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attributes":{}}; earlier return: … |
-| 168:66 EnvironmentView | Button t('ENV_CANCEL') | onClick=()=&gt;setCreateOpen(false); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
-| 168:198 EnvironmentView | Button t('ENV_CREATE') | type="submit" | disabled=blocked &#124;&#124; !title.trim(); {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attrib… |
-| 171:53 EnvironmentView | FilterSelect  | onChange=value=&gt;void run(()=&gt;manager.load(1,value as ''&#124;EnvironmentType)) | disabled=state.loading &#124;&#124; state.writing; earlier return: state.closed |
-| 171:390 EnvironmentView | Button t('ENV_REFRESH') | onClick=()=&gt;void run(()=&gt;manager.load()) | disabled=state.loading &#124;&#124; state.writing; earlier return: state.closed |
-| 172:5 EnvironmentView | AppliedFilters  | onClear=()=&gt;void run(()=&gt;manager.load(1,'')) | earlier return: state.closed |
-| 174:7 EnvironmentView | DataTable  | onPageChange=goToPage; onPageSizeChange=changePageSize; onLoadMore=loadMore | {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; earlier return: state.closed |
-| 191:141 EnvironmentView | Button t('ENV_FILES') | onClick=()=&gt;{if(alive.current)setSelected(item);} | {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; earlier return: state.closed |
-| 191:272 EnvironmentView | Button t('ENV_RENAME') | onClick=()=&gt;{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){editRef.current=item;setEdit(item… | disabled=blocked; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; earlier return: state.closed |
-| 191:528 EnvironmentView | Button t('ENV_DELETE') | onClick=()=&gt;{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){removeRef.current=item;setRemove(… | disabled=blocked; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; earlier return: state.closed |
-| 196:21 EnvironmentView | EnvironmentFiles  | onClose=()=&gt;setSelected(null) | {"kind":"logical","expression":"selectedRow","operator":"&&"}; earlier return: state.closed |
-| 197:14 EnvironmentView | EnvironmentRenameDialog  | onName=reportRename; onClose=()=&gt;{if(editRef.current===edit){editRef.current=null;setEdit(null);setRenameSeed(null);if(!recordBlocked)persistEnvironmentDr… | {"kind":"logical","expression":"edit","operator":"&&"}; earlier return: state.closed |
-| 198:5 EnvironmentView | Dialog  | onOpenChange=open=&gt;{if(!open)closeRemove();} | open=!!remove; earlier return: state.closed |
-| 198:378 EnvironmentView | Button t('ENV_DELETE') | onClick=()=&gt;{const item=removeRef.current;if(!alive.current &#124;&#124; !item &#124;&#124; operationBlocked() &#124;&#124; draft.isConfirming())return;cl… | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"!!remove"}}; earlier return: state.closed |
-| 198:704 EnvironmentView | Button t('ENV_CANCEL') | onClick=closeRemove | {"kind":"container","tag":"Dialog","attributes":{"open":"!!remove"}}; earlier return: state.closed |
+| 42:39 EnvironmentRuntimeNotice | div  |  | {"kind":"branch","expression":"vm.status==='unavailable'","branch":"true"}; earlier return: vm.status==='preparing' |
+| 112:5 EnvironmentView | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
+| 145:93 EnvironmentView | Button t('ENV_CREATE') | onClick=()=&gt;{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current)setCreateOpen(true);}; type="button" | aria-expanded=createOpen; disabled=blocked; earlier return: state.closed |
+| 147:31 EnvironmentView | div  |  | {"kind":"logical","expression":"state.recoveryBlocked","operator":"&&"}; earlier return: state.closed |
+| 149:7 EnvironmentView | Button t('ENV_RECHECK_RECOVERY') | onClick=()=&gt;void run(()=&gt;manager.recheckRecovery()) | disabled=state.writing; {"kind":"logical","expression":"state.recoveryBlocked","operator":"&&"}; earlier return: state.closed |
+| 153:45 EnvironmentView | Button t('ENV_LOOKUP_RESULT') | onClick=()=&gt;void run(()=&gt;manager.lookup()) | disabled=state.writing; {"kind":"logical","expression":"state.pending","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.wri… |
+| 153:180 EnvironmentView | Button t('ENV_RETRY_WRITE') | onClick=()=&gt;void run(()=&gt;manager.retry()) | disabled=state.writing; {"kind":"logical","expression":"state.pending","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.wri… |
+| 155:25 EnvironmentView | div  |  | {"kind":"logical","expression":"state.confirmed","operator":"&&"}; earlier return: state.closed |
+| 162:5 EnvironmentView | Dialog  | onOpenChange=open=&gt;{if(!open)setCreateOpen(false);} | open=createOpen; earlier return: state.closed |
+| 164:25 EnvironmentView | div  |  | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"logical","expression":"recordBlocked","operator":"&&"}; earlier return: stat… |
+| 164:147 EnvironmentView | Button t('ENV_DRAFT_RECORD_DISCARD') | onClick=discardRecord; type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"logical","expression":"recordBlocked","operator":"&&"}; earlier return: stat… |
+| 166:7 EnvironmentView | form  | onSubmit=event=&gt;{event.preventDefault();if(!alive.current &#124;&#124; operationBlocked() &#124;&#124; draft.isConfirming() &#124;&#124; editRef.current &… | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; earlier return: state.closed |
+| 167:9 EnvironmentView | Input  | onChange=value=&gt;draft.edit('name',value) | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attributes":{}}; earlier return: … |
+| 168:113 EnvironmentView | MotionSelect  | onValueChange=value=&gt;draft.edit('type',value==='temporary'?'temporary':'personal') | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attributes":{}}; earlier return: … |
+| 169:9 EnvironmentView | Input  | onChange=value=&gt;draft.edit('taskId',value) | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attributes":{}}; earlier return: … |
+| 170:66 EnvironmentView | Button t('ENV_CANCEL') | onClick=()=&gt;setCreateOpen(false); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
+| 170:198 EnvironmentView | Button t('ENV_CREATE') | type="submit" | disabled=blocked &#124;&#124; !title.trim(); {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}}; {"kind":"container","tag":"form","attrib… |
+| 173:53 EnvironmentView | FilterSelect  | onChange=value=&gt;void run(()=&gt;manager.load(1,value as ''&#124;EnvironmentType)) | disabled=state.loading &#124;&#124; state.writing; earlier return: state.closed |
+| 173:390 EnvironmentView | Button t('ENV_REFRESH') | onClick=()=&gt;void run(()=&gt;manager.load()) | disabled=state.loading &#124;&#124; state.writing; earlier return: state.closed |
+| 174:5 EnvironmentView | AppliedFilters  | onClear=()=&gt;void run(()=&gt;manager.load(1,'')) | earlier return: state.closed |
+| 176:7 EnvironmentView | DataTable  | onPageChange=goToPage; onPageSizeChange=changePageSize; onLoadMore=loadMore | {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; earlier return: state.closed |
+| 193:141 EnvironmentView | Button t('ENV_FILES') | onClick=()=&gt;{if(alive.current)setSelected(item);} | {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; earlier return: state.closed |
+| 193:272 EnvironmentView | Button t('ENV_RENAME') | onClick=()=&gt;{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){editRef.current=item;setEdit(item… | disabled=blocked; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; earlier return: state.closed |
+| 193:528 EnvironmentView | Button t('ENV_DELETE') | onClick=()=&gt;{if(alive.current && !operationBlocked() && !draft.isConfirming() && !editRef.current && !removeRef.current){removeRef.current=item;setRemove(… | disabled=blocked; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; earlier return: state.closed |
+| 198:21 EnvironmentView | EnvironmentFiles  | onClose=()=&gt;setSelected(null) | {"kind":"logical","expression":"selectedRow","operator":"&&"}; earlier return: state.closed |
+| 199:14 EnvironmentView | EnvironmentRenameDialog  | onName=reportRename; onClose=()=&gt;{if(editRef.current===edit){editRef.current=null;setEdit(null);setRenameSeed(null);if(!recordBlocked)persistEnvironmentDr… | {"kind":"logical","expression":"edit","operator":"&&"}; earlier return: state.closed |
+| 200:5 EnvironmentView | Dialog  | onOpenChange=open=&gt;{if(!open)closeRemove();} | open=!!remove; earlier return: state.closed |
+| 200:378 EnvironmentView | Button t('ENV_DELETE') | onClick=()=&gt;{const item=removeRef.current;if(!alive.current &#124;&#124; !item &#124;&#124; operationBlocked() &#124;&#124; draft.isConfirming())return;cl… | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"!!remove"}}; earlier return: state.closed |
+| 200:704 EnvironmentView | Button t('ENV_CANCEL') | onClick=closeRemove | {"kind":"container","tag":"Dialog","attributes":{"open":"!!remove"}}; earlier return: state.closed |
 
 ## frontend/features/environments/files/asset-import-panel.tsx
 
@@ -2291,40 +2407,32 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 27:129 FilesPanel | FileView  |  | {"kind":"branch","expression":"binding?.runtime === runtime && binding.memberId===submission?.memberId && binding.requester===submission?.requester","branch"… |
-| 73:7 FileView | Button t('Up', '上一级') | onClick=() =&gt; void manager.load(state.path.slice(0, state.path.lastIndexOf('/')) &#124;&#124; '/', 1) | disabled=blocked &#124;&#124; state.path === '/'; earlier return: !state.available |
-| 74:7 FileView | Button t('Refresh', '刷新') | onClick=() =&gt; void manager.load() | disabled=blocked; earlier return: !state.available |
-| 75:7 FileView | Button t('New folder', '新建文件夹') | onClick=() =&gt; openModal('mkdir') | disabled=blocked; earlier return: !state.available |
-| 76:41 FileView | Input  | onChange=event =&gt; { const files = Array.from(event.target.files &#124;&#124; []); event.target.value = ''; if (files.length) void manager.upload(files); }… | disabled=blocked; earlier return: !state.available |
-| 77:22 FileView | Button t('Cancel unsent work', '取消未发送操作') | onClick=() =&gt; manager.cancel() | disabled=state.cancelling; {"kind":"logical","expression":"state.busy","operator":"&&"}; earlier return: !state.available |
-| 79:41 FileView | p ( / prepared.bytes / t('bytes ready', '字节已就绪') / ) |  | {"kind":"logical","expression":"prepared?.epoch === state.epoch","operator":"&&"}; earlier return: !state.available |
-| 79:58 FileView | a t('Save to this device', '保存到本机') / · / prepared.name | href=prepared.url | {"kind":"logical","expression":"prepared?.epoch === state.epoch","operator":"&&"}; earlier return: !state.available |
-| 80:21 FileView | p messages[state.error] &#124;&#124; t('Operation failed', '操作失败') |  | {"kind":"logical","expression":"state.error","operator":"&&"}; earlier return: !state.available |
-| 81:5 FileView | p messages[state.notice] &#124;&#124; (state.busy ? t('Working…', '处理中…') : '') |  | earlier return: !state.available |
-| 83:23 FileView | p t('Streaming save is unavailable in this browser; bounded downloads up to 20 MiB remain available.', '当前浏览器不支持流式保存；仍可使用不超过20 MiB的限额下载。') |  | {"kind":"logical","expression":"!openDownload","operator":"&&"}; earlier return: !state.available |
-| 87:40 FileView | Button t('Open', '打开') | onClick=() =&gt; void manager.load((state.path === '/' ? '' : state.path) + '/' + entry.name, 1) | disabled=blocked; {"kind":"repeat","expression":"state.entries"}; {"kind":"logical","expression":"entry.type === 'directory'","operator":"&&"}; earlier retur… |
-| 88:37 FileView | Button t('Edit', '编辑') | onClick=() =&gt; { setSaveName(''); void manager.open(entry.name); } | disabled=blocked &#124;&#124; entry.bytes &gt; 1048576; {"kind":"repeat","expression":"state.entries"}; {"kind":"logical","expression":"entry.type === 'file'… |
-| 88:198 FileView | Button t('Download', '下载') | onClick=() =&gt; void manager.download(entry.name, receive) | disabled=blocked &#124;&#124; entry.bytes &gt; 20971520; {"kind":"repeat","expression":"state.entries"}; {"kind":"logical","expression":"entry.type === 'file… |
-| 88:359 FileView | Button t('Stream save', '流式保存') | onClick=() =&gt; { if (openDownload) void manager.downloadTo(entry.name, () =&gt; openDownload(entry.name)); } | disabled=blocked &#124;&#124; !openDownload; {"kind":"repeat","expression":"state.entries"}; {"kind":"logical","expression":"entry.type === 'file'","operator… |
-| 88:562 FileView | Button t('Submit text for review','提交文本审核') | onClick=()=&gt;void importer?.select((state.path==='/'?'':state.path)+'/'+entry.name) | disabled=blocked &#124;&#124; !importer &#124;&#124; entry.bytes&gt;131072 &#124;&#124; !entry.bytes; {"kind":"repeat","expression":"state.entries"}; {"kind"… |
-| 88:789 FileView | Button t('Import asset','导入资产') | onClick=()=&gt;void assetImporter?.select((state.path==='/'?'':state.path)+'/'+entry.name) | disabled=blocked &#124;&#124; !assetImporter &#124;&#124; entry.bytes&gt;20971520 &#124;&#124; !entry.bytes; {"kind":"repeat","expression":"state.entries"}; … |
-| 89:58 FileView | Button t('Rename', '重命名') | onClick=() =&gt; openModal('rename', entry.name) | disabled=blocked; {"kind":"repeat","expression":"state.entries"}; {"kind":"logical","expression":"['file', 'directory'].includes(entry.type)","operator":"&&"… |
-| 89:162 FileView | Button t('Remove', '删除') | onClick=() =&gt; openModal('remove', entry.name) | disabled=blocked; {"kind":"repeat","expression":"state.entries"}; {"kind":"logical","expression":"['file', 'directory'].includes(entry.type)","operator":"&&"… |
-| 93:7 FileView | Button t('Previous', '上一页') | onClick=() =&gt; void manager.load(state.path, state.page - 1) | disabled=blocked &#124;&#124; state.page &lt;= 1; earlier return: !state.available |
-| 95:7 FileView | Button t('Next', '下一页') | onClick=() =&gt; void manager.load(state.path, state.page + 1) | disabled=blocked &#124;&#124; state.page &gt;= state.pages; earlier return: !state.available |
-| 96:7 FileView | Select  | onChange=event =&gt; void manager.load(state.path, 1, Number(event.target.value) as 20 &#124; 50 &#124; 100) | disabled=blocked; earlier return: !state.available |
-| 96:224 FileView | option size |  | {"kind":"container","tag":"Select","attributes":{"disabled":"blocked"}}; {"kind":"repeat","expression":"[20, 50, 100]"}; earlier return: !state.available |
-| 99:23 FileView | Button t('Recover pending asset (read only)','恢复未决资产（只读）') | onClick=()=&gt;void assetImporter.recover() | disabled=blocked; {"kind":"logical","expression":"assetImporter","operator":"&&"}; earlier return: !state.available |
-| 102:7 FileView | Textarea  | onChange=event =&gt; manager.edit(event.target.value) | disabled=state.busy; {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
-| 103:45 FileView | Button t('Save', '保存') | onClick=() =&gt; void manager.save() | disabled=state.busy &#124;&#124; state.editor.conflict &#124;&#124; !state.editor.dirty; {"kind":"logical","expression":"state.editor","operator":"&&"}; earl… |
-| 104:9 FileView | Button t('Reload (discard draft)', '重新加载（丢弃草稿）') | onClick=() =&gt; void manager.open(state.editor!.name) | disabled=state.busy; {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
-| 105:9 FileView | Button t('Discard draft / close', '丢弃草稿 / 关闭') | onClick=() =&gt; { manager.closeEditor(); setSaveName(''); } | disabled=state.busy; {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
-| 106:43 FileView | Input  | onChange=event =&gt; setSaveName(event.target.value) | disabled=state.busy; {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
-| 107:7 FileView | Button t('Save as new file', '另存为新文件') | onClick=() =&gt; { void manager.saveAs(saveName); setSaveName(''); } | disabled=state.busy &#124;&#124; !saveName.trim(); {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
-| 110:5 FileView | Dialog  | onOpenChange=open =&gt; { if (!open) { setModal(null); setName(''); } } | open=modal?.epoch === state.epoch; earlier return: !state.available |
-| 112:141 FileView | Input  | onChange=event =&gt; setName(event.target.value) | {"kind":"container","tag":"Dialog","attributes":{"open":"modal?.epoch === state.epoch"}}; {"kind":"branch","expression":"modal?.action === 'remove'","branch"… |
-| 113:35 FileView | Button t('Confirm', '确认') | onClick=confirm | disabled=state.busy &#124;&#124; (modal?.action !== 'remove' && !name.trim()); {"kind":"container","tag":"Dialog","attributes":{"open":"modal?.epoch === stat… |
-| 113:178 FileView | Button t('Cancel', '取消') | onClick=() =&gt; { setModal(null); setName(''); } | {"kind":"container","tag":"Dialog","attributes":{"open":"modal?.epoch === state.epoch"}}; earlier return: !state.available |
+| 30:129 FilesPanel | FileView  |  | {"kind":"branch","expression":"binding?.runtime === runtime && binding.memberId===submission?.memberId && binding.requester===submission?.requester","branch"… |
+| 76:7 FileView | Button t('Up', '上一级') | onClick=() =&gt; void manager.load(state.path.slice(0, state.path.lastIndexOf('/')) &#124;&#124; '/', 1) | disabled=blocked &#124;&#124; state.path === '/'; earlier return: !state.available |
+| 77:7 FileView | Button t('Refresh', '刷新') | onClick=() =&gt; void manager.load() | disabled=blocked; earlier return: !state.available |
+| 78:7 FileView | Button t('New folder', '新建文件夹') | onClick=() =&gt; openModal('mkdir') | disabled=blocked; earlier return: !state.available |
+| 79:41 FileView | Input  | onChange=event =&gt; { const files = Array.from(event.target.files &#124;&#124; []); event.target.value = ''; if (files.length) void manager.upload(files); }… | disabled=blocked; earlier return: !state.available |
+| 80:22 FileView | Button t('Cancel unsent work', '取消未发送操作') | onClick=() =&gt; manager.cancel() | disabled=state.cancelling; {"kind":"logical","expression":"state.busy","operator":"&&"}; earlier return: !state.available |
+| 82:41 FileView | p ( / prepared.bytes / t('bytes ready', '字节已就绪') / ) |  | {"kind":"logical","expression":"prepared?.epoch === state.epoch","operator":"&&"}; earlier return: !state.available |
+| 82:58 FileView | a t('Save to this device', '保存到本机') / · / prepared.name | href=prepared.url | {"kind":"logical","expression":"prepared?.epoch === state.epoch","operator":"&&"}; earlier return: !state.available |
+| 83:21 FileView | p messages[state.error] &#124;&#124; t('Operation failed', '操作失败') |  | {"kind":"logical","expression":"state.error","operator":"&&"}; earlier return: !state.available |
+| 84:5 FileView | p messages[state.notice] &#124;&#124; (state.busy ? t('Working…', '处理中…') : '') |  | earlier return: !state.available |
+| 86:23 FileView | p t('Streaming save is unavailable in this browser; bounded downloads up to 20 MiB remain available.', '当前浏览器不支持流式保存；仍可使用不超过20 MiB的限额下载。') |  | {"kind":"logical","expression":"!openDownload","operator":"&&"}; earlier return: !state.available |
+| 90:7 FileView | Button t('Previous', '上一页') | onClick=() =&gt; void manager.load(state.path, state.page - 1) | disabled=blocked &#124;&#124; state.page &lt;= 1; earlier return: !state.available |
+| 92:7 FileView | Button t('Next', '下一页') | onClick=() =&gt; void manager.load(state.path, state.page + 1) | disabled=blocked &#124;&#124; state.page &gt;= state.pages; earlier return: !state.available |
+| 93:7 FileView | Select  | onChange=event =&gt; void manager.load(state.path, 1, Number(event.target.value) as 20 &#124; 50 &#124; 100) | disabled=blocked; earlier return: !state.available |
+| 93:224 FileView | option size |  | {"kind":"container","tag":"Select","attributes":{"disabled":"blocked"}}; {"kind":"repeat","expression":"[20, 50, 100]"}; earlier return: !state.available |
+| 96:23 FileView | Button t('Recover pending asset (read only)','恢复未决资产（只读）') | onClick=()=&gt;void assetImporter.recover() | disabled=blocked; {"kind":"logical","expression":"assetImporter","operator":"&&"}; earlier return: !state.available |
+| 99:7 FileView | Textarea  | onChange=event =&gt; manager.edit(event.target.value) | disabled=state.busy; {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
+| 100:45 FileView | Button t('Save', '保存') | onClick=() =&gt; void manager.save() | disabled=state.busy &#124;&#124; state.editor.conflict &#124;&#124; !state.editor.dirty; {"kind":"logical","expression":"state.editor","operator":"&&"}; earl… |
+| 101:9 FileView | Button t('Reload (discard draft)', '重新加载（丢弃草稿）') | onClick=() =&gt; void manager.open(state.editor!.name) | disabled=state.busy; {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
+| 102:9 FileView | Button t('Discard draft / close', '丢弃草稿 / 关闭') | onClick=() =&gt; { manager.closeEditor(); setSaveName(''); } | disabled=state.busy; {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
+| 103:43 FileView | Input  | onChange=event =&gt; setSaveName(event.target.value) | disabled=state.busy; {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
+| 104:7 FileView | Button t('Save as new file', '另存为新文件') | onClick=() =&gt; { void manager.saveAs(saveName); setSaveName(''); } | disabled=state.busy &#124;&#124; !saveName.trim(); {"kind":"logical","expression":"state.editor","operator":"&&"}; earlier return: !state.available |
+| 107:5 FileView | Dialog  | onOpenChange=open =&gt; { if (!open) { setModal(null); setName(''); } } | open=modal?.epoch === state.epoch; earlier return: !state.available |
+| 109:141 FileView | Input  | onChange=event =&gt; setName(event.target.value) | {"kind":"container","tag":"Dialog","attributes":{"open":"modal?.epoch === state.epoch"}}; {"kind":"branch","expression":"modal?.action === 'remove'","branch"… |
+| 110:35 FileView | Button t('Confirm', '确认') | onClick=confirm | disabled=state.busy &#124;&#124; (modal?.action !== 'remove' && !name.trim()); {"kind":"container","tag":"Dialog","attributes":{"open":"modal?.epoch === stat… |
+| 110:178 FileView | Button t('Cancel', '取消') | onClick=() =&gt; { setModal(null); setName(''); } | {"kind":"container","tag":"Dialog","attributes":{"open":"modal?.epoch === state.epoch"}}; earlier return: !state.available |
 
 ## frontend/features/environments/files/knowledge-import-panel.tsx
 
@@ -2479,18 +2587,18 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 35:16 AdminDashboardPage | Button frontendText(locale, "ADMIN_METRIC_REFRESH") | onClick=onRefresh | disabled=pending |
-| 44:43 AdminDashboardPage | p frontendText(locale, "ADMIN_METRIC_LOADING") |  | {"kind":"repeat","expression":"cards"}; {"kind":"container","tag":"Card","attributes":{"aria-busy":"metric.kind === \"loading\""}}; {"kind":"logical","expres… |
-| 49:41 AdminDashboardPage | div  |  | {"kind":"repeat","expression":"cards"}; {"kind":"container","tag":"Card","attributes":{"aria-busy":"metric.kind === \"loading\""}}; {"kind":"logical","expres… |
-| 50:15 AdminDashboardPage | Button frontendText(locale, "COMMON_RETRY") | onClick=() =&gt; onRetry(key) | {"kind":"repeat","expression":"cards"}; {"kind":"container","tag":"Card","attributes":{"aria-busy":"metric.kind === \"loading\""}}; {"kind":"logical","expres… |
-| 53:43 AdminDashboardPage | ButtonLink frontendText(locale, "ADMIN_METRIC_OPEN") | href=href | {"kind":"repeat","expression":"cards"}; {"kind":"container","tag":"Card","attributes":{"aria-busy":"metric.kind === \"loading\""}}; {"kind":"logical","expres… |
-| 62:40 AdminDashboardPage | p frontendText(locale, "ADMIN_SUMMARY_LOADING") |  | {"kind":"container","tag":"Card","attributes":{"aria-busy":"trend.kind === \"loading\""}}; {"kind":"logical","expression":"trend.kind === \"loading\"","opera… |
-| 64:38 AdminDashboardPage | div  |  | {"kind":"container","tag":"Card","attributes":{"aria-busy":"trend.kind === \"loading\""}}; {"kind":"logical","expression":"trend.kind === \"error\"","operato… |
-| 66:13 AdminDashboardPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetryTrend | {"kind":"container","tag":"Card","attributes":{"aria-busy":"trend.kind === \"loading\""}}; {"kind":"logical","expression":"trend.kind === \"error\"","operato… |
-| 87:43 AdminDashboardPage | p frontendText(locale, "ADMIN_SUMMARY_LOADING") |  | {"kind":"container","tag":"Card","attributes":{"aria-busy":"activity.kind === \"loading\""}}; {"kind":"logical","expression":"activity.kind === \"loading\"",… |
-| 89:41 AdminDashboardPage | div  |  | {"kind":"container","tag":"Card","attributes":{"aria-busy":"activity.kind === \"loading\""}}; {"kind":"logical","expression":"activity.kind === \"error\"","o… |
-| 91:13 AdminDashboardPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetryActivity | {"kind":"container","tag":"Card","attributes":{"aria-busy":"activity.kind === \"loading\""}}; {"kind":"logical","expression":"activity.kind === \"error\"","o… |
-| 110:88 AdminDashboardPage | ButtonLink frontendText(locale, labelKey) | href=href | {"kind":"logical","expression":"links.length &gt; 0","operator":"&&"}; {"kind":"repeat","expression":"links"} |
+| 37:16 AdminDashboardPage | Button frontendText(locale, "ADMIN_METRIC_REFRESH") | onClick=onRefresh | disabled=pending |
+| 46:43 AdminDashboardPage | p frontendText(locale, "ADMIN_METRIC_LOADING") |  | {"kind":"repeat","expression":"cards"}; {"kind":"container","tag":"Card","attributes":{"aria-busy":"metric.kind === \"loading\""}}; {"kind":"logical","expres… |
+| 51:41 AdminDashboardPage | div  |  | {"kind":"repeat","expression":"cards"}; {"kind":"container","tag":"Card","attributes":{"aria-busy":"metric.kind === \"loading\""}}; {"kind":"logical","expres… |
+| 52:15 AdminDashboardPage | Button frontendText(locale, "COMMON_RETRY") | onClick=() =&gt; onRetry(key) | {"kind":"repeat","expression":"cards"}; {"kind":"container","tag":"Card","attributes":{"aria-busy":"metric.kind === \"loading\""}}; {"kind":"logical","expres… |
+| 55:43 AdminDashboardPage | ButtonLink frontendText(locale, "ADMIN_METRIC_OPEN") | href=href | {"kind":"repeat","expression":"cards"}; {"kind":"container","tag":"Card","attributes":{"aria-busy":"metric.kind === \"loading\""}}; {"kind":"logical","expres… |
+| 64:40 AdminDashboardPage | p frontendText(locale, "ADMIN_SUMMARY_LOADING") |  | {"kind":"container","tag":"Card","attributes":{"aria-busy":"trend.kind === \"loading\""}}; {"kind":"logical","expression":"trend.kind === \"loading\"","opera… |
+| 66:38 AdminDashboardPage | div  |  | {"kind":"container","tag":"Card","attributes":{"aria-busy":"trend.kind === \"loading\""}}; {"kind":"logical","expression":"trend.kind === \"error\"","operato… |
+| 68:13 AdminDashboardPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetryTrend | {"kind":"container","tag":"Card","attributes":{"aria-busy":"trend.kind === \"loading\""}}; {"kind":"logical","expression":"trend.kind === \"error\"","operato… |
+| 94:43 AdminDashboardPage | p frontendText(locale, "ADMIN_SUMMARY_LOADING") |  | {"kind":"container","tag":"Card","attributes":{"aria-busy":"activity.kind === \"loading\""}}; {"kind":"logical","expression":"activity.kind === \"loading\"",… |
+| 96:41 AdminDashboardPage | div  |  | {"kind":"container","tag":"Card","attributes":{"aria-busy":"activity.kind === \"loading\""}}; {"kind":"logical","expression":"activity.kind === \"error\"","o… |
+| 98:13 AdminDashboardPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetryActivity | {"kind":"container","tag":"Card","attributes":{"aria-busy":"activity.kind === \"loading\""}}; {"kind":"logical","expression":"activity.kind === \"error\"","o… |
+| 117:88 AdminDashboardPage | ButtonLink frontendText(locale, labelKey) | href=href | {"kind":"logical","expression":"links.length &gt; 0","operator":"&&"}; {"kind":"repeat","expression":"links"} |
 
 ## frontend/pages/admin/admin-dashboard-route.tsx
 
@@ -2508,17 +2616,18 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 15:17 AdminAnalyticsPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRefresh; type="button" | disabled=pending |
-| 20:132 AdminAnalyticsPage | Select  | onChange=(event) =&gt; onDaysChange?.(Number(event.target.value)) | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
-| 20:296 AdminAnalyticsPage | option frontendText(locale, "ADMIN_ANALYTICS_RANGE_CUSTOM").replace("{days}", String(days)) |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"logical","… |
-| 20:413 AdminAnalyticsPage | option frontendText(locale, "ADMIN_ANALYTICS_RANGE_7") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
-| 20:489 AdminAnalyticsPage | option frontendText(locale, "ADMIN_ANALYTICS_RANGE_14") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
-| 20:567 AdminAnalyticsPage | option frontendText(locale, "ADMIN_ANALYTICS_RANGE_30") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
-| 20:654 AdminAnalyticsPage | Button frontendText(locale, "ADMIN_ANALYTICS_REFRESH") | onClick=onRefresh; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
-| 25:33 AdminAnalyticsPage | p frontendText(locale, "ADMIN_ANALYTICS_STALE") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","e… |
-| 29:158 AdminAnalyticsPage | div retry |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","e… |
-| 29:316 AdminAnalyticsPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","e… |
-| 64:10 DailyChart | div  |  | earlier return: rows.length === 0 |
+| 19:17 AdminAnalyticsPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRefresh; type="button" | disabled=pending |
+| 24:132 AdminAnalyticsPage | Select  | onChange=(event) =&gt; onDaysChange?.(Number(event.target.value)) | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
+| 24:296 AdminAnalyticsPage | option frontendText(locale, "ADMIN_ANALYTICS_RANGE_CUSTOM").replace("{days}", String(days)) |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"logical","… |
+| 24:413 AdminAnalyticsPage | option frontendText(locale, "ADMIN_ANALYTICS_RANGE_7") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
+| 24:489 AdminAnalyticsPage | option frontendText(locale, "ADMIN_ANALYTICS_RANGE_14") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
+| 24:567 AdminAnalyticsPage | option frontendText(locale, "ADMIN_ANALYTICS_RANGE_30") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
+| 24:654 AdminAnalyticsPage | Button frontendText(locale, "ADMIN_ANALYTICS_REFRESH") | onClick=onRefresh; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}} |
+| 29:33 AdminAnalyticsPage | p frontendText(locale, "ADMIN_ANALYTICS_STALE") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","e… |
+| 33:158 AdminAnalyticsPage | div retry |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","e… |
+| 33:316 AdminAnalyticsPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-busy":"pending &#124;&#124; state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","e… |
+| 111:7 BreakdownPanel | Tabs  | onValueChange=(value) =&gt; setDimension(value as BreakdownId) |  |
+| 112:48 BreakdownPanel | TabsTrigger frontendText(locale, tab.labelKey) |  | {"kind":"repeat","expression":"BREAKDOWN_TABS"} |
 
 ## frontend/pages/admin/asset-queue-page.tsx
 
@@ -2575,34 +2684,33 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 61:152 DuplicateQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
-| 63:33 DuplicateQueuePage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
-| 63:200 DuplicateQueuePage | Button frontendText(locale, "ADMIN_DUPLICATE_RECORD_DISCARD") | onClick=onDiscardDecisionRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
-| 64:22 DuplicateQueuePage | p localError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
-| 65:24 DuplicateQueuePage | p frontendText(locale, "ADMIN_DUPLICATE_READ_REQUIRED") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
-| 66:55 DuplicateQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending &#124;&#124; Boolean(pendingId); {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"… |
-| 67:7 DuplicateQueuePage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
-| 111:5 DuplicateQueuePage | ConfirmAction  | onCancel=cancel; onConfirm=confirm | open=valid |
+| 62:152 DuplicateQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
+| 64:33 DuplicateQueuePage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
+| 64:200 DuplicateQueuePage | Button frontendText(locale, "ADMIN_DUPLICATE_RECORD_DISCARD") | onClick=onDiscardDecisionRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
+| 65:22 DuplicateQueuePage | p localError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
+| 66:24 DuplicateQueuePage | p frontendText(locale, "ADMIN_DUPLICATE_READ_REQUIRED") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
+| 67:55 DuplicateQueuePage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending &#124;&#124; Boolean(pendingId); {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"… |
+| 68:7 DuplicateQueuePage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"valid &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kind === \"loading\"",… |
+| 114:5 DuplicateQueuePage | ConfirmAction  | onCancel=cancel; onConfirm=confirm | open=valid |
 
 ## frontend/pages/admin/knowledge-item-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 42:17 KnowledgeItemPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | disabled=pending |
-| 56:9 KnowledgeItemPage | ItemBody  | onTrash=onTrash; onLoadMoreRevisions=onLoadMoreRevisions; onSelectRollback=onSelectRollback; onConfirmRollback=onConfirmRollback; onCancelRollback=onCancelRo… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"branch","e… |
-| 61:23 KnowledgeItemPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
-| 63:7 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
-| 65:5 KnowledgeItemPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}} |
-| 68:39 KnowledgeItemPage | p frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_WRITE_REFUSED") / feedback.message ? &#96; (${feedback.message})&#96; : "" |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
-| 72:11 KnowledgeItemPage | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_RESOLVE") | onClick=onResolveOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
-| 73:11 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_RETRY") | onClick=onRetryOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
-| 79:9 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
-| 82:17 KnowledgeItemPage | p phase / … |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
-| 133:33 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_SELECT") | onClick=() =&gt; onSelectRollback?.(entry.id); type="button" | disabled=locked; {"kind":"branch","expression":"revisions.length === 0","branch":"false"}; {"kind":"repeat","expression":"revisions"}; {"kind":"branch","expr… |
-| 139:32 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_HISTORY_MORE") | onClick=onLoadMoreRevisions; type="button" | disabled=locked &#124;&#124; historyPending; {"kind":"logical","expression":"hasMoreRevisions","operator":"&&"} |
-| 146:13 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_CONFIRM") | onClick=onConfirmRollback; type="button" | disabled=locked; {"kind":"logical","expression":"confirmTarget !== null && canWrite","operator":"&&"} |
-| 147:13 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_CANCEL") | onClick=onCancelRollback; type="button" | disabled=locked; {"kind":"logical","expression":"confirmTarget !== null && canWrite","operator":"&&"} |
-| 151:11 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_TRASH") | onClick=onTrash; type="button" | disabled=locked; {"kind":"logical","expression":"canWrite","operator":"&&"} |
+| 43:17 KnowledgeItemPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | disabled=pending |
+| 57:9 KnowledgeItemPage | ItemBody  | onTrash=onTrash; onLoadMoreRevisions=onLoadMoreRevisions; onSelectRollback=onSelectRollback; onConfirmRollback=onConfirmRollback; onCancelRollback=onCancelRo… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"branch","e… |
+| 62:23 KnowledgeItemPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
+| 64:7 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
+| 66:5 KnowledgeItemPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}} |
+| 69:39 KnowledgeItemPage | p frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_WRITE_REFUSED") / feedback.message ? &#96; (${feedback.message})&#96; : "" |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {"kind":"logical","… |
+| 73:11 KnowledgeItemPage | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_RESOLVE") | onClick=onResolveOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
+| 74:11 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_RETRY") | onClick=onRetryOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
+| 80:9 KnowledgeItemPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; pending &#124;&#124; undefined"}}; {… |
+| 138:35 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_SELECT") | onClick=() =&gt; onSelectRollback?.(entry.id); type="button" | disabled=locked; {"kind":"branch","expression":"revisions.length === 0","branch":"false"}; {"kind":"repeat","expression":"revisions"}; {"kind":"branch","expr… |
+| 145:32 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_HISTORY_MORE") | onClick=onLoadMoreRevisions; type="button" | disabled=locked &#124;&#124; historyPending; {"kind":"logical","expression":"hasMoreRevisions","operator":"&&"} |
+| 152:13 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_CONFIRM") | onClick=onConfirmRollback; type="button" | disabled=locked; {"kind":"logical","expression":"confirmTarget !== null && canWrite","operator":"&&"} |
+| 153:13 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_CANCEL") | onClick=onCancelRollback; type="button" | disabled=locked; {"kind":"logical","expression":"confirmTarget !== null && canWrite","operator":"&&"} |
+| 157:11 ItemBody | Button frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_TRASH") | onClick=onTrash; type="button" | disabled=locked; {"kind":"logical","expression":"canWrite","operator":"&&"} |
 
 ## frontend/pages/admin/knowledge-item-route.tsx
 
@@ -2615,31 +2723,31 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 134:16 MembersPage | FilterSelect  | onChange=(value) =&gt; onStatusFilterChange?.(value as "" &#124; "active" &#124; "disabled") | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}} |
-| 135:5 MembersPage | AppliedFilters  | onClear=() =&gt; onStatusFilterChange?.("") | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}} |
-| 142:159 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 144:29 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 144:195 MembersPage | Button frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD") | onClick=onDiscardStatusRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 145:52 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 145:275 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":… |
-| 146:5 MembersPage | Tabs  | onValueChange=changeTab | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 148:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_MEMBERS_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 149:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_INVITATION_LIST_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 152:9 MembersPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 171:534 MembersPage | Button actionLabel | onClick=() =&gt; requestStatusConfirmation(member) | disabled=itemPending &#124;&#124; forbidden &#124;&#124; !onStatusChange; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation … |
-| 182:13 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_ADD") | onClick=() =&gt; setAddOpen(true); type="button" | aria-expanded=addOpen; disabled=pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","tag"… |
-| 184:31 MembersPage | p invitationError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 187:170 MembersPage | Button frontendText(locale, copied ? "ADMIN_INVITATION_CODE_COPIED" : "ADMIN_INVITATION_CODE_COPY") | onClick=() =&gt; void copyCode(issuedInvitation.code); type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 188:28 MembersPage | p frontendText(locale, "ADMIN_INVITATION_CODE_COPY_FAILED") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 193:15 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
-| 193:132 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadInvitationsRetry; type="button" | disabled=invitationWritePending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefin… |
-| 195:487 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_REVOKE") | onClick=() =&gt; requestRevokeConfirmation(invitation) | disabled=invitationWritePending &#124;&#124; pending &#124;&#124; forbidden &#124;&#124; !onRevokeInvitation; {"kind":"container","tag":"section","attributes… |
-| 203:5 MembersPage | Dialog  | onOpenChange=(next) =&gt; { if (!next) setAddOpen(false); } | open=addOpen |
-| 204:7 MembersPage | DialogContent  |  | {"kind":"container","tag":"Dialog","attributes":{"open":"addOpen"}} |
-| 208:11 MembersPage | Input  | onChange=(value) =&gt; setEmail(value); type="email" | disabled=pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","tag":"Dialog","attributes":… |
-| 211:11 MembersPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setAddOpen(false); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"addOpen"}} |
-| 212:11 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_GENERATE") | onClick=requestInviteConfirmation; type="button" | disabled=!email.trim() &#124;&#124; pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","… |
-| 216:5 MembersPage | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=confirmAction | open=validConfirmation |
+| 135:16 MembersPage | FilterSelect  | onChange=(value) =&gt; onStatusFilterChange?.(value as "" &#124; "active" &#124; "disabled") | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}} |
+| 136:5 MembersPage | AppliedFilters  | onClear=() =&gt; onStatusFilterChange?.("") | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}} |
+| 143:159 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 145:29 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 145:195 MembersPage | Button frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD") | onClick=onDiscardStatusRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 146:52 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 146:275 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":… |
+| 147:5 MembersPage | Tabs  | onValueChange=changeTab | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 149:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_MEMBERS_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 150:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_INVITATION_LIST_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 153:9 MembersPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 172:534 MembersPage | Button actionLabel | onClick=() =&gt; requestStatusConfirmation(member) | disabled=itemPending &#124;&#124; forbidden &#124;&#124; !onStatusChange; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation … |
+| 183:13 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_ADD") | onClick=() =&gt; setAddOpen(true); type="button" | aria-expanded=addOpen; disabled=pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","tag"… |
+| 185:31 MembersPage | p invitationError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 188:170 MembersPage | Button frontendText(locale, copied ? "ADMIN_INVITATION_CODE_COPIED" : "ADMIN_INVITATION_CODE_COPY") | onClick=() =&gt; void copyCode(issuedInvitation.code); type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 189:28 MembersPage | p frontendText(locale, "ADMIN_INVITATION_CODE_COPY_FAILED") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 194:15 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefined"}}; {"kind":"branch","expressi… |
+| 194:132 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadInvitationsRetry; type="button" | disabled=invitationWritePending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; addOpen &#124;&#124; undefin… |
+| 196:554 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_REVOKE") | onClick=() =&gt; requestRevokeConfirmation(invitation) | disabled=invitationWritePending &#124;&#124; pending &#124;&#124; forbidden &#124;&#124; !onRevokeInvitation; {"kind":"container","tag":"section","attributes… |
+| 204:5 MembersPage | Dialog  | onOpenChange=(next) =&gt; { if (!next) setAddOpen(false); } | open=addOpen |
+| 205:7 MembersPage | DialogContent  |  | {"kind":"container","tag":"Dialog","attributes":{"open":"addOpen"}} |
+| 209:11 MembersPage | Input  | onChange=(value) =&gt; setEmail(value); type="email" | disabled=pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","tag":"Dialog","attributes":… |
+| 212:11 MembersPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setAddOpen(false); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"addOpen"}} |
+| 213:11 MembersPage | Button frontendText(locale, "ADMIN_INVITATION_GENERATE") | onClick=requestInviteConfirmation; type="button" | disabled=!email.trim() &#124;&#124; pending &#124;&#124; invitationWritePending &#124;&#124; forbidden &#124;&#124; !onIssueInvitation; {"kind":"container","… |
+| 217:5 MembersPage | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=confirmAction | open=validConfirmation |
 
 ## frontend/pages/admin/menu-editor.tsx
 
@@ -2682,20 +2790,21 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 81:17 RecycleBinPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | disabled=pending |
-| 91:23 RecycleBinPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 93:7 RecycleBinPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 95:22 RecycleBinPage | p recordNotice |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 96:5 RecycleBinPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 98:40 RecycleBinPage | Button frontendText(locale, "ADMIN_TRASH_RETRY") | onClick=onRetryOperation; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 101:41 RecycleBinPage | a formatText(locale, "ADMIN_TRASH_OPEN_RESTORED", { id: feedback.knowledgeItemId }) | onClick=(event) =&gt; { if (!onOpenItem &#124;&#124; event.defaultPrevented &#124;&#124; event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctr… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 123:11 RecycleBinPage | a frontendText(locale, "ADMIN_TRASH_OPEN_ITEM") | onClick=(event) =&gt; { if (!onOpenItem &#124;&#124; event.defaultPrevented &#124;&#124; event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctr… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 147:13 RecycleBinPage | Button restoring ? frontendText(locale, "ADMIN_TRASH_RESTORING") : frontendText(locale, "ADMIN_TRASH_RESTORE") | onClick=() =&gt; onRestore?.(item.id); type="button" | disabled=writesLocked; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch",… |
-| 153:15 RecycleBinPage | Input  | onChange=(event) =&gt; onPurgeConfirmChange?.(item.id, event.target.value) | disabled=writesLocked; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch",… |
-| 155:28 RecycleBinPage | p frontendText(locale, "ADMIN_TRASH_PURGE_CONFIRM_MISMATCH") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 156:15 RecycleBinPage | Button frontendText(locale, "ADMIN_TRASH_PURGE") | onClick=() =&gt; { if (canPurge) onPurge?.(item.id); }; type="button" | disabled=!canPurge; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","ex… |
-| 161:15 RecycleBinPage | Button frontendText(locale, "ADMIN_TRASH_PURGE") | type="button" | disabled=true; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","express… |
-| 168:7 RecycleBinPage | Button frontendText(locale, "ADMIN_LOAD_MORE") | onClick=onLoadMore; type="button" | disabled=writesLocked; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch",… |
+| 90:17 RecycleBinPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | disabled=pending |
+| 100:23 RecycleBinPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 102:7 RecycleBinPage | Button frontendText(locale, "ADMIN_TRASH_DISCARD") | onClick=onDiscardOperation; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 104:22 RecycleBinPage | p recordNotice |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 105:5 RecycleBinPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 106:20 RecycleBinPage | Alert  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 108:41 RecycleBinPage | Button frontendText(locale, "ADMIN_TRASH_RETRY") | onClick=onRetryOperation; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 111:42 RecycleBinPage | a formatText(locale, "ADMIN_TRASH_OPEN_RESTORED", { id: feedback.knowledgeItemId }) | onClick=(event) =&gt; { if (!onOpenItem &#124;&#124; event.defaultPrevented &#124;&#124; event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctr… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 134:11 RecycleBinPage | a frontendText(locale, "ADMIN_TRASH_OPEN_ITEM") | onClick=(event) =&gt; { if (!onOpenItem &#124;&#124; event.defaultPrevented &#124;&#124; event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctr… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 158:13 RecycleBinPage | Button restoring ? frontendText(locale, "ADMIN_TRASH_RESTORING") : frontendText(locale, "ADMIN_TRASH_RESTORE") | onClick=() =&gt; onRestore?.(item.id); type="button" | disabled=writesLocked; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch",… |
+| 164:15 RecycleBinPage | Input  | onChange=(event) =&gt; onPurgeConfirmChange?.(item.id, event.target.value) | disabled=writesLocked; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch",… |
+| 166:28 RecycleBinPage | p frontendText(locale, "ADMIN_TRASH_PURGE_CONFIRM_MISMATCH") |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 167:15 RecycleBinPage | HoldActionButton frontendText(locale, "ADMIN_TRASH_PURGE") | onActivate=() =&gt; { if (canPurge) onPurge?.(item.id); }; type="horizontal" | disabled=!canPurge; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","ex… |
+| 175:15 RecycleBinPage | HoldActionButton frontendText(locale, "ADMIN_TRASH_PURGE") | type="horizontal" | disabled=true; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","express… |
+| 186:7 RecycleBinPage | Button frontendText(locale, "ADMIN_LOAD_MORE") | onClick=onLoadMore; type="button" | disabled=writesLocked; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch",… |
 
 ## frontend/pages/admin/recycle-bin-route.tsx
 
@@ -2707,13 +2816,13 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 39:92 ReviewDetailPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 40:9 ReviewDetailPage | ButtonLink frontendText(locale, "ADMIN_REVIEW_BACK") | onClick=(event) =&gt; { if (!onBack &#124;&#124; event.defaultPrevented &#124;&#124; event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctrlKey… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 53:31 ReviewDetailPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 53:201 ReviewDetailPage | Button frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD") | onClick=onDiscardDecisionRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 54:30 ReviewDetailPage | p decisionRecordNotice |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 55:5 ReviewDetailPage | ReviewDecisionFeedback  | onRetry=onRetryDecision; onReload=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 57:7 ReviewDetailPage | ReviewDecisionControls  | onDecision=onDecision | disabled=reviewDecisionLocked(decisionState); {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefine… |
+| 40:92 ReviewDetailPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 41:9 ReviewDetailPage | ButtonLink frontendText(locale, "ADMIN_REVIEW_BACK") | onClick=(event) =&gt; { if (!onBack &#124;&#124; event.defaultPrevented &#124;&#124; event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctrlKey… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 54:31 ReviewDetailPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 54:201 ReviewDetailPage | Button frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD") | onClick=onDiscardDecisionRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 55:30 ReviewDetailPage | p decisionRecordNotice |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 56:5 ReviewDetailPage | ReviewDecisionFeedback  | onRetry=onRetryDecision; onReload=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 58:7 ReviewDetailPage | ReviewDecisionControls  | onDecision=onDecision | disabled=reviewDecisionLocked(decisionState); {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefine… |
 
 ## frontend/pages/admin/review-detail-route.tsx
 
@@ -2828,277 +2937,273 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 84:7 AgentPage | PromptInput  | onValueChange=(value) =&gt; onQuestionChange?.(value); onSubmit=() =&gt; onSubmit?.(); onStop=onCancel | disabled=state.kind === "loading" &#124;&#124; feedbackBlocked |
-| 100:37 AgentPage | AgentSourceControls  | onStartScope=onStartScope | disabled=state.kind === "loading" &#124;&#124; feedbackBlocked; {"kind":"logical","expression":"onStartScope && sourceDraft","operator":"&&"} |
-| 101:625 AgentPage | Button frontendText(locale, "AGENT_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"cancelled\"","branch":"false"};… |
-| 101:877 AgentPage | Button frontendText(locale, "AGENT_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"cancelled\"","branch":"false"};… |
-| 101:1029 AgentPage | AgentRefusal  | onRetry=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"cancelled\"","branch":"false"};… |
-| 109:10 AgentRefusal | div  |  |  |
-| 112:17 AgentRefusal | Button frontendText(locale, "AGENT_RETRY") | onClick=onRetry | {"kind":"logical","expression":"onRetry","operator":"&&"} |
-| 134:7 AgentSourceControls | Select  | onValueChange=(value) =&gt; { draft.edit("kind", value as AgentScope["kind"]); draft.edit("ids", ""); setInvalid(false); } | disabled=disabled &#124;&#124; draft.applicationPending; {"kind":"container","tag":"fieldset","attributes":{"disabled":"disabled &#124;&#124; draft.applicati… |
-| 144:108 AgentSourceControls | Input  | onChange=(event) =&gt; draft.edit("ids", event.currentTarget.value) | {"kind":"container","tag":"fieldset","attributes":{"disabled":"disabled &#124;&#124; draft.applicationPending"}}; {"kind":"logical","expression":"kind !== \"… |
-| 146:17 AgentSourceControls | p frontendText(locale, "AGENT_SCOPE_INVALID") |  | {"kind":"container","tag":"fieldset","attributes":{"disabled":"disabled &#124;&#124; draft.applicationPending"}}; {"kind":"logical","expression":"invalid","o… |
-| 147:5 AgentSourceControls | Button frontendText(locale, "AGENT_SCOPE_APPLY") | onClick=apply; type="button" | disabled=disabled; {"kind":"container","tag":"fieldset","attributes":{"disabled":"disabled &#124;&#124; draft.applicationPending"}} |
+| 85:7 AgentPage | PromptInput  | onValueChange=(value) =&gt; onQuestionChange?.(value); onSubmit=() =&gt; onSubmit?.(); onStop=onCancel | disabled=state.kind === "loading" &#124;&#124; feedbackBlocked |
+| 101:37 AgentPage | AgentSourceControls  | onStartScope=onStartScope | disabled=state.kind === "loading" &#124;&#124; feedbackBlocked; {"kind":"logical","expression":"onStartScope && sourceDraft","operator":"&&"} |
+| 102:625 AgentPage | Button frontendText(locale, "AGENT_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"cancelled\"","branch":"false"};… |
+| 102:877 AgentPage | Button frontendText(locale, "AGENT_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"cancelled\"","branch":"false"};… |
+| 102:1029 AgentPage | AgentRefusal  | onRetry=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"cancelled\"","branch":"false"};… |
+| 110:10 AgentRefusal | Alert  |  |  |
+| 113:17 AgentRefusal | Button frontendText(locale, "AGENT_RETRY") | onClick=onRetry | {"kind":"logical","expression":"onRetry","operator":"&&"} |
+| 135:7 AgentSourceControls | Select  | onValueChange=(value) =&gt; { draft.edit("kind", value as AgentScope["kind"]); draft.edit("ids", ""); setInvalid(false); } | disabled=disabled &#124;&#124; draft.applicationPending; {"kind":"container","tag":"fieldset","attributes":{"disabled":"disabled &#124;&#124; draft.applicati… |
+| 145:108 AgentSourceControls | Input  | onChange=(event) =&gt; draft.edit("ids", event.currentTarget.value) | {"kind":"container","tag":"fieldset","attributes":{"disabled":"disabled &#124;&#124; draft.applicationPending"}}; {"kind":"logical","expression":"kind !== \"… |
+| 147:17 AgentSourceControls | p frontendText(locale, "AGENT_SCOPE_INVALID") |  | {"kind":"container","tag":"fieldset","attributes":{"disabled":"disabled &#124;&#124; draft.applicationPending"}}; {"kind":"logical","expression":"invalid","o… |
+| 148:5 AgentSourceControls | Button frontendText(locale, "AGENT_SCOPE_APPLY") | onClick=apply; type="button" | disabled=disabled; {"kind":"container","tag":"fieldset","attributes":{"disabled":"disabled &#124;&#124; draft.applicationPending"}} |
 
 ## frontend/pages/boards/boards-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 40:29 BoardsPage | Button frontendText(locale, "BOARDS_MOVE_RECORD_DISCARD") | onClick=onDiscardRecord | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 45:9 BoardsPage | Button frontendText(locale, "BOARDS_MOVE_CHECK") | onClick=onCheckMove | disabled=recovering; {"kind":"logical","expression":"unknownMove","operator":"&&"} |
-| 46:9 BoardsPage | Button frontendText(locale, "BOARDS_MOVE_RETRY") | onClick=onRetryMove | disabled=recovering; {"kind":"logical","expression":"unknownMove","operator":"&&"} |
-| 50:22 BoardsPage | p actionNotice |  | {"kind":"logical","expression":"actionNotice","operator":"&&"} |
-| 67:41 BoardsPage | BoardColumn  | onRetry=onRetry; onLoadMore=onLoadMore; onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onStatusChange=onStatusChange | {"kind":"container","tag":"SortableList","attributes":{"disabled":"true"}}; {"kind":"repeat","expression":"BOARD_STATUSES"} |
-| 89:108 BoardColumn | Button frontendText(locale, "BOARDS_RETRY") | onClick=() =&gt; onRetry(status) | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
-| 90:32 BoardColumn | ReadyColumn  | onRetry=onRetry; onLoadMore=onLoadMore; onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onStatusChange=onStatusChange | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
-| 112:7 ReadyColumn | div  | onKeyDown=(event) =&gt; { if (writeLocked &#124;&#124; event.target !== event.currentTarget) return; if (event.key !== "ArrowLeft" && event.key !== "ArrowRig… |  |
-| 122:7 ReadyColumn | Select  | onChange=(event) =&gt; onStatusChange(task, event.currentTarget.value as BoardTargetStatus) | disabled=writeLocked |
-| 129:124 ReadyColumn | Button frontendText(locale, "BOARDS_RETRY") | onClick=() =&gt; onRetry(status) | {"kind":"logical","expression":"state.loadError","operator":"&&"} |
-| 131:7 ReadyColumn | DataTable  | onPageChange=onPageChange ? (page: number) =&gt; onPageChange(status, page) : undefined; onPageSizeChange=onPageSizeChange ? (pageSize: SupportedPageSize) =&… | {"kind":"container","tag":"div","attributes":{"aria-busy":"state.pending &#124;&#124; undefined"}} |
+| 41:29 BoardsPage | Button frontendText(locale, "BOARDS_MOVE_RECORD_DISCARD") | onClick=onDiscardRecord | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 46:9 BoardsPage | Button frontendText(locale, "BOARDS_MOVE_CHECK") | onClick=onCheckMove | disabled=recovering; {"kind":"logical","expression":"unknownMove","operator":"&&"} |
+| 47:9 BoardsPage | Button frontendText(locale, "BOARDS_MOVE_RETRY") | onClick=onRetryMove | disabled=recovering; {"kind":"logical","expression":"unknownMove","operator":"&&"} |
+| 51:22 BoardsPage | p actionNotice |  | {"kind":"logical","expression":"actionNotice","operator":"&&"} |
+| 68:41 BoardsPage | BoardColumn  | onRetry=onRetry; onLoadMore=onLoadMore; onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onStatusChange=onStatusChange | {"kind":"container","tag":"SortableList","attributes":{"disabled":"true"}}; {"kind":"repeat","expression":"BOARD_STATUSES"} |
+| 90:108 BoardColumn | Button frontendText(locale, "BOARDS_RETRY") | onClick=() =&gt; onRetry(status) | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
+| 91:32 BoardColumn | ReadyColumn  | onRetry=onRetry; onLoadMore=onLoadMore; onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onStatusChange=onStatusChange | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
+| 113:7 ReadyColumn | div  | onKeyDown=(event) =&gt; { if (writeLocked &#124;&#124; event.target !== event.currentTarget) return; if (event.key !== "ArrowLeft" && event.key !== "ArrowRig… |  |
+| 123:7 ReadyColumn | Select  | onChange=(event) =&gt; onStatusChange(task, event.currentTarget.value as BoardTargetStatus) | disabled=writeLocked |
+| 130:124 ReadyColumn | Button frontendText(locale, "BOARDS_RETRY") | onClick=() =&gt; onRetry(status) | {"kind":"logical","expression":"state.loadError","operator":"&&"} |
+| 132:7 ReadyColumn | DataTable  | onPageChange=onPageChange ? (page: number) =&gt; onPageChange(status, page) : undefined; onPageSizeChange=onPageSizeChange ? (pageSize: SupportedPageSize) =&… | {"kind":"container","tag":"div","attributes":{"aria-busy":"state.pending &#124;&#124; undefined"}} |
 
 ## frontend/pages/calendar-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 45:33 CalendarPage | Dialog  | onOpenChange=next =&gt; { if (!next) setCreateOpen(false); } | open=createOpen |
-| 46:5 CalendarPage | DialogContent  |  | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
-| 49:29 CalendarPage | CalendarCreateForm  | onCreate=onCreate; onCreateReadback=onCreateReadback; onCreateDenied=onCreateDenied; onCreateLock=locked =&gt; { setCreateComposerLocked(locked); onCreateLoc… | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
-| 50:62 CalendarPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setCreateOpen(false); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
-| 58:16 CalendarPage | Button frontendText(locale, "CALENDAR_CREATE_TITLE") | onClick=() =&gt; setCreateOpen(true); type="button" | aria-expanded=createOpen; disabled=createBlocked |
-| 60:32 CalendarPage | CalendarRangeFilter  | onChange=next =&gt; { if (!controlsPending && !confirmation.isOpen()) onRangeChange(next); } | {"kind":"logical","expression":"range && onRangeChange","operator":"&&"} |
-| 61:21 CalendarPage | div actionError |  | {"kind":"logical","expression":"actionError","operator":"&&"} |
-| 62:77 CalendarPage | Button frontendText(locale, "CALENDAR_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
-| 62:306 CalendarPage | DataTable  | onPageChange=onPageChange ? changePage : undefined; onPageSizeChange=onPageSizeChange ? changePageSize : undefined; onLoadMore=onLoadMore ? loadMore : undefined | {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"} |
-| 81:164 CalendarPage | Button  | onClick=() =&gt; confirmation.request(event); type="button" | disabled=controlsPending; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading… |
+| 46:33 CalendarPage | Dialog  | onOpenChange=next =&gt; { if (!next) setCreateOpen(false); } | open=createOpen |
+| 47:5 CalendarPage | DialogContent  |  | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
+| 50:29 CalendarPage | CalendarCreateForm  | onCreate=onCreate; onCreateReadback=onCreateReadback; onCreateDenied=onCreateDenied; onCreateLock=locked =&gt; { setCreateComposerLocked(locked); onCreateLoc… | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
+| 51:62 CalendarPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setCreateOpen(false); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
+| 59:16 CalendarPage | Button frontendText(locale, "CALENDAR_CREATE_TITLE") | onClick=() =&gt; setCreateOpen(true); type="button" | aria-expanded=createOpen; disabled=createBlocked |
+| 61:32 CalendarPage | CalendarRangeFilter  | onChange=next =&gt; { if (!controlsPending && !confirmation.isOpen()) onRangeChange(next); } | {"kind":"logical","expression":"range && onRangeChange","operator":"&&"} |
+| 62:21 CalendarPage | div actionError |  | {"kind":"logical","expression":"actionError","operator":"&&"} |
+| 64:77 CalendarPage | Button frontendText(locale, "CALENDAR_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
+| 64:306 CalendarPage | DataTable  | onPageChange=onPageChange ? changePage : undefined; onPageSizeChange=onPageSizeChange ? changePageSize : undefined; onLoadMore=onLoadMore ? loadMore : undefined | {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"} |
+| 83:164 CalendarPage | Button  | onClick=() =&gt; confirmation.request(event); type="button" | disabled=controlsPending; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading… |
 
 ## frontend/pages/focus-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 43:5 FocusPage | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
-| 66:84 FocusPage | Button frontendText(locale, "FOCUS_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
-| 68:40 FocusPage | div  |  | {"kind":"branch","expression":"recordBlocked","branch":"true"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 68:142 FocusPage | button frontendText(locale, "FOCUS_DRAFT_RECORD_DISCARD") | onClick=discardRecord; type="button" | {"kind":"branch","expression":"recordBlocked","branch":"true"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 69:22 FocusPage | p recordNotice |  | {"kind":"branch","expression":"recordBlocked","branch":"false"}; {"kind":"branch","expression":"recordNotice","branch":"true"}; earlier return: state.kind ==… |
-| 70:877 FocusPage | Button frontendText(locale, "FOCUS_PAUSE") | onClick=() =&gt; transition("pause") | disabled=controlsPending; {"kind":"branch","expression":"session","branch":"true"}; {"kind":"logical","expression":"session.status === \"active\"","operator"… |
-| 70:1046 FocusPage | Button frontendText(locale, "FOCUS_RESUME") | onClick=() =&gt; transition("resume") | disabled=controlsPending; {"kind":"branch","expression":"session","branch":"true"}; {"kind":"logical","expression":"session.status === \"paused\"","operator"… |
-| 70:1251 FocusPage | Button frontendText(locale, "FOCUS_COMPLETE") | onClick=() =&gt; confirmation.request("complete") | disabled=controlsPending; {"kind":"branch","expression":"session","branch":"true"}; {"kind":"logical","expression":"(session.status === \"active\" &#124;&#12… |
-| 70:1404 FocusPage | Button frontendText(locale, "FOCUS_ABANDON") | onClick=() =&gt; confirmation.request("abandon") | disabled=controlsPending; {"kind":"branch","expression":"session","branch":"true"}; {"kind":"logical","expression":"(session.status === \"active\" &#124;&#12… |
-| 70:1731 FocusPage | Button frontendText(locale, "FOCUS_CHOOSE_TASK") | onClick=() =&gt; {if (!editable()) return; setPicking(true);} | aria-expanded=picking; disabled=controlsPending; {"kind":"branch","expression":"session","branch":"false"}; earlier return: state.kind === "loading"; earlier… |
-| 70:2005 FocusPage | p actionNotice |  | {"kind":"logical","expression":"actionNotice","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 70:2077 FocusPage | div actionError |  | {"kind":"logical","expression":"actionError","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 70:2162 FocusPage | Dialog  | onOpenChange=(next) =&gt; {if (!next) setPicking(false);} | open=picking; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 70:2669 FocusPage | FocusTaskPicker  | onSelect=task =&gt; {if (!editable()) return; draft.edit("taskId", task.id); draft.edit("taskTitle", task.title);}; onDenied=() =&gt; {draft.reset(); setPick… | {"kind":"container","tag":"Dialog","attributes":{"open":"picking"}}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 70:2917 FocusPage | Input  | onChange=(event) =&gt; draft.edit("title", event.currentTarget.value) | disabled=controlsPending; {"kind":"container","tag":"Dialog","attributes":{"open":"picking"}}; earlier return: state.kind === "loading"; earlier return: stat… |
-| 70:3153 FocusPage | Button frontendText(locale, "FOCUS_START_ACTION") | onClick=() =&gt; { if (!editable() &#124;&#124; !draft.current.current.taskId &#124;&#124; !onStart) return; const input = draft.current.current; starting.cu… | disabled=controlsPending &#124;&#124; !taskId; {"kind":"container","tag":"Dialog","attributes":{"open":"picking"}}; earlier return: state.kind === "loading";… |
+| 44:5 FocusPage | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
+| 67:84 FocusPage | Button frontendText(locale, "FOCUS_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 69:40 FocusPage | div  |  | {"kind":"branch","expression":"recordBlocked","branch":"true"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 69:142 FocusPage | button frontendText(locale, "FOCUS_DRAFT_RECORD_DISCARD") | onClick=discardRecord; type="button" | {"kind":"branch","expression":"recordBlocked","branch":"true"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 70:22 FocusPage | p recordNotice |  | {"kind":"branch","expression":"recordBlocked","branch":"false"}; {"kind":"branch","expression":"recordNotice","branch":"true"}; earlier return: state.kind ==… |
+| 71:877 FocusPage | Button frontendText(locale, "FOCUS_PAUSE") | onClick=() =&gt; transition("pause") | disabled=controlsPending; {"kind":"branch","expression":"session","branch":"true"}; {"kind":"logical","expression":"session.status === \"active\"","operator"… |
+| 71:1046 FocusPage | Button frontendText(locale, "FOCUS_RESUME") | onClick=() =&gt; transition("resume") | disabled=controlsPending; {"kind":"branch","expression":"session","branch":"true"}; {"kind":"logical","expression":"session.status === \"paused\"","operator"… |
+| 71:1251 FocusPage | Button frontendText(locale, "FOCUS_COMPLETE") | onClick=() =&gt; confirmation.request("complete") | disabled=controlsPending; {"kind":"branch","expression":"session","branch":"true"}; {"kind":"logical","expression":"(session.status === \"active\" &#124;&#12… |
+| 71:1404 FocusPage | Button frontendText(locale, "FOCUS_ABANDON") | onClick=() =&gt; confirmation.request("abandon") | disabled=controlsPending; {"kind":"branch","expression":"session","branch":"true"}; {"kind":"logical","expression":"(session.status === \"active\" &#124;&#12… |
+| 71:1731 FocusPage | Button frontendText(locale, "FOCUS_CHOOSE_TASK") | onClick=() =&gt; {if (!editable()) return; setPicking(true);} | aria-expanded=picking; disabled=controlsPending; {"kind":"branch","expression":"session","branch":"false"}; earlier return: state.kind === "loading"; earlier… |
+| 71:2005 FocusPage | p actionNotice |  | {"kind":"logical","expression":"actionNotice","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 71:2077 FocusPage | div actionError |  | {"kind":"logical","expression":"actionError","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 71:2162 FocusPage | Dialog  | onOpenChange=(next) =&gt; {if (!next) setPicking(false);} | open=picking; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 71:2669 FocusPage | FocusTaskPicker  | onSelect=task =&gt; {if (!editable()) return; draft.edit("taskId", task.id); draft.edit("taskTitle", task.title);}; onDenied=() =&gt; {draft.reset(); setPick… | {"kind":"container","tag":"Dialog","attributes":{"open":"picking"}}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 71:2917 FocusPage | Input  | onChange=(event) =&gt; draft.edit("title", event.currentTarget.value) | disabled=controlsPending; {"kind":"container","tag":"Dialog","attributes":{"open":"picking"}}; earlier return: state.kind === "loading"; earlier return: stat… |
+| 71:3153 FocusPage | Button frontendText(locale, "FOCUS_START_ACTION") | onClick=() =&gt; { if (!editable() &#124;&#124; !draft.current.current.taskId &#124;&#124; !onStart) return; const input = draft.current.current; starting.cu… | disabled=controlsPending &#124;&#124; !taskId; {"kind":"container","tag":"Dialog","attributes":{"open":"picking"}}; earlier return: state.kind === "loading";… |
 
 ## frontend/pages/goals-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 44:68 GoalsPage | Dialog  | onOpenChange=next =&gt; { if (!next) setCreateOpen(false); } | open=createOpen; {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
-| 45:5 GoalsPage | DialogContent  |  | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
-| 48:29 GoalsPage | PlanningCreateForm  | onCreate=onCreate; onCreateReadback=onCreateReadback; onCreateDenied=onCreateDenied; onCreateLock=locked =&gt; { setCreateComposerLocked(locked); onCreateLoc… | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
-| 49:62 GoalsPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setCreateOpen(false); type="button" | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
-| 57:16 GoalsPage | Button frontendText(locale, "GOALS_CREATE_TITLE") | onClick=() =&gt; setCreateOpen(true); type="button" | aria-expanded=createOpen; disabled=createBlocked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === … |
-| 59:21 GoalsPage | div actionError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"logi… |
-| 61:80 GoalsPage | Button frontendText(locale, "GOALS_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
-| 62:9 GoalsPage | DataTable  | onPageChange=onPageChange ? changePage : undefined; onPageSizeChange=onPageSizeChange ? changePageSize : undefined; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
-| 80:347 GoalsPage | RangeSlider  | onValueChange=(value) =&gt; { if (!statusConfirmation.isOpen()) onProgressChange?.(goal, value); } | disabled=statusConfirmation.open &#124;&#124; createLocked &#124;&#124; pending &#124;&#124; goal.status === "archived"; {"kind":"container","tag":"section",… |
+| 45:68 GoalsPage | Dialog  | onOpenChange=next =&gt; { if (!next) setCreateOpen(false); } | open=createOpen; {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
+| 46:5 GoalsPage | DialogContent  |  | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
+| 49:29 GoalsPage | PlanningCreateForm  | onCreate=onCreate; onCreateReadback=onCreateReadback; onCreateDenied=onCreateDenied; onCreateLock=locked =&gt; { setCreateComposerLocked(locked); onCreateLoc… | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
+| 50:62 GoalsPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setCreateOpen(false); type="button" | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
+| 58:16 GoalsPage | Button frontendText(locale, "GOALS_CREATE_TITLE") | onClick=() =&gt; setCreateOpen(true); type="button" | aria-expanded=createOpen; disabled=createBlocked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === … |
+| 60:21 GoalsPage | div actionError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"logi… |
+| 63:80 GoalsPage | Button frontendText(locale, "GOALS_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
+| 64:9 GoalsPage | DataTable  | onPageChange=onPageChange ? changePage : undefined; onPageSizeChange=onPageSizeChange ? changePageSize : undefined; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
+| 82:347 GoalsPage | RangeSlider  | onValueChange=(value) =&gt; { if (!statusConfirmation.isOpen()) onProgressChange?.(goal, value); } | disabled=statusConfirmation.open &#124;&#124; createLocked &#124;&#124; pending &#124;&#124; goal.status === "archived"; {"kind":"container","tag":"section",… |
 
 ## frontend/pages/graph-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 99:5 GraphPage | window.addEventListener  | "beforeunload", warn |  |
-| 207:47 GraphPage | div  |  | aria-busy=action.status === "checking"; {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"action && action… |
-| 210:7 GraphPage | Button frontendText(locale, "GRAPH_ACTION_CHECK_RESULT") | onClick=checkGraphAction | disabled=action.status === "checking"; {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"action && action.… |
-| 211:7 GraphPage | Button frontendText(locale, "GRAPH_ACTION_RETRY") | onClick=() =&gt; runGraphAction(action) | disabled=action.status === "checking"; {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"action && action.… |
-| 212:28 GraphPage | p frontendText(locale, "GRAPH_ACTION_QUERY_UNCONFIRMED") |  | {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"action && action.status !== \"running\"","operator":"&&"… |
-| 214:39 GraphPage | p frontendText(locale, "GRAPH_ACTION_CONFIRMED").replace("{id}", outcome.clientKey) |  | {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"outcome?.status === \"success\"","operator":"&&"} |
-| 260:13 GraphPage | Input  | onChange=(event) =&gt; onQueryChange?.(event.currentTarget.value) |  |
-| 261:13 GraphPage | FilterSelect  | onChange=(value) =&gt; onLensChange?.(value as GraphLens) |  |
-| 262:13 GraphPage | FilterSelect  | onChange=(value) =&gt; onTemporalRangeChange?.(value as GraphTemporalRange) |  |
-| 263:13 GraphPage | FilterSelect  | onChange=(value) =&gt; onChangeKindChange?.(value as NonNullable&lt;GraphPageProps["changeKind"]&gt;) |  |
-| 269:38 GraphPage | AppliedFilters  | onClear=clearFilters | {"kind":"logical","expression":"state.kind !== \"forbidden\"","operator":"&&"} |
-| 270:23 GraphPage | div  |  | {"kind":"logical","expression":"viewBlocked","operator":"&&"} |
-| 270:197 GraphPage | Button frontendText(locale, "GRAPH_VIEW_RECORD_DISCARD") | onClick=onDiscardView | {"kind":"logical","expression":"viewBlocked","operator":"&&"} |
-| 271:22 GraphPage | p viewNotice |  | {"kind":"logical","expression":"viewNotice","operator":"&&"} |
-| 272:25 GraphPage | div  |  | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 274:9 GraphPage | Button frontendText(locale, "GRAPH_ACTION_RECORD_DISCARD") | onClick=() =&gt; { if (memberId && discardBlockedGraphAction(memberId)) setRecordBlocked(false); } | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 277:81 GraphPage | p frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : outcome.status === "not_recorded" ? "GRAPH_ACTION_NOT_RECORDED" : "GRAPH_ACTIO… |  | {"kind":"logical","expression":"state.kind !== \"forbidden\" && outcome && outcome.status !== \"success\"","operator":"&&"} |
-| 279:102 GraphPage | Button frontendText(locale, "GRAPH_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
-| 280:114 GraphPage | Button frontendText(locale, "GRAPH_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"forbidden\"","operator":"&&"} |
-| 282:9 GraphPage | Button frontendText(locale, "GRAPH_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"empty\"","operator":"&&"} |
-| 285:9 GraphPage | GraphSuggestionsPanel  | onGenerate=onGenerateSuggestions | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"} |
-| 286:44 GraphPage | div  |  | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"logical","expression":"snapshot && snapshot.truncate… |
-| 291:29 GraphPage | Button frontendText(locale, "GRAPH_MORE") | onClick=onLoadMore; type="button" | disabled=morePending; {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"logical","expression":"snapsho… |
-| 294:23 GraphPage | div  |  | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"logical","expression":"moreError","operator":"&&"} |
-| 296:26 GraphPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadMore; type="button" | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"logical","expression":"moreError","operator":"&&"}; … |
-| 299:11 GraphPage | GraphCanvas  | onSelect=setSelectedId; onClearSelection=() =&gt; setSelectedId(null) | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"} |
-| 305:197 GraphPage | Button frontendText(locale, "GRAPH_DRILL_DOWN_EXIT") | onClick=() =&gt; onRootIdChange?.(null); type="button" | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"branch","expression":"rootId","branch":"true"} |
-| 307:92 GraphPage | Button frontendText(locale, "GRAPH_DRILL_DOWN_ENTER") | onClick=() =&gt; onRootIdChange?.(selectedNode.id); type="button" | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"branch","expression":"rootId","branch":"false"}; {"k… |
-| 310:13 GraphPage | GraphInspector  | onClose=() =&gt; setSelectedId(null); onAction=selectedNode && (!action &#124;&#124; action.node.id === selectedNode.id) ? () =&gt; runGraphAction(action ?? … | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"} |
-| 318:13 GraphPage | GraphEvidencePanel  | onDenied=onDenied | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"} |
-| 433:10 GraphRoute | GraphPage  | onDenied=denyRead; onRootIdChange=setRootId; onLoadMore=loadMore; onGenerateSuggestions=generateSuggestions; onQueryChange=setQuery; onLensChange=setLens; on… |  |
-| 439:269 GraphSuggestionsPanel | Button frontendText(locale, state.kind === "loading" ? "GRAPH_SUGGESTIONS_LOADING" : "GRAPH_SUGGESTIONS_GENERATE") | onClick=onGenerate | disabled=state.kind === "loading" |
-| 441:34 GraphSuggestionsPanel | p frontendText(locale, "GRAPH_SUGGESTIONS_ERROR") |  | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
+| 100:5 GraphPage | window.addEventListener  | "beforeunload", warn |  |
+| 208:47 GraphPage | div  |  | aria-busy=action.status === "checking"; {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"action && action… |
+| 211:7 GraphPage | Button frontendText(locale, "GRAPH_ACTION_CHECK_RESULT") | onClick=checkGraphAction | disabled=action.status === "checking"; {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"action && action.… |
+| 212:7 GraphPage | Button frontendText(locale, "GRAPH_ACTION_RETRY") | onClick=() =&gt; runGraphAction(action) | disabled=action.status === "checking"; {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"action && action.… |
+| 213:28 GraphPage | p frontendText(locale, "GRAPH_ACTION_QUERY_UNCONFIRMED") |  | {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"action && action.status !== \"running\"","operator":"&&"… |
+| 215:39 GraphPage | p frontendText(locale, "GRAPH_ACTION_CONFIRMED").replace("{id}", outcome.clientKey) |  | {"kind":"branch","expression":"recoveryAuthorized","branch":"true"}; {"kind":"logical","expression":"outcome?.status === \"success\"","operator":"&&"} |
+| 261:13 GraphPage | Input  | onChange=(event) =&gt; onQueryChange?.(event.currentTarget.value) |  |
+| 262:13 GraphPage | FilterSelect  | onChange=(value) =&gt; onLensChange?.(value as GraphLens) |  |
+| 263:13 GraphPage | FilterSelect  | onChange=(value) =&gt; onTemporalRangeChange?.(value as GraphTemporalRange) |  |
+| 264:13 GraphPage | FilterSelect  | onChange=(value) =&gt; onChangeKindChange?.(value as NonNullable&lt;GraphPageProps["changeKind"]&gt;) |  |
+| 270:38 GraphPage | AppliedFilters  | onClear=clearFilters | {"kind":"logical","expression":"state.kind !== \"forbidden\"","operator":"&&"} |
+| 271:23 GraphPage | div  |  | {"kind":"logical","expression":"viewBlocked","operator":"&&"} |
+| 271:197 GraphPage | Button frontendText(locale, "GRAPH_VIEW_RECORD_DISCARD") | onClick=onDiscardView | {"kind":"logical","expression":"viewBlocked","operator":"&&"} |
+| 272:22 GraphPage | p viewNotice |  | {"kind":"logical","expression":"viewNotice","operator":"&&"} |
+| 273:25 GraphPage | div  |  | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 275:9 GraphPage | Button frontendText(locale, "GRAPH_ACTION_RECORD_DISCARD") | onClick=() =&gt; { if (memberId && discardBlockedGraphAction(memberId)) setRecordBlocked(false); } | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 278:81 GraphPage | p frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : outcome.status === "not_recorded" ? "GRAPH_ACTION_NOT_RECORDED" : "GRAPH_ACTIO… |  | {"kind":"logical","expression":"state.kind !== \"forbidden\" && outcome && outcome.status !== \"success\"","operator":"&&"} |
+| 280:102 GraphPage | Button frontendText(locale, "GRAPH_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
+| 281:114 GraphPage | Button frontendText(locale, "GRAPH_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"forbidden\"","operator":"&&"} |
+| 283:9 GraphPage | Button frontendText(locale, "GRAPH_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"empty\"","operator":"&&"} |
+| 286:9 GraphPage | GraphSuggestionsPanel  | onGenerate=onGenerateSuggestions | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"} |
+| 287:44 GraphPage | div  |  | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"logical","expression":"snapshot && snapshot.truncate… |
+| 292:29 GraphPage | Button frontendText(locale, "GRAPH_MORE") | onClick=onLoadMore; type="button" | disabled=morePending; {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"logical","expression":"snapsho… |
+| 295:23 GraphPage | div  |  | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"logical","expression":"moreError","operator":"&&"} |
+| 297:26 GraphPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadMore; type="button" | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"logical","expression":"moreError","operator":"&&"}; … |
+| 300:11 GraphPage | GraphCanvas  | onSelect=setSelectedId; onClearSelection=() =&gt; setSelectedId(null) | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"} |
+| 306:197 GraphPage | Button frontendText(locale, "GRAPH_DRILL_DOWN_EXIT") | onClick=() =&gt; onRootIdChange?.(null); type="button" | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"branch","expression":"rootId","branch":"true"} |
+| 308:92 GraphPage | Button frontendText(locale, "GRAPH_DRILL_DOWN_ENTER") | onClick=() =&gt; onRootIdChange?.(selectedNode.id); type="button" | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"}; {"kind":"branch","expression":"rootId","branch":"false"}; {"k… |
+| 311:13 GraphPage | GraphInspector  | onClose=() =&gt; setSelectedId(null); onAction=selectedNode && (!action &#124;&#124; action.node.id === selectedNode.id) ? () =&gt; runGraphAction(action ?? … | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"} |
+| 319:13 GraphPage | GraphEvidencePanel  | onDenied=onDenied | {"kind":"logical","expression":"filteredSnapshot && state.kind !== \"empty\"","operator":"&&"} |
+| 434:10 GraphRoute | GraphPage  | onDenied=denyRead; onRootIdChange=setRootId; onLoadMore=loadMore; onGenerateSuggestions=generateSuggestions; onQueryChange=setQuery; onLensChange=setLens; on… |  |
+| 440:269 GraphSuggestionsPanel | Button frontendText(locale, state.kind === "loading" ? "GRAPH_SUGGESTIONS_LOADING" : "GRAPH_SUGGESTIONS_GENERATE") | onClick=onGenerate | disabled=state.kind === "loading" |
+| 442:34 GraphSuggestionsPanel | p frontendText(locale, "GRAPH_SUGGESTIONS_ERROR") |  | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
 
 ## frontend/pages/home-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 62:163 HomePage | button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; {"kind":"logical","expression":"state.retryable !== false","operator":"&&"}; earli… |
-| 68:18 HomePage | div  |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
-| 68:91 HomePage | button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
-| 87:13 HomePage | a frontendText(locale, "WORKBENCH_QUICK_SUBMIT") | href="/submit" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
-| 88:13 HomePage | a frontendText(locale, "WORKBENCH_QUICK_AI") | href="/agent" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
-| 98:13 HomePage | a frontendText(locale, "WORKBENCH_OPEN_TASKS") | href="/tasks" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
-| 111:13 HomePage | a frontendText(locale, "HOME_OPEN_KNOWLEDGE") | href="/knowledge" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
-| 119:23 HomePage | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"unavailable.has(\"knowledge\")","branch":"false"}; {"kind":"branch","expression":"summary.recentKnowledge.length","branch":"tr… |
-| 127:19 HomePage | div  |  | {"kind":"branch","expression":"unavailable.has(\"knowledge\")","branch":"false"}; {"kind":"branch","expression":"state.recentMoreError","branch":"true"}; ear… |
-| 129:42 HomePage | button frontendText(locale, "COMMON_RETRY") | onClick=onLoadMoreRecent; type="button" | {"kind":"branch","expression":"unavailable.has(\"knowledge\")","branch":"false"}; {"kind":"branch","expression":"state.recentMoreError","branch":"true"}; {"k… |
-| 132:19 HomePage | button frontendText(locale, "KNOWLEDGE_LOAD_MORE") | onClick=onLoadMoreRecent; type="button" | disabled=state.recentPending; {"kind":"branch","expression":"unavailable.has(\"knowledge\")","branch":"false"}; {"kind":"branch","expression":"state.recentMo… |
-| 149:38 HomePage | a content | href=item.href | {"kind":"branch","expression":"unavailable.has(\"activity\")","branch":"false"}; {"kind":"branch","expression":"summary.recentActivity.length","branch":"true… |
-| 160:49 HomePage | a frontendText(locale, action.labelKey) | href=action.href | {"kind":"repeat","expression":"summary.quickActions"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("s… |
-| 174:409 LegacyHomePage | a frontendText(locale, "HOME_QUICK_SUBMIT") | href="/submit" |  |
-| 174:1147 LegacyHomePage | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"recent.length","branch":"true"}; {"kind":"repeat","expression":"recent"} |
-| 174:1759 LegacyHomePage | a frontendText(locale, "HOME_OPEN_KNOWLEDGE") | href="/knowledge" |  |
-| 174:1893 LegacyHomePage | a frontendText(locale, "HOME_OPEN_SEARCH") | href="/search" |  |
-| 174:2021 LegacyHomePage | a frontendText(locale, "HOME_OPEN_AGENT") | href="/agent" |  |
+| 75:163 HomePage | button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; {"kind":"logical","expression":"state.retryable !== false","operator":"&&"}; earli… |
+| 81:18 HomePage | div  |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
+| 81:91 HomePage | button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
+| 101:13 HomePage | a frontendText(locale, "WORKBENCH_QUICK_SUBMIT") | href="/submit" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
+| 102:13 HomePage | a frontendText(locale, "WORKBENCH_QUICK_AI") | href="/agent" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
+| 113:13 HomePage | a frontendText(locale, "WORKBENCH_OPEN_TASKS") | href="/tasks" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
+| 126:13 HomePage | a frontendText(locale, "HOME_OPEN_KNOWLEDGE") | href="/knowledge" | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("summary" in state) |
+| 135:25 HomePage | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"unavailable.has(\"knowledge\")","branch":"false"}; {"kind":"branch","expression":"summary.recentKnowledge.length","branch":"tr… |
+| 144:19 HomePage | div  |  | {"kind":"branch","expression":"unavailable.has(\"knowledge\")","branch":"false"}; {"kind":"branch","expression":"state.recentMoreError","branch":"true"}; ear… |
+| 146:42 HomePage | button frontendText(locale, "COMMON_RETRY") | onClick=onLoadMoreRecent; type="button" | {"kind":"branch","expression":"unavailable.has(\"knowledge\")","branch":"false"}; {"kind":"branch","expression":"state.recentMoreError","branch":"true"}; {"k… |
+| 149:19 HomePage | button frontendText(locale, "KNOWLEDGE_LOAD_MORE") | onClick=onLoadMoreRecent; type="button" | disabled=state.recentPending; {"kind":"branch","expression":"unavailable.has(\"knowledge\")","branch":"false"}; {"kind":"branch","expression":"state.recentMo… |
+| 166:57 HomePage | a content | href=item.href | {"kind":"branch","expression":"unavailable.has(\"activity\")","branch":"false"}; {"kind":"branch","expression":"summary.recentActivity.length","branch":"true… |
+| 182:19 HomePage | a  | href=action.href | {"kind":"repeat","expression":"summary.quickActions"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error"; earlier return: !("s… |
+| 202:409 LegacyHomePage | a frontendText(locale, "HOME_QUICK_SUBMIT") | href="/submit" |  |
+| 202:1147 LegacyHomePage | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"recent.length","branch":"true"}; {"kind":"repeat","expression":"recent"} |
+| 202:1759 LegacyHomePage | a frontendText(locale, "HOME_OPEN_KNOWLEDGE") | href="/knowledge" |  |
+| 202:1893 LegacyHomePage | a frontendText(locale, "HOME_OPEN_SEARCH") | href="/search" |  |
+| 202:2021 LegacyHomePage | a frontendText(locale, "HOME_OPEN_AGENT") | href="/agent" |  |
 
 ## frontend/pages/inbox-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 46:16 InboxPage | Button frontendText(locale, "INBOX_CAPTURE_TITLE") | onClick=() =&gt; setCaptureOpen(true); type="button" | aria-expanded=captureOpen; spread: (captureLocked ? { "data-inbox-capture-pending": "" } : {}) |
-| 48:21 InboxPage | div actionError |  | {"kind":"logical","expression":"actionError","operator":"&&"} |
-| 50:7 InboxPage | FilterSelect  | onChange=value =&gt; { const next = (value &#124;&#124; undefined) as InboxStatus &#124; undefined; guard(() =&gt; onFilterChange(next)); } | disabled=controlsPending |
-| 64:5 InboxPage | AppliedFilters  | onClear=() =&gt; guard(() =&gt; onFilterChange(undefined)) |  |
-| 71:80 InboxPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
-| 72:9 InboxPage | DataTable  | onPageChange=page =&gt; guard(() =&gt; onPageChange?.(page)); onPageSizeChange=pageSize =&gt; guard(() =&gt; onPageSizeChange?.(pageSize)); onLoadMore=onLoad… | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
-| 89:430 InboxPage | a item.sourceUrl | href=item.sourceUrl | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 91:201 InboxPage | Button frontendText(locale, "INBOX_OPEN_TASK") | onClick=() =&gt; guard(() =&gt; onOpenTask?.(item)); type="button" | disabled=controlsPending; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error… |
-| 91:478 InboxPage | Button item.status === "archived" ? frontendText(locale, "INBOX_RESTORE") : frontendText(locale, "INBOX_ARCHIVE") | onClick=() =&gt; confirmation.request(item, "status"); type="button" | disabled=controlsPending; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error… |
-| 91:902 InboxPage | Button frontendText(locale, "INBOX_PROMOTE_TASK") | onClick=() =&gt; confirmation.request(item, "task"); type="button" | disabled=controlsPending; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error… |
-| 95:32 InboxPage | Dialog  | onOpenChange=next =&gt; { if (!next) setCaptureOpen(false); } | open=captureOpen; {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
-| 96:5 InboxPage | DialogContent  |  | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"captureOpen"}} |
-| 99:29 InboxPage | InboxCreateForm  | onCreate=onCreate; onCreateReadback=onCreateReadback; onCreateDenied=onCreateDenied; onCreateLock=locked =&gt; { setCaptureLocked(locked); onCreateLock?.(loc… | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"captureOpen"}} |
-| 100:62 InboxPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setCaptureOpen(false); type="button" | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"captureOpen"}} |
+| 47:16 InboxPage | Button frontendText(locale, "INBOX_CAPTURE_TITLE") | onClick=() =&gt; setCaptureOpen(true); type="button" | aria-expanded=captureOpen; spread: (captureLocked ? { "data-inbox-capture-pending": "" } : {}) |
+| 49:21 InboxPage | div actionError |  | {"kind":"logical","expression":"actionError","operator":"&&"} |
+| 51:7 InboxPage | FilterSelect  | onChange=value =&gt; { const next = (value &#124;&#124; undefined) as InboxStatus &#124; undefined; guard(() =&gt; onFilterChange(next)); } | disabled=controlsPending |
+| 65:5 InboxPage | AppliedFilters  | onClear=() =&gt; guard(() =&gt; onFilterChange(undefined)) |  |
+| 72:80 InboxPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
+| 73:9 InboxPage | DataTable  | onPageChange=page =&gt; guard(() =&gt; onPageChange?.(page)); onPageSizeChange=pageSize =&gt; guard(() =&gt; onPageSizeChange?.(pageSize)); onLoadMore=onLoad… | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
+| 90:430 InboxPage | a item.sourceUrl | href=item.sourceUrl | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 92:201 InboxPage | Button frontendText(locale, "INBOX_OPEN_TASK") | onClick=() =&gt; guard(() =&gt; onOpenTask?.(item)); type="button" | disabled=controlsPending; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error… |
+| 96:32 InboxPage | Dialog  | onOpenChange=next =&gt; { if (!next) setCaptureOpen(false); } | open=captureOpen; {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
+| 97:5 InboxPage | DialogContent  |  | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"captureOpen"}} |
+| 100:29 InboxPage | InboxCreateForm  | onCreate=onCreate; onCreateReadback=onCreateReadback; onCreateDenied=onCreateDenied; onCreateLock=locked =&gt; { setCaptureLocked(locked); onCreateLock?.(loc… | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"captureOpen"}} |
+| 101:62 InboxPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setCaptureOpen(false); type="button" | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"captureOpen"}} |
 
 ## frontend/pages/knowledge-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 40:5 KnowledgePage | AppliedFilters  | onClear=() =&gt; onFilterChange?.({}) |  |
-| 42:135 KnowledgePage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; {"ki… |
-| 43:26 KnowledgePage | div  |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:130 KnowledgePage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:263 KnowledgePage | ReviewPanel  | onRetry=onRetryReview; onPeriodChange=onReviewPeriodChange; onDiscardPeriod=onDiscardPeriod | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:504 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:610 KnowledgePage | ToReadPanel  | onLoadMore=onLoadMoreFavorites | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:814 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:987 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:1097 KnowledgePage | RecentResearchPanel  | onLoadMore=onLoadMoreResearch | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:1309 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:1407 KnowledgePage | PrivateNotesPanel  | onLoadMore=onLoadMoreNotes | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:1599 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:1703 KnowledgePage | ActivityPanel  | onLoadMore=onLoadMoreActivity | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 43:1848 KnowledgePage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
-| 43:2474 KnowledgePage | a item.title?.trim() &#124;&#124; frontendText(locale, "KNOWLEDGE_UNTITLED") | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
-| 43:3555 KnowledgePage | KnowledgeShareButton  |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
-| 51:25 SectionMore | div  |  | {"kind":"branch","expression":"moreError","branch":"true"} |
-| 51:230 SectionMore | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadMore; type="button" | {"kind":"branch","expression":"moreError","branch":"true"}; {"kind":"logical","expression":"onLoadMore","operator":"&&"} |
-| 53:10 SectionMore | Button frontendText(locale, "KNOWLEDGE_LOAD_MORE") | onClick=onLoadMore; type="button" | disabled=morePending; earlier return: moreError; earlier return: !nextCursor &#124;&#124; !onLoadMore |
-| 57:10 SectionUnread | div  |  |  |
-| 57:257 SectionUnread | Button frontendText(locale, "KNOWLEDGE_SECTION_RETRY") | onClick=onRetry; type="button" | {"kind":"logical","expression":"onRetry","operator":"&&"} |
-| 61:346 ToReadPanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"repeat","expression":"items"} |
-| 61:975 ToReadPanel | SectionMore  | onLoadMore=onLoadMore |  |
-| 65:494 ReviewPanel | ReviewPeriodControl  | onChange=(next) =&gt; onPeriodChange?.(next) | disabled=periodBlocked |
-| 65:813 ReviewPanel | div  |  | {"kind":"logical","expression":"periodBlocked","operator":"&&"} |
-| 65:971 ReviewPanel | Button frontendText(locale, "REVIEW_PERIOD_RECORD_DISCARD") | onClick=onDiscardPeriod; type="button" | {"kind":"logical","expression":"periodBlocked","operator":"&&"} |
-| 65:1134 ReviewPanel | p periodNotice |  | {"kind":"logical","expression":"periodNotice","operator":"&&"} |
-| 65:1404 ReviewPanel | p frontendText(locale, "KNOWLEDGE_REVIEW_ERROR") |  | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
-| 65:1521 ReviewPanel | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"}; {"kind":"logical","expression":"onRetry","operator":"&&"} |
-| 65:1778 ReviewPanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.knowledgeItemId)}&#96; | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.data.items.length","branch":"true"}; {"kind"… |
-| 69:222 ActivityPanel | a  | href=item.resourceType === "knowledge" ? &#96;/knowledge/${encodeURIComponent(item.resourceId)}&#96; : item.resourceType === "task" ? "/tasks" : item.resourc… | {"kind":"repeat","expression":"items"} |
-| 69:802 ActivityPanel | p frontendText(locale, "KNOWLEDGE_SECTION_UNREAD") |  | {"kind":"logical","expression":"moreError","operator":"&&"} |
-| 69:930 ActivityPanel | Button frontendText(locale, "KNOWLEDGE_ACTIVITY_LOAD_MORE") | onClick=onLoadMore | {"kind":"logical","expression":"nextCursor","operator":"&&"} |
-| 73:234 RecentKnowledgePanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"repeat","expression":"items"} |
-| 77:964 RecentResearchPanel | a frontendText(locale, "KNOWLEDGE_RESEARCH_OPEN") | href=&#96;/knowledge/${encodeURIComponent(item.knowledgeItemId)}?researchRunId=${encodeURIComponent(item.id)}&#96; | {"kind":"repeat","expression":"items"} |
-| 77:1225 RecentResearchPanel | SectionMore  | onLoadMore=onLoadMore |  |
-| 81:235 PrivateNotesPanel | a  | href=&#96;/knowledge/${encodeURIComponent(note.knowledgeItemId)}&#96; | {"kind":"repeat","expression":"notes"} |
-| 81:884 PrivateNotesPanel | SectionMore  | onLoadMore=onLoadMore |  |
+| 41:5 KnowledgePage | AppliedFilters  | onClear=() =&gt; onFilterChange?.({}) |  |
+| 43:135 KnowledgePage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; {"ki… |
+| 44:26 KnowledgePage | div  |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:130 KnowledgePage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:263 KnowledgePage | ReviewPanel  | onRetry=onRetryReview; onPeriodChange=onReviewPeriodChange; onDiscardPeriod=onDiscardPeriod | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:504 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:610 KnowledgePage | ToReadPanel  | onLoadMore=onLoadMoreFavorites | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:814 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:987 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:1097 KnowledgePage | RecentResearchPanel  | onLoadMore=onLoadMoreResearch | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:1309 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:1407 KnowledgePage | PrivateNotesPanel  | onLoadMore=onLoadMoreNotes | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:1599 KnowledgePage | SectionUnread  | onRetry=onRetrySections | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:1703 KnowledgePage | ActivityPanel  | onLoadMore=onLoadMoreActivity | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 44:1848 KnowledgePage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
+| 44:2474 KnowledgePage | a item.title?.trim() &#124;&#124; frontendText(locale, "KNOWLEDGE_UNTITLED") | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
+| 44:3555 KnowledgePage | KnowledgeShareButton  |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
+| 52:25 SectionMore | div  |  | {"kind":"branch","expression":"moreError","branch":"true"} |
+| 52:230 SectionMore | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadMore; type="button" | {"kind":"branch","expression":"moreError","branch":"true"}; {"kind":"logical","expression":"onLoadMore","operator":"&&"} |
+| 54:10 SectionMore | Button frontendText(locale, "KNOWLEDGE_LOAD_MORE") | onClick=onLoadMore; type="button" | disabled=morePending; earlier return: moreError; earlier return: !nextCursor &#124;&#124; !onLoadMore |
+| 58:10 SectionUnread | div  |  |  |
+| 58:257 SectionUnread | Button frontendText(locale, "KNOWLEDGE_SECTION_RETRY") | onClick=onRetry; type="button" | {"kind":"logical","expression":"onRetry","operator":"&&"} |
+| 62:406 ToReadPanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"repeat","expression":"items"} |
+| 62:1046 ToReadPanel | SectionMore  | onLoadMore=onLoadMore |  |
+| 66:494 ReviewPanel | ReviewPeriodControl  | onChange=(next) =&gt; onPeriodChange?.(next) | disabled=periodBlocked |
+| 66:813 ReviewPanel | div  |  | {"kind":"logical","expression":"periodBlocked","operator":"&&"} |
+| 66:971 ReviewPanel | Button frontendText(locale, "REVIEW_PERIOD_RECORD_DISCARD") | onClick=onDiscardPeriod; type="button" | {"kind":"logical","expression":"periodBlocked","operator":"&&"} |
+| 66:1134 ReviewPanel | p periodNotice |  | {"kind":"logical","expression":"periodNotice","operator":"&&"} |
+| 66:1404 ReviewPanel | p frontendText(locale, "KNOWLEDGE_REVIEW_ERROR") |  | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
+| 66:1521 ReviewPanel | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry; type="button" | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"}; {"kind":"logical","expression":"onRetry","operator":"&&"} |
+| 66:1838 ReviewPanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.knowledgeItemId)}&#96; | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.data.items.length","branch":"true"}; {"kind"… |
+| 70:222 ActivityPanel | a  | href=item.resourceType === "knowledge" ? &#96;/knowledge/${encodeURIComponent(item.resourceId)}&#96; : item.resourceType === "task" ? "/tasks" : item.resourc… | {"kind":"repeat","expression":"items"} |
+| 70:802 ActivityPanel | p frontendText(locale, "KNOWLEDGE_SECTION_UNREAD") |  | {"kind":"logical","expression":"moreError","operator":"&&"} |
+| 70:930 ActivityPanel | Button frontendText(locale, "KNOWLEDGE_ACTIVITY_LOAD_MORE") | onClick=onLoadMore | {"kind":"logical","expression":"nextCursor","operator":"&&"} |
+| 74:294 RecentKnowledgePanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"repeat","expression":"items"} |
+| 78:1024 RecentResearchPanel | a frontendText(locale, "KNOWLEDGE_RESEARCH_OPEN") | href=&#96;/knowledge/${encodeURIComponent(item.knowledgeItemId)}?researchRunId=${encodeURIComponent(item.id)}&#96; | {"kind":"repeat","expression":"items"} |
+| 78:1296 RecentResearchPanel | SectionMore  | onLoadMore=onLoadMore |  |
+| 82:295 PrivateNotesPanel | a  | href=&#96;/knowledge/${encodeURIComponent(note.knowledgeItemId)}&#96; | {"kind":"repeat","expression":"notes"} |
+| 82:955 PrivateNotesPanel | SectionMore  | onLoadMore=onLoadMore |  |
 
 ## frontend/pages/knowledge-reader-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 47:10 KnowledgeReaderPage | KnowledgeReaderSessionPage  |  | spread: props |
-| 111:50 KnowledgeReaderSessionPage | p frontendText(locale, "KNOWLEDGE_READER_FAVORITE_UNCONFIRMED") |  | {"kind":"logical","expression":"favoritePhase === \"unknown\"","operator":"&&"} |
-| 111:203 KnowledgeReaderSessionPage | p frontendText(locale, "KNOWLEDGE_READER_FAVORITE_STORAGE") |  | {"kind":"logical","expression":"favoritePhase === \"blocked\"","operator":"&&"} |
-| 111:453 KnowledgeReaderSessionPage | Button frontendText(locale, "KNOWLEDGE_READER_FAVORITE_CHECK") | onClick=() =&gt; void onCheckFavorite() | disabled=favoritePhase === "checking" &#124;&#124; favoritePhase === "saving"; {"kind":"logical","expression":"(favoriteError &#124;&#124; favoritePhase === … |
-| 111:683 KnowledgeReaderSessionPage | p frontendText(locale, "KNOWLEDGE_READER_FAVORITE_UNKNOWN") |  | {"kind":"logical","expression":"favoriteError","operator":"&&"} |
-| 111:932 KnowledgeReaderSessionPage | Button favorite ? frontendText(locale, "KNOWLEDGE_READER_UNFAVORITE") : frontendText(locale, "KNOWLEDGE_READER_FAVORITE") | onClick=() =&gt; void onToggleFavorite() | disabled=favoritePhase !== "idle"; aria-busy=favoritePhase === "saving"; {"kind":"logical","expression":"typeof favorite === \"boolean\" && !favoriteError &&… |
-| 111:1313 KnowledgeReaderSessionPage | Button diffState.kind === "loading" ? frontendText(locale, "KNOWLEDGE_READER_COMPARING") : frontendText(locale, "KNOWLEDGE_READER_COMPARE") | onClick=onCompare | disabled=diffState.kind === "loading"; {"kind":"logical","expression":"normalizedRevision.previousRevisionId && onCompare","operator":"&&"} |
-| 111:1592 KnowledgeReaderSessionPage | a frontendText(locale, "MESSAGES_DISCUSS") | href=contextDiscussionHref({ kind: "knowledge", id: normalizedRevision.knowledgeItemId }) | {"kind":"logical","expression":"normalizedRevision.knowledgeItemId","operator":"&&"} |
-| 111:1845 KnowledgeReaderSessionPage | a frontendText(locale, "KNOWLEDGE_READER_ASK") | href="/agent?scope=items&knowledgeItemId=" + encodeURIComponent(normalizedRevision.knowledgeItemId) |  |
-| 114:130 KnowledgeReaderSessionPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
-| 116:11 KnowledgeReaderSessionPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 119:5 KnowledgeReaderSessionPage | ExpandableTabs  | onValueChange=setMobilePanel | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 125:9 KnowledgeReaderSessionPage | ReaderOutlinePanel  | onSelectChunk=setSelectedChunkId | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 147:9 KnowledgeReaderSessionPage | SourcePanel  | onSelectChunk=setSelectedChunkId | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 148:9 KnowledgeReaderSessionPage | ReaderNotePanel  | onTitleChange=(value) =&gt; note.edit("title", value); onBodyChange=(value) =&gt; note.edit("body", value); onSave=saveNote; onCheck=() =&gt; void note.check… | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 149:43 KnowledgeReaderSessionPage | BacklinkPanel  | onRetry=onRetryBacklinks | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 150:42 KnowledgeReaderSessionPage | RelatedKnowledgePanel  | onRetry=onRetryRelated | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 171:10 ReaderSection | Card  |  | spread: cardProps |
-| 191:13 ReaderSectionToggle | Button  | type="button" |  |
-| 200:655 ReaderNotePanel | p frontendText(locale, "KNOWLEDGE_NOTE_DISCARD_ERROR") |  | {"kind":"logical","expression":"discardError","operator":"&&"} |
-| 200:778 ReaderNotePanel | div  |  | {"kind":"logical","expression":"phase === \"unknown\"","operator":"&&"} |
-| 200:851 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_CHECK") | onClick=onCheck | {"kind":"logical","expression":"phase === \"unknown\"","operator":"&&"} |
-| 200:1013 ReaderNotePanel | div  |  | {"kind":"logical","expression":"phase === \"storage-error\"","operator":"&&"} |
-| 200:1116 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_CHECK") | onClick=onRetryLoad | {"kind":"logical","expression":"phase === \"storage-error\"","operator":"&&"} |
-| 200:1287 ReaderNotePanel | div  |  | {"kind":"logical","expression":"phase === \"load-error\"","operator":"&&"} |
-| 200:1363 ReaderNotePanel | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetryLoad | {"kind":"logical","expression":"phase === \"load-error\"","operator":"&&"} |
-| 200:1628 ReaderNotePanel | input  | onChange=(event) =&gt; onTitleChange(event.currentTarget.value) | readOnly=shared &#124;&#124; locked |
-| 200:2101 ReaderNotePanel | Textarea  | onChange=(event) =&gt; onBodyChange(event.currentTarget.value) | readOnly=shared &#124;&#124; locked |
-| 200:2359 ReaderNotePanel | span statusLabel |  | {"kind":"logical","expression":"!shared","operator":"&&"} |
-| 200:2460 ReaderNotePanel | Button status === "saving" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVING") : frontendText(locale, "KNOWLEDGE_NOTE_SAVE") | onClick=onSave | disabled=locked &#124;&#124; status === "saving"; {"kind":"logical","expression":"!shared","operator":"&&"} |
-| 200:2859 ReaderNotePanel | div  |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"unknown\"","operator":"&&"} |
-| 200:2938 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_CHECK") | onClick=() =&gt; void sharing.check() | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"unknown\"","operator":"&&"} |
-| 200:3133 ReaderNotePanel | div  |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"storage-error\"","operator":"&&"} |
-| 200:3242 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_CHECK") | onClick=sharing.retryLoad | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"storage-error\"","operator":"&&"} |
-| 200:3433 ReaderNotePanel | Button frontendText(locale, "COMMON_RETRY") | onClick=sharing.retryLoad | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"load-error\"","operator":"&&"} |
-| 200:3691 ReaderNotePanel | Select  | onChange=(event) =&gt; sharing.select(event.currentTarget.value) | disabled=sharing.locked; {"kind":"logical","expression":"!shared","operator":"&&"} |
-| 200:3914 ReaderNotePanel | option frontendText(locale, "KNOWLEDGE_NOTE_SHARE_SELECT") |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"container","tag":"Select","attributes":{"disabled":"sharing.locked"}} |
-| 200:4101 ReaderNotePanel | option member.email |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"container","tag":"Select","attributes":{"disabled":"sharing.locked"}}; {"kind":"repeat","… |
-| 200:4177 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_SHARE_ACTION") | onClick=() =&gt; sharing.request("share") | disabled=sharing.locked &#124;&#124; !recipientMemberId; {"kind":"logical","expression":"!shared","operator":"&&"} |
-| 200:4893 ReaderNotePanel | button frontendText(locale, "KNOWLEDGE_NOTE_SHARE_REVOKE") | onClick=() =&gt; sharing.request("revoke", share); type="button" | disabled=sharing.locked; {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"branch","expression":"(sharing.phase === \"loading\" &#124;&#124… |
-| 200:5124 ReaderNotePanel | p frontendText(locale, "KNOWLEDGE_NOTE_SHARE_ERROR") |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.error","operator":"&&"} |
-| 212:7 ReaderOutlinePanel | FileTree  | onValueChange=onSelectChunk | {"kind":"branch","expression":"headings.length === 0","branch":"false"} |
-| 233:11 RelatedKnowledgePanel | p frontendText(locale, "KNOWLEDGE_RELATED_UNREAD") |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earl… |
-| 233:130 RelatedKnowledgePanel | Button frontendText(locale, "KNOWLEDGE_RELATED_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; {"ki… |
-| 236:170 RelatedKnowledgePanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 245:11 BacklinkPanel | p frontendText(locale, "KNOWLEDGE_BACKLINKS_UNREAD") |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earl… |
-| 245:132 BacklinkPanel | Button frontendText(locale, "KNOWLEDGE_BACKLINKS_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; {"ki… |
-| 248:66 BacklinkPanel | a  | href="/knowledge/" + encodeURIComponent(item.id) | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 269:29 SourcePanel | a frontendText(locale, "KNOWLEDGE_READER_DOWNLOAD") | href=downloadHref | {"kind":"logical","expression":"downloadHref","operator":"&&"} |
-| 272:144 SourcePanel | div  |  | {"kind":"branch","expression":"revision.chunks.length === 0","branch":"false"} |
-| 272:278 SourcePanel | button  | onClick=() =&gt; onSelectChunk(chunk.id); type="button" | {"kind":"branch","expression":"revision.chunks.length === 0","branch":"false"}; {"kind":"repeat","expression":"revision.chunks"} |
-| 272:1103 SourcePanel | div  |  | {"kind":"logical","expression":"selectedChunk","operator":"&&"} |
-| 296:38 RevisionDiffPanel | p frontendText(locale, "KNOWLEDGE_READER_DIFF_ERROR") |  | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 49:10 KnowledgeReaderPage | KnowledgeReaderSessionPage  |  | spread: props |
+| 114:50 KnowledgeReaderSessionPage | p frontendText(locale, "KNOWLEDGE_READER_FAVORITE_UNCONFIRMED") |  | {"kind":"logical","expression":"favoritePhase === \"unknown\"","operator":"&&"} |
+| 114:203 KnowledgeReaderSessionPage | p frontendText(locale, "KNOWLEDGE_READER_FAVORITE_STORAGE") |  | {"kind":"logical","expression":"favoritePhase === \"blocked\"","operator":"&&"} |
+| 114:453 KnowledgeReaderSessionPage | Button frontendText(locale, "KNOWLEDGE_READER_FAVORITE_CHECK") | onClick=() =&gt; void onCheckFavorite() | disabled=favoritePhase === "checking" &#124;&#124; favoritePhase === "saving"; {"kind":"logical","expression":"(favoriteError &#124;&#124; favoritePhase === … |
+| 114:683 KnowledgeReaderSessionPage | p frontendText(locale, "KNOWLEDGE_READER_FAVORITE_UNKNOWN") |  | {"kind":"logical","expression":"favoriteError","operator":"&&"} |
+| 114:932 KnowledgeReaderSessionPage | Button favorite ? frontendText(locale, "KNOWLEDGE_READER_UNFAVORITE") : frontendText(locale, "KNOWLEDGE_READER_FAVORITE") | onClick=() =&gt; void onToggleFavorite() | disabled=favoritePhase !== "idle"; aria-busy=favoritePhase === "saving"; {"kind":"logical","expression":"typeof favorite === \"boolean\" && !favoriteError &&… |
+| 114:1313 KnowledgeReaderSessionPage | Button diffState.kind === "loading" ? frontendText(locale, "KNOWLEDGE_READER_COMPARING") : frontendText(locale, "KNOWLEDGE_READER_COMPARE") | onClick=onCompare | disabled=diffState.kind === "loading"; {"kind":"logical","expression":"normalizedRevision.previousRevisionId && onCompare","operator":"&&"} |
+| 114:1592 KnowledgeReaderSessionPage | a frontendText(locale, "MESSAGES_DISCUSS") | href=contextDiscussionHref({ kind: "knowledge", id: normalizedRevision.knowledgeItemId }) | {"kind":"logical","expression":"normalizedRevision.knowledgeItemId","operator":"&&"} |
+| 114:1845 KnowledgeReaderSessionPage | a frontendText(locale, "KNOWLEDGE_READER_ASK") | href="/agent?scope=items&knowledgeItemId=" + encodeURIComponent(normalizedRevision.knowledgeItemId) |  |
+| 117:130 KnowledgeReaderSessionPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
+| 119:11 KnowledgeReaderSessionPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 122:5 KnowledgeReaderSessionPage | ExpandableTabs  | onValueChange=setMobilePanel | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 129:9 KnowledgeReaderSessionPage | ReaderOutlinePanel  | onSelectChunk=setSelectedChunkId | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 151:9 KnowledgeReaderSessionPage | SourcePanel  | onSelectChunk=setSelectedChunkId | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 152:9 KnowledgeReaderSessionPage | ReaderNotePanel  | onTitleChange=(value) =&gt; note.edit("title", value); onBodyChange=(value) =&gt; note.edit("body", value); onSave=saveNote; onCheck=() =&gt; void note.check… | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 153:43 KnowledgeReaderSessionPage | BacklinkPanel  | onRetry=onRetryBacklinks | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 154:42 KnowledgeReaderSessionPage | RelatedKnowledgePanel  | onRetry=onRetryRelated | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 175:10 ReaderSection | Card  |  | spread: cardProps |
+| 195:13 ReaderSectionToggle | Button  | type="button" |  |
+| 204:655 ReaderNotePanel | p frontendText(locale, "KNOWLEDGE_NOTE_DISCARD_ERROR") |  | {"kind":"logical","expression":"discardError","operator":"&&"} |
+| 204:778 ReaderNotePanel | div  |  | {"kind":"logical","expression":"phase === \"unknown\"","operator":"&&"} |
+| 204:851 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_CHECK") | onClick=onCheck | {"kind":"logical","expression":"phase === \"unknown\"","operator":"&&"} |
+| 204:1013 ReaderNotePanel | div  |  | {"kind":"logical","expression":"phase === \"storage-error\"","operator":"&&"} |
+| 204:1116 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_CHECK") | onClick=onRetryLoad | {"kind":"logical","expression":"phase === \"storage-error\"","operator":"&&"} |
+| 204:1287 ReaderNotePanel | div  |  | {"kind":"logical","expression":"phase === \"load-error\"","operator":"&&"} |
+| 204:1363 ReaderNotePanel | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetryLoad | {"kind":"logical","expression":"phase === \"load-error\"","operator":"&&"} |
+| 204:1628 ReaderNotePanel | input  | onChange=(event) =&gt; onTitleChange(event.currentTarget.value) | readOnly=shared &#124;&#124; locked |
+| 204:2101 ReaderNotePanel | Textarea  | onChange=(event) =&gt; onBodyChange(event.currentTarget.value) | readOnly=shared &#124;&#124; locked |
+| 204:2359 ReaderNotePanel | span statusLabel |  | {"kind":"logical","expression":"!shared","operator":"&&"} |
+| 204:2460 ReaderNotePanel | Button status === "saving" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVING") : frontendText(locale, "KNOWLEDGE_NOTE_SAVE") | onClick=onSave | disabled=locked &#124;&#124; status === "saving"; {"kind":"logical","expression":"!shared","operator":"&&"} |
+| 204:2859 ReaderNotePanel | div  |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"unknown\"","operator":"&&"} |
+| 204:2938 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_CHECK") | onClick=() =&gt; void sharing.check() | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"unknown\"","operator":"&&"} |
+| 204:3133 ReaderNotePanel | div  |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"storage-error\"","operator":"&&"} |
+| 204:3242 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_CHECK") | onClick=sharing.retryLoad | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"storage-error\"","operator":"&&"} |
+| 204:3433 ReaderNotePanel | Button frontendText(locale, "COMMON_RETRY") | onClick=sharing.retryLoad | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.phase === \"load-error\"","operator":"&&"} |
+| 204:3691 ReaderNotePanel | Select  | onChange=(event) =&gt; sharing.select(event.currentTarget.value) | disabled=sharing.locked; {"kind":"logical","expression":"!shared","operator":"&&"} |
+| 204:3914 ReaderNotePanel | option frontendText(locale, "KNOWLEDGE_NOTE_SHARE_SELECT") |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"container","tag":"Select","attributes":{"disabled":"sharing.locked"}} |
+| 204:4101 ReaderNotePanel | option member.email |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"container","tag":"Select","attributes":{"disabled":"sharing.locked"}}; {"kind":"repeat","… |
+| 204:4177 ReaderNotePanel | Button frontendText(locale, "KNOWLEDGE_NOTE_SHARE_ACTION") | onClick=() =&gt; sharing.request("share") | disabled=sharing.locked &#124;&#124; !recipientMemberId; {"kind":"logical","expression":"!shared","operator":"&&"} |
+| 204:4893 ReaderNotePanel | button frontendText(locale, "KNOWLEDGE_NOTE_SHARE_REVOKE") | onClick=() =&gt; sharing.request("revoke", share); type="button" | disabled=sharing.locked; {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"branch","expression":"(sharing.phase === \"loading\" &#124;&#124… |
+| 204:5124 ReaderNotePanel | p frontendText(locale, "KNOWLEDGE_NOTE_SHARE_ERROR") |  | {"kind":"logical","expression":"!shared","operator":"&&"}; {"kind":"logical","expression":"sharing.error","operator":"&&"} |
+| 216:7 ReaderOutlinePanel | FileTree  | onValueChange=onSelectChunk | {"kind":"branch","expression":"headings.length === 0","branch":"false"} |
+| 237:11 RelatedKnowledgePanel | p frontendText(locale, "KNOWLEDGE_RELATED_UNREAD") |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earl… |
+| 237:130 RelatedKnowledgePanel | Button frontendText(locale, "KNOWLEDGE_RELATED_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; {"ki… |
+| 240:230 RelatedKnowledgePanel | a  | href=&#96;/knowledge/${encodeURIComponent(item.id)}&#96; | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 249:11 BacklinkPanel | p frontendText(locale, "KNOWLEDGE_BACKLINKS_UNREAD") |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earl… |
+| 249:132 BacklinkPanel | Button frontendText(locale, "KNOWLEDGE_BACKLINKS_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; {"ki… |
+| 252:126 BacklinkPanel | a  | href="/knowledge/" + encodeURIComponent(item.id) | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 273:29 SourcePanel | a frontendText(locale, "KNOWLEDGE_READER_DOWNLOAD") | href=downloadHref | {"kind":"logical","expression":"downloadHref","operator":"&&"} |
+| 276:144 SourcePanel | div  |  | {"kind":"branch","expression":"revision.chunks.length === 0","branch":"false"} |
+| 276:278 SourcePanel | button  | onClick=() =&gt; onSelectChunk(chunk.id); type="button" | {"kind":"branch","expression":"revision.chunks.length === 0","branch":"false"}; {"kind":"repeat","expression":"revision.chunks"} |
+| 276:1103 SourcePanel | div  |  | {"kind":"logical","expression":"selectedChunk","operator":"&&"} |
+| 300:38 RevisionDiffPanel | p frontendText(locale, "KNOWLEDGE_READER_DIFF_ERROR") |  | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
 
 ## frontend/pages/login-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 42:21 LoginPage | p error |  | {"kind":"logical","expression":"error","operator":"&&"} |
-| 44:15 LoginPage | Button frontendText(locale, "LOGIN_GITHUB") | onClick=() =&gt; { window.location.href = "/auth/github"; } | {"kind":"branch","expression":"githubEnabled","branch":"true"} |
-| 47:11 LoginPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); void onCodeSubmit(); } | aria-busy=pending &#124;&#124; undefined |
-| 49:27 LoginPage | p formError |  | {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"logical","expression":"formError","operator":"&&"} |
-| 50:130 LoginPage | Input  | onChange=(event) =&gt; setEmail(event.target.value); type="email" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
-| 51:128 LoginPage | Input  | onChange=(event) =&gt; setCode(event.target.value); type="text" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
-| 52:13 LoginPage | StatefulButton frontendText(locale, "LOGIN_CODE_SUBMIT") | type="submit" | disabled=!canSubmit; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+| 45:15 LoginPage | Button frontendText(locale, "LOGIN_GITHUB") | onClick=() =&gt; { window.location.href = "/auth/github"; } | {"kind":"branch","expression":"githubEnabled","branch":"true"} |
+| 48:11 LoginPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); void onCodeSubmit(); } | aria-busy=pending &#124;&#124; undefined |
+| 51:130 LoginPage | Input  | onChange=(event) =&gt; setEmail(event.target.value); type="email" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+| 52:128 LoginPage | Input  | onChange=(event) =&gt; setCode(event.target.value); type="text" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+| 53:13 LoginPage | StatefulButton frontendText(locale, "LOGIN_CODE_SUBMIT") | type="submit" | disabled=!canSubmit; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
 
 ## frontend/pages/messages/messages-page.tsx
 
@@ -3107,147 +3212,143 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 37:103 MessagesPage | Button frontendText(locale, "MESSAGES_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
 | 46:9 MessagesPage | Button frontendText(locale, "MESSAGES_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"revoked\"","operator":"&&"} |
 | 47:9 MessagesPage | ButtonLink frontendText(locale, "MESSAGES_BACK") | href="/messages" | {"kind":"logical","expression":"state.kind === \"revoked\"","operator":"&&"} |
-| 55:49 MessagesPage | ButtonLink frontendText(locale, "MESSAGES_OPEN_CONTEXT") | href=discussionContextHref({ kind: thread.contextKind, id: thread.contextId }) | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"pending &#124;&#124; u… |
-| 55:230 MessagesPage | ButtonLink frontendText(locale, "MESSAGES_OPEN_THREAD") | href=threadDiscussionHref(thread.id) | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"pending &#124;&#124; u… |
-| 59:5 MessagesPage | DiscussionCursorPagination  | onPrevious=onPrevious; onNext=() =&gt; state.nextCursor && onNext(state.nextCursor); onLimitChange=onLimitChange | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
+| 56:51 MessagesPage | ButtonLink frontendText(locale, "MESSAGES_OPEN_CONTEXT") | href=discussionContextHref({ kind: thread.contextKind, id: thread.contextId }) | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"pending &#124;&#124; u… |
+| 56:232 MessagesPage | ButtonLink frontendText(locale, "MESSAGES_OPEN_THREAD") | href=threadDiscussionHref(thread.id) | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"pending &#124;&#124; u… |
+| 61:5 MessagesPage | DiscussionCursorPagination  | onPrevious=onPrevious; onNext=() =&gt; state.nextCursor && onNext(state.nextCursor); onLimitChange=onLimitChange | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
 
 ## frontend/pages/messages/thread-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 69:40 ThreadPage | div  |  | {"kind":"branch","expression":"recordBlocked","branch":"true"} |
-| 69:150 ThreadPage | Button frontendText(locale, "MESSAGES_DRAFT_RECORD_DISCARD") | onClick=discardRecord; type="button" | {"kind":"branch","expression":"recordBlocked","branch":"true"} |
-| 70:22 ThreadPage | p recordNotice |  | {"kind":"branch","expression":"recordBlocked","branch":"false"}; {"kind":"branch","expression":"recordNotice","branch":"true"} |
-| 122:45 ThreadPage | a state.thread.contextId | href=discussionContextHref({ kind: state.thread.contextKind, id: state.thread.contextId }) | {"kind":"branch","expression":"state.kind === \"ready\"","branch":"true"} |
-| 124:9 ThreadPage | a frontendText(locale, "MESSAGES_BACK") | href="/messages" |  |
-| 125:9 ThreadPage | Button frontendText(locale, "MESSAGES_REFRESH") | onClick=onRefresh | disabled=pending |
-| 131:110 ThreadPage | Button frontendText(locale, "MESSAGES_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
-| 137:11 ThreadPage | Button frontendText(locale, "MESSAGES_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"revoked\"","operator":"&&"} |
-| 138:11 ThreadPage | ButtonLink frontendText(locale, "MESSAGES_BACK") | href="/messages" | {"kind":"logical","expression":"state.kind === \"revoked\"","operator":"&&"} |
-| 145:900 ThreadPage | Button frontendText(locale, "MESSAGES_REPLY") | onClick=() =&gt; selectReply(message) | disabled=locked; {"kind":"logical","expression":"state.kind === \"ready\" && !recoveryBlocked","operator":"&&"}; {"kind":"container","tag":"div","attributes"… |
-| 147:5 ThreadPage | DiscussionCursorPagination  | onPrevious=onPrevious; onNext=() =&gt; state.nextCursor && onNext(state.nextCursor); onLimitChange=onLimitChange | {"kind":"logical","expression":"state.kind === \"ready\" && !recoveryBlocked","operator":"&&"} |
-| 148:5 ThreadPage | DiscussionComposer  | onLookup=onLookup ? checkResult : undefined; onBodyChange=(value) =&gt; draft.edit("body", value); onCancelReply=() =&gt; selectReply(null); onSubmit=submit | {"kind":"logical","expression":"state.kind === \"ready\" && !recoveryBlocked","operator":"&&"} |
-| 165:10 DiscussionComposer | form  | onSubmit=(event) =&gt; void onSubmit(event) |  |
-| 166:202 DiscussionComposer | button frontendText(locale, "MESSAGES_CANCEL_REPLY") | onClick=onCancelReply; type="button" | disabled=locked; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"replyTo","operator":"&&"} |
-| 168:197 DiscussionComposer | Button frontendText(locale, status === "checking" ? "MESSAGES_CHECKING_RESULT" : "MESSAGES_CHECK_RESULT") | onClick=() =&gt; void onLookup(); type="button" | disabled=status === "pending" &#124;&#124; status === "checking"; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"operatio… |
-| 170:5 DiscussionComposer | Textarea  | onChange=(event) =&gt; onBodyChange(event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"form","attributes":{}} |
-| 171:158 DiscussionComposer | Button status === "pending" ? frontendText(locale, "MESSAGES_SENDING") : frontendText(locale, status === "error" ? "MESSAGES_RETRY_SEND" : "MESSAGES_SEND") | type="submit" | disabled=status === "pending" &#124;&#124; status === "checking" &#124;&#124; !body.trim(); {"kind":"container","tag":"form","attributes":{}} |
-| 192:349 DiscussionCursorPagination | Select  | onChange=(event) =&gt; onLimitChange(Number(event.currentTarget.value) as 20 &#124; 50) | disabled=pending |
-| 192:615 DiscussionCursorPagination | Button labels.previousLabel | onClick=onPrevious; type="button" | disabled=pending &#124;&#124; page &lt;= 1 |
-| 192:773 DiscussionCursorPagination | Button labels.nextLabel | onClick=onNext; type="button" | disabled=pending &#124;&#124; !hasNext |
+| 70:40 ThreadPage | div  |  | {"kind":"branch","expression":"recordBlocked","branch":"true"} |
+| 70:150 ThreadPage | Button frontendText(locale, "MESSAGES_DRAFT_RECORD_DISCARD") | onClick=discardRecord; type="button" | {"kind":"branch","expression":"recordBlocked","branch":"true"} |
+| 71:22 ThreadPage | p recordNotice |  | {"kind":"branch","expression":"recordBlocked","branch":"false"}; {"kind":"branch","expression":"recordNotice","branch":"true"} |
+| 126:45 ThreadPage | a state.thread.contextId | href=discussionContextHref({ kind: state.thread.contextKind, id: state.thread.contextId }) | {"kind":"branch","expression":"state.kind === \"ready\"","branch":"true"} |
+| 128:9 ThreadPage | a frontendText(locale, "MESSAGES_BACK") | href="/messages" |  |
+| 129:9 ThreadPage | Button frontendText(locale, "MESSAGES_REFRESH") | onClick=onRefresh | disabled=pending |
+| 135:110 ThreadPage | Button frontendText(locale, "MESSAGES_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
+| 141:11 ThreadPage | Button frontendText(locale, "MESSAGES_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"revoked\"","operator":"&&"} |
+| 142:11 ThreadPage | ButtonLink frontendText(locale, "MESSAGES_BACK") | href="/messages" | {"kind":"logical","expression":"state.kind === \"revoked\"","operator":"&&"} |
+| 157:981 ThreadPage | Button frontendText(locale, "MESSAGES_REPLY") | onClick=() =&gt; selectReply(message) | disabled=locked; {"kind":"logical","expression":"state.kind === \"ready\" && !recoveryBlocked","operator":"&&"}; {"kind":"branch","expression":"state.message… |
+| 159:5 ThreadPage | DiscussionCursorPagination  | onPrevious=onPrevious; onNext=() =&gt; state.nextCursor && onNext(state.nextCursor); onLimitChange=onLimitChange | {"kind":"logical","expression":"state.kind === \"ready\" && !recoveryBlocked","operator":"&&"} |
+| 160:5 ThreadPage | DiscussionComposer  | onLookup=onLookup ? checkResult : undefined; onBodyChange=(value) =&gt; draft.edit("body", value); onCancelReply=() =&gt; selectReply(null); onSubmit=submit | {"kind":"logical","expression":"state.kind === \"ready\" && !recoveryBlocked","operator":"&&"} |
+| 177:10 DiscussionComposer | form  | onSubmit=(event) =&gt; void onSubmit(event) |  |
+| 178:202 DiscussionComposer | button frontendText(locale, "MESSAGES_CANCEL_REPLY") | onClick=onCancelReply; type="button" | disabled=locked; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"replyTo","operator":"&&"} |
+| 180:197 DiscussionComposer | Button frontendText(locale, status === "checking" ? "MESSAGES_CHECKING_RESULT" : "MESSAGES_CHECK_RESULT") | onClick=() =&gt; void onLookup(); type="button" | disabled=status === "pending" &#124;&#124; status === "checking"; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"operatio… |
+| 182:5 DiscussionComposer | Textarea  | onChange=(event) =&gt; onBodyChange(event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"form","attributes":{}} |
+| 183:158 DiscussionComposer | Button status === "pending" ? frontendText(locale, "MESSAGES_SENDING") : frontendText(locale, status === "error" ? "MESSAGES_RETRY_SEND" : "MESSAGES_SEND") | type="submit" | disabled=status === "pending" &#124;&#124; status === "checking" &#124;&#124; !body.trim(); {"kind":"container","tag":"form","attributes":{}} |
+| 204:349 DiscussionCursorPagination | Select  | onChange=(event) =&gt; onLimitChange(Number(event.currentTarget.value) as 20 &#124; 50) | disabled=pending |
+| 204:615 DiscussionCursorPagination | Button labels.previousLabel | onClick=onPrevious; type="button" | disabled=pending &#124;&#124; page &lt;= 1 |
+| 204:773 DiscussionCursorPagination | Button labels.nextLabel | onClick=onNext; type="button" | disabled=pending &#124;&#124; !hasNext |
 
 ## frontend/pages/my-submissions-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 55:16 MySubmissionsPage | ButtonLink frontendText(locale, "SUBMIT_TITLE") | onClick=(event) =&gt; { event.preventDefault(); writeWorkspaceHistory("push", "/submit"); }; href="/submit" |  |
-| 65:24 MySubmissionsPage | AppliedFilters  | onClear=() =&gt; applyRange({ from: "", to: "" }) | {"kind":"logical","expression":"!range.invalid","operator":"&&"} |
-| 68:141 MySubmissionsPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
-| 69:26 MySubmissionsPage | div  |  | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
-| 69:130 MySubmissionsPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
-| 70:23 MySubmissionsPage | div resubmitError |  | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
-| 71:15 MySubmissionsPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
-| 80:18 MySubmissionsPage | div  |  | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
-| 123:7 SubmissionRangeFilter | DateRangeInput  | onChange=setDraft | disabled=pending |
-| 130:7 SubmissionRangeFilter | Button frontendText(locale, "CALENDAR_RANGE_APPLY") | onClick=() =&gt; { if (invalid) return; applyRange(draft); }; type="button" | disabled=pending &#124;&#124; invalid |
-| 132:17 SubmissionRangeFilter | p frontendText(locale, "SUBMISSIONS_RANGE_INVALID") |  | {"kind":"logical","expression":"invalid","operator":"&&"} |
-| 155:10 resubmitAction | button frontendText(locale, "SUBMISSIONS_RESUBMIT") | onClick=() =&gt; onResubmit(item); type="button" | earlier return: mark; earlier return: item.status !== "revision_requested"; earlier return: !onResubmit &#124;&#124; !submissionResubmitSource(item) |
+| 56:16 MySubmissionsPage | ButtonLink frontendText(locale, "SUBMIT_TITLE") | onClick=(event) =&gt; { event.preventDefault(); writeWorkspaceHistory("push", "/submit"); }; href="/submit" |  |
+| 66:24 MySubmissionsPage | AppliedFilters  | onClear=() =&gt; applyRange({ from: "", to: "" }) | {"kind":"logical","expression":"!range.invalid","operator":"&&"} |
+| 69:141 MySubmissionsPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
+| 70:26 MySubmissionsPage | div  |  | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
+| 70:130 MySubmissionsPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
+| 71:23 MySubmissionsPage | div resubmitError |  | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
+| 72:15 MySubmissionsPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
+| 81:18 MySubmissionsPage | div  |  | {"kind":"branch","expression":"range.invalid","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branc… |
+| 124:7 SubmissionRangeFilter | DateRangeInput  | onChange=setDraft | disabled=pending |
+| 131:7 SubmissionRangeFilter | Button frontendText(locale, "CALENDAR_RANGE_APPLY") | onClick=() =&gt; { if (invalid) return; applyRange(draft); }; type="button" | disabled=pending &#124;&#124; invalid |
+| 133:17 SubmissionRangeFilter | p frontendText(locale, "SUBMISSIONS_RANGE_INVALID") |  | {"kind":"logical","expression":"invalid","operator":"&&"} |
 
 ## frontend/pages/notifications/notifications-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 97:7 NotificationsPage | FilterSelect  | onChange=(value) =&gt; onFilterChange({ ...filters, read: readFilter(value) }) | disabled=pending |
-| 98:7 NotificationsPage | FilterSelect  | onChange=(value) =&gt; onFilterChange({ ...filters, eventType: eventFilter(value) }) | disabled=pending |
-| 102:15 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ") | onClick=() =&gt; onMarkVisibleRead(visibleUnreadIds) | disabled=actionsDisabled &#124;&#124; visibleUnreadIds.length === 0; {"kind":"logical","expression":"ready","operator":"&&"} |
-| 103:5 NotificationsPage | AppliedFilters  | onClear=() =&gt; onFilterChange({}) |  |
-| 106:29 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_DISCARD") | onClick=onDiscardRecord | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 113:9 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_RETRY") | onClick=onRetry | {"kind":"logical","expression":"revokedTarget","operator":"&&"} |
-| 117:192 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"recovery\"","operator":"&&"} |
-| 118:108 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
-| 119:120 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"forbidden\"","operator":"&&"} |
-| 123:9 NotificationsPage | div  | onScroll=onFeedScroll | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.items.length === 0","branch":"false"} |
-| 137:27 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_OPEN") | onClick=() =&gt; onOpen(item.id) | disabled=actionsDisabled; {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.items.length === 0… |
-| 138:44 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_MARK_READ") | onClick=() =&gt; onMarkRead(item.id) | disabled=actionsDisabled; {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.items.length === 0… |
-| 148:67 NotificationsPage | DataPagination  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.items.length === 0","branch":"false"}; {"kin… |
-| 154:23 NotificationsPage | p statusText |  | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.items.length === 0","branch":"false"}; {"kin… |
+| 98:7 NotificationsPage | FilterSelect  | onChange=(value) =&gt; onFilterChange({ ...filters, read: readFilter(value) }) | disabled=pending |
+| 99:7 NotificationsPage | FilterSelect  | onChange=(value) =&gt; onFilterChange({ ...filters, eventType: eventFilter(value) }) | disabled=pending |
+| 103:15 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ") | onClick=() =&gt; onMarkVisibleRead(visibleUnreadIds) | disabled=actionsDisabled &#124;&#124; visibleUnreadIds.length === 0; {"kind":"logical","expression":"ready","operator":"&&"} |
+| 104:5 NotificationsPage | AppliedFilters  | onClear=() =&gt; onFilterChange({}) |  |
+| 107:29 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_UPDATE_RECORD_DISCARD") | onClick=onDiscardRecord | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 114:9 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_RETRY") | onClick=onRetry | {"kind":"logical","expression":"revokedTarget","operator":"&&"} |
+| 118:192 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"recovery\"","operator":"&&"} |
+| 119:108 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
+| 120:120 NotificationsPage | Button frontendText(locale, "NOTIFICATIONS_RETRY") | onClick=onRetry | {"kind":"logical","expression":"state.kind === \"forbidden\"","operator":"&&"} |
+| 124:9 NotificationsPage | div  | onScroll=onFeedScroll | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.items.length === 0","branch":"false"} |
+| 153:67 NotificationsPage | DataPagination  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.items.length === 0","branch":"false"}; {"kin… |
+| 159:23 NotificationsPage | p statusText |  | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"branch","expression":"state.items.length === 0","branch":"false"}; {"kin… |
 
 ## frontend/pages/project-timeline-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 28:84 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
-| 30:74 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_BACK") | onClick=onBack; type="button" | earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 31:5 ProjectTimelinePage | TimelineCreateForm  |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; spread: createCallbacks |
-| 32:21 ProjectTimelinePage | div actionError |  | {"kind":"logical","expression":"actionError","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 33:5 ProjectTimelinePage | DataTable  | onPageChange=changePage; onPageSizeChange=changePageSize; onLoadMore=onLoadMore | earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 51:257 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_MARK_DONE") | onClick=() =&gt; onStatusChange?.(item, "done"); type="button" | disabled=pending &#124;&#124; createLocked; {"kind":"logical","expression":"item.status === \"open\"","operator":"&&"}; earlier return: state.kind === "loadi… |
-| 51:506 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_ARCHIVE") | onClick=() =&gt; onStatusChange?.(item, "archived"); type="button" | disabled=pending &#124;&#124; createLocked; {"kind":"logical","expression":"item.status !== \"archived\"","operator":"&&"}; earlier return: state.kind === "l… |
-| 51:733 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_REOPEN") | onClick=() =&gt; onStatusChange?.(item, "open"); type="button" | disabled=pending &#124;&#124; createLocked; {"kind":"logical","expression":"item.status === \"archived\"","operator":"&&"}; earlier return: state.kind === "l… |
-| 51:941 ProjectTimelinePage | TimelineItemEditor  | onSave=onEdit | {"kind":"logical","expression":"onEdit","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 29:84 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 31:74 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_BACK") | onClick=onBack; type="button" | earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 32:5 ProjectTimelinePage | TimelineCreateForm  |  | earlier return: state.kind === "loading"; earlier return: state.kind === "error"; spread: createCallbacks |
+| 33:21 ProjectTimelinePage | div actionError |  | {"kind":"logical","expression":"actionError","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 34:5 ProjectTimelinePage | DataTable  | onPageChange=changePage; onPageSizeChange=changePageSize; onLoadMore=onLoadMore | earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 52:257 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_MARK_DONE") | onClick=() =&gt; onStatusChange?.(item, "done"); type="button" | disabled=pending &#124;&#124; createLocked; {"kind":"logical","expression":"item.status === \"open\"","operator":"&&"}; earlier return: state.kind === "loadi… |
+| 52:506 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_ARCHIVE") | onClick=() =&gt; onStatusChange?.(item, "archived"); type="button" | disabled=pending &#124;&#124; createLocked; {"kind":"logical","expression":"item.status !== \"archived\"","operator":"&&"}; earlier return: state.kind === "l… |
+| 52:733 ProjectTimelinePage | Button frontendText(locale, "PROJECT_TIMELINE_REOPEN") | onClick=() =&gt; onStatusChange?.(item, "open"); type="button" | disabled=pending &#124;&#124; createLocked; {"kind":"logical","expression":"item.status === \"archived\"","operator":"&&"}; earlier return: state.kind === "l… |
+| 52:941 ProjectTimelinePage | TimelineItemEditor  | onSave=onEdit | {"kind":"logical","expression":"onEdit","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
 
 ## frontend/pages/projects-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 45:68 ProjectsPage | Dialog  | onOpenChange=next =&gt; { if (!next) setCreateOpen(false); } | open=createOpen; {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
-| 46:5 ProjectsPage | DialogContent  |  | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
-| 49:29 ProjectsPage | PlanningCreateForm  | onCreate=onCreate; onCreateReadback=onCreateReadback; onCreateDenied=onCreateDenied; onCreateLock=locked =&gt; { setCreateComposerLocked(locked); onCreateLoc… | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
-| 50:62 ProjectsPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setCreateOpen(false); type="button" | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
-| 58:16 ProjectsPage | Button frontendText(locale, "PROJECTS_CREATE_TITLE") | onClick=() =&gt; setCreateOpen(true); type="button" | aria-expanded=createOpen; disabled=createBlocked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === … |
-| 60:21 ProjectsPage | div actionError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"logi… |
-| 63:80 ProjectsPage | Button frontendText(locale, "PROJECTS_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
-| 64:9 ProjectsPage | DataTable  | onPageChange=onPageChange ? changePage : undefined; onPageSizeChange=onPageSizeChange ? changePageSize : undefined; onLoadMore=listBlocked ? undefined : onLo… | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
-| 90:892 ProjectsPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
-| 90:1018 ProjectsPage | Button frontendText(locale, "PROJECTS_SUMMARY_RETRY") | onClick=() =&gt; onRetrySummary?.(project); type="button" | disabled=listBlocked &#124;&#124; summaryPending.includes(project.id); {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.op… |
+| 46:68 ProjectsPage | Dialog  | onOpenChange=next =&gt; { if (!next) setCreateOpen(false); } | open=createOpen; {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"} |
+| 47:5 ProjectsPage | DialogContent  |  | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
+| 50:29 ProjectsPage | PlanningCreateForm  | onCreate=onCreate; onCreateReadback=onCreateReadback; onCreateDenied=onCreateDenied; onCreateLock=locked =&gt; { setCreateComposerLocked(locked); onCreateLoc… | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
+| 51:62 ProjectsPage | Button frontendText(locale, "COMMON_CANCEL") | onClick=() =&gt; setCreateOpen(false); type="button" | {"kind":"logical","expression":"state.kind === \"ready\"","operator":"&&"}; {"kind":"container","tag":"Dialog","attributes":{"open":"createOpen"}} |
+| 59:16 ProjectsPage | Button frontendText(locale, "PROJECTS_CREATE_TITLE") | onClick=() =&gt; setCreateOpen(true); type="button" | aria-expanded=createOpen; disabled=createBlocked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === … |
+| 61:21 ProjectsPage | div actionError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"logi… |
+| 64:80 ProjectsPage | Button frontendText(locale, "PROJECTS_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
+| 65:9 ProjectsPage | DataTable  | onPageChange=onPageChange ? changePage : undefined; onPageSizeChange=onPageSizeChange ? changePageSize : undefined; onLoadMore=listBlocked ? undefined : onLo… | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
+| 91:926 ProjectsPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.open && state.kind === \"ready\" &#124;&#124; undefined"}}; {"kind":"bran… |
+| 91:1052 ProjectsPage | Button frontendText(locale, "PROJECTS_SUMMARY_RETRY") | onClick=() =&gt; onRetrySummary?.(project); type="button" | disabled=listBlocked &#124;&#124; summaryPending.includes(project.id); {"kind":"container","tag":"section","attributes":{"aria-hidden":"statusConfirmation.op… |
 
 ## frontend/pages/search-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 139:25 SearchPage | div  |  | {"kind":"logical","expression":"composerBlocked","operator":"&&"} |
-| 139:187 SearchPage | Button frontendText(locale, "SEARCH_COMPOSER_RECORD_DISCARD") | onClick=onDiscardComposer; type="button" | {"kind":"logical","expression":"composerBlocked","operator":"&&"} |
-| 140:24 SearchPage | p composerNotice |  | {"kind":"logical","expression":"composerNotice","operator":"&&"} |
-| 144:7 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); onSubmit?.(); } |  |
-| 146:9 SearchPage | SearchChipsField  | onQueryChange=(value) =&gt; onQueryChange?.(value) | disabled=queryLocked; {"kind":"container","tag":"form","attributes":{}} |
-| 160:59 SearchPage | Button frontendText(locale, "COMMON_CLEAR_FILTERS") | onClick=() =&gt; onFilterChange({ tagIds: [] }); type="button" | {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"onFilterChange && appliedChips.length &gt; 0","operator":"&&"} |
-| 161:13 SearchPage | Button frontendText(locale, "SEARCH_SUBMIT") | type="submit" | disabled=!onSubmit &#124;&#124; queryLocked; {"kind":"container","tag":"form","attributes":{}} |
-| 166:55 SearchPage | p savedViewError |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewError && !savedViewRecordBlo… |
-| 167:36 SearchPage | div  |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewRecordBlocked","operator":"&&"} |
-| 167:155 SearchPage | Button frontendText(locale, "SEARCH_SAVED_VIEW_RECORD_DISCARD") | onClick=onDiscardSavedViewRecord; type="button" | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewRecordBlocked","operator":"&&"} |
-| 168:30 SearchPage | Button frontendText(locale, "SEARCH_SAVED_VIEW_CHECK") | onClick=onCheckSavedView; type="button" | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewUnknown","operator":"&&"} |
-| 170:26 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); const name = savedViewName.trim(); if (controlledName === undefined && !name) return; onSaveView(name); } | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"onSaveView","operator":"&&"} |
-| 171:13 SearchPage | Input  | onChange=(event) =&gt; setSavedViewName(event.currentTarget.value) | disabled=savedViewPending; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"onSaveView… |
-| 172:13 SearchPage | Button frontendText(locale, "SEARCH_SAVE_VIEW") | type="submit" | disabled=savedViewPending &#124;&#124; !savedViewName.trim(); {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind"… |
-| 174:36 SearchPage | div  |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedViews?.length","operator":"&&"} |
-| 175:293 SearchPage | button view.name | onClick=() =&gt; onApplyView?.(view); type="button" | disabled=savedViewPending; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedVie… |
-| 175:471 SearchPage | button × | onClick=() =&gt; onDeleteView?.(view.id); type="button" | disabled=savedViewPending &#124;&#124; !onDeleteView; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logica… |
-| 176:34 SearchPage | Button frontendText(locale, viewsExpanded ? "COMMON_COLLAPSE" : "COMMON_EXPAND") | onClick=() =&gt; setViewsExpanded((current) =&gt; !current); type="button" | aria-expanded=viewsExpanded; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedV… |
-| 189:40 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); if (commitFilters()) close(); } | {"kind":"logical","expression":"onFilterChange","operator":"&&"} |
-| 190:9 SearchPage | FilterSelect  | onChange=(value) =&gt; setDraft((current) =&gt; ({ ...current, kind: value })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
-| 191:131 SearchPage | Input  | onChange=(event) =&gt; setDraft((current) =&gt; ({ ...current, authorId: event.currentTarget.value })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
-| 192:9 SearchPage | DateRangeInput  | onChange=(next) =&gt; setDraft((current) =&gt; ({ ...current, publishedFrom: next.from, publishedTo: next.to })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
-| 207:9 SearchPage | Button frontendText(locale, "SEARCH_FILTERS_APPLY") | type="submit" | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
-| 208:25 SearchPage | p filterError |  | {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"filterEr… |
-| 212:133 SearchPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
-| 214:24 SearchPage | div  |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 214:128 SearchPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
-| 216:9 SearchPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
-| 232:160 SearchPage | a result.title?.trim() &#124;&#124; frontendText(locale, "SEARCH_UNTITLED") | href=result.href | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
-| 234:409 SearchPage | a frontendText(locale, "SEARCH_ASK_RESULT") | href=&#96;/agent?scope=items&knowledgeItemId=${encodeURIComponent(result.knowledgeItemId)}&#96; | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 140:25 SearchPage | div  |  | {"kind":"logical","expression":"composerBlocked","operator":"&&"} |
+| 140:187 SearchPage | Button frontendText(locale, "SEARCH_COMPOSER_RECORD_DISCARD") | onClick=onDiscardComposer; type="button" | {"kind":"logical","expression":"composerBlocked","operator":"&&"} |
+| 141:24 SearchPage | p composerNotice |  | {"kind":"logical","expression":"composerNotice","operator":"&&"} |
+| 145:7 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); onSubmit?.(); } |  |
+| 147:9 SearchPage | SearchChipsField  | onQueryChange=(value) =&gt; onQueryChange?.(value) | disabled=queryLocked; {"kind":"container","tag":"form","attributes":{}} |
+| 161:59 SearchPage | Button frontendText(locale, "COMMON_CLEAR_FILTERS") | onClick=() =&gt; onFilterChange({ tagIds: [] }); type="button" | {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"onFilterChange && appliedChips.length &gt; 0","operator":"&&"} |
+| 162:13 SearchPage | Button frontendText(locale, "SEARCH_SUBMIT") | type="submit" | disabled=!onSubmit &#124;&#124; queryLocked; {"kind":"container","tag":"form","attributes":{}} |
+| 167:55 SearchPage | p savedViewError |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewError && !savedViewRecordBlo… |
+| 168:36 SearchPage | div  |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewRecordBlocked","operator":"&&"} |
+| 168:155 SearchPage | Button frontendText(locale, "SEARCH_SAVED_VIEW_RECORD_DISCARD") | onClick=onDiscardSavedViewRecord; type="button" | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewRecordBlocked","operator":"&&"} |
+| 169:30 SearchPage | Button frontendText(locale, "SEARCH_SAVED_VIEW_CHECK") | onClick=onCheckSavedView; type="button" | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"savedViewUnknown","operator":"&&"} |
+| 171:26 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); const name = savedViewName.trim(); if (controlledName === undefined && !name) return; onSaveView(name); } | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"onSaveView","operator":"&&"} |
+| 172:13 SearchPage | Input  | onChange=(event) =&gt; setSavedViewName(event.currentTarget.value) | disabled=savedViewPending; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"onSaveView… |
+| 173:13 SearchPage | Button frontendText(locale, "SEARCH_SAVE_VIEW") | type="submit" | disabled=savedViewPending &#124;&#124; !savedViewName.trim(); {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind"… |
+| 175:36 SearchPage | div  |  | {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedViews?.length","operator":"&&"} |
+| 176:379 SearchPage | button view.name | onClick=() =&gt; onApplyView?.(view); type="button" | disabled=savedViewPending; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedVie… |
+| 176:557 SearchPage | button × | onClick=() =&gt; onDeleteView?.(view.id); type="button" | disabled=savedViewPending &#124;&#124; !onDeleteView; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logica… |
+| 177:34 SearchPage | Button frontendText(locale, viewsExpanded ? "COMMON_COLLAPSE" : "COMMON_EXPAND") | onClick=() =&gt; setViewsExpanded((current) =&gt; !current); type="button" | aria-expanded=viewsExpanded; {"kind":"logical","expression":"(savedViews &#124;&#124; onSaveView)","operator":"&&"}; {"kind":"logical","expression":"!!savedV… |
+| 190:40 SearchPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); if (commitFilters()) close(); } | {"kind":"logical","expression":"onFilterChange","operator":"&&"} |
+| 191:9 SearchPage | FilterSelect  | onChange=(value) =&gt; setDraft((current) =&gt; ({ ...current, kind: value })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
+| 192:131 SearchPage | Input  | onChange=(event) =&gt; setDraft((current) =&gt; ({ ...current, authorId: event.currentTarget.value })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
+| 193:9 SearchPage | DateRangeInput  | onChange=(next) =&gt; setDraft((current) =&gt; ({ ...current, publishedFrom: next.from, publishedTo: next.to })) | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
+| 208:9 SearchPage | Button frontendText(locale, "SEARCH_FILTERS_APPLY") | type="submit" | disabled=queryLocked; {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}} |
+| 209:25 SearchPage | p filterError |  | {"kind":"logical","expression":"onFilterChange","operator":"&&"}; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"filterEr… |
+| 213:133 SearchPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"} |
+| 215:24 SearchPage | div  |  | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 215:128 SearchPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
+| 217:9 SearchPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
+| 233:160 SearchPage | a result.title?.trim() &#124;&#124; frontendText(locale, "SEARCH_UNTITLED") | href=result.href | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"} |
+| 235:409 SearchPage | a frontendText(locale, "SEARCH_ASK_RESULT") | href=&#96;/agent?scope=items&knowledgeItemId=${encodeURIComponent(result.knowledgeItemId)}&#96; | {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch","expression":"state.kind === \"error\"","branch":"false"}; {"k… |
 
 ## frontend/pages/settings-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 57:1240 SettingsPage | Button frontendText(locale, mode === "light" ? "SHELL_THEME_LIGHT" : mode === "dark" ? "SHELL_THEME_DARK" : "SHELL_THEME_SYSTEM") | onClick=() =&gt; chooseTheme(mode); type="button" | disabled=save.kind === "saving"; {"kind":"repeat","expression":"([\"light\", \"dark\", \"system\"] as ThemeMode[])"} |
-| 57:1937 SettingsPage | Select  | onChange=(event) =&gt; chooseLanguage(event.target.value) | disabled=save.kind === "saving" |
-| 57:2058 SettingsPage | option frontendText(locale, "SHELL_LANGUAGE_ZH_CN") |  | {"kind":"container","tag":"Select","attributes":{"disabled":"save.kind === \"saving\""}} |
-| 57:2135 SettingsPage | option frontendText(locale, "SHELL_LANGUAGE_EN") |  | {"kind":"container","tag":"Select","attributes":{"disabled":"save.kind === \"saving\""}} |
-| 57:2390 SettingsPage | p frontendText(locale, "SETTINGS_SAVING") |  | {"kind":"logical","expression":"save.kind === \"saving\"","operator":"&&"} |
-| 57:2521 SettingsPage | p frontendText(locale, "SETTINGS_SAVED") |  | {"kind":"logical","expression":"save.kind === \"saved\"","operator":"&&"} |
-| 57:2652 SettingsPage | div  |  | {"kind":"logical","expression":"save.kind === \"failed\"","operator":"&&"} |
-| 57:2800 SettingsPage | Button frontendText(locale, "COMMON_RETRY") | onClick=retrySave; type="button" | {"kind":"logical","expression":"save.kind === \"failed\"","operator":"&&"} |
+| 58:1240 SettingsPage | Button frontendText(locale, mode === "light" ? "SHELL_THEME_LIGHT" : mode === "dark" ? "SHELL_THEME_DARK" : "SHELL_THEME_SYSTEM") | onClick=() =&gt; chooseTheme(mode); type="button" | disabled=save.kind === "saving"; {"kind":"repeat","expression":"([\"light\", \"dark\", \"system\"] as ThemeMode[])"} |
+| 58:1937 SettingsPage | Select  | onChange=(event) =&gt; chooseLanguage(event.target.value) | disabled=save.kind === "saving" |
+| 58:2058 SettingsPage | option frontendText(locale, "SHELL_LANGUAGE_ZH_CN") |  | {"kind":"container","tag":"Select","attributes":{"disabled":"save.kind === \"saving\""}} |
+| 58:2135 SettingsPage | option frontendText(locale, "SHELL_LANGUAGE_EN") |  | {"kind":"container","tag":"Select","attributes":{"disabled":"save.kind === \"saving\""}} |
+| 58:2390 SettingsPage | p frontendText(locale, "SETTINGS_SAVING") |  | {"kind":"logical","expression":"save.kind === \"saving\"","operator":"&&"} |
+| 58:2521 SettingsPage | p frontendText(locale, "SETTINGS_SAVED") |  | {"kind":"logical","expression":"save.kind === \"saved\"","operator":"&&"} |
+| 58:2759 SettingsPage | Button frontendText(locale, "COMMON_RETRY") | onClick=retrySave; type="button" | {"kind":"logical","expression":"save.kind === \"failed\"","operator":"&&"} |
 
 ## frontend/pages/submit-page.tsx
 
@@ -3268,7 +3369,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 129:204 SubmitPage | Textarea  | onChange=(event) =&gt; onDraftChange?.({ content: event.currentTarget.value }) | {"kind":"container","tag":"form","attributes":{"aria-busy":"pending ? \"true\" : undefined"}} |
 | 136:135 SubmitPage | Button frontendText(locale, recheckReasons[draftSave.reason ?? "error"] === true ? "SUBMIT_DRAFT_RECHECK" : "SUBMIT_DRAFT_RETRY") | onClick=onDraftRetry; type="button" | {"kind":"container","tag":"form","attributes":{"aria-busy":"pending ? \"true\" : undefined"}}; {"kind":"logical","expression":"draftSave","operator":"&&"}; {… |
 | 137:32 SubmitPage | Button frontendText(locale, "SUBMIT_DRAFT_DISCARD") | onClick=() =&gt; setDiscardConfirm(true); type="button" | disabled=draftSave.kind === "saving" &#124;&#124; discarding; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending ? \"true\" : undefined"}}; … |
-| 141:26 SubmitPage | Button frontendText(locale, pending ? "SUBMIT_BUTTON_PENDING" : resubmitting ? "SUBMIT_RESUBMIT_SUBMIT" : "SUBMIT_BUTTON") | type="submit" | disabled=submitDisabled; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending ? \"true\" : undefined"}}; {"kind":"logical","expression":"!resu… |
+| 141:26 SubmitPage | StatefulButton frontendText(locale, resubmitting ? "SUBMIT_RESUBMIT_SUBMIT" : "SUBMIT_BUTTON") | type="submit" | disabled=submitDisabled; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending ? \"true\" : undefined"}}; {"kind":"logical","expression":"!resu… |
 | 144:30 SubmitPage | SubmissionCommentsPanel  | onRetry=comments.onRetry | {"kind":"logical","expression":"resubmit && comments","operator":"&&"} |
 | 145:26 SubmitPage | ConfirmAction  | onCancel=() =&gt; setDiscardConfirm(false); onConfirm=() =&gt; { setDiscardConfirm(false); onDraftDiscard?.(); } | open=discardConfirm; {"kind":"logical","expression":"discardAvailable","operator":"&&"} |
 
@@ -3276,92 +3377,89 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 111:5 TaskEditor | owner.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, committed |  |
-| 117:5 TaskEditor | owner.addEventListener  | "beforeunload", preventUnload |  |
-| 272:22 TaskEditor | div  |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"recordBlocked","branch":"true"} |
-| 272:104 TaskEditor | button t("TASKS_DRAFT_RECORD_DISCARD") | onClick=discardRecord; type="button" | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"recordBlocked","branch":"true"} |
-| 273:21 TaskEditor | p recordNotice |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"recordNotice","branch":"true"} |
-| 274:14 TaskEditor | p t("TASKS_SAVING") |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"busy","operator":"&&"} |
-| 275:17 TaskEditor | div  |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"unknown","operator":"&&"} |
-| 276:7 TaskEditor | Button t("TASKS_CHECK_WRITE") | onClick=() =&gt; void check() | disabled=busy; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"unknown","operator":"… |
-| 277:7 TaskEditor | Button t("TASKS_RETRY_WRITE") | onClick=() =&gt; { if (intent.current) void perform(intent.current, true); } | disabled=busy; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"unknown","operator":"… |
-| 279:16 TaskEditor | p t(notice) |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"notice","operator":"&&"} |
-| 280:15 TaskEditor | p t("TASKS_ACTION_FAILED") / t("TASKS_INVALID_FORM") |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"error","operator":"&&"} |
-| 281:16 TaskEditor | p t("TASKS_LOADING") |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"true"} |
-| 281:112 TaskEditor | div  |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 281:165 TaskEditor | Button t("TASKS_RELOAD_DETAIL") | onClick=() =&gt; void read() | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 282:7 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); save(); } | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 283:58 TaskEditor | Input  | onChange=(event) =&gt; edit("fields", { ...currentDraft.current.fields, title: event.currentTarget.value }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 284:58 TaskEditor | Input  | onChange=(event) =&gt; edit("fields", { ...currentDraft.current.fields, notes: event.currentTarget.value }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 285:61 TaskEditor | Select  | onChange=(event) =&gt; edit("fields", { ...currentDraft.current.fields, priority: event.currentTarget.value }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 285:316 TaskEditor | option t(taskPriorityKey(priority)) |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 286:56 TaskEditor | Input  | onChange=(event) =&gt; edit("fields", { ...currentDraft.current.fields, dueAt: event.currentTarget.value }); type="datetime-local" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 288:9 TaskEditor | Button t(taskId ? "TASKS_SAVE" : "TASKS_CREATE") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 291:9 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); if (!locked) { const next = currentDraft.current.status; void perform({ clean: ["status"], op: { op: "status… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 292:43 TaskEditor | Select  | onChange=(event) =&gt; edit("status", event.currentTarget.value as TaskItem["status"]) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 292:255 TaskEditor | option t(taskStatusKey(value)) |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 293:11 TaskEditor | Button t("TASKS_SAVE_STATUS") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 295:9 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); const progress = currentDraft.current.progress; const next = Number(progress); if (!locked && progress !== "… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 296:45 TaskEditor | Input  | onChange=(event) =&gt; edit("progress", event.currentTarget.value); type="number" | disabled=locked &#124;&#124; ["done", "canceled"].includes(detail.task.status); {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; … |
-| 297:11 TaskEditor | Button t("TASKS_SAVE_PROGRESS") | type="submit" | disabled=locked &#124;&#124; ["done", "canceled"].includes(detail.task.status); {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; … |
-| 299:9 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); saveTags(); } | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 300:41 TaskEditor | Input  | onChange=(event) =&gt; edit("tags", event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 301:11 TaskEditor | Button t("TASKS_SAVE_TAGS") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 303:9 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"]… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 304:38 TaskEditor | Input  | onChange=(event) =&gt; edit("knowledgeId", event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 305:11 TaskEditor | Button t("TASKS_LINK_ADD") | type="submit" | disabled=locked &#124;&#124; detail.links.length &gt;= 5; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"b… |
-| 307:254 TaskEditor | Button t("TASKS_LINK_REMOVE") | onClick=() =&gt; void perform({ op: { op: "unlink", taskId, linkId: link.id, expectedUpdatedAt: detail.task.updatedAt } }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 308:9 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); const position = nextSubtaskPosition(subtasks); if (… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 309:44 TaskEditor | Input  | onChange=(event) =&gt; edit("subtaskTitle", event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 310:11 TaskEditor | Button t("TASKS_SUBTASK_ADD") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 312:226 TaskEditor | Select  | onChange=(event) =&gt; { const status = event.currentTarget.value as TaskSubtask["status"]; if (status !== item.status) void perform({ op: { op: "subtask-upd… | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 312:698 TaskEditor | option t(taskStatusKey(status)) |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 312:831 TaskEditor | Button item.status === "done" ? t("TASKS_SUBTASK_REOPEN") : t("TASKS_SUBTASK_DONE") | onClick=() =&gt; void perform({ op: { op: "subtask-update", taskId, subtaskId: item.id, title: item.title, status: item.status === "done" ? "todo" : "done", … | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 312:1292 TaskEditor | Button t("TASKS_SUBTASK_REMOVE") | onClick=() =&gt; void perform({ op: { op: "subtask-delete", taskId, subtaskId: item.id, expectedUpdatedAt: item.updatedAt } }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 313:9 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); const dependsOnTaskId = currentDraft.current.dependsOnTaskId.trim(); if (locked &#124;&#124; !/^[A-Za-z0-9][… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
-| 314:44 TaskEditor | Input  | onChange=(event) =&gt; edit("dependsOnTaskId", event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 315:11 TaskEditor | Button t("TASKS_DEPENDENCY_ADD") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 317:208 TaskEditor | Button t("TASKS_DEPENDENCY_REMOVE") | onClick=() =&gt; void perform({ op: { op: "dependency-remove", taskId, dependsOnTaskId: item.dependsOnTaskId, expectedUpdatedAt: detail.task.updatedAt } }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
-| 320:5 TaskEditor | Button t("TASKS_CLOSE") | onClick=close | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}} |
-| 323:7 TaskEditor | Sheet  | onOpenChange=(open) =&gt; { if (!open) close(); } | open=true; {"kind":"branch","expression":"taskId","branch":"true"} |
-| 324:7 TaskEditor | Dialog  | onOpenChange=(open) =&gt; { if (!open) close(); } | open=true; {"kind":"branch","expression":"taskId","branch":"false"} |
-| 326:5 TaskEditor | ConfirmAction  | onCancel=cancelDiscard; onConfirm=discard | open=confirmingDiscard |
+| 112:5 TaskEditor | owner.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, committed |  |
+| 118:5 TaskEditor | owner.addEventListener  | "beforeunload", preventUnload |  |
+| 273:22 TaskEditor | div  |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"recordBlocked","branch":"true"} |
+| 273:104 TaskEditor | button t("TASKS_DRAFT_RECORD_DISCARD") | onClick=discardRecord; type="button" | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"recordBlocked","branch":"true"} |
+| 274:21 TaskEditor | p recordNotice |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"recordNotice","branch":"true"} |
+| 275:14 TaskEditor | p t("TASKS_SAVING") |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"busy","operator":"&&"} |
+| 276:17 TaskEditor | div  |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"unknown","operator":"&&"} |
+| 277:7 TaskEditor | Button t("TASKS_CHECK_WRITE") | onClick=() =&gt; void check() | disabled=busy; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"unknown","operator":"… |
+| 278:7 TaskEditor | Button t("TASKS_RETRY_WRITE") | onClick=() =&gt; { if (intent.current) void perform(intent.current, true); } | disabled=busy; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"unknown","operator":"… |
+| 280:16 TaskEditor | p t(notice) |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"notice","operator":"&&"} |
+| 281:15 TaskEditor | p t("TASKS_ACTION_FAILED") / t("TASKS_INVALID_FORM") |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"logical","expression":"error","operator":"&&"} |
+| 282:16 TaskEditor | p t("TASKS_LOADING") |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"true"} |
+| 282:112 TaskEditor | div  |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 282:165 TaskEditor | Button t("TASKS_RELOAD_DETAIL") | onClick=() =&gt; void read() | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 283:7 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); save(); } | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 284:58 TaskEditor | Input  | onChange=(event) =&gt; edit("fields", { ...currentDraft.current.fields, title: event.currentTarget.value }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 285:58 TaskEditor | Input  | onChange=(event) =&gt; edit("fields", { ...currentDraft.current.fields, notes: event.currentTarget.value }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 286:61 TaskEditor | Select  | onChange=(event) =&gt; edit("fields", { ...currentDraft.current.fields, priority: event.currentTarget.value }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 286:316 TaskEditor | option t(taskPriorityKey(priority)) |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 287:56 TaskEditor | Input  | onChange=(event) =&gt; edit("fields", { ...currentDraft.current.fields, dueAt: event.currentTarget.value }); type="datetime-local" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 289:9 TaskEditor | Button t(taskId ? "TASKS_SAVE" : "TASKS_CREATE") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 292:9 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); if (!locked) { const next = currentDraft.current.status; void perform({ clean: ["status"], op: { op: "status… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 293:43 TaskEditor | Select  | onChange=(event) =&gt; edit("status", event.currentTarget.value as TaskItem["status"]) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 293:255 TaskEditor | option t(taskStatusKey(value)) |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 294:11 TaskEditor | Button t("TASKS_SAVE_STATUS") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 296:9 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); const progress = currentDraft.current.progress; const next = Number(progress); if (!locked && progress !== "… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 297:45 TaskEditor | Input  | onChange=(event) =&gt; edit("progress", event.currentTarget.value); type="number" | disabled=locked &#124;&#124; ["done", "canceled"].includes(detail.task.status); {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; … |
+| 298:11 TaskEditor | Button t("TASKS_SAVE_PROGRESS") | type="submit" | disabled=locked &#124;&#124; ["done", "canceled"].includes(detail.task.status); {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; … |
+| 300:9 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); saveTags(); } | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 301:41 TaskEditor | Input  | onChange=(event) =&gt; edit("tags", event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 302:11 TaskEditor | Button t("TASKS_SAVE_TAGS") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 318:17 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"]… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 319:46 TaskEditor | Input  | onChange=(event) =&gt; edit("knowledgeId", event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 320:19 TaskEditor | Button t("TASKS_LINK_ADD") | type="submit" | disabled=locked &#124;&#124; detail.links.length &gt;= 5; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"b… |
+| 322:262 TaskEditor | Button t("TASKS_LINK_REMOVE") | onClick=() =&gt; void perform({ op: { op: "unlink", taskId, linkId: link.id, expectedUpdatedAt: detail.task.updatedAt } }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 329:17 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); const title = currentDraft.current.subtaskTitle.trim(); const position = nextSubtaskPosition(subtasks); if (… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 330:52 TaskEditor | Input  | onChange=(event) =&gt; edit("subtaskTitle", event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 331:19 TaskEditor | Button t("TASKS_SUBTASK_ADD") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 333:234 TaskEditor | Select  | onChange=(event) =&gt; { const status = event.currentTarget.value as TaskSubtask["status"]; if (status !== item.status) void perform({ op: { op: "subtask-upd… | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 333:706 TaskEditor | option t(taskStatusKey(status)) |  | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 333:839 TaskEditor | Button item.status === "done" ? t("TASKS_SUBTASK_REOPEN") : t("TASKS_SUBTASK_DONE") | onClick=() =&gt; void perform({ op: { op: "subtask-update", taskId, subtaskId: item.id, title: item.title, status: item.status === "done" ? "todo" : "done", … | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 333:1300 TaskEditor | Button t("TASKS_SUBTASK_REMOVE") | onClick=() =&gt; void perform({ op: { op: "subtask-delete", taskId, subtaskId: item.id, expectedUpdatedAt: item.updatedAt } }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 340:17 TaskEditor | form  | onSubmit=(event) =&gt; { event.preventDefault(); const dependsOnTaskId = currentDraft.current.dependsOnTaskId.trim(); if (locked &#124;&#124; !/^[A-Za-z0-9][… | {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"false"}; {"kind":"… |
+| 341:52 TaskEditor | Input  | onChange=(event) =&gt; edit("dependsOnTaskId", event.currentTarget.value) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 342:19 TaskEditor | Button t("TASKS_DEPENDENCY_ADD") | type="submit" | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 344:216 TaskEditor | Button t("TASKS_DEPENDENCY_REMOVE") | onClick=() =&gt; void perform({ op: { op: "dependency-remove", taskId, dependsOnTaskId: item.dependsOnTaskId, expectedUpdatedAt: detail.task.updatedAt } }) | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}}; {"kind":"branch","expression":"reading","branch":"f… |
+| 351:5 TaskEditor | Button t("TASKS_CLOSE") | onClick=close | disabled=locked; {"kind":"container","tag":"div","attributes":{"aria-busy":"busy &#124;&#124; reading"}} |
+| 354:7 TaskEditor | Sheet  | onOpenChange=(open) =&gt; { if (!open) close(); } | open=true; {"kind":"branch","expression":"taskId","branch":"true"} |
+| 355:7 TaskEditor | Dialog  | onOpenChange=(open) =&gt; { if (!open) close(); } | open=true; {"kind":"branch","expression":"taskId","branch":"false"} |
+| 357:5 TaskEditor | ConfirmAction  | onCancel=cancelDiscard; onConfirm=discard | open=confirmingDiscard |
 
 ## frontend/pages/tasks/tasks-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 122:16 TasksPage | div  |  |  |
-| 123:9 TasksPage | ButtonLink frontendText(locale, "MESSAGES_DISCUSS") | href=contextDiscussionHref({ kind: "task", id: task.id }) |  |
-| 124:20 TasksPage | Button frontendText(locale, "TASKS_EDIT") | onClick=() =&gt; onOpen(task.id) | disabled=Boolean(actionPendingId); {"kind":"logical","expression":"onOpen","operator":"&&"} |
-| 125:9 TasksPage | Button statusAction | onClick=() =&gt; { if (!confirmationRef.current) onStatusChange?.(task.id, task.status === "done" ? "todo" : "done"); } | disabled=validConfirmation &#124;&#124; actionPendingId != null |
-| 126:9 TasksPage | Button frontendText(locale, "TASKS_DELETE") | onClick=() =&gt; requestDelete(task) | disabled=validConfirmation &#124;&#124; deleteBlocked |
-| 135:28 TasksPage | Button frontendText(locale, "TASKS_NEW") | onClick=onCreate | disabled=Boolean(actionPendingId); {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"log… |
-| 138:7 TasksPage | Input  | onChange=(event) =&gt; onTextFilterChange?.({ ...filters, q: event.currentTarget.value &#124;&#124; undefined }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 139:7 TasksPage | FilterSelect  | onChange=(value) =&gt; onFilterChange?.({ ...filters, status: (value &#124;&#124; undefined) as TaskStatus &#124; undefined }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 140:7 TasksPage | FilterSelect  | onChange=(value) =&gt; onFilterChange?.({ ...filters, priority: (value &#124;&#124; undefined) as TaskPriority &#124; undefined }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 141:7 TasksPage | Input  | onChange=(event) =&gt; onTextFilterChange?.({ ...filters, tag: event.currentTarget.value &#124;&#124; undefined }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 142:7 TasksPage | FilterSelect  | onChange=(value) =&gt; onFilterChange?.({ ...filters, due: (value &#124;&#124; undefined) as TaskFilterState["due"] }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 144:5 TasksPage | AppliedFilters  | onClear=() =&gt; onFilterChange?.({}) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 146:78 TasksPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
-| 148:21 TasksPage | div actionError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
-| 149:24 TasksPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
-| 149:132 TasksPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
-| 154:7 TasksPage | TodoList  | onEndReached=!desktop && !localLoadError && state.pagination.page &lt; state.pagination.totalPages ? onLoadMore : undefined | aria-busy=pending &#124;&#124; undefined; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kin… |
-| 168:55 TasksPage | DataPagination  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
-| 169:25 TasksPage | p listStatusText |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
-| 171:13 TasksPage | ConfirmAction  | onCancel=cancelDelete; onConfirm=confirmDelete | open=validConfirmation |
+| 133:16 TasksPage | div  |  |  |
+| 134:9 TasksPage | ButtonLink frontendText(locale, "MESSAGES_DISCUSS") | href=contextDiscussionHref({ kind: "task", id: task.id }) |  |
+| 144:28 TasksPage | Button frontendText(locale, "TASKS_NEW") | onClick=onCreate | disabled=Boolean(actionPendingId); {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"log… |
+| 147:7 TasksPage | Input  | onChange=(event) =&gt; onTextFilterChange?.({ ...filters, q: event.currentTarget.value &#124;&#124; undefined }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 148:7 TasksPage | FilterSelect  | onChange=(value) =&gt; onFilterChange?.({ ...filters, status: (value &#124;&#124; undefined) as TaskStatus &#124; undefined }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 149:7 TasksPage | FilterSelect  | onChange=(value) =&gt; onFilterChange?.({ ...filters, priority: (value &#124;&#124; undefined) as TaskPriority &#124; undefined }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 150:7 TasksPage | Input  | onChange=(event) =&gt; onTextFilterChange?.({ ...filters, tag: event.currentTarget.value &#124;&#124; undefined }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 151:7 TasksPage | FilterSelect  | onChange=(value) =&gt; onFilterChange?.({ ...filters, due: (value &#124;&#124; undefined) as TaskFilterState["due"] }) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 153:5 TasksPage | AppliedFilters  | onClear=() =&gt; onFilterChange?.({}) | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 155:78 TasksPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
+| 157:21 TasksPage | div actionError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
+| 158:24 TasksPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
+| 158:132 TasksPage | Button frontendText(locale, "SEARCH_RETRY") | onClick=onRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
+| 163:7 TasksPage | TodoList  | onEndReached=!desktop && !localLoadError && state.pagination.page &lt; state.pagination.totalPages ? onLoadMore : undefined | aria-busy=pending &#124;&#124; undefined; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kin… |
+| 177:55 TasksPage | DataPagination  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
+| 178:25 TasksPage | p listStatusText |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"state.kind === … |
+| 180:13 TasksPage | ConfirmAction  | onCancel=cancelDelete; onConfirm=confirmDelete | open=validConfirmation |
 
 ## frontend/pages/today-page.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 21:123 TodayPage | Button frontendText(locale, "TODAY_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
-| 26:842 TodayPage | TodayLink frontendText(locale, "TODAY_TASKS_ALL") | href="/tasks?due=today&page=1&pageSize=20" | earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 26:1154 TodayPage | Button task.title | onClick=() =&gt; onOpen?.({kind: "task", id: task.id}) | {"kind":"branch","expression":"snapshot.tasks.items.length","branch":"true"}; {"kind":"repeat","expression":"snapshot.tasks.items.slice(0, 10)"}; earlier ret… |
-| 26:1577 TodayPage | TodayLink frontendText(locale, "TODAY_CALENDAR_ALL") | href=calendarHref | {"kind":"logical","expression":"calendarHref","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
-| 26:1869 TodayPage | Button event.title | onClick=() =&gt; onOpen?.({kind: "calendar", id: event.id}) | {"kind":"branch","expression":"snapshot.calendar.length","branch":"true"}; {"kind":"repeat","expression":"snapshot.calendar.slice(0, 10)"}; earlier return: s… |
-| 32:10 TodayLink | a children | onClick=event =&gt; { if (event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctrlKey &#124;&#124; event.altKey &#124;&#124; event.shiftKey) ret… |  |
+| 23:123 TodayPage | Button frontendText(locale, "TODAY_RETRY") | onClick=onRetry | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 28:842 TodayPage | TodayLink frontendText(locale, "TODAY_TASKS_ALL") | href="/tasks?due=today&page=1&pageSize=20" | earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 28:1184 TodayPage | Button task.title | onClick=() =&gt; onOpen?.({kind: "task", id: task.id}) | {"kind":"branch","expression":"snapshot.tasks.items.length","branch":"true"}; {"kind":"repeat","expression":"snapshot.tasks.items.slice(0, 10)"}; earlier ret… |
+| 28:1619 TodayPage | TodayLink frontendText(locale, "TODAY_CALENDAR_ALL") | href=calendarHref | {"kind":"logical","expression":"calendarHref","operator":"&&"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 28:1941 TodayPage | Button event.title | onClick=() =&gt; onOpen?.({kind: "calendar", id: event.id}) | {"kind":"branch","expression":"snapshot.calendar.length","branch":"true"}; {"kind":"repeat","expression":"snapshot.calendar.slice(0, 10)"}; earlier return: s… |
+| 34:10 TodayLink | a children | onClick=event =&gt; { if (event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctrlKey &#124;&#124; event.altKey &#124;&#124; event.shiftKey) ret… |  |
 
 ## frontend/pages/workbench-landing/public-workbench-page.tsx
 
@@ -3387,19 +3485,19 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 77:10 WorkbenchFeaturePanel | Drawer  | onOpenChange=open =&gt; { if (!open) close(); } | open=active; earlier return: !state.activeFeature |
-| 79:5 WorkbenchFeaturePanel | div  |  | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; earlier return: !state.activeFeature |
-| 83:9 WorkbenchFeaturePanel | Button  | onClick=close | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; earlier return: !state.activeFeature |
-| 88:9 WorkbenchFeaturePanel | Button text("BACK_TO_ANSWER") | onClick=() =&gt; dispatch({ type: "citation-back" }) | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"true"}; e… |
-| 91:9 WorkbenchFeaturePanel | h2 source.title |  | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"true"}; e… |
-| 107:13 WorkbenchFeaturePanel | Button text(state.captured ? "CAPTURE_DONE" : "CAPTURE_SELECT") | onClick=() =&gt; dispatch({ type: "capture" }) | disabled=state.captured; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && cita… |
-| 111:11 WorkbenchFeaturePanel | p text(state.captured ? "CAPTURE_DONE" : "CAPTURE_PENDING") |  | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; … |
-| 119:13 WorkbenchFeaturePanel | Button text("OPEN_SOURCE") | onClick=() =&gt; setSourceOpen(sourceOpen === item.id ? null : item.id) | aria-expanded=sourceOpen === item.id; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && s… |
-| 131:13 WorkbenchFeaturePanel | Button text("ANSWER_SHOW") | onClick=() =&gt; setAnswerVisible(true) | aria-expanded=answerVisible; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && … |
-| 137:81 WorkbenchFeaturePanel | Button text("SOURCE_LABEL") / : / content.sources.find(document =&gt; document.id === item.sourceId)?.title | onClick=() =&gt; dispatch({ type: "citation", id: item.id }) | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; … |
-| 148:13 WorkbenchFeaturePanel | p text(state.taskDone ? "ACTION_DONE" : "ACTION_TODO") |  | {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; … |
-| 149:13 WorkbenchFeaturePanel | Button text("ACTION_COMPLETE") | onClick=() =&gt; dispatch({ type: "complete-task" }) | disabled=state.taskDone; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && cita… |
-| 162:11 WorkbenchFeaturePanel | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"container","tag":"Drawer","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","br… |
+| 79:10 WorkbenchFeaturePanel | Sheet  | onOpenChange=open =&gt; { if (!open) close(); } | open=active; earlier return: !state.activeFeature |
+| 82:5 WorkbenchFeaturePanel | div  |  | {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; earlier return: !state.activeFeature |
+| 86:9 WorkbenchFeaturePanel | Button  | onClick=close | {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; earlier return: !state.activeFeature |
+| 91:9 WorkbenchFeaturePanel | Button text("BACK_TO_ANSWER") | onClick=() =&gt; dispatch({ type: "citation-back" }) | {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"true"}; ea… |
+| 94:9 WorkbenchFeaturePanel | h2 source.title |  | {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"true"}; ea… |
+| 110:13 WorkbenchFeaturePanel | Button text(state.captured ? "CAPTURE_DONE" : "CAPTURE_SELECT") | onClick=() =&gt; dispatch({ type: "capture" }) | disabled=state.captured; {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citat… |
+| 114:11 WorkbenchFeaturePanel | p text(state.captured ? "CAPTURE_DONE" : "CAPTURE_PENDING") |  | {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {… |
+| 122:13 WorkbenchFeaturePanel | Button text("OPEN_SOURCE") | onClick=() =&gt; setSourceOpen(sourceOpen === item.id ? null : item.id) | aria-expanded=sourceOpen === item.id; {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && so… |
+| 134:13 WorkbenchFeaturePanel | Button text("ANSWER_SHOW") | onClick=() =&gt; setAnswerVisible(true) | aria-expanded=answerVisible; {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && c… |
+| 140:81 WorkbenchFeaturePanel | Button text("SOURCE_LABEL") / : / content.sources.find(document =&gt; document.id === item.sourceId)?.title | onClick=() =&gt; dispatch({ type: "citation", id: item.id }) | {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {… |
+| 151:13 WorkbenchFeaturePanel | p text(state.taskDone ? "ACTION_DONE" : "ACTION_TODO") |  | {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","branch":"false"}; {… |
+| 152:13 WorkbenchFeaturePanel | Button text("ACTION_COMPLETE") | onClick=() =&gt; dispatch({ type: "complete-task" }) | disabled=state.taskDone; {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citat… |
+| 165:11 WorkbenchFeaturePanel | Button text("NEXT") | onClick=() =&gt; dispatch({ type: "next" }) | disabled=gated; {"kind":"container","tag":"Sheet","attributes":{"open":"active"}}; {"kind":"branch","expression":"showingCitation && source && citation","bra… |
 
 ## frontend/pages/workbench-landing/workbench-scene-runtime.ts
 
@@ -3429,19 +3527,19 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 21:15 WorkbenchReviewPage | Button frontendText(locale, "REVIEW_REFRESH") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
-| 23:9 WorkbenchReviewPage | ReviewPeriodControl  | onChange=(next) =&gt; onPeriodChange?.(next) | disabled=periodBlocked; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}} |
-| 33:23 WorkbenchReviewPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"periodBlocked","operator":"&&"} |
-| 33:176 WorkbenchReviewPage | Button frontendText(locale, "REVIEW_PERIOD_RECORD_DISCARD") | onClick=onDiscardPeriod | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"periodBlocked","operator":"&&"} |
-| 34:22 WorkbenchReviewPage | p periodNotice |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"periodNotice","operator":"&&"} |
-| 36:78 WorkbenchReviewPage | Button frontendText(locale, "REVIEW_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"state.kind === \"error\"","oper… |
-| 46:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/tasks?status=done&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
-| 47:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/tasks?due=overdue&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
-| 48:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/tasks?status=blocked&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
-| 49:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/inbox?status=inbox&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
-| 50:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/projects?status=active&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
-| 58:58 ListCard | a frontendText(locale, "REVIEW_VIEW_ALL") | onClick=event =&gt; { if (event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctrlKey &#124;&#124; event.altKey &#124;&#124; event.shiftKey) ret… |  |
-| 61:228 ListCard | Button item.title | onClick=() =&gt; onOpen?.({kind:item.kind,id:item.id}) | {"kind":"branch","expression":"items.length","branch":"true"}; {"kind":"repeat","expression":"items.slice(0,10)"} |
+| 24:15 WorkbenchReviewPage | Button frontendText(locale, "REVIEW_REFRESH") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
+| 26:9 WorkbenchReviewPage | ReviewPeriodControl  | onChange=(next) =&gt; onPeriodChange?.(next) | disabled=periodBlocked; {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}} |
+| 36:23 WorkbenchReviewPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"periodBlocked","operator":"&&"} |
+| 36:176 WorkbenchReviewPage | Button frontendText(locale, "REVIEW_PERIOD_RECORD_DISCARD") | onClick=onDiscardPeriod | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"periodBlocked","operator":"&&"} |
+| 37:22 WorkbenchReviewPage | p periodNotice |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"periodNotice","operator":"&&"} |
+| 39:78 WorkbenchReviewPage | Button frontendText(locale, "REVIEW_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"state.kind === \"error\"","oper… |
+| 71:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/tasks?status=done&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
+| 72:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/tasks?due=overdue&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
+| 73:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/tasks?status=blocked&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
+| 74:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/inbox?status=inbox&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
+| 75:9 WorkbenchReviewPage | ListCard  | onOpen=onOpen; href="/projects?status=active&page=1&pageSize=20" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\""}}; {"kind":"logical","expression":"s","operator":"&&"} |
+| 83:58 ListCard | a frontendText(locale, "REVIEW_VIEW_ALL") | onClick=event =&gt; { if (event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctrlKey &#124;&#124; event.altKey &#124;&#124; event.shiftKey) ret… |  |
+| 86:228 ListCard | Button item.title | onClick=() =&gt; onOpen?.({kind:item.kind,id:item.id}) | {"kind":"branch","expression":"items.length","branch":"true"}; {"kind":"repeat","expression":"items.slice(0,10)"} |
 
 ## frontend/public/sw.js
 

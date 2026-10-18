@@ -16,6 +16,7 @@ import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { loadCalendarIntent } from "../lib/calendar-create-intent";
 import { loadCalendarDraft, persistCalendarDraft } from "../lib/calendar-draft";
+import { HeatCalendar, HeatCalendarGrid, HeatCalendarTooltip } from "../components/charts/heat-calendar";
 
 export type CalendarPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; items: readonly CalendarEvent[]; pagination?: FrontendPageMetadata };
 
@@ -59,6 +60,7 @@ export function CalendarPage({ locale, state, pending = false, actionError, onRe
     />
     {range && onRangeChange && <CalendarRangeFilter key={`${range.from}:${range.to}`} locale={locale} range={range} pending={controlsPending} onChange={next => { if (!controlsPending && !confirmation.isOpen()) onRangeChange(next); }} />}
     {actionError && <div role="alert" className="text-sm text-destructive">{actionError}</div>}
+    {state.kind === "ready" && <CalendarEventDensity items={state.items} locale={locale} />}
     {state.kind === "error" ? <PageState kind="error" title={state.message}><Button type="button" variant="outline" onClick={onRetry}>{frontendText(locale, "CALENDAR_RETRY")}</Button></PageState> : state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "CALENDAR_LOADING")} /> : <DataTable
       locale={locale}
       rows={state.items}
@@ -82,4 +84,43 @@ export function CalendarPage({ locale, state, pending = false, actionError, onRe
       ]}
     />}
   </section></>;
+}
+
+const HEAT_CALENDAR_WEEKS = 16;
+
+/**
+ * Event density across the loaded window: one UTC day per cell, the last
+ * loaded event day ending the grid. Counts are exact (maxCount is the busiest
+ * day), so a hovered cell reads the real number of events. The table below
+ * stays the authoritative list; this view is additive.
+ */
+function CalendarEventDensity({ items, locale }: { items: readonly CalendarEvent[]; locale: LocaleRuntime }) {
+  const perDay = new Map<number, number>();
+  for (const item of items) {
+    const at = Date.parse(item.startsAt);
+    if (!Number.isFinite(at)) continue;
+    const date = new Date(at);
+    const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    perDay.set(day, (perDay.get(day) ?? 0) + 1);
+  }
+  if (perDay.size === 0) return null;
+  const max = Math.max(...perDay.values());
+  const end = new Date(Math.max(...perDay.keys()));
+  // The chart's grid is Monday-first, so end on the Monday of the last loaded day's week.
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7) - (HEAT_CALENDAR_WEEKS - 1) * 7);
+  const values = Array.from({ length: HEAT_CALENDAR_WEEKS }, (_, week) =>
+    Array.from({ length: 7 }, (_, day) => {
+      const date = new Date(start);
+      date.setUTCDate(date.getUTCDate() + week * 7 + day);
+      return (perDay.get(date.getTime()) ?? 0) / max;
+    }));
+  const unit = frontendText(locale, "CALENDAR_EVENT");
+  return <section data-calendar-heat aria-label={frontendText(locale, "CALENDAR_EVENT")} className="shrink-0 overflow-x-auto rounded-lg border p-4">
+    <HeatCalendar weeks={HEAT_CALENDAR_WEEKS} values={values} maxCount={max} endDate={end} unit={unit} color="var(--primary)">
+      <HeatCalendarGrid>
+        <HeatCalendarTooltip>{data => <span className="font-mono tabular-nums">{data.days > 1 ? data.total : data.count} {unit}</span>}</HeatCalendarTooltip>
+      </HeatCalendarGrid>
+    </HeatCalendar>
+  </section>;
 }

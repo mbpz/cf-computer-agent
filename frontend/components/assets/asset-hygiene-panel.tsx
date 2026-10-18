@@ -7,6 +7,7 @@ import { Checkbox } from "../ui/checkbox";
 import { PageState } from "../ui/page-state";
 import { FilterSelect } from "../ui/filter-select";
 import { TypedConfirmAction } from "../ui/typed-confirm-action";
+import { DonutChart, DonutChartCenter, DonutChartLegend, DonutChartPlot } from "../charts/donut-chart";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { ApiRequestError, type Fetcher } from "../../lib/api";
 import {
@@ -172,7 +173,19 @@ export function AssetHygienePanel({ locale, memberId, requester = fetch }: { loc
           <p>{capacity.message}</p>
           <Button type="button" variant="outline" onClick={readCapacity}>{frontendText(locale, "COMMON_RETRY")}</Button>
         </div>
-        : <dl className="grid gap-2 text-sm sm:grid-cols-2">
+        : <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,15rem)_1fr]">
+          {capacity.value.storageEnabled && capacity.value.usedBytes !== null && <DonutChart
+            label={frontendText(locale, "ADMIN_ASSET_HYGIENE_TITLE")}
+            formatValue={(value) => bytesLabel(value)}
+            segments={[
+              { id: "used", name: frontendText(locale, "ADMIN_ASSET_CAPACITY_USED"), value: capacity.value.usedBytes, color: "#2563eb" },
+              { id: "free", name: frontendText(locale, "ADMIN_ASSET_CAPACITY_FREE"), value: Math.max(0, capacity.value.maxBytes - capacity.value.usedBytes), color: "var(--muted-foreground)" },
+            ]}
+          >
+            <DonutChartPlot><DonutChartCenter totalLabel={frontendText(locale, "ADMIN_ASSET_CAPACITY_MAX")} /></DonutChartPlot>
+            <DonutChartLegend />
+          </DonutChart>}
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
           <div className="flex items-center justify-between gap-2"><dt>{frontendText(locale, "ADMIN_ASSET_CAPACITY_USED")}</dt>
             <dd data-asset-capacity-used={capacity.value.usedBytes ?? "unavailable"}>
               {capacity.value.storageEnabled && capacity.value.usedBytes !== null
@@ -189,7 +202,7 @@ export function AssetHygienePanel({ locale, memberId, requester = fetch }: { loc
                 {frontendText(locale, capacity.value.warning ? "ADMIN_ASSET_CAPACITY_WARNING_OVER" : "ADMIN_ASSET_CAPACITY_WARNING_UNDER")}
               </Badge>
             </dd></div>
-        </dl>}
+        </dl></div>}
 
       <div className="flex flex-wrap items-end gap-3">
         <FilterSelect label={frontendText(locale, "ADMIN_ASSET_ORPHAN_PREFIX")} ariaLabel={frontendText(locale, "ADMIN_ASSET_ORPHAN_PREFIX")}

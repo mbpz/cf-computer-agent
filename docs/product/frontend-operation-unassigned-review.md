@@ -61,11 +61,11 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 181 项，但 A01 
 | `frontend/app.tsx:236:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
 | `frontend/app.tsx:263:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
 
-## `frontend/components/agents/agent-activity/activity-row.tsx`（0，2026-10-17 随 agent-page 接入归属）
+## `frontend/components/agents/agent-activity/activity-row.tsx`（0）
 
 本文件是 beUI agent 活动行的落地副本。核对期间并行的 agent slice 在 `frontend/pages/agent-page.tsx` 接入 `AgentActivity`，`activity-row.tsx` 的活动行候选随该能力根进入 root 图，不再计入未归属项。原先单条候选（`SearchResultRow` 的 `<a href={result.url}>`，只渲染上游给出的搜索结果地址、不改写 URL）的处置随本次归属一并撤销，历史措辞见本轮对账记录。
 
-## `frontend/components/agents/agent-activity/index.tsx`（0，2026-10-17 随 agent-page 接入归属）
+## `frontend/components/agents/agent-activity/index.tsx`（0）
 
 `AgentActivity` 现由 `frontend/pages/agent-page.tsx` 渲染，本文件的 5 条候选（working 状态行、摘要展开按钮、`AgentDisclosure` 容器、活动列表与逐项 listitem）随该路由 root 归入能力图，不再计入未归属项。这些动作只切换本地展开与观看流式追加，没有网络写入。
 
@@ -77,32 +77,26 @@ beUI citations 组件的落地副本，由 agent 答案面板（`frontend/compon
 | --- | --- | --- | --- |
 | `frontend/components/agents/citations.tsx:81:5` | unmounted-ui | 仅当调用方渲染内联角标 `Citation` 时挂载；当前无调用点 | 锚点指向 `#<idPrefix>-<citationId>` 定位同页来源行；默认英文 `View citation {index}` 仅在该未接线组件内出现。 |
 
-## `frontend/components/agents/loading-states/reasoning-text.tsx`（0，2026-10-17 随 agent-page 接入归属）
+## `frontend/components/agents/loading-states/reasoning-text.tsx`（0）
 
 `ReasoningText` 现由 `frontend/pages/agent-page.tsx` 的推理状态渲染，本文件的 4 条候选（role=status 容器、cascade/scramble/swap 三种短语动效）随该路由 root 归入能力图，不再计入未归属项。这些动作只是本地短语轮播与 CSS 动画，没有网络写入。
 
-## `frontend/components/agents/message-bubble.tsx`（5）
+## `frontend/components/agents/message-bubble.tsx`（3）
 
 beUI 气泡的落地副本。`components/agent/agent-transcript.tsx:1` 由 `frontend/app.tsx:1425` 渲染，并在其中使用 `MessageBubble` 与 `MessageBubbleContent`，因此这两个部件虽未进入以 root symbol 为起点的图（静态图不追到这条声明处），却是产品实际挂载的表面，记 `app-boundary`；`MessageBubbleGroup`、`MessageBubbleCollapsible` 与其折叠按钮当前无调用点，记 `unmounted-ui`。全部部件只转发调用方 props/children，折叠状态为本地或调用方受控，没有网络写入。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/components/agents/message-bubble.tsx:127:7` | app-boundary | App 的 transcript 区域经 `agent-transcript.tsx` 渲染 `<MessageBubble variant="tint"\|"soft">` | motion.div 带 data-slot/data-align/data-variant，对齐取 `align` 或 MessageSideContext；转发 props/children，入场动画受 reduced-motion 门控，无写入。 |
-| `frontend/components/agents/message-bubble.tsx:264:5` | app-boundary | 同上，`<MessageBubbleContent>` 包裹每条消息正文（传 render 时克隆该子元素） | 转发 props/children 到 div，或 cloneElement(render) 并合并 ref/className/data-slot；不写业务状态。 |
 | `frontend/components/agents/message-bubble.tsx:281:5` | unmounted-ui | 仅当调用方渲染 `<MessageBubbleGroup>`（当前无调用点） | 转发 props/children 到 flex 容器，按 spacing 选间距；自身无动作。 |
 | `frontend/components/agents/message-bubble.tsx:330:5` | unmounted-ui | 仅当调用方渲染 `<MessageBubbleCollapsible>`（当前无调用点） | 转发 props/children 到带 data-state 的容器，未展开时用行数裁剪与遮罩；折叠状态来自本地或调用方。 |
 | `frontend/components/agents/message-bubble.tsx:348:7` | unmounted-ui | 仅当上述折叠部件被渲染且按钮点击（当前无调用点） | setOpen(!currentOpen)（受控时回调 onOpenChange）；按钮 aria-expanded/aria-controls 指向内容，不写业务状态。 |
 
-## `frontend/components/agents/message-scroller.tsx`（4）
+## `frontend/components/agents/message-scroller.tsx`（0）
 
 beUI 消息滚动区的落地副本。`components/agent/agent-transcript.tsx:16` 渲染 `<MessageScroller>`（App 的历史区域），因此视口、内容区与根节点三条候选虽未进入 root 图，仍是产品实际挂载的容器，记 `app-boundary`；`navigation="rail"` 无调用点传入，故 `PreviewRail` 那条（`:462`）在实际产品中不渲染，记 `unmounted-ui`。视口事件只维护本地“跟随最新”状态，其余是转发与展示，没有网络写入。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/components/agents/message-scroller.tsx:410:5` | app-boundary | App 的 transcript 区域渲染 `<MessageScroller>` 后，用户滚动/滚轮/触摸/按键 | scroll → handleScroll + 调用方 onViewportScroll；wheel/touchstart → leaveLiveEdge + 调用方回调；keydown 的 ArrowUp/PageUp/Home 也离开 live edge；仅改本地跟随状态。 |
-| `frontend/components/agents/message-scroller.tsx:441:7` | app-boundary | 同上（内容区随消息追加渲染） | role=log、aria-live=polite 的容器（浏览器播报追加内容），转发 contentProps 与 children；不写业务状态。 |
-| `frontend/components/agents/message-scroller.tsx:456:5` | app-boundary | 同上（根节点） | 转发 props/children 到根 div（data-slot=message-scroller）；无动作。 |
-| `frontend/components/agents/message-scroller.tsx:462:9` | unmounted-ui | 仅当调用方传 `navigation="rail"` 且轨道溢出时渲染（当前无调用点传该 prop） | 渲染 `PreviewRail` 并把 `onItemSelect` 接到 scrollToRailItem：只滚动本地视口、更新 activeRailId 与跟随标志；不请求、不写业务状态。 |
 
 ## `frontend/components/agents/message.tsx`（4）
 
@@ -115,7 +109,7 @@ beUI 消息原语的落地副本。`components/agent/answer-panel.tsx:3` 与 `co
 | `frontend/components/agents/message.tsx:228:5` | unmounted-ui | 仅当调用方渲染 `<MessageMarker>`（当前无调用点） | 转发 props/children 到居中的分隔条容器；无动作。 |
 | `frontend/components/agents/message.tsx:247:5` | unmounted-ui | 仅当调用方渲染 `<MessageTyping>`（当前无调用点） | 转发 props/children 与 label 到 span（typing 动效受 reduced-motion 门控）；无动作。 |
 
-## `frontend/components/agents/streaming-response.tsx`（0，2026-10-17 随 agent-page 接入归属）
+## `frontend/components/agents/streaming-response.tsx`（0）
 
 `StreamingResponse` 现由 `frontend/pages/agent-page.tsx:15` 渲染，本文件的 6 条候选（内部 `ResponseAction`、复制、重试、赞/踩、来源展开）随该路由 root 归入能力图，不再计入未归属项。这些动作只调用调用方回调或改本地状态，唯一对外副作用是可选剪贴板写入，没有服务端写入。
 
@@ -225,7 +219,7 @@ beUI 卡片的落地副本，经 [source:frontend/components/ui/card.tsx] 纯再
 | `frontend/components/motion/card.tsx:208:10` | app-boundary | 调用方渲染 `<CardContent>` | 转发 props/children 到 div，padding 取自 CardSizeContext；不写业务状态。 |
 | `frontend/components/motion/card.tsx:216:5` | unmounted-ui | 仅当调用方渲染 `<CardFooter>` 时出现（当前 0 处调用点） | 转发 props/children 到 div，footer padding 取自 CardSizeContext；自身无动作。 |
 
-## `frontend/components/motion/center-morph-modal.tsx`（0，2026-10-17 §17 打补丁并接入后归属）
+## `frontend/components/motion/center-morph-modal.tsx`（0）
 
 本载荷在 Wave 4 采用（矩阵 §17）并被 `components/ui/dialog.tsx` 接入为应用唯一模态：补丁把它原来的 4 条未归属候选（window keydown/Escape 与焦点循环、backdrop 按钮、role=dialog 面板、右上角关闭按钮）改造成可注入 `backdropProps`/`panelProps`/`children`、`onDismiss` 与 `dismissible`/`showCloseButton` 的形态，坐标因此移至 `337:5`、`354:15`、`388:19`、`432:23` 并随 `ui/dialog.tsx` 的调用点进入 root 图，不再计入未归属项。行为未变：全部是本地开合与焦点管理，没有网络写入。
 
@@ -292,7 +286,7 @@ beUI 日期区间选择器的 vendored 落地副本。除下列三条外，本�
 | `frontend/components/motion/date-range-picker.tsx:839:5` | unmounted-ui | 仅当调用方渲染 `DateRangePickerContent` 时出现（当前无调用点） | MorphPopoverContent 承载日历面：onOpenAutoFocus 记录内容节点并按 `autoFocus` 聚焦所选日期；开合与焦点都是本地行为，不写业务状态。 |
 | `frontend/components/motion/date-range-picker.tsx:872:5` | unmounted-ui | 仅当调用方渲染便捷组合 `DateRangePickerDropdown` 时出现（当前无调用点） | 组合 root + trigger + content + calendar 并透传 `placeholder`/`autoFocus`/`showSummary` 等 props；自身不写状态，选值与提交仍由调用方回调决定。 |
 
-## `frontend/components/motion/loader.tsx`（0，2026-10-15 归属落地页）
+## `frontend/components/motion/loader.tsx`（0）
 
 落地页 3D 加载态现在直接挂载该组件的 `dots` variant（`workbench-scene.tsx`），因此本文件的三个候选全部归属落地页，不再计入未归属项。历史分类见文末变更说明。
 
@@ -304,7 +298,7 @@ beUI 磁性包装（`Magnetic`），唯一 import 方是同样未被消费的 `b
 | --- | --- | --- | --- |
 | `frontend/components/motion/magnetic.tsx:41:5` | unmounted-ui | 仅当调用方渲染 `Magnetic` 时出现（当前无调用点） | motion.div：mousemove 按指针与元素中心的偏移设 x/y（触摸或 reduced-motion 时整体不启用），mouseleave 归零；纯装饰，无请求。 |
 
-## `frontend/components/motion/not-found/shared.tsx`（2）
+## `frontend/components/motion/not-found/shared.tsx`（3）
 
 路由 fallback 的 404 舞台与 CTA 行。原 `NotFoundPage` 内的返回首页链接已被 `NotFoundGlitch` 取代，该未归属坐标由 `frontend/app.tsx:931:250` 迁移到本文件；app.tsx 不再持有此候选。[source:frontend/components/motion/not-found/glitch.tsx]
 
@@ -313,22 +307,19 @@ beUI 磁性包装（`Magnetic`），唯一 import 方是同样未被消费的 `b
 | `frontend/components/motion/not-found/shared.tsx:55:7` | app-boundary | 路由 fallback 渲染 404；homeHref 默认 `/` | motion.a 指向 homeHref；whileTap/whileHover 受 reduced-motion 与 hover 能力门控。 |
 | `frontend/components/motion/not-found/shared.tsx:65:9` | unmounted-ui | 仅当调用方传入 browseHref 时渲染 | 第二 CTA 当前没有调用点传 browseHref，因此不出现在工作台界面中。 |
 
-## `frontend/components/motion/popover.tsx`（0，2026-10-17 §17 打补丁并接入后归属）
+| `frontend/components/motion/not-found/shared.tsx:86:5` | app-boundary | 路由 fallback 渲染 404 舞台节点（NotFoundStage 转发 props） | 转发 props/children 到舞台 div 并携带 data-page-state；无业务写入。 |
+## `frontend/components/motion/popover.tsx`（0）
 
 Wave 4 打补丁后，`components/shell/app-shell.tsx:9` 改为从本文件取 `Popover`/`PopoverTrigger`/`PopoverContent` 渲染账户菜单等点按锚定弹层，两条候选（根节点 `:420:7`、内容面 `:725:11`）也随之进入 root 图并从本记录移除。补丁把原来硬编码的 `role="dialog"` 与 `aria-haspopup` 改为调用方可传的语义插槽（这也是 `ui/dropdown-menu.tsx` 注释里当初否决它的原因被消除之处），行为仍是本地开合 + hover 时序 + 几何计算，没有网络写入。
 
-## `frontend/components/motion/preview-rail.tsx`（4）
+## `frontend/components/motion/preview-rail.tsx`（0）
 
 beUI 预览轨的落地副本，唯一 import 来自 `components/agents/message-scroller.tsx:462`，而该处只在 `navigation === "rail"` 时渲染；当前没有调用点传 `navigation="rail"`，所以本文件不出现于产品界面，下列条件均为假设调用者接线之后。tick 状态（hover/focus/pinned/active）全部是本地状态，点击才调用调用方 `onItemSelect`/`onActiveChange`，没有网络写入。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/components/motion/preview-rail.tsx:133:5` | unmounted-ui | 若挂载即渲染根 motion.div（layoutRoot） | onBlur：焦点离开根节点时清空 focusedId/pinnedId，避免卡片被悬空钉住；仅本地状态。 |
-| `frontend/components/motion/preview-rail.tsx:152:7` | unmounted-ui | 若挂载且指针离开 nav | onPointerLeave：`hover.leave(event)` 为真（非触摸抬起）时清空 hoveredId；触摸抬起不清理，交由外部点击处理。 |
-| `frontend/components/motion/preview-rail.tsx:250:13` | unmounted-ui | items 中带 href 的条目被渲染（repeat 逐项） | `<a href={item.href} target rel>`：指针/焦点维护 tick，`handleSelect` 按 tap 语义处理（触摸首击 preventDefault 只钉住卡片，第二击才跟随链接），再 selectItem + 调用方 onItemSelect；组件自身不写业务状态，跳转由 href 决定。 |
-| `frontend/components/motion/preview-rail.tsx:273:13` | unmounted-ui | items 中不带 href 的条目被渲染 | type=button 条目：相同的按下/聚焦/点击处理，`handleSelect` → selectItem（未受控时改本地 activeId，否则回调 onActiveChange）+ 调用方 onItemSelect；不发请求。 |
 
-## `frontend/components/motion/switch.tsx`（0，2026-10-16 归属管理端菜单编辑器）
+## `frontend/components/motion/switch.tsx`（0）
 
 管理端菜单编辑器的布尔可见性字段改为使用该组件（`menu-editor.tsx`），因此本文件的候选归属管理端，不再计入未归属项。
 
@@ -345,19 +336,19 @@ beUI 预览轨的落地副本，唯一 import 来自 `components/agents/message-
 | `frontend/components/shell/context-rail.tsx:47:60` | unmounted-ui | 若挂载，移动触发器可见时点击 | setMobileOpen(true)，打开 Sheet。 |
 | `frontend/components/shell/context-rail.tsx:48:5` | unmounted-ui | 若挂载，Sheet 的打开状态改变 | setMobileOpen；关闭/焦点行为需真实组件旅程验收。 |
 
-## `frontend/components/ui/card.tsx`（0，2026-10-17 改为 `motion/card` 的纯再导出）
+## `frontend/components/ui/card.tsx`（0）
 
 本文件不再定义 Card 部件，只 `export { CARD_TARGET_CLASS, Card, CardTitle… } from "../motion/card"`（Card、六个部件、三个类型与 `CardSize`/`CardVariant`），作为应用唯一 Card 的适配器，全部 24 处 import 都经它。原先记在本文件的 `13:85`（CardFooter 转发 div props）随实现移到 `frontend/components/motion/card.tsx:216:5`，因此本文件不再持有未归属候选；它仍作为消费 `motion/card` 的 caller 证据保留指纹。
 
-## `frontend/components/ui/checkbox.tsx`（0，2026-10-16 随 admin-role-detail 能力根归属）
+## `frontend/components/ui/checkbox.tsx`（0）
 
 `components/ui/checkbox.tsx` 的唯一消费者原为未归属的 `frontend/pages/admin/role-detail-page.tsx`；admin-role-detail 登记为能力根 `workbench-admin-role-detail` 后，该消费者整页归入该路由，本文件的候选（原生 `input type=checkbox`，转发 ref 与其余 props）随之归属对应路由，2026-10-16 起从本记录移除。`components/motion/checkbox.tsx` 另有已归属消费者，两者不是同一实现，不重复计算。
 
-## `frontend/components/ui/dropdown-menu.tsx`（0，2026-10-17 文件已删除）
+## `frontend/components/ui/dropdown-menu.tsx`（0）
 
 Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx` 与 `motion/command-palette.tsx`），因此按死代码移除，工作树中已不存在该源文件。上一轮为它的 7 条候选（document 层的 pointerdown/focusin/keydown 关闭、菜单根的 keydown、trigger 按钮、content 面板、item 按钮）记的 `unmounted-ui` 行与指纹一并撤回：源码删除后它们既不是未归属候选，也不再是需要防漂移的已审查文件。原先“删除属另一个决定”的判断现已执行，结论是删除而非保留。
 
-## `frontend/components/ui/tabs.tsx`（0，2026-10-17 改为组合 `motion/tabs` 载荷并接入成员页后归属）
+## `frontend/components/ui/tabs.tsx`（0）
 
 本文件已改为在 beUI `motion/tabs.tsx` 载荷外做适配器（导出名不变），并被 `frontend/pages/admin/members-page.tsx:8` 用来把「成员 / 授权记录」渲染成两页签，因此原来 4 条未归属候选（根 Provider、TabsList 键盘、TabsTrigger 点击、TabsContent 面板）随该路由进入 root 图，坐标变为 `67:5`、`73:10`、`103:10`、`121:10`，不再计入未归属项。
 
@@ -436,47 +427,39 @@ Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx`
 | `frontend/features/environments/files/asset-import-panel.tsx:56:12` | vm-runtime-unshipped | busy 时用户点击停止等待 | model.stop；只停止本地等待，不宣称撤销服务端处理。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:57:5` | vm-runtime-unshipped | 非 idle 且未 busy，用户关闭 | model.close；保留成员未决恢复元数据。 |
 
-## `frontend/features/environments/files/files-panel.tsx`（34）
+## `frontend/features/environments/files/files-panel.tsx`（26）
 
 实际消费者有两个：[source:tools/browser-vm/runtime-owner-browser.mjs]（仅传 runtime/locale，未传 submission，因而该 harness 不提供两个导入模型）与正式 [source:frontend/features/environments/environments-page.tsx]。正式页面**已挂载**：选中环境后渲染 `EnvironmentFiles`（[source:frontend/features/environments/environment-files-surface.tsx]），后者经惰性 `import('./files/files-panel')` 挂载本面板并传入真实 submission.memberId；本文件的 34 条候选因此属于新分类 vm-runtime-unshipped。本版本有意不发布 VM 引擎与镜像，owner 作用域 runtime 永远无法进入 running，FileView 的共同条件 state.available 恒为假，组件只渲染“Start an environment…”占位，全部动作（含两个导入面板）永久不可用。blocked=busy、editor、文本导入打开或资产导入打开。各行额外条件如下；所有选项/提示也保留，不把每行等同用户动作。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/features/environments/files/files-panel.tsx:27:129` | vm-runtime-unshipped | binding 与当前 runtime/member/requester 全部一致 | 向 FileView 传递 manager/importer/assetImporter 和剩余 props；旧绑定不渲染。 |
-| `frontend/features/environments/files/files-panel.tsx:73:7` | vm-runtime-unshipped | 文件可用、未 blocked 且非根目录 | manager.load 父目录第 1 页。 |
-| `frontend/features/environments/files/files-panel.tsx:74:7` | vm-runtime-unshipped | 文件可用且未 blocked | manager.load 刷新当前目录，不重放前次写入。 |
-| `frontend/features/environments/files/files-panel.tsx:75:7` | vm-runtime-unshipped | 文件可用且未 blocked | openModal(mkdir)；这里只打开新建目录确认框。 |
-| `frontend/features/environments/files/files-panel.tsx:76:41` | vm-runtime-unshipped | 文件可用、未 blocked 且用户选择至少一个文件 | 清空 input 后 manager.upload(files)，批量逐项处理。 |
-| `frontend/features/environments/files/files-panel.tsx:77:22` | vm-runtime-unshipped | 正在 busy 且未 cancelling | manager.cancel；只取消未发送工作，不宣称回滚已发送写入。 |
 | `frontend/features/environments/files/files-panel.tsx:79:41` | vm-runtime-unshipped | prepared.epoch 等于当前 epoch | role=status 呈现本地下载已准备及字节数。 |
-| `frontend/features/environments/files/files-panel.tsx:79:58` | vm-runtime-unshipped | 同一 epoch 的 prepared URL 存在，用户点击链接 | 浏览器 download 保存 Blob；不等于已取得原生落盘验收。 |
-| `frontend/features/environments/files/files-panel.tsx:80:21` | vm-runtime-unshipped | state.error 非空 | role=alert 显示映射错误或原错误码；不触发自动重试。 |
-| `frontend/features/environments/files/files-panel.tsx:81:5` | vm-runtime-unshipped | 文件可用时常驻状态区域 | 显示 notice 或 Working 状态，无独立操作。 |
-| `frontend/features/environments/files/files-panel.tsx:83:23` | vm-runtime-unshipped | 没有 openDownload 或原生保存能力 | 呈现流式保存不可用提示；不得伪装可流式落盘。 |
-| `frontend/features/environments/files/files-panel.tsx:87:40` | vm-runtime-unshipped | entry.type 为 directory 且未 blocked | manager.load 子目录第 1 页。 |
-| `frontend/features/environments/files/files-panel.tsx:88:37` | vm-runtime-unshipped | entry 为 file、未 blocked 且 bytes 不超过 1 MiB | manager.open 文本编辑；开始前清空另存名称。 |
-| `frontend/features/environments/files/files-panel.tsx:88:198` | vm-runtime-unshipped | entry 为 file、未 blocked 且 bytes 不超过 20 MiB | manager.download 后 receive 创建 Blob URL 或调用注入回调。 |
-| `frontend/features/environments/files/files-panel.tsx:88:359` | vm-runtime-unshipped | entry 为 file、未 blocked 且 openDownload 存在 | manager.downloadTo，显式调用保存选择器/注入 sink。 |
-| `frontend/features/environments/files/files-panel.tsx:88:562` | vm-runtime-unshipped | entry 为非空 file、不超过 128 KiB、importer 存在且未 blocked | importer.select 冻结文本快照；尚未提交审核。 |
-| `frontend/features/environments/files/files-panel.tsx:88:789` | vm-runtime-unshipped | entry 为非空 file、不超过 20 MiB、assetImporter 存在且未 blocked | assetImporter.select 冻结原文件；尚未上传。 |
-| `frontend/features/environments/files/files-panel.tsx:89:58` | vm-runtime-unshipped | entry 为 file 或 directory 且未 blocked | openModal(rename,entry.name)，不立即重命名。 |
-| `frontend/features/environments/files/files-panel.tsx:89:162` | vm-runtime-unshipped | entry 为 file 或 directory 且未 blocked | openModal(remove,entry.name)，不立即删除。 |
 | `frontend/features/environments/files/files-panel.tsx:93:7` | vm-runtime-unshipped | 未 blocked 且 page 大于 1 | manager.load 同目录上一页。 |
-| `frontend/features/environments/files/files-panel.tsx:95:7` | vm-runtime-unshipped | 未 blocked 且 page 小于 pages | manager.load 同目录下一页。 |
-| `frontend/features/environments/files/files-panel.tsx:96:7` | vm-runtime-unshipped | 未 blocked，改变每页数量 | manager.load 当前目录第 1 页，页大小为 20/50/100。 |
-| `frontend/features/environments/files/files-panel.tsx:96:224` | vm-runtime-unshipped | 分页 Select 按 20/50/100 循环选项 | options 依附父 Select；不是三个独立 API。 |
-| `frontend/features/environments/files/files-panel.tsx:99:23` | vm-runtime-unshipped | assetImporter 存在且未 blocked | recover 回读当前成员未决资产，不自动重放上传。 |
-| `frontend/features/environments/files/files-panel.tsx:102:7` | vm-runtime-unshipped | editor 存在且未 busy | manager.edit 更新编辑草稿；不直接写客体文件。 |
-| `frontend/features/environments/files/files-panel.tsx:103:45` | vm-runtime-unshipped | editor 存在、dirty、无 conflict 且未 busy | manager.save，使用已有编辑版本校验。 |
-| `frontend/features/environments/files/files-panel.tsx:104:9` | vm-runtime-unshipped | editor 存在且未 busy，明确点击丢弃重读 | manager.open 当前名称；这是显式丢弃草稿操作。 |
-| `frontend/features/environments/files/files-panel.tsx:105:9` | vm-runtime-unshipped | editor 存在且未 busy，明确点击关闭 | manager.closeEditor 并清空副本名称。 |
-| `frontend/features/environments/files/files-panel.tsx:106:43` | vm-runtime-unshipped | editor 存在且未 busy，改变副本名称 | setSaveName；仅更新本地表单状态。 |
-| `frontend/features/environments/files/files-panel.tsx:107:7` | vm-runtime-unshipped | editor 存在、未 busy 且副本名非空 | manager.saveAs 后清空副本名；不覆盖原文件。 |
-| `frontend/features/environments/files/files-panel.tsx:110:5` | vm-runtime-unshipped | modal.epoch 等于当前 epoch | Dialog 可见；onOpenChange 关闭时清空 modal/name。 |
-| `frontend/features/environments/files/files-panel.tsx:112:141` | vm-runtime-unshipped | 确认框已打开且 action 非 remove | 名称输入更新本地 name，用于 mkdir/rename。 |
-| `frontend/features/environments/files/files-panel.tsx:113:35` | vm-runtime-unshipped | 确认框打开、未 busy，非删除时名称非空 | confirm 再核对 epoch，关闭框后分派 mkdir/rename/remove。 |
-| `frontend/features/environments/files/files-panel.tsx:113:178` | vm-runtime-unshipped | 确认框打开，用户点击取消 | 清空 modal/name；不调用文件写入。 |
 
+| `frontend/features/environments/files/files-panel.tsx:30:129` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:76:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:77:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:78:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:80:22` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:82:41` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:82:58` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:83:21` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:84:5` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:86:23` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:90:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:92:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:93:224` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:96:23` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:99:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:100:45` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:101:9` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:102:9` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:103:43` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:104:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:107:5` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:109:141` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:110:35` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:110:178` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 ## `frontend/features/environments/files/knowledge-import-panel.tsx`（14）
 
 由 FilesPanel 在 importer 存在时挂载；正式 [source:frontend/features/environments/environment-files-surface.tsx] 已挂载 FilesPanel 并传入真实 submission.memberId，因此 importer 现会被创建；但本版本有意不发布 VM 引擎，FileView 在 state.available 为假时提前返回占位，共同条件非 idle 永远不可达。editable 仅 kind=preview，busy 为 reading/sending。下游 [source:frontend/features/environments/files/knowledge-import.ts] 使用 createSubmission，不自行发布；未知状态保留原载荷/键。
@@ -525,7 +508,7 @@ Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx`
 | `frontend/features/environments/storage/checkpoints.mjs:49:42` | vm-runtime-unshipped | checkpoint transaction 已创建且传入 signal，取消发生 | abort 对应 IndexedDB transaction；不将发出请求视为提交完成。 |
 | `frontend/features/environments/storage/checkpoints.mjs:128:3` | vm-runtime-unshipped | checkpoint store 已创建，账户 owner 被终止 | close 清理事务/连接；物理擦除证明不由此得出。 |
 
-## `frontend/features/environments/storage/reconcile-checkpoints.ts`（0，2026-10-16 归属 workbench-environments）
+## `frontend/features/environments/storage/reconcile-checkpoints.ts`（0）
 
 该文件的候选现由 `workbench-environments` 能力根覆盖，2026-10-16 起不再计入未归属项。与 checkpoints 必须同 owner.scope；只基于服务端 tombstones 删除本地副本，不以分页缺项推断删除。
 
@@ -537,11 +520,11 @@ Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx`
 | --- | --- | --- | --- |
 | `frontend/lib/workspace-location.ts:63:3` | app-boundary | HistoryNavigationNotice 订阅，owner 发出 WORKSPACE_HISTORY_FAULT_EVENT | listener 更新 fault snapshot；取消订阅移除监听器。 |
 
-## `frontend/pages/admin/create-role-page.tsx`（0，2026-10-16 归属 admin-role-new 能力根）
+## `frontend/pages/admin/create-role-page.tsx`（0）
 
 角色新建页，由 `frontend/app.tsx` 的 `AdminRoleNewRoute`（renderPage 的 admin-role-new 分支）渲染，可由 `frontend/pages/admin/roles-page.tsx` 的创建按钮（写 `/admin/roles/new`）到达。admin-role-new 现已在 `shared/workbench-maturity-capabilities.ts` 登记为能力根 `workbench-admin-role-new`（root symbol `AdminRoleNewRoute` 与 `AdminRoleCreatePage`），因此整页候选归入该路由、由以 root symbol 为起点的图覆盖，不再计入未归属项，2026-10-16 起从本记录移除。写入与读取都由共享控制器回调承担，页面自身不发请求。
 
-## `frontend/pages/admin/role-detail-page.tsx`（0，2026-10-16 归属 admin-role-detail 能力根）
+## `frontend/pages/admin/role-detail-page.tsx`（0）
 
 角色权限详情页，由 `frontend/app.tsx` 的 `AdminRoleDetailRoute`（renderPage 的 admin-role-detail 分支）渲染，可由角色列表行（写 `/admin/roles/<id>`）到达。admin-role-detail 现已在 `shared/workbench-maturity-capabilities.ts` 登记为能力根 `workbench-admin-role-detail`（root symbol `AdminRoleDetailRoute` 与 `AdminRoleDetailPage`），因此整页候选归入该路由、由以 root symbol 为起点的图覆盖，不再计入未归属项，2026-10-16 起从本记录移除。保存、指派与取消指派都先进入确认框，再由共享控制器回调落盘，页面自身不发请求。
 
@@ -622,8 +605,8 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/components/motion/date-range-picker.tsx`: `1e346dbbe4251c74296546e8f8f3563fd5df3b801c0db1dd2c47f61812562f89`
 - `frontend/components/motion/scroll-reveal.tsx`: `7853c47a57dc1ac4c9b41d744a2421c9473d0597555300e4a84d1e54407abc97`
 - `frontend/components/motion/magnetic.tsx`: `4409bd3cc09e05df784661657795624f663cebe0a3693c76e82df210c42e357c`
-- `frontend/components/motion/not-found/glitch.tsx`: `f63ed5577881f978c331ffd4552241abc90c71c14cd2bb5e2eafa2ed2556ef03`
-- `frontend/components/motion/not-found/shared.tsx`: `f98d45223967f45277bf89b659b308e63c784397d4da9c2830565b9bcfc508da`
+- `frontend/components/motion/not-found/glitch.tsx`: `96f1cfb9702592af701e83cd3a8e5ba82d674caed2a0c68987e124468afb018c`
+- `frontend/components/motion/not-found/shared.tsx`: `46af8848dc48c4ada565ff548f384e99fdaa2e2cda306a2829fab70cc8183981`
 - `frontend/components/motion/preview-rail.tsx`: `2b7e72b05d16a7a6e887175310dae523321e55be1ff79c7c01593b16469c4e4c`
 - `frontend/components/shell/context-rail.tsx`: `9dcaa79e710f0b871c977e2251a71a4571124a861b4e9c9591bfa113398b184d`
 - `frontend/components/ui/button.tsx`: `13861f82b8222d50039381ec724df08c53d8c0c426b822027b54735463274d58`
@@ -636,11 +619,11 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/features/environments/connector-session.mjs`: `4bea623fd47128568d112e9cfa26ecdc90f114a6572e536b08d49f4537cc5269`
 - `frontend/features/environments/environment-files-surface.tsx`: `f24df6c74cbe83f85a7536bd9a9d2015df21634c1ccbea0fb3643449a70025ed`
 - `frontend/features/environments/environment-vm-composition.ts`: `b26be9b74c008c4bbddbc04e11c6bb0bf9853bc8aa9a0157a7175cd48abd47e7`
-- `frontend/features/environments/environments-page.tsx`: `57886ef62735f2a9350cbb93ee3f3937be66baca7677b60c5a8f3182fffa9c12`
+- `frontend/features/environments/environments-page.tsx`: `92d29c2f586d2de028cfec425826274c752c364b859b9e4c597547f51a055d78`
 - `frontend/features/environments/files/asset-import-panel.tsx`: `27e56d8ac0eb52b336bace709dbe383ad1b8197695d6b1bee3c199ccd725b8dd`
 - `frontend/features/environments/files/asset-import.ts`: `a825ff94a287acd8bc61cd517f27fe92d1ee32cd999948fb9e6f7d3def217338`
 - `frontend/features/environments/files/file-manager.mjs`: `2721e8e7abecd3dda95765eecb055f7bf3272942f1933807a07bba83a7df5ea6`
-- `frontend/features/environments/files/files-panel.tsx`: `8cc17fc174ac62274e3b65e59109781cc092cea287a031add3118467e49a1c4d`
+- `frontend/features/environments/files/files-panel.tsx`: `9d953cf881d1b23749fb86dca773217225761e92d7c7bc0ba2bfd291d428e9e4`
 - `frontend/features/environments/files/knowledge-import-panel.tsx`: `0b85767dfa44343e7f69ce60120f1be8db217fe34ed4055b3b23bf395cf9ff99`
 - `frontend/features/environments/files/knowledge-import.ts`: `bce2bebe39eb4f17650b35b4a020f51f757ba5594b6e178a4a44f98b45028abd`
 - `frontend/features/environments/files/stream-download.mjs`: `b491973525cb44aefce8a265490471e947931c2380b605d15b37226ca7295943`

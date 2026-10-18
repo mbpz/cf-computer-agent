@@ -1,5 +1,6 @@
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { SharedLayoutBg } from "../../components/motion/shared-layout-bg";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
@@ -79,7 +80,10 @@ export function KnowledgeItemPage({ state, locale, onRetry, canReview, pendingAc
         <Button type="button" variant="outline" data-knowledge-discard-operation disabled={pending} onClick={onDiscardOperation}>{frontendText(locale, "ADMIN_TRASH_DISCARD")}</Button>
       </>}
     </div>
-    {pending && <p role="status" data-knowledge-pending className="text-sm text-muted-foreground">{phase}…</p>}
+    {pending && <div data-knowledge-pending className="space-y-2">
+      <PageState kind="loading" title={`${phase}…`} />
+      <p className="text-sm text-muted-foreground">{phase}…</p>
+    </div>}
   </section>;
 }
 
@@ -124,18 +128,20 @@ function ItemBody({ item, locale, canWrite, locked, previousRevisionId, trashed,
           <p className="text-xs text-muted-foreground">{frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_HISTORY_HINT")}</p>
           {revisions.length === 0
             ? <p className="text-muted-foreground">{frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_HISTORY_EMPTY")}</p>
-            : <ul className="space-y-2">
-              {revisions.map((entry) => <li key={entry.id} data-knowledge-history-row={entry.id} className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs">{entry.id}</span>
-                <span className="text-xs text-muted-foreground">{entry.publishedAt}</span>
-                {entry.isCurrent
-                  ? <Badge variant="outline">{frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_HISTORY_CURRENT")}</Badge>
-                  : canWrite && <Button type="button" variant="outline" size="sm" disabled={locked}
-                    data-knowledge-rollback-target={entry.id}
-                    aria-label={frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_ROLLBACK").replace("{revisionId}", entry.id)}
-                    onClick={() => onSelectRollback?.(entry.id)}>{frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_SELECT")}</Button>}
+            : <SharedLayoutBg as="ul" className="space-y-2" inset={8}>
+              {revisions.map((entry) => <li key={entry.id} data-knowledge-history-row={entry.id}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs">{entry.id}</span>
+                  <span className="text-xs text-muted-foreground">{entry.publishedAt}</span>
+                  {entry.isCurrent
+                    ? <Badge variant="outline">{frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_HISTORY_CURRENT")}</Badge>
+                    : canWrite && <Button type="button" variant="outline" size="sm" disabled={locked}
+                      data-knowledge-rollback-target={entry.id}
+                      aria-label={frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_ROLLBACK").replace("{revisionId}", entry.id)}
+                      onClick={() => onSelectRollback?.(entry.id)}>{frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_SELECT")}</Button>}
+                </div>
               </li>)}
-            </ul>}
+            </SharedLayoutBg>}
           {hasMoreRevisions && <Button type="button" variant="outline" size="sm" data-knowledge-history-more
             disabled={locked || historyPending} onClick={onLoadMoreRevisions}>{frontendText(locale, "ADMIN_KNOWLEDGE_ITEM_HISTORY_MORE")}</Button>}
         </div>

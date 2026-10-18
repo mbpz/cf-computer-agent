@@ -1,9 +1,8 @@
 import { ArrowLeft, ArrowRight, Check, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type Dispatch } from "react";
 import { Button } from "../../components/motion/button/base";
-import { Drawer } from "../../components/motion/drawer";
 import { Card } from "../../components/ui/card";
-import { useFocusScope } from "../../components/ui/focus-scope";
+import { Sheet, SheetContent } from "../../components/ui/sheet";
 import type { LocaleRuntime } from "../../lib/i18n";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
 import { demoContent } from "./workbench-demo-data";
@@ -25,7 +24,10 @@ export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
   const content = demoContent(locale.locale);
   const active = state.activeFeature !== null;
   const close = useCallback(() => dispatch({ type: "close" }), [dispatch]);
-  const focusRef = useFocusScope(active, close);
+  // The sheet adapter arms the focus scope (initial focus, Tab trap, restore)
+  // on its own wrapper; this ref only anchors the manual recovery and the
+  // citation trigger lookup.
+  const focusRef = useRef<HTMLDivElement>(null);
   const id = useId();
   const citationHeading = useRef<HTMLHeadingElement>(null);
   const previousCitation = useRef<string | null>(null);
@@ -74,8 +76,9 @@ export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
   const gated = (state.step === "capture" && !state.captured) || (state.step === "action" && !state.taskDone);
   const gateText = state.step === "capture" ? "CAPTURE_GATE" : "ACTION_GATE";
 
-  return <Drawer open={active} onOpenChange={open => { if (!open) close(); }} side="right" dismissable
-    ariaLabel={text("GUIDE_LABEL")} className="workbench-feature-panel" backdropClassName="workbench-landing-overlay">
+  return <Sheet open={active} onOpenChange={open => { if (!open) close(); }}>
+    <SheetContent side="right" ariaLabel={text("GUIDE_LABEL")} className="workbench-feature-panel"
+      backdropClassName="workbench-landing-overlay">
     <div ref={focusRef} className="workbench-feature-panel-body" tabIndex={-1}
       aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}>
       <header className="workbench-panel-header">
@@ -164,5 +167,6 @@ export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
         </footer>}
       </>}
     </div>
-  </Drawer>;
+    </SheetContent>
+  </Sheet>;
 }

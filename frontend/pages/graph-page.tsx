@@ -11,6 +11,7 @@ import { FilterDisclosure } from "../components/ui/filter-disclosure";
 import { Input } from "../components/ui/input";
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
+import { SharedLayoutBg } from "../components/motion/shared-layout-bg";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { loadGraph, type GraphQueryInput, type GraphSnapshot } from "../lib/graph-data";
 import { loadGraphSuggestions, type GraphSuggestion, type GraphSuggestionResult } from "../lib/graph-suggestions";
@@ -440,7 +441,7 @@ function GraphSuggestionsPanel({ locale, state, onGenerate }: { locale: LocaleRu
     <CardContent>
       {state.kind === "error" && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "GRAPH_SUGGESTIONS_ERROR")}</p>}
       {state.kind !== "error" && suggestions.length === 0 && <p className="text-sm text-muted-foreground">{frontendText(locale, state.result?.messageKey === "GRAPH_SUGGESTIONS_EVIDENCE_INSUFFICIENT" ? "GRAPH_SUGGESTIONS_EVIDENCE_GAP" : "GRAPH_SUGGESTIONS_EMPTY")}</p>}
-      {suggestions.length > 0 && <div className="grid gap-3 md:grid-cols-2">{suggestions.map((suggestion) => <GraphSuggestionCard key={suggestion.id} locale={locale} suggestion={suggestion} />)}</div>}
+      {suggestions.length > 0 && <SharedLayoutBg className="grid gap-3 md:grid-cols-2" inset={6} pillClassName="rounded-lg bg-muted/60">{suggestions.map((suggestion) => <GraphSuggestionCard key={suggestion.id} locale={locale} suggestion={suggestion} />)}</SharedLayoutBg>}
     </CardContent>
   </Card>;
 }

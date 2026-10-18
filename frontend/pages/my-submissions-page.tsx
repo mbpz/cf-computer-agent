@@ -6,6 +6,7 @@ import { ButtonLink } from "../components/motion/button/base";
 import { DataTable, type DataTablePage } from "../components/data-table";
 import { DateRangeInput, type DayRange } from "../components/ui/date-range-input";
 import { AppliedFilters, type AppliedFilter } from "../components/ui/applied-filters";
+import { OverflowActions } from "../components/motion/overflow-actions";
 import { PageHeader } from "../components/ui/page-header";
 import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
@@ -152,7 +153,12 @@ function resubmitAction(item: MySubmissionItem, locale: LocaleRuntime, onResubmi
   if (mark) return <span data-my-submission-resubmitted className="text-xs text-muted-foreground">{frontendText(locale, "SUBMISSIONS_ALREADY_RESUBMITTED")} {mark.submissionId}</span>;
   if (item.status !== "revision_requested") return null;
   if (!onResubmit || !submissionResubmitSource(item)) return <span data-my-submission-resubmit-unavailable className="text-xs text-muted-foreground">{frontendText(locale, "SUBMISSIONS_RESUBMIT_UNAVAILABLE")}</span>;
-  return <button type="button" data-my-submission-resubmit className="text-sm font-medium text-primary hover:underline" onClick={() => onResubmit(item)}>{frontendText(locale, "SUBMISSIONS_RESUBMIT")}</button>;
+  return <OverflowActions size="sm" primaryActions={[{
+    id: "resubmit",
+    label: frontendText(locale, "SUBMISSIONS_RESUBMIT"),
+    attributes: { "data-my-submission-resubmit": true },
+    onClick: () => onResubmit(item),
+  }]} openLabel={frontendText(locale, "COMMON_MORE_ACTIONS")} closeLabel={frontendText(locale, "COMMON_FEWER_ACTIONS")} />;
 }
 
 function reviewReasonKey(reasonCode: NonNullable<MySubmissionItem["review"]>["reasonCode"]): string {

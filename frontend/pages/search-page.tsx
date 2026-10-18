@@ -12,6 +12,7 @@ import { SearchChipsField } from "../components/ui/search-chips-field";
 import { FilterSelect } from "../components/ui/filter-select";
 import { FilterDisclosure } from "../components/ui/filter-disclosure";
 import { DateRangeInput } from "../components/ui/date-range-input";
+import { SharedLayoutBg } from "../components/motion/shared-layout-bg";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { SavedViewItem } from "../lib/saved-views-data";
 import { cn } from "../lib/utils";
@@ -172,7 +173,7 @@ export function SearchPage({ state, locale, query, queryLocked = false, pending 
             <Button type="submit" disabled={savedViewPending || !savedViewName.trim()}>{frontendText(locale, "SEARCH_SAVE_VIEW")}</Button>
           </form>}
           {!!savedViews?.length && <div data-saved-view-row role="group" aria-label={frontendText(locale, "SEARCH_SAVED_VIEWS")} className="order-first flex min-w-0 flex-1 basis-0 items-center gap-2">
-            <div ref={viewsRef} data-saved-view-list className={cn("min-w-0 flex-1 text-sm", viewsExpanded ? "line-clamp-2" : "line-clamp-1")}>{savedViews.map((view) => <span key={view.id} className="mr-2 inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 align-middle"><button type="button" data-saved-view-apply={view.id} className="font-medium hover:underline" disabled={savedViewPending} onClick={() => onApplyView?.(view)}>{view.name}</button><button type="button" disabled={savedViewPending || !onDeleteView} aria-label={`${frontendText(locale, "SEARCH_DELETE_VIEW")}: ${view.name}`} className="rounded px-1 text-muted-foreground hover:bg-muted" onClick={() => onDeleteView?.(view.id)}>×</button></span>)}</div>
+            <div ref={viewsRef} data-saved-view-list className={cn("min-w-0 flex-1 text-sm", viewsExpanded ? "line-clamp-2" : "line-clamp-1")}><SharedLayoutBg className="contents" inset={2} pillClassName="rounded-md bg-muted/60">{savedViews.map((view) => <span key={view.id} className="mr-2 inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 align-middle"><button type="button" data-saved-view-apply={view.id} className="font-medium hover:underline" disabled={savedViewPending} onClick={() => onApplyView?.(view)}>{view.name}</button><button type="button" disabled={savedViewPending || !onDeleteView} aria-label={`${frontendText(locale, "SEARCH_DELETE_VIEW")}: ${view.name}`} className="rounded px-1 text-muted-foreground hover:bg-muted" onClick={() => onDeleteView?.(view.id)}>×</button></span>)}</SharedLayoutBg></div>
             {viewsOverflowing && <Button type="button" size="sm" variant="ghost" data-saved-view-toggle className="h-6 shrink-0 px-2 text-xs" aria-expanded={viewsExpanded} onClick={() => setViewsExpanded((current) => !current)}>{frontendText(locale, viewsExpanded ? "COMMON_COLLAPSE" : "COMMON_EXPAND")}</Button>}
           </div>}
         </div>

@@ -72,7 +72,7 @@ export function NotFoundGlitch({
   browseLabel,
 }: NotFoundProps) {
   return (
-    <NotFoundStage className={className}>
+    <NotFoundStage className={className} data-page-state="not-found">
       <div className="group relative select-none font-mono font-bold leading-none tracking-tighter text-foreground [font-size:clamp(5rem,18vw,11rem)]">
         {/* Chromatic ghost layers, nudged apart on hover. */}
         <span
