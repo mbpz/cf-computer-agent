@@ -1,5 +1,12 @@
+import { ListChecks, MagnifyingGlass, Sparkle } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { PageState } from "../components/ui/page-state";
+import { AnimatedNumber } from "../components/motion/animated-number";
+import { Dock, DockItem } from "../components/motion/dock";
+import { SharedLayoutBg } from "../components/motion/shared-layout-bg";
+import { TiltCard } from "../components/motion/tilt-card";
+import { Tooltip } from "../components/motion/tooltip";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { WorkbenchSummary } from "../lib/workbench-data";
 
@@ -47,6 +54,12 @@ const ACTIVITY_LABEL_KEYS: Record<string, string> = {
   "discussion.message_sent": "WORKBENCH_ACTIVITY_DISCUSSION_MESSAGE_SENT",
 };
 
+const QUICK_ACTION_ICONS: Record<string, ReactNode> = {
+  "open-tasks": <ListChecks size={20} weight="duotone" />,
+  "ask-ai": <Sparkle size={20} weight="duotone" />,
+  "search-knowledge": <MagnifyingGlass size={20} weight="duotone" />,
+};
+
 function textWithCount(locale: LocaleRuntime | undefined, key: string, count: number): string {
   return frontendText(locale, key).replace("{count}", String(count));
 }
@@ -78,7 +91,8 @@ export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: 
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-        <Card className="overflow-hidden border-primary/25">
+        <TiltCard className="h-full">
+        <Card className="h-full overflow-hidden border-primary/25">
           <CardHeader>
             <CardTitle>{frontendText(locale, "WORKBENCH_CAPTURE_TITLE")}</CardTitle>
             <p className="text-sm text-muted-foreground">{frontendText(locale, "WORKBENCH_CAPTURE_DESCRIPTION")}</p>
@@ -88,6 +102,7 @@ export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: 
             <a href="/agent" className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "WORKBENCH_QUICK_AI")}</a>
           </CardContent>
         </Card>
+        </TiltCard>
 
         <Card data-home-section="tasks">
           <CardHeader className="flex-row items-start justify-between space-y-0">
@@ -98,7 +113,7 @@ export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: 
             <a href="/tasks" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "WORKBENCH_OPEN_TASKS")}</a>
           </CardHeader>
           <CardContent>
-            {unavailable.has("tasks") ? failed : <><p className="text-4xl font-semibold tabular-nums">{summary.taskCount}</p>
+            {unavailable.has("tasks") ? failed : <><p className="text-4xl font-semibold"><AnimatedNumber value={summary.taskCount} startOnView={false} /></p>
             <p className="mt-1 text-sm text-muted-foreground">{textWithCount(locale, "WORKBENCH_OVERDUE", summary.overdueTaskCount)}</p></>}
           </CardContent>
         </Card>
@@ -114,14 +129,16 @@ export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: 
             {unavailable.has("knowledge") ? failed : (
               <>
                 {summary.recentKnowledge.length ? (
-                  <div className="divide-y">
+                  <SharedLayoutBg as="ul" className="divide-y" inset={10}>
                     {summary.recentKnowledge.map((item) => (
-                      <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="block py-3 first:pt-0 last:pb-0 hover:text-primary">
-                        <p className="font-medium">{item.title || frontendText(locale, "KNOWLEDGE_UNTITLED")}</p>
-                        {item.summary && <p className="mt-1 text-xs text-muted-foreground">{toDateLabel(item.summary, locale)}</p>}
-                      </a>
+                      <li key={item.id}>
+                        <a href={`/knowledge/${encodeURIComponent(item.id)}`} className="block px-2 py-3 first:pt-0 last:pb-0 hover:text-primary">
+                          <p className="font-medium">{item.title || frontendText(locale, "KNOWLEDGE_UNTITLED")}</p>
+                          {item.summary && <p className="mt-1 text-xs text-muted-foreground">{toDateLabel(item.summary, locale)}</p>}
+                        </a>
+                      </li>
                     ))}
-                  </div>
+                  </SharedLayoutBg>
                 ) : <p className="text-sm text-muted-foreground">{frontendText(locale, "HOME_RECENT_EMPTY")}</p>}
                 {state.recentMoreError ? (
                   <div role="alert" data-home-more-error="knowledge" className="mt-3 flex flex-wrap items-center gap-2 text-sm text-destructive">
@@ -142,13 +159,13 @@ export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: 
           <CardHeader><CardTitle>{frontendText(locale, "WORKBENCH_ACTIVITY_TITLE")}</CardTitle></CardHeader>
           <CardContent>
             {unavailable.has("activity") ? failed : summary.recentActivity.length ? (
-              <div className="space-y-4">
+              <SharedLayoutBg as="ul" className="space-y-1" inset={10}>
                 {summary.recentActivity.map((item) => {
                   const label = frontendText(locale, ACTIVITY_LABEL_KEYS[item.label] ?? "WORKBENCH_ACTIVITY_UNKNOWN");
-                  const content = <div><p className="text-sm font-medium">{label}</p><p className="mt-1 text-xs text-muted-foreground">{toDateLabel(item.createdAt, locale)}</p></div>;
-                  return item.href ? <a key={item.id} href={item.href} className="block hover:text-primary">{content}</a> : <div key={item.id}>{content}</div>;
+                  const content = <div className="px-2 py-2"><p className="text-sm font-medium">{label}</p><p className="mt-1 text-xs text-muted-foreground">{toDateLabel(item.createdAt, locale)}</p></div>;
+                  return <li key={item.id}>{item.href ? <a href={item.href} className="block hover:text-primary">{content}</a> : content}</li>;
                 })}
-              </div>
+              </SharedLayoutBg>
             ) : <p className="text-sm text-muted-foreground">{frontendText(locale, "WORKBENCH_ACTIVITY_EMPTY")}</p>}
           </CardContent>
         </Card>
@@ -156,8 +173,19 @@ export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: 
 
       <Card>
         <CardHeader><CardTitle>{frontendText(locale, "WORKBENCH_QUICK_ACTIONS")}</CardTitle></CardHeader>
-        <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {summary.quickActions.map((action) => <a key={action.id} href={action.href} className="rounded-md border px-3 py-3 text-sm font-medium hover:bg-accent">{frontendText(locale, action.labelKey)}</a>)}
+        <CardContent>
+          <Dock size={44} className="max-w-full">
+            {summary.quickActions.map((action) => {
+              const label = frontendText(locale, action.labelKey);
+              return <DockItem key={action.id}>
+                <Tooltip content={label}>
+                  <a href={action.href} aria-label={label} className="grid size-full place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    {QUICK_ACTION_ICONS[action.id] ?? <ListChecks size={20} weight="duotone" />}
+                  </a>
+                </Tooltip>
+              </DockItem>;
+            })}
+          </Dock>
         </CardContent>
       </Card>
     </section>

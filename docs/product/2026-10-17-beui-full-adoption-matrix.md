@@ -56,6 +56,7 @@
 | 知识阅读器 | `collapsible` / `bouncy-accordion`（章节）、`morphing-lightbox`（图片）、`file-tree`（已装，目录） |
 | 移动列表 | `swipeable-list`、`pull-to-refresh` |
 | 站点统计 | `status-bar`（每日活动的分层条形与逐日 tooltip）＋ `donut-chart`（热门页面/地区/国家占比）＋ `tabs`（维度切换） |
+| 首页 | `dock`（快捷操作入口，图标按钮带 aria-label 与 tooltip）＋ `shared-layout-bg`（最近知识与活动列表的滑动高亮）＋ `tilt-card`（收集卡）＋ `animated-number`（任务计数） |
 
 ### Wave 3 — 一致性锁定与验收
 
