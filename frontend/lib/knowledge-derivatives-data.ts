@@ -158,6 +158,13 @@ export interface DerivativeRequestOptions {
   signal?: AbortSignal;
 }
 
+/** Normalizes a retained Studio payload with the same rules as a fresh one. */
+export function normalizeStoredArtifact(kind: "mindmap" | "flashcards" | "quiz", payload: unknown): KnowledgeDerivative {
+  if (kind === "mindmap") return normalizeMindmap(payload);
+  if (kind === "flashcards") return normalizeFlashcards(payload);
+  return normalizeQuiz(payload);
+}
+
 /**
  * `report` is the one surface that is bound to a research run: the server
  * refuses it for a run that is not running or is not the caller's own, and it

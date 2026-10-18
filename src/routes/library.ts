@@ -27,6 +27,7 @@ import { renderResearchReportDraft, type ResearchReportService } from "../ai/res
 import type { MindmapService } from "../ai/mindmap-service";
 import type { FlashcardService } from "../ai/flashcard-service";
 import type { QuizService } from "../ai/quiz-service";
+import type { StudioArtifactService } from "../studio/artifacts";
 import type { PrivateNotesService } from "../private-notes/service";
 import type { SubmissionsService } from "../submissions/service";
 import type { FavoritesService } from "../favorites/service";
@@ -49,6 +50,7 @@ export interface LibraryRouteServices {
   mindmaps: MindmapService;
   flashcards: FlashcardService;
   quizzes: QuizService;
+  studioArtifacts: StudioArtifactService;
   library: LibraryService;
   privateNotes: PrivateNotesService;
   submissions: SubmissionsService;
@@ -549,7 +551,9 @@ export async function routeLibraryApi(
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("MINDMAP_REQUEST_INVALID", "Request body is invalid", 400);
     const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
-    return jsonResponse(await services.mindmaps.generate(scope, knowledgeItemId, citations), 200, context.requestId);
+    const result = await services.mindmaps.generate(scope, knowledgeItemId, citations);
+    const artifact = await services.studioArtifacts.save(scope, knowledgeItemId, "mindmap", result, input.citationIds as string[]).catch(() => null);
+    return jsonResponse({ ...result, ...(artifact ? { artifact } : {}) }, 200, context.requestId);
   }
 
   const report = /^\/api\/knowledge\/([^/]+)\/report$/.exec(url.pathname);
@@ -573,7 +577,9 @@ export async function routeLibraryApi(
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("FLASHCARD_REQUEST_INVALID", "Request body is invalid", 400);
     const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
-    return jsonResponse(await services.flashcards.generate(scope, knowledgeItemId, citations), 200, context.requestId);
+    const result = await services.flashcards.generate(scope, knowledgeItemId, citations);
+    const artifact = await services.studioArtifacts.save(scope, knowledgeItemId, "flashcards", result, input.citationIds as string[]).catch(() => null);
+    return jsonResponse({ ...result, ...(artifact ? { artifact } : {}) }, 200, context.requestId);
   }
 
   const quiz = /^\/api\/knowledge\/([^/]+)\/quiz$/.exec(url.pathname);
@@ -585,7 +591,40 @@ export async function routeLibraryApi(
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("QUIZ_REQUEST_INVALID", "Request body is invalid", 400);
     const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
-    return jsonResponse(await services.quizzes.generate(scope, knowledgeItemId, citations), 200, context.requestId);
+    const result = await services.quizzes.generate(scope, knowledgeItemId, citations);
+    const artifact = await services.studioArtifacts.save(scope, knowledgeItemId, "quiz", result, input.citationIds as string[]).catch(() => null);
+    return jsonResponse({ ...result, ...(artifact ? { artifact } : {}) }, 200, context.requestId);
+  }
+
+  const artifacts = /^\/api\/knowledge\/([^/]+)\/artifacts$/.exec(url.pathname);
+  if (artifacts) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse(
+      { artifacts: await services.studioArtifacts.list(scope, decodePathId(artifacts[1]!)) },
+      200,
+      context.requestId,
+    );
+  }
+
+  const artifact = /^\/api\/knowledge\/([^/]+)\/artifacts\/([^/]+)$/.exec(url.pathname);
+  if (artifact) {
+    const knowledgeItemId = decodePathId(artifact[1]!);
+    const artifactId = decodePathId(artifact[2]!);
+    if (request.method === "GET") {
+      requireNoQuery(url);
+      return jsonResponse(
+        { artifact: await services.studioArtifacts.read(scope, knowledgeItemId, artifactId) },
+        200,
+        context.requestId,
+      );
+    }
+    if (request.method === "DELETE") {
+      requireNoQuery(url);
+      await services.studioArtifacts.remove(scope, knowledgeItemId, artifactId);
+      return jsonResponse({ deleted: true }, 200, context.requestId);
+    }
+    return methodNotAllowed("GET, DELETE", context);
   }
 
   const related = /^\/api\/knowledge\/([^/]+)\/related$/.exec(url.pathname);

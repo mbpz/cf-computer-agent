@@ -81,6 +81,30 @@ export function KnowledgeDerivativesPanel(props: {
           >{generating ? frontendText(locale, "KNOWLEDGE_DERIVATIVES_GENERATING") : derivativeLabel(kind, locale)}</Button>;
         })}
       </div>
+      <div data-saved-artifacts className="space-y-2">
+        <p className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_SAVED_ARTIFACTS_TITLE")}</p>
+        {derivatives.saved.length === 0
+          ? <p className="text-xs text-muted-foreground" data-saved-artifacts-empty>{frontendText(locale, "KNOWLEDGE_SAVED_ARTIFACTS_EMPTY")}</p>
+          : <ul className="space-y-1">
+            {derivatives.saved.map((item) => <li key={item.id} data-saved-artifact={item.id} className="flex flex-wrap items-center justify-between gap-2">
+              <Button type="button" size="sm" variant="ghost"
+                data-saved-artifact-open={item.id}
+                aria-label={frontendText(locale, "KNOWLEDGE_SAVED_ARTIFACTS_OPEN")
+                  .replace("{artifact}", derivativeLabel(item.kind, locale))
+                  .replace("{createdAt}", item.createdAt)}
+                onClick={() => derivatives.openSaved(item.id)}>
+                {derivativeLabel(item.kind, locale)}
+                <span className="text-xs text-muted-foreground">{item.createdAt}</span>
+              </Button>
+              <Button type="button" size="sm" variant="ghost"
+                data-saved-artifact-delete={item.id}
+                aria-label={frontendText(locale, "KNOWLEDGE_SAVED_ARTIFACTS_DELETE")}
+                onClick={() => derivatives.removeSaved(item.id)}>
+                {frontendText(locale, "KNOWLEDGE_SAVED_ARTIFACTS_DELETE")}
+              </Button>
+            </li>)}
+          </ul>}
+      </div>
       {/* The report is bound to a research run on the server: saying so here is
           cheaper than a request that can only be refused. */}
       {activeKind !== null && activeState.kind === "blocked" && <p className="text-sm text-muted-foreground" data-derivative-blocked={activeState.reason}>

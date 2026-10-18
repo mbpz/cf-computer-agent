@@ -50,6 +50,8 @@ export interface AuditActionMap {
   "knowledge.trashed": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
   "knowledge.restored": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
   "knowledge.purged": { resourceType: "knowledge"; metadata: { currentRevisionId: string; purgedRevisionCount: number } };
+  "knowledge.artifact_created": { resourceType: "knowledge"; metadata: { artifactId: string; revisionId: string; kind: "mindmap" | "flashcards" | "quiz" } };
+  "knowledge.artifact_deleted": { resourceType: "knowledge"; metadata: { artifactId: string; revisionId: string; kind: "mindmap" | "flashcards" | "quiz" } };
   "agent.tool_called": { resourceType: "agent_tool"; metadata: { tool: string; resourceIds: string[] } };
   "task.created": { resourceType: "task"; metadata: { status: TaskStatus; priority: TaskPriority } };
   "task.updated": { resourceType: "task"; metadata: { priority: TaskPriority } };
@@ -98,6 +100,8 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "knowledge.trashed",
   "knowledge.restored",
   "knowledge.purged",
+  "knowledge.artifact_created",
+  "knowledge.artifact_deleted",
   "agent.tool_called",
   "task.created",
   "task.updated",
@@ -421,6 +425,20 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       return safeMetadata({
         currentRevisionId: metadata.currentRevisionId,
         purgedRevisionCount: metadata.purgedRevisionCount,
+      });
+    }
+    case "knowledge.artifact_created":
+    case "knowledge.artifact_deleted": {
+      assertResourceType(resourceType, "knowledge");
+      const metadata = readPlainDataObject(input, new Set(["artifactId", "revisionId", "kind"]));
+      if (!isBoundedId(metadata.artifactId) || !isBoundedId(metadata.revisionId)
+        || (metadata.kind !== "mindmap" && metadata.kind !== "flashcards" && metadata.kind !== "quiz")) {
+        throw invalidMetadata();
+      }
+      return safeMetadata({
+        artifactId: metadata.artifactId,
+        revisionId: metadata.revisionId,
+        kind: metadata.kind,
       });
     }
     case "agent.tool_called": {

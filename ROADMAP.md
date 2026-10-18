@@ -46,7 +46,7 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 2026-09-17 Personal Work Graph 后端合同闸门已本地完成：成员隔离、scope/root/depth/types/limit 解析、cursor 绑定、时间线投影、有界 loader 与 citation 授权均通过 focused unit/worker、TypeScript、smoke 和 delivery-status contract。`nextCursor` 延续字段与 malformed/cross-linked citation fixture 保留为 minor deferred；发布、生产与 signed browser acceptance 仍 pending，未执行远程迁移、部署或 push。
 
-总账成熟度：`atoms=98`; `implementation=done:78,partial:8,pending:12,n/a:0`; `verification=done:82,partial:3,pending:13,n/a:0`; `release=done:0,partial:29,pending:69,n/a:0`; `acceptance=done:1,partial:9,pending:88,n/a:0`
+总账成熟度：`atoms=99`; `implementation=done:79,partial:8,pending:12,n/a:0`; `verification=done:83,partial:3,pending:13,n/a:0`; `release=done:0,partial:29,pending:70,n/a:0`; `acceptance=done:1,partial:9,pending:89,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
 
@@ -167,12 +167,13 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 目标：围绕已授权来源支持多轮研究与可追溯产物，同时把 Agent 限定在预算、审批、恢复和最小工具权限内。
 
-范围：`KB-009`。
+范围：`KB-009`、`KB-013`。
 
 前置依赖：消费 `IDN-005`、`KB-007`、`KB-010` 的引用回读、可见性重校验和私人来源工作流；新增研究产物原子必须先写入总账。
 
 退出标准：
 
+- [ ] Studio 产物（思维导图/闪卡/测验）按 owner 保留，可重开与删除，读取/删除前重新授权条目与修订（owned: `KB-013`; consumed: `KB-006`、`KB-007`）
 - [ ] 选中来源、会话与产物保留来源 Revision、权限与审计关联，并在撤权后不可读取（owned: `KB-009`; consumed: `IDN-005`、`KB-010`）
 - [ ] Agent 仅使用批准的只读知识工具并产出 draft/可审核产物，越权操作被拒绝（owned: `KB-009`; consumed: `KB-007`）
 - [ ] 计划确认、额度耗尽、断线、取消和恢复不重复副作用，并显示 deferred 或证据缺口（owned: `KB-009`; consumed: `OPS-009`）

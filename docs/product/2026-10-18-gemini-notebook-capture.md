@@ -77,13 +77,34 @@
 ## 4. 结论
 
 1. 标杆当日证据只强化既有取舍：`docs/product/ai-knowledge-base-benchmark.md` §2.1 的 “Audio/Video/Slide Deck = P3” 结论不变，并新增 `信息图` 同属 P3、`数据表格` 由比较表覆盖。
-2. 本轮没有发现可在 Cloudflare 免费层内落地且尚未实现的新能力；`Web 发现 / Fast Research` 需要外部检索配额，`音频/视频/演示文稿/信息图` 需要生成式媒体模型，均不在当前发布边界。
+2. 免费层内可落地的新能力是 **Studio 产物保留**：已按 `ART-015` / `KB-013` 实现（生成后按 owner 保留思维导图/闪卡/测验，可重开与删除）；`Web 发现 / Fast Research` 需要外部检索配额，`音频/视频/演示文稿/信息图` 需要生成式媒体模型，仍不在当前发布边界。
 3. 本项目的差异点仍是治理与可回读：成员/Space/Collection 授权逐次重校验、审核与不可变 Revision、citation 回读、回收站与恢复、研究运行的计划确认与配额降级。
-4. 本文不提升任何原子、发布或验收状态。
+4. 本文不提升既有原子的发布或验收状态；新增的 `ART-015` / `KB-013` 只记录本地实现与验证，发布/验收仍为 pending。
 
 ## 5. 未覆盖
 
-- 未触发任何 Studio 生成，因此产物质量、生成时延与配额行为没有观测。
+- 已触发一次思维导图生成（准备面板与完成状态），未触发音频/视频/幻灯片/信息图，也未比较生成质量。
 - 未上传来源、未分享/发布、未修改设置，因此这些写路径的权限与幂等没有证据。
 - 私有笔记本正文、账号标识、Cookie、RPC 请求体均未采集或记录。
+- 登录后 bundle 只做了静态捕获：27 个脚本、24 个路由候选、源映射不可用，未还原 RPC 请求体或参数语义。
 - 未做跨账号隔离、深链接、移动端与深色模式对比。
+
+## 6. 登录后 bundle 与一次 Studio 生成（追加）
+
+### 6.1 静态 bundle
+
+- 方法：omp relay 暴露 CDP 后，以本地桥接把 `http://127.0.0.1:9224` 呈现为标准 loopback 端点，再运行 `rea analyze-web-bundle`（observation 3000 ms、允许 `notebook.google.com` 与 `www.gstatic.com`、请求 source map）。
+- 证据：`ev_374d759833c17bffe18b3d946f995f17991d2dd1eb2070c5cd2cb35f6628059a`；27 个脚本、24 个路由候选、12 个低置信端点候选，`completeness=partial`，source map 不可用。
+- 路由候选（去重后）：`search`、`import`、`discover`、`licenses`、`accessrequest/:notebookId`、`notebook/creating`、`notebook/:id`、`notebook/:id/chat`、`notebook/:id/details`、`notebook/:id/preview`、`grantaccess/:notebookid`、`notebook/:notebookId/artifact/:artifactId`、`notebook/:notebookId/share`、`oauth2callback`。
+- 端点候选只有信号/媒体初始化类（`/v1/chooseServer`、`/v1/refreshCreds`、usercontent shim）；RPC 参数语义仍未还原。脚本中出现 Angular Zone 标记。
+
+### 6.2 一次思维导图生成
+
+- 点击 `思维导图` 打开准备面板：语言选择（中文简体）、来源（2 个）、可选主题、估算 AI 用量、`立即生成`。
+- 点击 `立即生成` 后约 20 秒内完成；Studio 列表新增 `零售本体 脑图`（2 个来源、未读标记），并提示开启 Web 通知。未复制生成正文。
+- 该链路产生 2 次 `batchexecute`（`EylDcb`、`sODAg`）。
+
+### 6.3 已落地与本轮边界
+
+- 已落地：Studio 产物保留（`ART-015` / `KB-013`，见 [`Studio 产物保留`](./2026-10-18-studio-artifact-retention.md)）。
+- 未落地：准备面板的语言/主题/用量估算、未读标记与通知、`artifact/:artifactId` 深链接；音频/视频/幻灯片/信息图仍按 P3 延期。

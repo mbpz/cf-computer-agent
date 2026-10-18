@@ -119,6 +119,7 @@ import { routeTodayApi } from "./routes/today";
 import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
+import { StudioArtifactRepository, StudioArtifactService } from "./studio/artifacts";
 import { FlashcardService } from "./ai/flashcard-service";
 import { QuizService } from "./ai/quiz-service";
 import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSaveResearchDraftTool, createSearchKnowledgeTool } from "./agent/tools";
@@ -300,6 +301,10 @@ function createRequestServices(
   const tags = new TagsService(new TagsRepository(env.DB));
   const operationReceipts = new AdminOperationReceipts(env.DB);
   const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit, dependencies.workScope);
+  const studioArtifacts = new StudioArtifactService(
+    new StudioArtifactRepository(env.DB, () => new Date()),
+    library,
+  );
   const sources = new SourcesRepository(env.DB);
   const submissions = new SubmissionsService(new SubmissionsRepository(env.DB, audit));
   const duplicates = new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, audit));
@@ -385,6 +390,7 @@ function createRequestServices(
     mindmaps: new MindmapService(ai),
     flashcards: new FlashcardService(ai),
     quizzes: new QuizService(ai),
+    studioArtifacts,
     knowledge: new KnowledgeService(legacyRepository),
     library,
     graph: new GraphProjectionService(new GraphProjectionRepository(env.DB, {}, dependencies.workScope), { workScope: dependencies.workScope }),

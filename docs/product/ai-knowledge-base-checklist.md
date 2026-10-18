@@ -280,6 +280,8 @@
 - [x] `ART-013` P0/M5 生成 provenance；状态：L/W；验收：研究报告持久化模型、Prompt 版本、创建时间、ResearchRun 状态以及去重后的来源 Revision/Chunk/publishedAt 快照，响应/草稿不包含来源正文。证据：`migrations/0013_m6_research_reports.sql`、`src/ai/research-report-service.ts`、`src/research/repository.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t 'research report'`。
 - [x] `ART-014` P3/M8 音频/视频/幻灯片实验；状态：L；验收：`decideExperimentalMedia` 默认关闭，使用独立 `experimental-media` 额度范围，质量分数非 1.0 时在消耗额度前阻断，并在额度耗尽时延期到下一 UTC 日。该策略仅为显式 rollout gate，当前不向生产 UI 暴露实验入口。证据：`src/ai/experimental-media-policy.ts`、`test/unit/experimental-media-policy.test.ts`；命令：`rtk npx vitest run test/unit/experimental-media-policy.test.ts && rtk npm run typecheck`。
 
+- [x] `ART-015` P2/M5 Studio 产物保留；状态：L/W；验收：思维导图/闪卡/测验生成成功后按 owner 存入 D1，列表最多 50 条；读取与删除前重新授权条目及其所属修订；跨成员列表为空、读取 404；创建/删除各写一条审计；载荷与引用列表有界。证据：`migrations/0076_studio_artifacts.sql`、`src/studio/artifacts.ts`、`src/routes/library.ts`、`frontend/lib/studio-artifacts-data.ts`、`frontend/lib/use-knowledge-derivatives.ts`、`frontend/components/knowledge/knowledge-derivatives-panel.tsx`、`test/worker/m1-api.test.ts`、`test/unit/frontend-studio-artifacts.test.tsx`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t "retains generated Studio artifacts" && rtk npx vitest run test/unit/frontend-studio-artifacts.test.tsx`。
+
 ## AGT — Agent 工具与会话
 
 当前 R 阶段：R0/R5；总账映射：[IDN-005、KB-009、OPS-009](./delivery-status-ledger.md)

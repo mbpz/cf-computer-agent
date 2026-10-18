@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：445；操作/转发候选：1810。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：446；操作/转发候选：1812。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -61,7 +61,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/history-navigation-notice.tsx | 2 |
 | frontend/components/inbox-action-confirmation.tsx | 1 |
 | frontend/components/inbox-create-form.tsx | 17 |
-| frontend/components/knowledge/knowledge-derivatives-panel.tsx | 10 |
+| frontend/components/knowledge/knowledge-derivatives-panel.tsx | 12 |
 | frontend/components/knowledge/knowledge-research-panel.tsx | 33 |
 | frontend/components/knowledge/knowledge-share-button.tsx | 3 |
 | frontend/components/knowledge/reader-article.tsx | 2 |
@@ -358,6 +358,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/lib/session-state.ts | 0 |
 | frontend/lib/session.ts | 0 |
 | frontend/lib/snapshot-validation.ts | 0 |
+| frontend/lib/studio-artifacts-data.ts | 0 |
 | frontend/lib/submission-comments-data.ts | 0 |
 | frontend/lib/submission-data.ts | 0 |
 | frontend/lib/submission-draft-data.ts | 0 |
@@ -494,7 +495,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /admin/analytics | frontend/app.tsx#AdminAnalyticsRoute | 83 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /notifications | frontend/app.tsx#NotificationsRoute; frontend/lib/notifications-data.ts#* | 88 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /messages | frontend/app.tsx#MessagesRoute | 37 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
-| /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 181 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardAction; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /knowledge/:id | frontend/app.tsx#KnowledgeReaderRoute; frontend/app.tsx#KnowledgeReaderSession; frontend/lib/graph-evidence.ts#loadGraphCitation; frontend/lib/knowledge-reader-data.ts#* | 183 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardAction; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 71 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent |
 | /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 106 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/roles/new | frontend/app.tsx#AdminRoleNewRoute; frontend/pages/admin/create-role-page.tsx#AdminRoleCreatePage | 49 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
@@ -986,14 +987,16 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | --- | --- | --- | --- |
 | 66:7 KnowledgeDerivativesPanel | div  |  |  |
 | 70:18 KnowledgeDerivativesPanel | Button generating ? frontendText(locale, "KNOWLEDGE_DERIVATIVES_GENERATING") : derivativeLabel(kind, locale) | onClick=() =&gt; derivatives.generate(kind, kind === "report" ? runningRunId ?? undefined : undefined); type="button" | aria-busy=generating; disabled=!derivatives.canGenerate; {"kind":"repeat","expression":"KNOWLEDGE_ARTIFACT_KINDS"} |
-| 88:77 KnowledgeDerivativesPanel | a frontendText(locale, "KNOWLEDGE_DERIVATIVES_OPEN_RESEARCH") | href="#reader-research-panel" | {"kind":"logical","expression":"activeKind !== null && activeState.kind === \"blocked\"","operator":"&&"}; {"kind":"branch","expression":"activeState.reason … |
-| 92:11 KnowledgeDerivativesPanel | DerivativeResult  | onGenerate=() =&gt; derivatives.generate(activeKind, activeKind === "report" ? runningRunId ?? undefined : undefined); onClose=derivatives.dismiss | {"kind":"branch","expression":"activeKind !== null && activeState.kind !== \"idle\" && activeState.kind !== \"blocked\"","branch":"true"} |
-| 109:17 DerivativeResult | Button frontendText(locale, "KNOWLEDGE_DERIVATIVES_CLOSE") | onClick=onClose; type="button" |  |
-| 112:7 DerivativeResult | p frontendText(locale, "KNOWLEDGE_DERIVATIVES_RUNNING").replace("{artifact}", label) |  | {"kind":"branch","expression":"state.kind === \"generating\"","branch":"true"} |
-| 121:40 DerivativeResult | Button frontendText(locale, "KNOWLEDGE_DERIVATIVES_RETRY").replace("{artifact}", label) | onClick=onGenerate; type="button" | {"kind":"branch","expression":"state.kind === \"empty\"","branch":"true"}; earlier return: state.kind === "generating" |
-| 127:7 DerivativeResult | p unavailable ? frontendText(locale, state.reason === "quota" ? "KNOWLEDGE_DERIVATIVES_QUOTA" : "KNOWLEDGE_DERIVATIVES_DEGRADED") : frontendText(locale, "KNOWL… |  | {"kind":"branch","expression":"state.kind === \"failed\" &#124;&#124; state.kind === \"unavailable\"","branch":"true"}; earlier return: state.kind === "gener… |
-| 133:40 DerivativeResult | Button frontendText(locale, "KNOWLEDGE_DERIVATIVES_RETRY").replace("{artifact}", label) | onClick=onGenerate; type="button" | {"kind":"branch","expression":"state.kind === \"failed\" &#124;&#124; state.kind === \"unavailable\"","branch":"true"}; earlier return: state.kind === "gener… |
-| 158:7 Citations | a citation.title.trim() &#124;&#124; frontendText(locale, "KNOWLEDGE_UNTITLED") | href=&#96;/knowledge/${encodeURIComponent(knowledgeItemId)}#${encodeURIComponent(citation.citationId)}&#96; | {"kind":"repeat","expression":"citations"}; earlier return: citations.length === 0 |
+| 90:15 KnowledgeDerivativesPanel | Button derivativeLabel(item.kind, locale) | onClick=() =&gt; derivatives.openSaved(item.id); type="button" | {"kind":"branch","expression":"derivatives.saved.length === 0","branch":"false"}; {"kind":"repeat","expression":"derivatives.saved"} |
+| 99:15 KnowledgeDerivativesPanel | Button frontendText(locale, "KNOWLEDGE_SAVED_ARTIFACTS_DELETE") | onClick=() =&gt; derivatives.removeSaved(item.id); type="button" | {"kind":"branch","expression":"derivatives.saved.length === 0","branch":"false"}; {"kind":"repeat","expression":"derivatives.saved"} |
+| 112:77 KnowledgeDerivativesPanel | a frontendText(locale, "KNOWLEDGE_DERIVATIVES_OPEN_RESEARCH") | href="#reader-research-panel" | {"kind":"logical","expression":"activeKind !== null && activeState.kind === \"blocked\"","operator":"&&"}; {"kind":"branch","expression":"activeState.reason … |
+| 116:11 KnowledgeDerivativesPanel | DerivativeResult  | onGenerate=() =&gt; derivatives.generate(activeKind, activeKind === "report" ? runningRunId ?? undefined : undefined); onClose=derivatives.dismiss | {"kind":"branch","expression":"activeKind !== null && activeState.kind !== \"idle\" && activeState.kind !== \"blocked\"","branch":"true"} |
+| 133:17 DerivativeResult | Button frontendText(locale, "KNOWLEDGE_DERIVATIVES_CLOSE") | onClick=onClose; type="button" |  |
+| 136:7 DerivativeResult | p frontendText(locale, "KNOWLEDGE_DERIVATIVES_RUNNING").replace("{artifact}", label) |  | {"kind":"branch","expression":"state.kind === \"generating\"","branch":"true"} |
+| 145:40 DerivativeResult | Button frontendText(locale, "KNOWLEDGE_DERIVATIVES_RETRY").replace("{artifact}", label) | onClick=onGenerate; type="button" | {"kind":"branch","expression":"state.kind === \"empty\"","branch":"true"}; earlier return: state.kind === "generating" |
+| 151:7 DerivativeResult | p unavailable ? frontendText(locale, state.reason === "quota" ? "KNOWLEDGE_DERIVATIVES_QUOTA" : "KNOWLEDGE_DERIVATIVES_DEGRADED") : frontendText(locale, "KNOWL… |  | {"kind":"branch","expression":"state.kind === \"failed\" &#124;&#124; state.kind === \"unavailable\"","branch":"true"}; earlier return: state.kind === "gener… |
+| 157:40 DerivativeResult | Button frontendText(locale, "KNOWLEDGE_DERIVATIVES_RETRY").replace("{artifact}", label) | onClick=onGenerate; type="button" | {"kind":"branch","expression":"state.kind === \"failed\" &#124;&#124; state.kind === \"unavailable\"","branch":"true"}; earlier return: state.kind === "gener… |
+| 182:7 Citations | a citation.title.trim() &#124;&#124; frontendText(locale, "KNOWLEDGE_UNTITLED") | href=&#96;/knowledge/${encodeURIComponent(knowledgeItemId)}#${encodeURIComponent(citation.citationId)}&#96; | {"kind":"repeat","expression":"citations"}; earlier return: citations.length === 0 |
 
 ## frontend/components/knowledge/knowledge-research-panel.tsx
 

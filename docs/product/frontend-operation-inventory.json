@@ -349,6 +349,7 @@
     "frontend/lib/session-state.ts",
     "frontend/lib/session.ts",
     "frontend/lib/snapshot-validation.ts",
+    "frontend/lib/studio-artifacts-data.ts",
     "frontend/lib/submission-comments-data.ts",
     "frontend/lib/submission-data.ts",
     "frontend/lib/submission-draft-data.ts",
@@ -4503,14 +4504,16 @@
         "frontend/components/agents/code-block.tsx:170:7",
         "frontend/components/knowledge/knowledge-derivatives-panel.tsx:66:7",
         "frontend/components/knowledge/knowledge-derivatives-panel.tsx:70:18",
-        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:88:77",
-        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:92:11",
-        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:109:17",
-        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:112:7",
-        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:121:40",
-        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:127:7",
-        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:133:40",
-        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:158:7",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:90:15",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:99:15",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:112:77",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:116:11",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:133:17",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:136:7",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:145:40",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:151:7",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:157:40",
+        "frontend/components/knowledge/knowledge-derivatives-panel.tsx:182:7",
         "frontend/components/knowledge/knowledge-research-panel.tsx:99:9",
         "frontend/components/knowledge/knowledge-research-panel.tsx:101:35",
         "frontend/components/knowledge/knowledge-research-panel.tsx:103:9",
@@ -15263,10 +15266,82 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:88:77",
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:90:15",
       "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
       "owner": "KnowledgeDerivativesPanel",
-      "line": 88,
+      "line": 90,
+      "column": 15,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "size": "\"sm\"",
+        "variant": "\"ghost\"",
+        "data-saved-artifact-open": "item.id",
+        "aria-label": "frontendText(locale, \"KNOWLEDGE_SAVED_ARTIFACTS_OPEN\")\n                  .replace(\"{artifact}\", derivativeLabel(item.kind, locale))\n                  .replace(\"{createdAt}\", item.createdAt)",
+        "onClick": "() => derivatives.openSaved(item.id)"
+      },
+      "handlers": {
+        "onClick": "() => derivatives.openSaved(item.id)"
+      },
+      "spreads": [],
+      "labels": [
+        "derivativeLabel(item.kind, locale)"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "derivatives.saved.length === 0",
+          "branch": "false"
+        },
+        {
+          "kind": "repeat",
+          "expression": "derivatives.saved"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:99:15",
+      "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
+      "owner": "KnowledgeDerivativesPanel",
+      "line": 99,
+      "column": 15,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "size": "\"sm\"",
+        "variant": "\"ghost\"",
+        "data-saved-artifact-delete": "item.id",
+        "aria-label": "frontendText(locale, \"KNOWLEDGE_SAVED_ARTIFACTS_DELETE\")",
+        "onClick": "() => derivatives.removeSaved(item.id)"
+      },
+      "handlers": {
+        "onClick": "() => derivatives.removeSaved(item.id)"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"KNOWLEDGE_SAVED_ARTIFACTS_DELETE\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "derivatives.saved.length === 0",
+          "branch": "false"
+        },
+        {
+          "kind": "repeat",
+          "expression": "derivatives.saved"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:112:77",
+      "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
+      "owner": "KnowledgeDerivativesPanel",
+      "line": 112,
       "column": 77,
       "kind": "jsx",
       "tag": "a",
@@ -15294,10 +15369,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:92:11",
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:116:11",
       "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
       "owner": "KnowledgeDerivativesPanel",
-      "line": 92,
+      "line": 116,
       "column": 11,
       "kind": "jsx",
       "tag": "DerivativeResult",
@@ -15326,10 +15401,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:109:17",
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:133:17",
       "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
       "owner": "DerivativeResult",
-      "line": 109,
+      "line": 133,
       "column": 17,
       "kind": "jsx",
       "tag": "Button",
@@ -15351,10 +15426,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:112:7",
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:136:7",
       "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
       "owner": "DerivativeResult",
-      "line": 112,
+      "line": 136,
       "column": 7,
       "kind": "jsx",
       "tag": "p",
@@ -15378,10 +15453,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:121:40",
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:145:40",
       "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
       "owner": "DerivativeResult",
-      "line": 121,
+      "line": 145,
       "column": 40,
       "kind": "jsx",
       "tag": "Button",
@@ -15414,10 +15489,10 @@
       ]
     },
     {
-      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:127:7",
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:151:7",
       "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
       "owner": "DerivativeResult",
-      "line": 127,
+      "line": 151,
       "column": 7,
       "kind": "jsx",
       "tag": "p",
@@ -15449,10 +15524,10 @@
       ]
     },
     {
-      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:133:40",
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:157:40",
       "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
       "owner": "DerivativeResult",
-      "line": 133,
+      "line": 157,
       "column": 40,
       "kind": "jsx",
       "tag": "Button",
@@ -15489,10 +15564,10 @@
       ]
     },
     {
-      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:158:7",
+      "id": "frontend/components/knowledge/knowledge-derivatives-panel.tsx:182:7",
       "path": "frontend/components/knowledge/knowledge-derivatives-panel.tsx",
       "owner": "Citations",
-      "line": 158,
+      "line": 182,
       "column": 7,
       "kind": "jsx",
       "tag": "a",

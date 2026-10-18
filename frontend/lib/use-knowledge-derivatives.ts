@@ -6,6 +6,7 @@ import {
   artifactMessageKey,
   createResearchSubmissionDraft,
   generateKnowledgeArtifact,
+  normalizeStoredArtifact,
   recordResearchQuery,
   startItemResearchRun,
   transitionResearchRun,
@@ -17,6 +18,7 @@ import {
   type ResearchRunPlanInput,
   type ResearchRunView,
 } from "./knowledge-derivatives-data";
+import { deleteStudioArtifact, loadStudioArtifacts, readStudioArtifact, type StudioArtifactSummary } from "./studio-artifacts-data";
 import type { RecentResearchItem } from "./knowledge-data";
 import { loadRecentResearchPage } from "./knowledge-panels-data";
 import { createIdempotencyKey } from "../components/submissions/submission-form-model";
@@ -78,6 +80,11 @@ export interface KnowledgeDerivativesController {
   sourceCount: number;
   activeKind: KnowledgeArtifactKind | null;
   stateFor(kind: KnowledgeArtifactKind): DerivativeState;
+  /** Owner-scoped artifacts retained for this knowledge item. */
+  saved: readonly StudioArtifactSummary[];
+  /** Loads one retained artifact into the same result surface. */
+  openSaved(artifactId: string): void;
+  removeSaved(artifactId: string): void;
   /** `researchRunId` is required by the server for the report surface only. */
   generate(kind: KnowledgeArtifactKind, researchRunId?: string): void;
   dismiss(): void;
@@ -105,9 +112,18 @@ export function useKnowledgeDerivatives(input: {
   identity.current = { knowledgeItemId, revisionId };
   const [stored, setStored] = useState<Partial<Record<KnowledgeArtifactKind, StoredDerivative>>>({});
   const [activeKind, setActiveKind] = useState<KnowledgeArtifactKind | null>(null);
+  const [saved, setSaved] = useState<readonly StudioArtifactSummary[]>([]);
+  const [savedVersion, setSavedVersion] = useState(0);
   const controllers = useRef<Partial<Record<KnowledgeArtifactKind, AbortController>>>({});
   const tokens = useRef<Partial<Record<KnowledgeArtifactKind, number>>>({});
   const counter = useRef(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadStudioArtifacts(knowledgeItemId, requester, controller.signal)
+      .then((items) => setSaved(items))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [knowledgeItemId, requester, savedVersion]);
   useEffect(() => () => {
     for (const controller of Object.values(controllers.current)) controller?.abort();
     controllers.current = {};
@@ -152,12 +168,42 @@ export function useKnowledgeDerivatives(input: {
     }).then((artifact) => {
       if (!live()) return;
       commit(kind, owner, artifactIsEmpty(artifact) ? { kind: "empty", messageKey: artifactMessageKey(artifact) } : { kind: "ready", artifact });
+      // The server retains generated Studio artifacts; the list is the only
+      // place the reader learns what it can reopen later.
+      setSavedVersion((version) => version + 1);
     }).catch((error: unknown) => {
       if (!live() || isAbort(error)) return;
       commit(kind, owner, derivativeFailure(error));
     }).finally(() => {
       if (tokens.current[kind] === token) delete controllers.current[kind];
     });
+  }
+
+  /**
+   * Reopens a retained artifact through the same result surface. The payload is
+   * revalidated by the same normalizer a fresh response uses; the stored
+   * revision is not trusted for authorization.
+   */
+  function openSaved(artifactId: string) {
+    const owner = identity.current;
+    void readStudioArtifact(knowledgeItemId, artifactId, requester).then((artifact) => {
+      if (identity.current.knowledgeItemId !== owner.knowledgeItemId) return;
+      const artifactState = normalizeStoredArtifact(artifact.kind, artifact.payload);
+      commit(artifact.kind, owner, artifactIsEmpty(artifactState)
+        ? { kind: "empty", messageKey: artifactMessageKey(artifactState) }
+        : { kind: "ready", artifact: artifactState });
+      setActiveKind(artifact.kind);
+    }).catch((error: unknown) => {
+      if (identity.current.knowledgeItemId !== owner.knowledgeItemId) return;
+      const kind = activeKind;
+      if (kind) commit(kind, owner, derivativeFailure(error));
+    });
+  }
+
+  function removeSaved(artifactId: string) {
+    void deleteStudioArtifact(knowledgeItemId, artifactId, requester).then(() => {
+      setSaved((items) => items.filter((item) => item.id !== artifactId));
+    }).catch(() => undefined);
   }
 
   function dismiss() {
@@ -174,7 +220,7 @@ export function useKnowledgeDerivatives(input: {
     setActiveKind(null);
   }
 
-  return { canGenerate: citationIds.length > 0, sourceCount: citationIds.length, activeKind, stateFor, generate, dismiss };
+  return { canGenerate: citationIds.length > 0, sourceCount: citationIds.length, activeKind, stateFor, saved, openSaved, removeSaved, generate, dismiss };
 }
 
 /** Runs are listed by the workspace-wide endpoint and narrowed to this item. */

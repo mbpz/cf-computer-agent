@@ -1910,6 +1910,56 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(JSON.stringify(result)).not.toContain("mindmapmarker source evidence");
   });
 
+  it("retains generated Studio artifacts for their owner only", async () => {
+    const selected = await publishSubmission(
+      "contributor", "Artifact source", "artifactmarker source evidence", "shared", "artifact-source-key1",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=artifactmarker");
+    const hit = (await search.json() as { items: Array<{ citationId: string; knowledgeItemId: string }> }).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(hit).toBeTruthy();
+
+    const generated = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/flashcards`, {
+      method: "POST", body: JSON.stringify({ citationIds: [hit!.citationId] }),
+    });
+    expect(generated.status).toBe(200);
+    const body = await generated.json() as {
+      cards: Array<{ answer: string }>;
+      artifact: { id: string; kind: string; revisionId: string; createdAt: string };
+    };
+    expect(body.artifact).toMatchObject({ kind: "flashcards" });
+    expect(body.cards[0]?.answer).toContain("selected source");
+
+    const list = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/artifacts`);
+    expect(list.status).toBe(200);
+    const listed = (await list.json() as { artifacts: Array<{ id: string; kind: string }> }).artifacts;
+    expect(listed.map((item) => item.id)).toContain(body.artifact.id);
+
+    // Owner scope: another active member cannot list or read this artifact.
+    expect((await (await memberApi("admin", `/api/knowledge/${selected.knowledgeItemId}/artifacts`)).json() as { artifacts: unknown[] }).artifacts).toEqual([]);
+    expect((await memberApi("admin", `/api/knowledge/${selected.knowledgeItemId}/artifacts/${body.artifact.id}`)).status).toBe(404);
+
+    const detail = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/artifacts/${body.artifact.id}`);
+    expect(detail.status).toBe(200);
+    const retained = await detail.json() as { artifact: { payload: { cards: Array<{ answer: string }> }; citationIds: string[] } };
+    expect(retained.artifact.payload.cards[0]?.answer).toContain("selected source");
+    expect(retained.artifact.citationIds).toEqual([hit!.citationId]);
+
+    const removed = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/artifacts/${body.artifact.id}`, { method: "DELETE" });
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toEqual({ deleted: true });
+    const empty = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/artifacts`);
+    expect((await empty.json() as { artifacts: unknown[] }).artifacts).toEqual([]);
+
+    const audits = await env.DB.prepare(
+      "SELECT action, COUNT(*) AS count FROM audit_events WHERE resource_id = ? AND action IN ('knowledge.artifact_created', 'knowledge.artifact_deleted') GROUP BY action",
+    ).bind(selected.knowledgeItemId).all<{ action: string; count: number }>();
+    expect(Object.fromEntries(audits.results.map((row) => [row.action, row.count]))).toEqual({
+      "knowledge.artifact_created": 1,
+      "knowledge.artifact_deleted": 1,
+    });
+  });
+
   it("generates learning cards with cited answers", async () => {
     const selected = await publishSubmission(
       "contributor", "Flashcard source", "flashcardmarker source evidence", "shared", "flashcard-source-key1",
