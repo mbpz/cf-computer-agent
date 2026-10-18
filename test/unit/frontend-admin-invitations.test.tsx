@@ -46,9 +46,9 @@ describe("admin member invitations", () => {
     await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={issue} />));
     await openAddDialog();
     await act(async () => setEmail("new@example.test"));
-    await click(buttonByText("Generate code"));
+    await click(buttonByText("Authorize email"));
     expect(issue).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("A one-time login code will be created for new@example.test.");
+    expect(document.body.textContent).toContain("new@example.test will be able to request a sign-in code");
     await click(document.querySelector("[data-confirm-action]") as HTMLButtonElement);
     expect(issue).toHaveBeenCalledWith("new@example.test");
     expect(issue).toHaveBeenCalledTimes(1);
@@ -72,18 +72,18 @@ describe("admin member invitations", () => {
     await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={issue} />));
     await openAddDialog();
     await act(async () => setEmail("dialog@example.test"));
-    await click(buttonByText("Generate code"));
+    await click(buttonByText("Authorize email"));
     expect(issue).not.toHaveBeenCalled();
     await click(document.querySelector("[data-confirm-action]") as HTMLButtonElement);
     expect(issue).toHaveBeenCalledWith("dialog@example.test");
     expect(issue).toHaveBeenCalledTimes(1);
   });
 
-  it("dismisses the dialog after a code is issued", async () => {
+  it("dismisses the dialog after a grant is issued", async () => {
     await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} />));
     await openAddDialog();
     expect(document.querySelectorAll("[data-member-add-dialog]")).toHaveLength(1);
-    await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} issuedInvitation={{ email: "new@example.test", code: "CODE-ABCD-1234", expiresAt: pending.expiresAt }} />));
+    await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} issuedInvitation={{ email: "new@example.test", expiresAt: pending.expiresAt }} />));
     expect(document.querySelector("[data-member-add-dialog]")).toBeNull();
   });
 
@@ -97,15 +97,14 @@ describe("admin member invitations", () => {
     expect(table.className).toContain("lg:flex-1");
   });
 
-  it("shows the code once with copy, expiry, and the one-time notice", async () => {
-    await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} issuedInvitation={{ email: "new@example.test", code: "CODE-ABCD-1234", expiresAt: pending.expiresAt }} />));
+  it("shows the authorization receipt with its expiry", async () => {
+    await act(async () => root.render(<MembersPage locale={locale} members={[]} onIssueInvitation={vi.fn()} issuedInvitation={{ email: "new@example.test", expiresAt: pending.expiresAt }} />));
     await openInvitationsTab();
-    expect(container.querySelectorAll("[data-invitation-code]")).toHaveLength(1);
-    expect(document.body.textContent).toContain("CODE-ABCD-1234");
-    expect(document.body.textContent).toContain("Login code for new@example.test");
-    expect(document.body.textContent).toContain("shown only once");
+    expect(container.querySelectorAll("[data-invitation-issued]")).toHaveLength(1);
+    expect(document.body.textContent).toContain("Invitation authorized for new@example.test");
+    expect(document.body.textContent).toContain("The invitee can now request a sign-in code from the login page.");
     expect(document.body.textContent).toContain(`Expires ${pending.expiresAt}`);
-    expect(buttonByText("Copy code")).toBeTruthy();
+    expect(buttonByText("Copy code")).toBeUndefined();
   });
 
   it("revokes a pending invitation only after confirmation", async () => {
@@ -129,7 +128,7 @@ describe("admin member invitations", () => {
     await flush();
     await openAddDialog();
     await act(async () => setEmail("new@example.test"));
-    await click(buttonByText("Generate code"));
+    await click(buttonByText("Authorize email"));
     await click(document.querySelector("[data-confirm-action]") as HTMLButtonElement);
     await flush();
     expect(issues).toBe(1);
@@ -147,7 +146,7 @@ describe("admin member invitations", () => {
     await flush();
     await openAddDialog();
     await act(async () => setEmail("new@example.test"));
-    await click(buttonByText("Generate code"));
+    await click(buttonByText("Authorize email"));
     await click(document.querySelector("[data-confirm-action]") as HTMLButtonElement);
     await flush();
     expect(issues).toBe(1);

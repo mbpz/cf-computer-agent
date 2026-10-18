@@ -12,12 +12,6 @@ export interface AdminMemberInvitation {
   expiresAt: string;
 }
 
-/** The plaintext `code` is returned exactly once by the issue call and is never retrievable again. */
-export interface IssuedAdminMemberInvitation {
-  invitation: AdminMemberInvitation;
-  code: string;
-}
-
 /** The revoke endpoint returns a trimmed receipt, not the full invitation DTO. */
 export interface RevokedAdminMemberInvitation {
   id: string;
@@ -25,17 +19,10 @@ export interface RevokedAdminMemberInvitation {
   status: "revoked";
 }
 
-export interface LoginCodeMember {
-  id: string;
-  email: string;
-  role: "contributor";
-}
-
 const invitationStatuses: Record<AdminMemberInvitationStatus, true> = { pending: true, redeemed: true, revoked: true };
 const invitationKeys = ["id", "email", "status", "createdAt", "expiresAt"] as const;
 
 function invalidInvitation(): never { throw new Error("INVITATION_RESPONSE_INVALID"); }
-function invalidLogin(): never { throw new Error("LOGIN_CODE_RESPONSE_INVALID"); }
 
 function normalizeInvitation(value: unknown): AdminMemberInvitation {
   // The list and the revoke receipt never carry the one-time code: any extra key is
@@ -58,12 +45,12 @@ export async function loadAdminMemberInvitations(requester: Fetcher = fetch, sig
   return items;
 }
 
-export async function issueAdminMemberInvitation(email: string, requester: Fetcher = fetch): Promise<IssuedAdminMemberInvitation> {
+export async function issueAdminMemberInvitation(email: string, requester: Fetcher = fetch): Promise<AdminMemberInvitation> {
   const data = await apiFetch<unknown>("/api/admin/member-invitations", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email }) });
-  if (!data || typeof data !== "object" || Array.isArray(data) || Object.keys(data).length !== 2 || !("invitation" in data) || !("code" in data)) invalidInvitation();
+  if (!data || typeof data !== "object" || Array.isArray(data) || Object.keys(data).length !== 1 || !("invitation" in data)) invalidInvitation();
   const invitation = normalizeInvitation(data.invitation);
-  if (invitation.status !== "pending" || typeof data.code !== "string" || !data.code) invalidInvitation();
-  return { invitation, code: data.code };
+  if (invitation.status !== "pending") invalidInvitation();
+  return invitation;
 }
 
 export async function revokeAdminMemberInvitation(id: string, requester: Fetcher = fetch): Promise<RevokedAdminMemberInvitation> {
@@ -75,17 +62,6 @@ export async function revokeAdminMemberInvitation(id: string, requester: Fetcher
   const { id: receiptId, email, status } = receipt as Record<string, unknown>;
   if (receiptId !== id || typeof email !== "string" || !email || status !== "revoked") invalidInvitation();
   return { id: receiptId, email, status: "revoked" };
-}
-
-export async function submitLoginCode(email: string, code: string, requester: Fetcher = fetch): Promise<LoginCodeMember> {
-  const data = await apiFetch<unknown>("/auth/code", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, code }) });
-  if (!data || typeof data !== "object" || Array.isArray(data) || Object.keys(data).length !== 1 || !("member" in data)) invalidLogin();
-  const member = data.member;
-  if (!member || typeof member !== "object" || Array.isArray(member)
-    || Object.keys(member).length !== 3 || Object.keys(member).some((key) => !["id", "email", "role"].includes(key))) invalidLogin();
-  const { id, email: memberEmail, role } = member as Record<string, unknown>;
-  if (typeof id !== "string" || !id || typeof memberEmail !== "string" || !memberEmail || role !== "contributor") invalidLogin();
-  return { id, email: memberEmail, role: "contributor" };
 }
 
 /** Maps a failed invitation write to a distinct, user-presentable outcome. */
@@ -102,15 +78,4 @@ export function adminMemberInvitationFailure(error: unknown): AdminMemberInvitat
     case "INVITATION_NOT_PENDING": return "not_pending";
     default: return "unknown";
   }
-}
-
-/** Maps a failed code sign-in. Verification failures are uniform (401 CODE_LOGIN_INVALID)
- * so the UI can only ever show one generic message for them. */
-export type LoginCodeFailure = "invalid" | "rejected" | "unknown";
-
-export function loginCodeFailure(error: unknown): LoginCodeFailure {
-  if (!(error instanceof ApiRequestError)) return "unknown";
-  if (error.status === 400 || error.code === "CODE_LOGIN_REQUEST_INVALID") return "invalid";
-  if (error.status === 401 || error.code === "CODE_LOGIN_INVALID") return "rejected";
-  return "unknown";
 }

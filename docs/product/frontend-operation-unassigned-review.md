@@ -579,7 +579,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `b7fa7cbff7b69b484566986792c3b546eaae80a07a4e770c83f3c93954c96e85`
+- `frontend/app.tsx`: `238158f4f260c682fad7be96dac3c002a78f4d56fcb03dd0ba77d2f9acdcdf2a`
 - `frontend/components/agent/answer-panel.tsx`: `d604801b674d21ef059a70f79cc367326ceccf60ba5e400c4d3480eca1e63586`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`
 - `frontend/components/agents/message-bubble.tsx`: `0fe1347583c44eee1d69e84aae80e2ea2097334ddc55a29469775616e0b7b43d`
@@ -630,7 +630,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/lib/use-toast.tsx`: `0b4f788931e28f9eb5d87d8d84414568187c35736094130452ad272891b950a8`
 - `frontend/lib/workspace-location.ts`: `8e5fd84e7f611784f46a05016808cb6c2a5a7b507d4be306ae490afcac31bd35`
 - `frontend/main.tsx`: `9ba6f443d0f7da037015cb7f1d1b3444777989588c66429d3630a0c5fb500391`
-- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `9aa559e4576cf5eef754a41941fe8db2c926a1b8ebf4c711d4e13cf71e68988e`
+- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `b618f593d164001e1765fc55e6e428c960357a83927fec5a70a6e3996b48ef82`
 - `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `19b47d756dd823d4934eacd11d364bb3602b7f8fa09e74e4e5db588affdd761b`
 - `frontend/pages/workbench-landing/workbench-scene.tsx`: `bd5def5c4ef683d0ae1422e26180a8feeca67de86ef4ccbea79b3605cb3fef5a`
 - `frontend/public/sw.js`: `703801312e5cccba0cf162837b97878185fe03e18cdc2182c2fc4c5215923bad`

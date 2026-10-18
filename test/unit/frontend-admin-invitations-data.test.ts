@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { ApiRequestError, type Fetcher } from "../../frontend/lib/api";
-import { adminMemberInvitationFailure, issueAdminMemberInvitation, loadAdminMemberInvitations, loginCodeFailure, revokeAdminMemberInvitation, submitLoginCode } from "../../frontend/lib/admin-member-invitations-data";
+import { adminMemberInvitationFailure, issueAdminMemberInvitation, loadAdminMemberInvitations, revokeAdminMemberInvitation } from "../../frontend/lib/admin-member-invitations-data";
 
 const invitation = { id: "i1", email: "new@example.test", status: "pending", createdAt: "2026-10-11T00:00:00.000Z", expiresAt: "2026-10-12T00:00:00.000Z" };
 
@@ -29,18 +29,18 @@ describe("admin member invitation data", () => {
     await expect(loadAdminMemberInvitations(requester({ items: [invitation, invitation] }).fetchStub)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
   });
 
-  it("posts the exact issue body and returns the single-use code", async () => {
-    const { calls, fetchStub } = requester({ invitation, code: "CODE-1234" }, 200);
-    await expect(issueAdminMemberInvitation("new@example.test", fetchStub)).resolves.toEqual({ invitation, code: "CODE-1234" });
+  it("posts the exact issue body and returns the authorization grant", async () => {
+    const { calls, fetchStub } = requester({ invitation }, 201);
+    await expect(issueAdminMemberInvitation("new@example.test", fetchStub)).resolves.toEqual(invitation);
     expect(calls[0]!.path).toBe("/api/admin/member-invitations");
     expect(calls[0]!.init?.method).toBe("POST");
     expect(calls[0]!.init?.body).toBe(JSON.stringify({ email: "new@example.test" }));
   });
 
-  it("rejects an issue response without a code or with a non-pending invitation", async () => {
-    await expect(issueAdminMemberInvitation("new@example.test", requester({ invitation, code: "" }).fetchStub)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
-    await expect(issueAdminMemberInvitation("new@example.test", requester({ invitation: { ...invitation, status: "revoked" }, code: "x" }).fetchStub)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
-    await expect(issueAdminMemberInvitation("new@example.test", requester({ invitation, code: "x", extra: 1 }).fetchStub)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+  it("rejects an issue response with extra fields or a non-pending invitation", async () => {
+    await expect(issueAdminMemberInvitation("new@example.test", requester({ invitation, code: "LEAK" }).fetchStub)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+    await expect(issueAdminMemberInvitation("new@example.test", requester({ invitation: { ...invitation, status: "revoked" } }).fetchStub)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+    await expect(issueAdminMemberInvitation("new@example.test", requester({ invitation, extra: 1 }).fetchStub)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
   });
 
   it("revokes by id and requires the trimmed revoked receipt", async () => {
@@ -54,14 +54,6 @@ describe("admin member invitation data", () => {
     await expect(revokeAdminMemberInvitation("i1", requester({ invitation: { ...receipt, createdAt: "x" } }).fetchStub)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
   });
 
-  it("posts the exact code-login body and requires a contributor member", async () => {
-    const { calls, fetchStub } = requester({ member: { id: "m2", email: "new@example.test", role: "contributor" } });
-    await expect(submitLoginCode("new@example.test", "CODE-1234", fetchStub)).resolves.toEqual({ id: "m2", email: "new@example.test", role: "contributor" });
-    expect(calls[0]!.path).toBe("/auth/code");
-    expect(calls[0]!.init?.body).toBe(JSON.stringify({ email: "new@example.test", code: "CODE-1234" }));
-    await expect(submitLoginCode("a", "b", requester({ member: { id: "m2", email: "e@x.test", role: "admin" } }).fetchStub)).rejects.toThrow("LOGIN_CODE_RESPONSE_INVALID");
-  });
-
   it("maps documented error codes to distinct outcomes", () => {
     expect(adminMemberInvitationFailure(new ApiRequestError("INVITATION_REQUEST_INVALID", "", 400, false))).toBe("invalid");
     expect(adminMemberInvitationFailure(new ApiRequestError("INVITATION_ALREADY_PENDING", "", 409, false))).toBe("already_pending");
@@ -70,8 +62,5 @@ describe("admin member invitation data", () => {
     expect(adminMemberInvitationFailure(new ApiRequestError("INVITATION_NOT_PENDING", "", 409, false))).toBe("not_pending");
     expect(adminMemberInvitationFailure(new ApiRequestError("API_ERROR", "", 403, false))).toBe("forbidden");
     expect(adminMemberInvitationFailure(new Error("network"))).toBe("unknown");
-    expect(loginCodeFailure(new ApiRequestError("CODE_LOGIN_INVALID", "", 401, false))).toBe("rejected");
-    expect(loginCodeFailure(new ApiRequestError("CODE_LOGIN_REQUEST_INVALID", "", 400, false))).toBe("invalid");
-    expect(loginCodeFailure(new Error("network"))).toBe("unknown");
   });
 });

@@ -397,10 +397,8 @@ export async function routeAdminApi(
     if (typeof input.email !== "string") {
       throw new AppError("INVITATION_REQUEST_INVALID", "Invitation request is invalid", 400);
     }
-    const issued = await services.invitations.issue(actor.memberId, { email: input.email });
-    // The plaintext code is returned exactly once, here. It is never stored in
-    // plaintext, never logged and never retrievable again.
-    return jsonResponse({ invitation: invitationDto(issued.invitation), code: issued.code }, 201, context.requestId);
+    const invitation = await services.invitations.issue(actor.memberId, { email: input.email });
+    return jsonResponse({ invitation: invitationDto(invitation) }, 201, context.requestId);
   }
 
   const invitationRevoke = /^\/api\/admin\/member-invitations\/([^/]+)\/revoke$/.exec(url.pathname);

@@ -14,6 +14,7 @@ const MIRRORED = [
   "HTMLElement",
   "SVGElement",
   "Node",
+  "NodeList",
   "Document",
   "DocumentFragment",
   "Text",

@@ -35,6 +35,10 @@ import { createGitHubOAuthClient, type GitHubOAuthDiagnostic } from "./identity/
 import { createWeChatOAuthClient } from "./identity/wechat-oauth";
 import { resolvePrincipal, type Principal } from "./identity/principal";
 import { SessionService } from "./identity/session";
+import { EmailLoginRepository } from "./email-login/repository";
+import { EmailLoginService } from "./email-login/service";
+import { createEmailLoginMailer } from "./email-login/mailer";
+import type { EmailLoginMailer } from "./email-login/types";
 import { emitStructuredLog } from "./ops/structured-log";
 import { KnowledgeService } from "./knowledge/service";
 import { createRequestPublishedContent } from "./knowledge/published-content";
@@ -154,6 +158,13 @@ export interface AppDependencies {
   oauthDiagnostic?: (diagnostic: GitHubOAuthDiagnostic & { requestId: string }) => void;
   analyticsNow?: () => Date;
   reviewNow?: () => Date;
+  /** Email-code login seams for tests; `mailer: null` forces the unavailable state. */
+  emailLogin?: {
+    mailer?: EmailLoginMailer | null;
+    now?: () => Date;
+    randomBytes?: (length: number) => Uint8Array;
+    id?: () => string;
+  };
   onBackgroundFailure?: (reason: UncertaintyReason) => void;
 }
 
@@ -190,6 +201,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
             return jsonResponse({
               github: hasOAuthCredentialPair(env.GITHUB_OAUTH_CLIENT_ID, env.GITHUB_OAUTH_CLIENT_SECRET),
               wechat: services.wechat.isConfigured(),
+              emailCode: services.emailLogin.configured(),
             }, 200, context.requestId);
           }
           if (url.pathname === "/api/telemetry/pageview") {
@@ -368,6 +380,23 @@ function createRequestServices(
   );
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   const sessions = new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil, workScope: dependencies.workScope });
+  const invitations = new MemberInvitationsService(new MemberInvitationsRepository(env.DB, audit));
+  const emailLoginMailer = dependencies.emailLogin?.mailer === null
+    ? undefined
+    : (dependencies.emailLogin?.mailer ?? createEmailLoginMailer(env));
+  const emailLogin = new EmailLoginService(
+    new EmailLoginRepository(env.DB),
+    members,
+    invitations,
+    {
+      mailer: emailLoginMailer,
+      from: APP_CONFIG.emailLoginFrom,
+      pepper: env.APP_TOKEN,
+      now: dependencies.emailLogin?.now,
+      randomBytes: dependencies.emailLogin?.randomBytes,
+      id: dependencies.emailLogin?.id,
+    },
+  );
   return {
     answers: new AnswerService(ai),
     ai,
@@ -400,7 +429,8 @@ function createRequestServices(
     legacyRepository,
     memberRecords,
     members,
-    invitations: new MemberInvitationsService(new MemberInvitationsRepository(env.DB, audit), members),
+    invitations,
+    emailLogin,
     publication: new PublicationService(publicationRecords, publishedContent.committer, publishedContent.remover),
     publishedContent,
     oauth: createGitHubOAuthClient({

@@ -28,7 +28,7 @@ function withPlaceholder(text: string, placeholder: string, value: string): stri
   return text.replace(`{${placeholder}}`, value);
 }
 
-export function MembersPage({ onLoadRetry, members, pagination, status = "", pendingIds = [], loading = false, forbidden = false, readRequired = false, pending = false, error, pageError, actionError, statusRecordBlocked = false, onDiscardStatusRecord, onStatusFilterChange, onPageChange, onPageSizeChange, onLoadMore, onStatusChange, invitations = [], invitationsPending = false, invitationWritePending = false, invitationError, invitationsError, issuedInvitation, onIssueInvitation, onRevokeInvitation, onLoadInvitationsRetry, tab, onTabChange, locale }: { onLoadRetry?: () => void; members: readonly { id: string; email?: string; role?: string; status?: string }[]; pagination?: FrontendPageMetadata; status?: "" | "active" | "disabled"; pendingIds?: readonly string[]; loading?: boolean; forbidden?: boolean; readRequired?: boolean; pending?: boolean; error?: string; pageError?: string; actionError?: string; statusRecordBlocked?: boolean; onDiscardStatusRecord?: () => void; onStatusFilterChange?: (status: "" | "active" | "disabled") => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void; onLoadMore?: () => void; onStatusChange?: (id: string, status: "active" | "disabled") => void; invitations?: readonly AdminMemberInvitation[]; invitationsPending?: boolean; invitationWritePending?: boolean; invitationError?: string; invitationsError?: string; issuedInvitation?: { email: string; code: string; expiresAt: string } | null; onIssueInvitation?: (email: string) => void; onRevokeInvitation?: (id: string) => void; onLoadInvitationsRetry?: () => void; tab?: AdminMembersTab; onTabChange?: (tab: AdminMembersTab) => void; locale: LocaleRuntime }) {
+export function MembersPage({ onLoadRetry, members, pagination, status = "", pendingIds = [], loading = false, forbidden = false, readRequired = false, pending = false, error, pageError, actionError, statusRecordBlocked = false, onDiscardStatusRecord, onStatusFilterChange, onPageChange, onPageSizeChange, onLoadMore, onStatusChange, invitations = [], invitationsPending = false, invitationWritePending = false, invitationError, invitationsError, issuedInvitation, onIssueInvitation, onRevokeInvitation, onLoadInvitationsRetry, tab, onTabChange, locale }: { onLoadRetry?: () => void; members: readonly { id: string; email?: string; role?: string; status?: string }[]; pagination?: FrontendPageMetadata; status?: "" | "active" | "disabled"; pendingIds?: readonly string[]; loading?: boolean; forbidden?: boolean; readRequired?: boolean; pending?: boolean; error?: string; pageError?: string; actionError?: string; statusRecordBlocked?: boolean; onDiscardStatusRecord?: () => void; onStatusFilterChange?: (status: "" | "active" | "disabled") => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void; onLoadMore?: () => void; onStatusChange?: (id: string, status: "active" | "disabled") => void; invitations?: readonly AdminMemberInvitation[]; invitationsPending?: boolean; invitationWritePending?: boolean; invitationError?: string; invitationsError?: string; issuedInvitation?: { email: string; expiresAt: string } | null; onIssueInvitation?: (email: string) => void; onRevokeInvitation?: (id: string) => void; onLoadInvitationsRetry?: () => void; tab?: AdminMembersTab; onTabChange?: (tab: AdminMembersTab) => void; locale: LocaleRuntime }) {
   type StatusConfirmation = {
     kind: "status"; id: string; email?: string; previousStatus: string; nextStatus: "active" | "disabled";
     list: typeof members; filter: typeof status; page?: number; pageSize?: number;
@@ -39,8 +39,6 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
   const [email, setEmail] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   // The route owns the tab (URL-backed); a direct render stays switchable.
   const [internalTab, setInternalTab] = useState<AdminMembersTab>("members");
@@ -56,9 +54,8 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
   useCreateDraft({}, {}, () => confirmationRef.current !== null, locale, () => false);
   useEffect(() => () => { confirmationRef.current = null; }, []);
   useEffect(() => {
-    setCopied(false); setCopyFailed(false);
-    // A freshly issued code clears the input only when it matches what was typed
-    // and dismisses the add dialog: the one-time code now lives in the list view.
+    // A fresh grant clears the input only when it matches what was typed and
+    // dismisses the add dialog; the list below is the durable record.
     if (issuedInvitation) {
       setEmail((current) => current.trim() === issuedInvitation.email ? "" : current);
       setAddOpen(false);
@@ -105,10 +102,6 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
     if (action.kind === "status") onStatusChange?.(action.id, action.nextStatus);
     else if (action.kind === "invite") onIssueInvitation?.(action.email);
     else onRevokeInvitation?.(action.id);
-  };
-  const copyCode = async (code: string) => {
-    try { await navigator.clipboard.writeText(code); setCopied(true); setCopyFailed(false); }
-    catch { setCopied(false); setCopyFailed(true); }
   };
   const dialog = (() => {
     if (!confirmation) return null;
@@ -183,11 +176,9 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
             <Button type="button" data-member-add-open aria-haspopup="dialog" aria-expanded={addOpen} disabled={pending || invitationWritePending || forbidden || !onIssueInvitation} onClick={() => setAddOpen(true)}>{frontendText(locale, "ADMIN_INVITATION_ADD")}</Button>
           </div>
           {invitationError && <p role="alert" className="text-sm text-destructive">{invitationError}</p>}
-          {issuedInvitation && <Card data-invitation-code className="border-primary/40"><CardContent className="space-y-2 p-4">
-            <p className="text-sm font-medium">{withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_TITLE"), "email", issuedInvitation.email)}</p>
-            <div className="flex flex-wrap items-center gap-3"><code className="rounded-md bg-muted px-3 py-2 font-mono text-sm break-all">{issuedInvitation.code}</code><Button type="button" size="sm" variant="outline" onClick={() => void copyCode(issuedInvitation.code)}>{frontendText(locale, copied ? "ADMIN_INVITATION_CODE_COPIED" : "ADMIN_INVITATION_CODE_COPY")}</Button></div>
-            {copyFailed && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "ADMIN_INVITATION_CODE_COPY_FAILED")}</p>}
-            <p className="text-xs text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_CODE_ONCE_NOTE")}</p>
+          {issuedInvitation && <Card data-invitation-issued className="border-primary/40"><CardContent className="space-y-2 p-4">
+            <p className="text-sm font-medium">{withPlaceholder(frontendText(locale, "ADMIN_INVITATION_ISSUED_TITLE"), "email", issuedInvitation.email)}</p>
+            <p className="text-xs text-muted-foreground">{frontendText(locale, "ADMIN_INVITATION_ISSUED_NOTE")}</p>
             <p className="text-xs text-muted-foreground">{withPlaceholder(frontendText(locale, "ADMIN_INVITATION_CODE_EXPIRES"), "expiresAt", issuedInvitation.expiresAt)}</p>
           </CardContent></Card>}
           {invitationsError

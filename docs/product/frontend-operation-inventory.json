@@ -131,6 +131,7 @@
     "frontend/components/motion/not-found/shared.tsx",
     "frontend/components/motion/notification-stack.tsx",
     "frontend/components/motion/number-ticker.tsx",
+    "frontend/components/motion/otp-input.tsx",
     "frontend/components/motion/overflow-actions.tsx",
     "frontend/components/motion/popover-morph.tsx",
     "frontend/components/motion/popover-position.ts",
@@ -306,6 +307,7 @@
     "frontend/lib/discussion-intent.ts",
     "frontend/lib/discussions-data.ts",
     "frontend/lib/ease.ts",
+    "frontend/lib/email-login-data.ts",
     "frontend/lib/favicon.ts",
     "frontend/lib/focus-create-intent.ts",
     "frontend/lib/focus-data.ts",
@@ -3925,31 +3927,29 @@
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
         "frontend/lib/workspace-location.ts:112:3",
-        "frontend/pages/admin/members-page.tsx:135:16",
-        "frontend/pages/admin/members-page.tsx:136:5",
-        "frontend/pages/admin/members-page.tsx:143:159",
-        "frontend/pages/admin/members-page.tsx:145:29",
-        "frontend/pages/admin/members-page.tsx:145:195",
-        "frontend/pages/admin/members-page.tsx:146:52",
-        "frontend/pages/admin/members-page.tsx:146:275",
-        "frontend/pages/admin/members-page.tsx:147:5",
-        "frontend/pages/admin/members-page.tsx:149:9",
-        "frontend/pages/admin/members-page.tsx:150:9",
-        "frontend/pages/admin/members-page.tsx:153:9",
-        "frontend/pages/admin/members-page.tsx:172:534",
-        "frontend/pages/admin/members-page.tsx:183:13",
-        "frontend/pages/admin/members-page.tsx:185:31",
-        "frontend/pages/admin/members-page.tsx:188:170",
-        "frontend/pages/admin/members-page.tsx:189:28",
-        "frontend/pages/admin/members-page.tsx:194:15",
-        "frontend/pages/admin/members-page.tsx:194:132",
-        "frontend/pages/admin/members-page.tsx:196:554",
-        "frontend/pages/admin/members-page.tsx:204:5",
-        "frontend/pages/admin/members-page.tsx:205:7",
-        "frontend/pages/admin/members-page.tsx:209:11",
-        "frontend/pages/admin/members-page.tsx:212:11",
-        "frontend/pages/admin/members-page.tsx:213:11",
-        "frontend/pages/admin/members-page.tsx:217:5"
+        "frontend/pages/admin/members-page.tsx:128:16",
+        "frontend/pages/admin/members-page.tsx:129:5",
+        "frontend/pages/admin/members-page.tsx:136:159",
+        "frontend/pages/admin/members-page.tsx:138:29",
+        "frontend/pages/admin/members-page.tsx:138:195",
+        "frontend/pages/admin/members-page.tsx:139:52",
+        "frontend/pages/admin/members-page.tsx:139:275",
+        "frontend/pages/admin/members-page.tsx:140:5",
+        "frontend/pages/admin/members-page.tsx:142:9",
+        "frontend/pages/admin/members-page.tsx:143:9",
+        "frontend/pages/admin/members-page.tsx:146:9",
+        "frontend/pages/admin/members-page.tsx:165:534",
+        "frontend/pages/admin/members-page.tsx:176:13",
+        "frontend/pages/admin/members-page.tsx:178:31",
+        "frontend/pages/admin/members-page.tsx:185:15",
+        "frontend/pages/admin/members-page.tsx:185:132",
+        "frontend/pages/admin/members-page.tsx:187:554",
+        "frontend/pages/admin/members-page.tsx:195:5",
+        "frontend/pages/admin/members-page.tsx:196:7",
+        "frontend/pages/admin/members-page.tsx:200:11",
+        "frontend/pages/admin/members-page.tsx:203:11",
+        "frontend/pages/admin/members-page.tsx:204:11",
+        "frontend/pages/admin/members-page.tsx:208:5"
       ],
       "unresolvedSymbols": [
         "frontend/components/motion/combobox.tsx#Combobox",
@@ -5944,6 +5944,8 @@
         "frontend/components/motion/button/base.tsx:127:17",
         "frontend/components/motion/input.tsx:153:9",
         "frontend/components/motion/input.tsx:218:13",
+        "frontend/components/motion/otp-input.tsx:229:7",
+        "frontend/components/motion/otp-input.tsx:243:9",
         "frontend/components/ui/alert.tsx:57:5",
         "frontend/components/ui/alert.tsx:73:3",
         "frontend/components/ui/alert.tsx:85:3",
@@ -5951,11 +5953,15 @@
         "frontend/components/ui/input.tsx:37:3",
         "frontend/components/ui/label.tsx:11:37",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
-        "frontend/pages/login-page.tsx:45:15",
-        "frontend/pages/login-page.tsx:48:11",
-        "frontend/pages/login-page.tsx:51:130",
-        "frontend/pages/login-page.tsx:52:128",
-        "frontend/pages/login-page.tsx:53:13"
+        "frontend/pages/login-page.tsx:136:15",
+        "frontend/pages/login-page.tsx:142:17",
+        "frontend/pages/login-page.tsx:145:124",
+        "frontend/pages/login-page.tsx:146:17",
+        "frontend/pages/login-page.tsx:152:17",
+        "frontend/pages/login-page.tsx:153:19",
+        "frontend/pages/login-page.tsx:167:19",
+        "frontend/pages/login-page.tsx:170:19",
+        "frontend/pages/login-page.tsx:173:19"
       ],
       "unresolvedSymbols": [
         "frontend/components/ui/button.tsx#StatefulButton",
@@ -23646,6 +23652,65 @@
           "source": "if (!interactive) {\n    return (\n      <div\n        data-notification-stack=\"static\"\n        className={cn(\n          \"relative z-10 block w-full rounded-lg text-left text-foreground\",\n          className,\n        )}\n      >\n        <span\n          aria-label={ariaLabel}\n          role=\"list\"\n          className={cn(\"grid gap-1\", classNames?.stack)}\n        >\n          {visibleItems.map((item) => (\n            <span\n              key={item.id}\n              role=\"listitem\"\n              {...item.data}\n              className={cn(\n                \"block rounded-lg border border-border/60 bg-background px-4\",\n                classNames?.card,\n              )}\n            >\n              <NotificationCardContent item={item} classNames={classNames} />\n            </span>\n          ))}\n        </span>\n        {/* The interactive stack owns the count/label row; the static list\n            only grows a footer when the caller supplies one (the pager). */}\n        {footer !== undefined ? (\n          <div\n            className={cn(\n              \"relative z-10 mt-2 flex min-h-9 flex-wrap items-center gap-2 border-t px-1 pt-3\",\n              classNames?.footer,\n            )}\n          >\n            {footer}\n          </div>\n        ) : null}\n      </div>\n    );\n  }"
         }
       ]
+    },
+    {
+      "id": "frontend/components/motion/otp-input.tsx:229:7",
+      "path": "frontend/components/motion/otp-input.tsx",
+      "owner": "OTPInput",
+      "line": 229,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "fieldset",
+      "attributes": {
+        "data-otp-input": "true",
+        "className": "\"relative m-0 inline-flex w-max border-0 p-0\"",
+        "onMouseDown": "(e) => {\n          if (disabled) return;\n          // Suppress the native click-caret; we drive the active slot ourselves.\n          e.preventDefault();\n          // Clamp to the first empty slot so a click can't jump ahead of progress.\n          const firstEmpty = slots.indexOf(\"\");\n          const cap = firstEmpty === -1 ? length - 1 : firstEmpty;\n          setActive(Math.min(slotFromClientX(e.clientX), cap));\n          inputRef.current?.focus();\n        }"
+      },
+      "handlers": {
+        "onMouseDown": "(e) => {\n          if (disabled) return;\n          // Suppress the native click-caret; we drive the active slot ourselves.\n          e.preventDefault();\n          // Clamp to the first empty slot so a click can't jump ahead of progress.\n          const firstEmpty = slots.indexOf(\"\");\n          const cap = firstEmpty === -1 ? length - 1 : firstEmpty;\n          setActive(Math.min(slotFromClientX(e.clientX), cap));\n          inputRef.current?.focus();\n        }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/motion/otp-input.tsx:243:9",
+      "path": "frontend/components/motion/otp-input.tsx",
+      "owner": "OTPInput",
+      "line": 243,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "input",
+      "attributes": {
+        "ref": "inputRef",
+        "id": "`${uid}-input`",
+        "inputMode": "\"numeric\"",
+        "autoComplete": "\"one-time-code\"",
+        "autoFocus": "autoFocus",
+        "disabled": "disabled",
+        "aria-label": "ariaLabel",
+        "aria-invalid": "status === \"error\"",
+        "value": "\"\"",
+        "maxLength": "length",
+        "onKeyDown": "onKeyDown",
+        "onChange": "onChangeNative",
+        "onPaste": "onPaste",
+        "onFocus": "() => setFocused(true)",
+        "onBlur": "() => setFocused(false)",
+        "className": "\"absolute inset-0 z-20 h-full w-full cursor-text bg-transparent text-transparent caret-transparent opacity-0 outline-none disabled:cursor-not-allowed\""
+      },
+      "handlers": {
+        "onKeyDown": "onKeyDown",
+        "onChange": "onChangeNative",
+        "onPaste": "onPaste",
+        "onFocus": "() => setFocused(true)",
+        "onBlur": "() => setFocused(false)"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
     },
     {
       "id": "frontend/components/motion/overflow-actions.tsx:255:13",
@@ -43279,10 +43344,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:135:16",
+      "id": "frontend/pages/admin/members-page.tsx:128:16",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 135,
+      "line": 128,
       "column": 16,
       "kind": "jsx",
       "tag": "FilterSelect",
@@ -43311,10 +43376,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:136:5",
+      "id": "frontend/pages/admin/members-page.tsx:129:5",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 136,
+      "line": 129,
       "column": 5,
       "kind": "jsx",
       "tag": "AppliedFilters",
@@ -43341,10 +43406,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:143:159",
+      "id": "frontend/pages/admin/members-page.tsx:136:159",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 143,
+      "line": 136,
       "column": 159,
       "kind": "jsx",
       "tag": "Button",
@@ -43387,10 +43452,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:145:29",
+      "id": "frontend/pages/admin/members-page.tsx:138:29",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 145,
+      "line": 138,
       "column": 29,
       "kind": "jsx",
       "tag": "div",
@@ -43429,10 +43494,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:145:195",
+      "id": "frontend/pages/admin/members-page.tsx:138:195",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 145,
+      "line": 138,
       "column": 195,
       "kind": "jsx",
       "tag": "Button",
@@ -43475,10 +43540,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:146:52",
+      "id": "frontend/pages/admin/members-page.tsx:139:52",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 146,
+      "line": 139,
       "column": 52,
       "kind": "jsx",
       "tag": "div",
@@ -43516,10 +43581,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:146:275",
+      "id": "frontend/pages/admin/members-page.tsx:139:275",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 146,
+      "line": 139,
       "column": 275,
       "kind": "jsx",
       "tag": "Button",
@@ -43568,10 +43633,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:147:5",
+      "id": "frontend/pages/admin/members-page.tsx:140:5",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 147,
+      "line": 140,
       "column": 5,
       "kind": "jsx",
       "tag": "Tabs",
@@ -43607,10 +43672,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:149:9",
+      "id": "frontend/pages/admin/members-page.tsx:142:9",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 149,
+      "line": 142,
       "column": 9,
       "kind": "jsx",
       "tag": "TabsTrigger",
@@ -43644,10 +43709,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:150:9",
+      "id": "frontend/pages/admin/members-page.tsx:143:9",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 150,
+      "line": 143,
       "column": 9,
       "kind": "jsx",
       "tag": "TabsTrigger",
@@ -43681,10 +43746,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:153:9",
+      "id": "frontend/pages/admin/members-page.tsx:146:9",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 153,
+      "line": 146,
       "column": 9,
       "kind": "jsx",
       "tag": "DataTable",
@@ -43734,10 +43799,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:172:534",
+      "id": "frontend/pages/admin/members-page.tsx:165:534",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 172,
+      "line": 165,
       "column": 534,
       "kind": "jsx",
       "tag": "Button",
@@ -43782,10 +43847,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:183:13",
+      "id": "frontend/pages/admin/members-page.tsx:176:13",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 183,
+      "line": 176,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -43833,10 +43898,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:185:31",
+      "id": "frontend/pages/admin/members-page.tsx:178:31",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 185,
+      "line": 178,
       "column": 31,
       "kind": "jsx",
       "tag": "p",
@@ -43883,119 +43948,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:188:170",
+      "id": "frontend/pages/admin/members-page.tsx:185:15",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 188,
-      "column": 170,
-      "kind": "jsx",
-      "tag": "Button",
-      "attributes": {
-        "type": "\"button\"",
-        "size": "\"sm\"",
-        "variant": "\"outline\"",
-        "onClick": "() => void copyCode(issuedInvitation.code)"
-      },
-      "handlers": {
-        "onClick": "() => void copyCode(issuedInvitation.code)"
-      },
-      "spreads": [],
-      "labels": [
-        "frontendText(locale, copied ? \"ADMIN_INVITATION_CODE_COPIED\" : \"ADMIN_INVITATION_CODE_COPY\")"
-      ],
-      "context": [
-        {
-          "kind": "container",
-          "tag": "section",
-          "attributes": {
-            "aria-hidden": "validConfirmation || addOpen || undefined"
-          }
-        },
-        {
-          "kind": "branch",
-          "expression": "loading",
-          "branch": "false"
-        },
-        {
-          "kind": "branch",
-          "expression": "error",
-          "branch": "false"
-        },
-        {
-          "kind": "container",
-          "tag": "section",
-          "attributes": {
-            "aria-busy": "(invitationWritePending || invitationsPending) || undefined"
-          }
-        },
-        {
-          "kind": "logical",
-          "expression": "issuedInvitation",
-          "operator": "&&"
-        }
-      ],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/pages/admin/members-page.tsx:189:28",
-      "path": "frontend/pages/admin/members-page.tsx",
-      "owner": "MembersPage",
-      "line": 189,
-      "column": 28,
-      "kind": "jsx",
-      "tag": "p",
-      "attributes": {
-        "role": "\"alert\"",
-        "className": "\"text-sm text-destructive\""
-      },
-      "handlers": {},
-      "spreads": [],
-      "labels": [
-        "frontendText(locale, \"ADMIN_INVITATION_CODE_COPY_FAILED\")"
-      ],
-      "context": [
-        {
-          "kind": "container",
-          "tag": "section",
-          "attributes": {
-            "aria-hidden": "validConfirmation || addOpen || undefined"
-          }
-        },
-        {
-          "kind": "branch",
-          "expression": "loading",
-          "branch": "false"
-        },
-        {
-          "kind": "branch",
-          "expression": "error",
-          "branch": "false"
-        },
-        {
-          "kind": "container",
-          "tag": "section",
-          "attributes": {
-            "aria-busy": "(invitationWritePending || invitationsPending) || undefined"
-          }
-        },
-        {
-          "kind": "logical",
-          "expression": "issuedInvitation",
-          "operator": "&&"
-        },
-        {
-          "kind": "logical",
-          "expression": "copyFailed",
-          "operator": "&&"
-        }
-      ],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/pages/admin/members-page.tsx:194:15",
-      "path": "frontend/pages/admin/members-page.tsx",
-      "owner": "MembersPage",
-      "line": 194,
+      "line": 185,
       "column": 15,
       "kind": "jsx",
       "tag": "div",
@@ -44040,10 +43996,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:194:132",
+      "id": "frontend/pages/admin/members-page.tsx:185:132",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 194,
+      "line": 185,
       "column": 132,
       "kind": "jsx",
       "tag": "Button",
@@ -44099,10 +44055,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:196:554",
+      "id": "frontend/pages/admin/members-page.tsx:187:554",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 196,
+      "line": 187,
       "column": 554,
       "kind": "jsx",
       "tag": "Button",
@@ -44167,10 +44123,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:204:5",
+      "id": "frontend/pages/admin/members-page.tsx:195:5",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 204,
+      "line": 195,
       "column": 5,
       "kind": "jsx",
       "tag": "Dialog",
@@ -44187,10 +44143,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:205:7",
+      "id": "frontend/pages/admin/members-page.tsx:196:7",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 205,
+      "line": 196,
       "column": 7,
       "kind": "jsx",
       "tag": "DialogContent",
@@ -44217,10 +44173,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:209:11",
+      "id": "frontend/pages/admin/members-page.tsx:200:11",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 209,
+      "line": 200,
       "column": 11,
       "kind": "jsx",
       "tag": "Input",
@@ -44251,10 +44207,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:212:11",
+      "id": "frontend/pages/admin/members-page.tsx:203:11",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 212,
+      "line": 203,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -44283,10 +44239,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:213:11",
+      "id": "frontend/pages/admin/members-page.tsx:204:11",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 213,
+      "line": 204,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -44314,10 +44270,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/members-page.tsx:217:5",
+      "id": "frontend/pages/admin/members-page.tsx:208:5",
       "path": "frontend/pages/admin/members-page.tsx",
       "owner": "MembersPage",
-      "line": 217,
+      "line": 208,
       "column": 5,
       "kind": "jsx",
       "tag": "ConfirmAction",
@@ -56036,10 +55992,10 @@
       ]
     },
     {
-      "id": "frontend/pages/login-page.tsx:45:15",
+      "id": "frontend/pages/login-page.tsx:136:15",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 45,
+      "line": 136,
       "column": 15,
       "kind": "jsx",
       "tag": "Button",
@@ -56065,81 +56021,191 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:48:11",
+      "id": "frontend/pages/login-page.tsx:142:17",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 48,
-      "column": 11,
+      "line": 142,
+      "column": 17,
+      "kind": "jsx",
+      "tag": "form",
+      "attributes": {
+        "className": "\"space-y-3\"",
+        "aria-busy": "requesting || undefined",
+        "onSubmit": "(event) => { event.preventDefault(); void sendCode(); }"
+      },
+      "handlers": {
+        "onSubmit": "(event) => { event.preventDefault(); void sendCode(); }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "!emailCodeEnabled",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "step === \"email\"",
+          "branch": "true"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/login-page.tsx:145:124",
+      "path": "frontend/pages/login-page.tsx",
+      "owner": "LoginPage",
+      "line": 145,
+      "column": 124,
+      "kind": "jsx",
+      "tag": "Input",
+      "attributes": {
+        "id": "\"login-email\"",
+        "type": "\"email\"",
+        "autoComplete": "\"email\"",
+        "value": "email",
+        "disabled": "requesting",
+        "onChange": "(value) => { setEmail(value); if (formError) setFormError(undefined); }"
+      },
+      "handlers": {
+        "onChange": "(value) => { setEmail(value); if (formError) setFormError(undefined); }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "!emailCodeEnabled",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "step === \"email\"",
+          "branch": "true"
+        },
+        {
+          "kind": "container",
+          "tag": "form",
+          "attributes": {
+            "aria-busy": "requesting || undefined"
+          }
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/login-page.tsx:146:17",
+      "path": "frontend/pages/login-page.tsx",
+      "owner": "LoginPage",
+      "line": 146,
+      "column": 17,
+      "kind": "jsx",
+      "tag": "StatefulButton",
+      "attributes": {
+        "type": "\"submit\"",
+        "className": "\"h-11 w-full\"",
+        "size": "\"lg\"",
+        "state": "requesting ? \"loading\" : \"idle\"",
+        "loadingText": "frontendText(locale, \"LOGIN_EMAIL_SENDING\")",
+        "disabled": "requesting || email.trim().length === 0"
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"LOGIN_EMAIL_SEND\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "!emailCodeEnabled",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "step === \"email\"",
+          "branch": "true"
+        },
+        {
+          "kind": "container",
+          "tag": "form",
+          "attributes": {
+            "aria-busy": "requesting || undefined"
+          }
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/login-page.tsx:152:17",
+      "path": "frontend/pages/login-page.tsx",
+      "owner": "LoginPage",
+      "line": 152,
+      "column": 17,
       "kind": "jsx",
       "tag": "form",
       "attributes": {
         "className": "\"space-y-3\"",
         "aria-busy": "pending || undefined",
-        "onSubmit": "(event) => { event.preventDefault(); void onCodeSubmit(); }"
+        "onSubmit": "(event) => { event.preventDefault(); void verifyCode(); }"
       },
       "handlers": {
-        "onSubmit": "(event) => { event.preventDefault(); void onCodeSubmit(); }"
-      },
-      "spreads": [],
-      "labels": [],
-      "context": [],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/pages/login-page.tsx:51:130",
-      "path": "frontend/pages/login-page.tsx",
-      "owner": "LoginPage",
-      "line": 51,
-      "column": 130,
-      "kind": "jsx",
-      "tag": "Input",
-      "attributes": {
-        "id": "\"login-code-email\"",
-        "type": "\"email\"",
-        "autoComplete": "\"email\"",
-        "value": "email",
-        "disabled": "pending",
-        "onChange": "(value) => setEmail(value)"
-      },
-      "handlers": {
-        "onChange": "(value) => setEmail(value)"
+        "onSubmit": "(event) => { event.preventDefault(); void verifyCode(); }"
       },
       "spreads": [],
       "labels": [],
       "context": [
         {
-          "kind": "container",
-          "tag": "form",
-          "attributes": {
-            "aria-busy": "pending || undefined"
-          }
+          "kind": "branch",
+          "expression": "!emailCodeEnabled",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "step === \"email\"",
+          "branch": "false"
         }
       ],
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:52:128",
+      "id": "frontend/pages/login-page.tsx:153:19",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 52,
-      "column": 128,
+      "line": 153,
+      "column": 19,
       "kind": "jsx",
-      "tag": "Input",
+      "tag": "OTPInput",
       "attributes": {
-        "id": "\"login-code-code\"",
-        "type": "\"text\"",
-        "autoComplete": "\"one-time-code\"",
-        "className": "\"font-mono\"",
+        "length": "CODE_LENGTH",
         "value": "code",
+        "onChange": "(value) => { setCode(value); if (formError) setFormError(undefined); if (codeStatus !== \"idle\") setCodeStatus(\"idle\"); }",
+        "onComplete": "(value) => { setCode(value); void verifyCode(value); }",
+        "label": "frontendText(locale, \"LOGIN_CODE_CODE_LABEL\")",
+        "aria-label": "frontendText(locale, \"LOGIN_CODE_ARIA\")",
+        "errorMessage": "formError",
+        "status": "codeStatus",
         "disabled": "pending",
-        "onChange": "(value) => setCode(value)"
+        "autoFocus": "true",
+        "className": "\"w-full\""
       },
       "handlers": {
-        "onChange": "(value) => setCode(value)"
+        "onChange": "(value) => { setCode(value); if (formError) setFormError(undefined); if (codeStatus !== \"idle\") setCodeStatus(\"idle\"); }",
+        "onComplete": "(value) => { setCode(value); void verifyCode(value); }"
       },
       "spreads": [],
       "labels": [],
       "context": [
+        {
+          "kind": "branch",
+          "expression": "!emailCodeEnabled",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "step === \"email\"",
+          "branch": "false"
+        },
         {
           "kind": "container",
           "tag": "form",
@@ -56151,11 +56217,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:53:13",
+      "id": "frontend/pages/login-page.tsx:167:19",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 53,
-      "column": 13,
+      "line": 167,
+      "column": 19,
       "kind": "jsx",
       "tag": "StatefulButton",
       "attributes": {
@@ -56164,7 +56230,7 @@
         "size": "\"lg\"",
         "state": "pending ? \"loading\" : \"idle\"",
         "loadingText": "frontendText(locale, \"LOGIN_CODE_PENDING\")",
-        "disabled": "!canSubmit"
+        "disabled": "pending || code.length !== CODE_LENGTH"
       },
       "handlers": {},
       "spreads": [],
@@ -56173,11 +56239,93 @@
       ],
       "context": [
         {
+          "kind": "branch",
+          "expression": "!emailCodeEnabled",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "step === \"email\"",
+          "branch": "false"
+        },
+        {
           "kind": "container",
           "tag": "form",
           "attributes": {
             "aria-busy": "pending || undefined"
           }
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/login-page.tsx:170:19",
+      "path": "frontend/pages/login-page.tsx",
+      "owner": "LoginPage",
+      "line": 170,
+      "column": 19,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"ghost\"",
+        "size": "\"sm\"",
+        "disabled": "requesting || pending || resendIn > 0",
+        "onClick": "() => void sendCode()"
+      },
+      "handlers": {
+        "onClick": "() => void sendCode()"
+      },
+      "spreads": [],
+      "labels": [
+        "resendIn > 0 ? frontendText(locale, \"LOGIN_CODE_RESEND_WAIT\").replace(\"{seconds}\", String(resendIn)) : frontendText(locale, \"LOGIN_CODE_RESEND\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "!emailCodeEnabled",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "step === \"email\"",
+          "branch": "false"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/login-page.tsx:173:19",
+      "path": "frontend/pages/login-page.tsx",
+      "owner": "LoginPage",
+      "line": 173,
+      "column": 19,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"ghost\"",
+        "size": "\"sm\"",
+        "disabled": "requesting || pending",
+        "onClick": "changeEmail"
+      },
+      "handlers": {
+        "onClick": "changeEmail"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"LOGIN_CODE_CHANGE_EMAIL\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "!emailCodeEnabled",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "step === \"email\"",
+          "branch": "false"
         }
       ],
       "earlyReturns": []

@@ -4176,7 +4176,7 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
   const [invitationForbidden, setInvitationForbidden] = useState(false);
   const [invitationWritePending, setInvitationWritePending] = useState(false);
   const [invitationError, setInvitationError] = useState<string>();
-  const [issuedInvitation, setIssuedInvitation] = useState<{ email: string; code: string; expiresAt: string } | null>(null);
+  const [issuedInvitation, setIssuedInvitation] = useState<{ email: string; expiresAt: string } | null>(null);
   const [invitationsVersion, setInvitationsVersion] = useState(0);
   const invitationReadRef = useRef<AbortController | null>(null);
   const invitationWriteRef = useRef<object | null>(null);
@@ -4211,7 +4211,7 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
     try {
       const result = await issueInvitation(email);
       if (invitationWriteRef.current !== token) return;
-      setIssuedInvitation({ email: result.invitation.email, code: result.code, expiresAt: result.invitation.expiresAt });
+      setIssuedInvitation({ email: result.email, expiresAt: result.expiresAt });
       await readInvitations();
     } catch (error: unknown) {
       if (invitationWriteRef.current !== token) return;

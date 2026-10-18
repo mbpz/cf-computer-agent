@@ -37,6 +37,14 @@
 
 若暂时不使用微信，无需添加任何微信 Secret；若要启用，按下文创建网站应用并将四项变量作为 Worker Secret 发布后再验证。
 
+### 邮箱验证码登录
+
+登录页默认提供“邮箱验证码”路径。发信使用 `wrangler.jsonc` 的 `send_email` 绑定 `EMAIL`，发件地址固定为 `login@memory.crgmhrc.asia`（`src/config.ts`），验证码 HMAC 使用既有 `APP_TOKEN`，**不新增任何环境变量或 Secret**。
+
+1. 为本域名开通 Email Sending：`npx wrangler email sending enable memory.crgmhrc.asia`（若账户尚未获得该 beta 权限，命令会返回 `Unauthorized`，此时邮箱验证码入口只能显示发信失败）。
+2. 应用 `0077_email_login_codes.sql` 后部署含 `send_email` 绑定的 Worker。未应用迁移时验证码接口会因缺少表而失败；未绑定 `EMAIL` 时返回 `503 EMAIL_LOGIN_UNAVAILABLE`。
+3. 验证码只发送给已授权地址：`ALLOWED_MEMBER_EMAILS` 中的邮箱、已有 active 成员，或管理员签发的 pending 邀请。接口对未授权地址也返回 `202`，不以响应区分地址是否存在。
+
 ## 2. 创建 GitHub OAuth App
 
 进入 GitHub：

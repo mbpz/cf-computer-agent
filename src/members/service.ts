@@ -92,15 +92,35 @@ export class MembersService {
     return this.insertWithConflictRecovery(identity, role);
   }
 
+  /** Canonical-email lookup shared by the email-code eligibility check and verification. */
+  async findByCanonicalEmail(input: string): Promise<Member | null> {
+    const email = canonicalEmail(input);
+    if (!email || email !== input) return null;
+    const byEmail = await this.repository.findByCanonicalEmail(email, 2);
+    if (byEmail.length > 1) throw identityConflict();
+    return byEmail[0] ?? null;
+  }
+
+  /** Whether an email is on the configured GitHub allowlist; invalid config fails closed. */
+  isEmailAllowed(input: string): boolean {
+    const email = canonicalEmail(input);
+    if (!email) return false;
+    try {
+      return parseAllowedMemberEmails(this.allowedMemberEmails, this.bootstrapAdminEmail).has(email);
+    } catch {
+      return false;
+    }
+  }
+
   /**
-   * Resolves the member for an admin-issued one-time code login.
+   * Resolves the member for a self-service email-code login.
    *
-   * No email allowlist applies here (the invitation itself is the
-   * authorization), the account is always created as an active contributor,
-   * and the bootstrap administrator promotion is never consulted, so this path
-   * can neither create nor promote an administrator.
+   * The caller authorizes the email (allowlist or pending invitation); the
+   * account is always created as an active contributor, and the bootstrap
+   * administrator promotion is never consulted, so this path can neither
+   * create nor promote an administrator.
    */
-  async resolveCodeLogin(input: { email: string }): Promise<Member> {
+  async resolveEmailCodeLogin(input: { email: string }): Promise<Member> {
     const email = canonicalEmail(input.email);
     if (!email || email !== input.email) {
       throw new AppError("MEMBER_IDENTITY_INVALID", "Member identity is invalid", 401);

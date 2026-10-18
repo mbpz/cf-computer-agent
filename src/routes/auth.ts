@@ -4,7 +4,7 @@ import type { GitHubOAuthClient } from "../identity/github-oauth";
 import type { WeChatOAuthClient } from "../identity/wechat-oauth";
 import { clearCookie, oauthCookie, readUniqueCookie, sessionCookie } from "../identity/oauth-cookies";
 import type { SessionService } from "../identity/session";
-import type { MemberInvitationsService } from "../member-invitations/service";
+import type { EmailLoginService } from "../email-login/service";
 import type { MembersService } from "../members/service";
 import { parseJsonRequestAs, strictRecord } from "./member";
 
@@ -20,7 +20,7 @@ export interface AuthRouteServices {
   oauth: GitHubOAuthClient;
   wechat: WeChatOAuthClient;
   members: Pick<MembersService, "resolveGitHubLogin" | "resolveWeChatLogin">;
-  invitations: Pick<MemberInvitationsService, "redeem">;
+  emailLogin: Pick<EmailLoginService, "requestCode" | "verifyCode">;
   sessions: Pick<SessionService, "create" | "logout">;
 }
 
@@ -94,11 +94,21 @@ export async function routeAuth(
     return response;
   }
 
-  if (url.pathname === "/auth/code") {
+  if (url.pathname === "/auth/email/code") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    const input = await parseCodeLoginRequest(request);
-    const member = await services.invitations.redeem(input);
+    requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+    const input = await parseEmailCodeRequest(request);
+    await services.emailLogin.requestCode(input.email);
+    return jsonResponse({ status: "accepted" }, 202, context.requestId);
+  }
+
+  if (url.pathname === "/auth/email/code/verify") {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+    const input = await parseEmailCodeVerifyRequest(request);
+    const member = await services.emailLogin.verifyCode(input);
     const session = await services.sessions.create(member);
     const response = jsonResponse({
       member: { id: member.id, email: member.email, role: member.role },
@@ -140,18 +150,28 @@ export function clearSessionCookie(response: Response): Response {
   return response;
 }
 
-async function parseCodeLoginRequest(request: Request): Promise<{ email: string; code: string }> {
+async function parseEmailCodeRequest(request: Request): Promise<{ email: string }> {
   const input = strictRecord(
-    await parseJsonRequestAs(request, "CODE_LOGIN_REQUEST_INVALID"),
-    ["email", "code"],
-    "CODE_LOGIN_REQUEST_INVALID",
+    await parseJsonRequestAs(request, "EMAIL_LOGIN_REQUEST_INVALID"),
+    ["email"],
+    "EMAIL_LOGIN_REQUEST_INVALID",
   );
-  if (typeof input.email !== "string" || typeof input.code !== "string") throw codeLoginRequestInvalid();
-  return { email: input.email, code: input.code };
+  if (typeof input.email !== "string") {
+    throw new AppError("EMAIL_LOGIN_REQUEST_INVALID", "Email login request is invalid", 400);
+  }
+  return { email: input.email };
 }
 
-function codeLoginRequestInvalid(): AppError {
-  return new AppError("CODE_LOGIN_REQUEST_INVALID", "Login code request is invalid", 400);
+async function parseEmailCodeVerifyRequest(request: Request): Promise<{ email: string; code: string }> {
+  const input = strictRecord(
+    await parseJsonRequestAs(request, "EMAIL_LOGIN_REQUEST_INVALID"),
+    ["email", "code"],
+    "EMAIL_LOGIN_REQUEST_INVALID",
+  );
+  if (typeof input.email !== "string" || typeof input.code !== "string") {
+    throw new AppError("EMAIL_LOGIN_REQUEST_INVALID", "Email login request is invalid", 400);
+  }
+  return { email: input.email, code: input.code };
 }
 
 function uniqueQueryValue(url: URL, name: string): string | undefined {

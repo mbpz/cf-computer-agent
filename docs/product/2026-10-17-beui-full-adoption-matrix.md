@@ -1094,10 +1094,10 @@ Wave 1–3 的前后对比已按 §16 完成（同一 10 页、同一视口、`b
 | 页面 `section` | `lg:h-full lg:min-h-0`、`inert` + `aria-hidden`（确认层/邀请对话框打开时） |
 | 标签列表 | `role="tablist"`、`aria-orientation`、逐项 `role="tab"`/`aria-selected`/`aria-controls`/`tabIndex`/`data-state`/`data-tab-value`（载荷另有 `data-tabs-value`） |
 | 成员面板 | `role="tabpanel"` + `aria-labelledby`、`DataTable` 的 `data-list-mode`、分页钩子（`data-admin-pagination-*` 等，未改）及行内 `aria-label="<启用/禁用> <target>"` |
-| 授权记录面板 | `role="tabpanel"`、`section[data-admin-invitations]`（含 `aria-busy`）、`[data-member-add-open]`（`aria-haspopup`/`aria-expanded`）、`[data-invitation-code]`、`[data-member-add-dialog]`、`[data-member-add-cancel]`、`#invitation-email` |
+| 授权记录面板 | `role="tabpanel"`、`section[data-admin-invitations]`（含 `aria-busy`）、`[data-member-add-open]`（`aria-haspopup`/`aria-expanded`）、`[data-invitation-issued]`、`[data-member-add-dialog]`、`[data-member-add-cancel]`、`#invitation-email` |
 | 页面级 | `[data-member-status-record-blocked]`、`[data-confirm-action]` |
 
-i18n：未新增键。标签「成员」用 `ADMIN_MEMBERS_TITLE`；「授权记录」用 `ADMIN_INVITATION_LIST_TITLE`（中文恰为「授权记录」，英文 `Invitations`）——原记录区块标题即此键，`ADMIN_INVITATION_SECTION_TITLE`（授权新成员）继续作为面板内邀请区块的 `h2` 与对话框标题，两个键都已存在且语义各归其位（任务描述把 `SECTION_TITLE` 记作「授权记录」，实际该键是「授权新成员」，故按实际取值选择）。
+i18n：2026-10-18 邮箱验证码改造后新增 `LOGIN_EMAIL_*`/`LOGIN_CODE_*`/`ADMIN_INVITATION_ISSUED_*` 键；原记录段落的以下说明保留其历史语境。标签「成员」用 `ADMIN_MEMBERS_TITLE`；「授权记录」用 `ADMIN_INVITATION_LIST_TITLE`（中文恰为「授权记录」，英文 `Invitations`）——原记录区块标题即此键，`ADMIN_INVITATION_SECTION_TITLE`（授权新成员）继续作为面板内邀请区块的 `h2` 与对话框标题，两个键都已存在且语义各归其位（任务描述把 `SECTION_TITLE` 记作「授权记录」，实际该键是「授权新成员」，故按实际取值选择）。
 
 ### 26.4 测试寻址调整（断言不变）
 

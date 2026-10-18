@@ -25,7 +25,7 @@
   → 只能访问 legacy health/notes/search/chat，不能成为管理员
 ```
 
-D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 nonce；`KnowledgeBase` Durable Object 保存已发布笔记和索引。D1 migration 与 Durable Object `v1` 都只能向前兼容，不能靠删表、删数据或重置 DO 回滚。微信 OAuth 适配器暂不在前端开放，当前生产登录入口只有 GitHub。
+D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 nonce；`KnowledgeBase` Durable Object 保存已发布笔记和索引。D1 migration 与 Durable Object `v1` 都只能向前兼容，不能靠删表、删数据或重置 DO 回滚。当前登录入口为 GitHub 与邮箱验证码；微信 OAuth 适配器暂不在前端开放。邮箱验证码使用 Cloudflare Email Sending 的 `EMAIL` 绑定；当前账户如未完成发信域名开通，投递会失败并返回 `503 EMAIL_LOGIN_DELIVERY_FAILED`，GitHub 不受影响。
 
 ## 2. 生产配置
 
@@ -46,6 +46,8 @@ D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 n
 | `BOOTSTRAP_WECHAT_SUBJECT` | allowlist 中管理员 subject | 微信首个管理员；可选 |
 
 禁止把这些值写入仓库、`wrangler.jsonc`、`.dev.vars`、命令参数、URL、日志、截图或聊天。已经公开过的值必须轮换。
+
+邮箱验证码登录还需要 `0077_email_login_codes.sql` 和已开通的 Cloudflare Email Sending（发件地址固定为 `login@memory.crgmhrc.asia`，见 `src/config.ts`）。该迁移重建 `member_login_invitations`（去掉管理员转发码的列）并新建 `email_login_codes`；它只向前兼容，不能靠删除表回滚。发信失败会返回 `503 EMAIL_LOGIN_DELIVERY_FAILED` 并作废当次验证码；Worker 未获取 `EMAIL` 绑定时 `/auth/email/code` 返回 `503 EMAIL_LOGIN_UNAVAILABLE`。
 
 ## 3. GitHub OAuth App
 

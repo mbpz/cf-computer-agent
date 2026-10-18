@@ -3,7 +3,7 @@ import type { CreateAuditEvent } from "../audit/types";
 import type { CreateMemberInvitation, MemberInvitation } from "./types";
 
 /**
- * Persistence for admin-issued one-time login codes.
+ * Persistence for email authorization grants.
  *
  * Every mutating method pairs its conditional single-row write with the audit
  * statement from `AuditRepository.prepareChangedRowAudit`, which only inserts
@@ -14,24 +14,20 @@ export interface MemberInvitationsRepositoryPort {
   findById(id: string): Promise<MemberInvitation | null>;
   findPendingByEmail(email: string): Promise<MemberInvitation | null>;
   list(): Promise<MemberInvitation[]>;
-  /** Active administrators may not be handed a code-login invitation. */
+  /** Active administrators may not be handed an invitation. */
   hasActiveAdminMember(email: string): Promise<boolean>;
   /** Conditional insert: null when a pending invitation already exists. */
   insert(invitation: CreateMemberInvitation, audit: CreateAuditEvent): Promise<MemberInvitation | null>;
   /** Conditional pending -> revoked: null when the invitation is not pending. */
   revoke(id: string, revokedAt: string, audit: CreateAuditEvent): Promise<MemberInvitation | null>;
-  /** Conditional counter bump: false once the invitation is locked or not pending. */
-  recordFailedAttempt(id: string, ceiling: number, audit: CreateAuditEvent): Promise<boolean>;
-  /** Conditional pending -> redeemed within expiry and under the ceiling. */
-  redeem(id: string, now: string, ceiling: number, audit: CreateAuditEvent): Promise<boolean>;
+  /** Conditional pending -> redeemed within expiry. */
+  redeem(id: string, now: string, audit: CreateAuditEvent): Promise<boolean>;
 }
 
 type InvitationRow = {
   id: string;
   email: string;
-  code_hash: string;
   status: MemberInvitation["status"];
-  attempt_count: number;
   created_at: string;
   expires_at: string;
   redeemed_at: string | null;
@@ -68,10 +64,10 @@ export class MemberInvitationsRepository implements MemberInvitationsRepositoryP
     let results: D1Result[];
     try {
       results = await this.writeWithAudit(this.db.prepare(
-        `INSERT INTO member_login_invitations (id, email, code_hash, status, attempt_count, created_at, expires_at)
-         SELECT ?, ?, ?, 'pending', 0, ?, ?
+        `INSERT INTO member_login_invitations (id, email, status, created_at, expires_at)
+         SELECT ?, ?, 'pending', ?, ?
          WHERE NOT EXISTS (SELECT 1 FROM member_login_invitations WHERE email = ? AND status = 'pending')`,
-      ).bind(invitation.id, invitation.email, invitation.codeHash, invitation.createdAt, invitation.expiresAt, invitation.email), audit);
+      ).bind(invitation.id, invitation.email, invitation.createdAt, invitation.expiresAt, invitation.email), audit);
     } catch (error) {
       // The conditional insert already refuses a second pending row; a racing
       // writer can still reach the partial unique index first.
@@ -79,7 +75,7 @@ export class MemberInvitationsRepository implements MemberInvitationsRepositoryP
       throw error;
     }
     if (results[0]?.meta.changes !== 1) return null;
-    return { ...invitation, status: "pending", attemptCount: 0, redeemedAt: null, revokedAt: null };
+    return { ...invitation, status: "pending", redeemedAt: null, revokedAt: null };
   }
 
   async revoke(id: string, revokedAt: string, audit: CreateAuditEvent): Promise<MemberInvitation | null> {
@@ -91,21 +87,12 @@ export class MemberInvitationsRepository implements MemberInvitationsRepositoryP
     return this.findById(id);
   }
 
-  async recordFailedAttempt(id: string, ceiling: number, audit: CreateAuditEvent): Promise<boolean> {
-    assertInvitationAudit("member.code_login_denied", id, audit);
-    const results = await this.writeWithAudit(this.db.prepare(
-      `UPDATE member_login_invitations SET attempt_count = attempt_count + 1
-       WHERE id = ? AND status = 'pending' AND attempt_count < ?`,
-    ).bind(id, ceiling), audit);
-    return results[0]?.meta.changes === 1;
-  }
-
-  async redeem(id: string, now: string, ceiling: number, audit: CreateAuditEvent): Promise<boolean> {
+  async redeem(id: string, now: string, audit: CreateAuditEvent): Promise<boolean> {
     assertInvitationAudit("member.code_login", id, audit);
     const results = await this.writeWithAudit(this.db.prepare(
       `UPDATE member_login_invitations SET status = 'redeemed', redeemed_at = ?
-       WHERE id = ? AND status = 'pending' AND expires_at > ? AND attempt_count < ?`,
-    ).bind(now, id, now, ceiling), audit);
+       WHERE id = ? AND status = 'pending' AND expires_at > ?`,
+    ).bind(now, id, now), audit);
     return results[0]?.meta.changes === 1;
   }
 
@@ -120,15 +107,13 @@ export class MemberInvitationsRepository implements MemberInvitationsRepositoryP
   }
 }
 
-const invitationSelect = "SELECT id, email, code_hash, status, attempt_count, created_at, expires_at, redeemed_at, revoked_at FROM member_login_invitations";
+const invitationSelect = "SELECT id, email, status, created_at, expires_at, redeemed_at, revoked_at FROM member_login_invitations";
 
 function mapInvitationRow(row: InvitationRow): MemberInvitation {
   return {
     id: row.id,
     email: row.email,
-    codeHash: row.code_hash,
     status: row.status,
-    attemptCount: row.attempt_count,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     redeemedAt: row.redeemed_at,
@@ -137,7 +122,7 @@ function mapInvitationRow(row: InvitationRow): MemberInvitation {
 }
 
 function assertInvitationAudit(
-  action: "member.invitation_issued" | "member.invitation_revoked" | "member.code_login" | "member.code_login_denied",
+  action: "member.invitation_issued" | "member.invitation_revoked" | "member.code_login",
   resourceId: string,
   audit: CreateAuditEvent,
 ): void {
