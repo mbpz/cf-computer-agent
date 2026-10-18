@@ -1,5 +1,10 @@
 import { ApiRequestError, apiFetch, type Fetcher } from "./api";
 
+export interface PasswordRegistration {
+  member: PasswordAuthMember;
+  recoveryCode: string;
+}
+
 export interface PasswordAuthMember {
   id: string;
   email: string;
@@ -40,12 +45,34 @@ async function credentials(path: string, email: string, password: string, reques
   return parseMember(data);
 }
 
-export function registerPassword(email: string, password: string, requester: Fetcher = fetch): Promise<PasswordAuthMember> {
-  return credentials("/auth/register", email, password, requester);
+export async function registerPassword(email: string, password: string, requester: Fetcher = fetch): Promise<PasswordRegistration> {
+  const data = await apiFetch<unknown>("/auth/register", {
+    requester,
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!data || typeof data !== "object" || Array.isArray(data)
+    || Object.keys(data).length !== 2 || !("member" in data) || !("recoveryCode" in data)
+    || typeof data.recoveryCode !== "string" || data.recoveryCode.length === 0) invalidResponse();
+  return { member: parseMember({ member: data.member }), recoveryCode: data.recoveryCode };
 }
 
 export function loginPassword(email: string, password: string, requester: Fetcher = fetch): Promise<PasswordAuthMember> {
   return credentials("/auth/password", email, password, requester);
+}
+
+export async function resetPassword(email: string, recoveryCode: string, password: string, requester: Fetcher = fetch): Promise<string> {
+  const data = await apiFetch<unknown>("/auth/password/reset", {
+    requester,
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, recoveryCode, password }),
+  });
+  if (!data || typeof data !== "object" || Array.isArray(data)
+    || Object.keys(data).length !== 1 || !("recoveryCode" in data)
+    || typeof data.recoveryCode !== "string" || data.recoveryCode.length === 0) invalidResponse();
+  return data.recoveryCode;
 }
 
 export type PasswordAuthFailure =
@@ -56,6 +83,8 @@ export type PasswordAuthFailure =
   | "rejected"
   | "locked"
   | "disabled"
+  | "reset_rejected"
+  | "reset_locked"
   | "unknown";
 
 export function passwordAuthFailure(error: unknown): PasswordAuthFailure {
@@ -68,6 +97,8 @@ export function passwordAuthFailure(error: unknown): PasswordAuthFailure {
     case "PASSWORD_LOGIN_LOCKED": return "locked";
     case "PASSWORD_LOGIN_INVALID": return "rejected";
     case "MEMBER_DISABLED": return "disabled";
+    case "PASSWORD_RESET_INVALID": return "reset_rejected";
+    case "PASSWORD_RESET_LOCKED": return "reset_locked";
     default: return error.status === 400 ? "invalid" : "unknown";
   }
 }

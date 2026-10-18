@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：475；操作/转发候选：1758。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：475；操作/转发候选：1763。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -456,7 +456,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/inbox-page.tsx | 12 |
 | frontend/pages/knowledge-page.tsx | 39 |
 | frontend/pages/knowledge-reader-page.tsx | 51 |
-| frontend/pages/login-page.tsx | 7 |
+| frontend/pages/login-page.tsx | 12 |
 | frontend/pages/messages/discussion-model.ts | 0 |
 | frontend/pages/messages/messages-page.tsx | 6 |
 | frontend/pages/messages/thread-page.tsx | 20 |
@@ -534,7 +534,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /admin/knowledge/:id | frontend/pages/admin/knowledge-item-route.tsx#AdminKnowledgeItemRoute | 40 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 183 | 无（不代表动态边界已核对） |
 | &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 68 | frontend/components/ui/card.tsx#Card |
-| &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 23 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 28 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 
 尚未归入上述入口的候选：162。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
 
@@ -3152,13 +3152,18 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 107:15 LoginPage | Button frontendText(locale, "LOGIN_GITHUB") | onClick=() =&gt; { window.location.href = "/auth/github"; } | {"kind":"branch","expression":"githubEnabled","branch":"true"} |
-| 110:11 LoginPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); void submit(); } | aria-busy=pending &#124;&#124; undefined |
-| 118:15 LoginPage | Input  | onChange=(value) =&gt; { setEmail(value); if (formError) setFormError(undefined); }; type="email" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
-| 122:15 LoginPage | Input  | onChange=(value) =&gt; { setPassword(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
-| 126:15 LoginPage | Input  | onChange=(value) =&gt; { setConfirm(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"logical","expression":"registering"… |
-| 128:13 LoginPage | StatefulButton frontendText(locale, registering ? "LOGIN_REGISTER_SUBMIT" : "LOGIN_PASSWORD_SUBMIT") | type="submit" | disabled=pending &#124;&#124; email.trim().length === 0 &#124;&#124; password.length === 0; {"kind":"container","tag":"form","attributes":{"aria-busy":"pendi… |
-| 131:13 LoginPage | Button frontendText(locale, registering ? "LOGIN_SWITCH_TO_LOGIN" : "LOGIN_SWITCH_TO_REGISTER") | onClick=() =&gt; switchMode(registering ? "login" : "register"); type="button" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+| 163:17 LoginPage | Button frontendText(locale, copied ? "LOGIN_RECOVERY_COPIED" : "LOGIN_RECOVERY_COPY") | onClick=() =&gt; void copyRecovery(); type="button" | {"kind":"branch","expression":"recoveryDisplay","branch":"true"} |
+| 168:15 LoginPage | Button frontendText(locale, recoveryFor === "register" ? "LOGIN_RECOVERY_CONTINUE" : "LOGIN_RECOVERY_BACK_TO_LOGIN") | onClick=finishRecovery; type="button" | {"kind":"branch","expression":"recoveryDisplay","branch":"true"} |
+| 174:19 LoginPage | Button frontendText(locale, "LOGIN_GITHUB") | onClick=() =&gt; { window.location.href = "/auth/github"; } | {"kind":"branch","expression":"recoveryDisplay","branch":"false"}; {"kind":"branch","expression":"githubEnabled","branch":"true"} |
+| 177:15 LoginPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); void submit(); } | aria-busy=pending &#124;&#124; undefined; {"kind":"branch","expression":"recoveryDisplay","branch":"false"} |
+| 185:19 LoginPage | Input  | onChange=(value) =&gt; { setEmail(value); if (formError) setFormError(undefined); }; type="email" | disabled=pending; {"kind":"branch","expression":"recoveryDisplay","branch":"false"}; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#12… |
+| 189:19 LoginPage | Input  | onChange=(value) =&gt; { setRecoveryInput(value); if (formError) setFormError(undefined); }; type="text" | disabled=pending; {"kind":"branch","expression":"recoveryDisplay","branch":"false"}; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#12… |
+| 193:19 LoginPage | Input  | onChange=(value) =&gt; { setPassword(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"branch","expression":"recoveryDisplay","branch":"false"}; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#12… |
+| 197:19 LoginPage | Input  | onChange=(value) =&gt; { setConfirm(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"branch","expression":"recoveryDisplay","branch":"false"}; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#12… |
+| 199:17 LoginPage | StatefulButton frontendText(locale, registering ? "LOGIN_REGISTER_SUBMIT" : resetting ? "LOGIN_RESET_SUBMIT" : "LOGIN_PASSWORD_SUBMIT") | type="submit" | disabled=pending &#124;&#124; email.trim().length === 0 &#124;&#124; password.length === 0; {"kind":"branch","expression":"recoveryDisplay","branch":"false"}… |
+| 204:21 LoginPage | Button frontendText(locale, "LOGIN_SWITCH_TO_REGISTER") | onClick=() =&gt; switchMode("register"); type="button" | disabled=pending; {"kind":"branch","expression":"recoveryDisplay","branch":"false"}; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#12… |
+| 205:21 LoginPage | Button frontendText(locale, "LOGIN_FORGOT_PASSWORD") | onClick=() =&gt; switchMode("reset"); type="button" | disabled=pending; {"kind":"branch","expression":"recoveryDisplay","branch":"false"}; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#12… |
+| 206:25 LoginPage | Button frontendText(locale, "LOGIN_SWITCH_TO_LOGIN") | onClick=() =&gt; switchMode("login"); type="button" | disabled=pending; {"kind":"branch","expression":"recoveryDisplay","branch":"false"}; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#12… |
 
 ## frontend/pages/messages/messages-page.tsx
 

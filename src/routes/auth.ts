@@ -20,7 +20,7 @@ export interface AuthRouteServices {
   oauth: GitHubOAuthClient;
   wechat: WeChatOAuthClient;
   members: Pick<MembersService, "resolveGitHubLogin" | "resolveWeChatLogin">;
-  passwords: Pick<PasswordAuthService, "register" | "login">;
+  passwords: Pick<PasswordAuthService, "register" | "login" | "resetPassword">;
   sessions: Pick<SessionService, "create" | "logout">;
 }
 
@@ -99,16 +99,27 @@ export async function routeAuth(
     requireNoQuery(url);
     requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
     const input = await parsePasswordAuthRequest(request);
-    const member = await services.passwords.register({
+    const registered = await services.passwords.register({
       ...input,
       ip: request.headers.get("cf-connecting-ip") ?? "",
     });
+    const member = registered.member;
     const session = await services.sessions.create(member);
     const response = jsonResponse({
       member: { id: member.id, email: member.email, role: member.role },
+      recoveryCode: registered.recoveryCode,
     }, 201, context.requestId);
     response.headers.append("set-cookie", sessionCookie(session.token));
     return response;
+  }
+
+  if (url.pathname === "/auth/password/reset") {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+    const input = await parsePasswordResetRequest(request);
+    const reset = await services.passwords.resetPassword(input);
+    return jsonResponse({ recoveryCode: reset.recoveryCode }, 200, context.requestId);
   }
 
   if (url.pathname === "/auth/password") {
@@ -156,6 +167,18 @@ export function clearWeChatCookie(response: Response): Response {
 export function clearSessionCookie(response: Response): Response {
   response.headers.append("set-cookie", clearCookie(SESSION_COOKIE));
   return response;
+}
+
+async function parsePasswordResetRequest(request: Request): Promise<{ email: string; recoveryCode: string; password: string }> {
+  const input = strictRecord(
+    await parseJsonRequestAs(request, "PASSWORD_RESET_REQUEST_INVALID"),
+    ["email", "recoveryCode", "password"],
+    "PASSWORD_RESET_REQUEST_INVALID",
+  );
+  if (typeof input.email !== "string" || typeof input.recoveryCode !== "string" || typeof input.password !== "string") {
+    throw new AppError("PASSWORD_RESET_REQUEST_INVALID", "Password reset request is invalid", 400);
+  }
+  return { email: input.email, recoveryCode: input.recoveryCode, password: input.password };
 }
 
 async function parsePasswordAuthRequest(request: Request): Promise<{ email: string; password: string }> {

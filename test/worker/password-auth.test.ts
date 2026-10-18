@@ -13,6 +13,7 @@ const IP = "203.0.113.42";
 describe("password registration and login", () => {
   let now: number;
   let id: number;
+  let audit: number;
 
   beforeEach(async () => {
     await reset();
@@ -23,6 +24,7 @@ describe("password registration and login", () => {
     ).run();
     now = Date.parse("2026-10-18T12:00:00.000Z");
     id = 0;
+    audit = 0;
   });
 
   function app(overrides: AppDependencies["passwordAuth"] = {}) {
@@ -30,7 +32,7 @@ describe("password registration and login", () => {
       passwordAuth: {
         now: () => new Date(now),
         id: () => `member-${++id}`,
-        auditId: () => `audit-${id}`,
+        auditId: () => `audit-${++audit}`,
         registrationLimit: 5,
         loginFailureThreshold: 5,
         lockMs: 15 * 60 * 1_000,
@@ -42,17 +44,20 @@ describe("password registration and login", () => {
   it("registers an active contributor, hashes the password and opens a session", async () => {
     const response = await api(app(), "/auth/register", "POST", { email: " New@Example.Test ", password: PASSWORD });
     expect(response.status).toBe(201);
-    const body = await response.json() as { member: { id: string; email: string; role: string } };
+    const body = await response.json() as { member: { id: string; email: string; role: string }; recoveryCode: string };
     expect(body.member).toMatchObject({ id: "member-1", email: "new@example.test", role: "contributor" });
+    expect(body.recoveryCode).toMatch(/^[A-Z2-7]{6}-[A-Z2-7]{6}-[A-Z2-7]{6}-[A-Z2-7]{6}$/u);
     const cookie = response.headers.get("set-cookie") ?? "";
     expect(cookie).toMatch(/^__Host-memory-session=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=\d+$/u);
     const token = cookie.split(";", 1)[0]!.slice("__Host-memory-session=".length);
 
     const row = await env.DB.prepare("SELECT * FROM members WHERE id = ?").bind("member-1")
-      .first<{ access_sub: string; email: string; role: string; status: string; password_hash: string }>();
+      .first<{ access_sub: string; email: string; role: string; status: string; password_hash: string; recovery_code_hash: string }>();
     expect(row).toMatchObject({ access_sub: "password:member-1", email: "new@example.test", role: "contributor", status: "active" });
     expect(row!.password_hash).toMatch(/^pbkdf2-sha256\$100000\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$/u);
     expect(row!.password_hash).not.toContain(PASSWORD);
+    expect(row!.recovery_code_hash).toMatch(/^[0-9a-f]{64}$/u);
+    expect(JSON.stringify(row)).not.toContain(body.recoveryCode.replaceAll("-", ""));
     expect(await count("SELECT COUNT(*) AS total FROM password_registration_attempts")).toBe(1);
     expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.login'")).toBe(1);
 
@@ -169,6 +174,58 @@ describe("password registration and login", () => {
     expect(rows.results).toHaveLength(2);
     expect(rows.results[0]!.password_hash).not.toBe(rows.results[1]!.password_hash);
   });
+
+  it("resets the password with the recovery code, rotates it and revokes sessions", async () => {
+    const account = await registerAccount("recover@example.test");
+    const reset = await api(app(), "/auth/password/reset", "POST", {
+      email: "recover@example.test",
+      recoveryCode: account.recoveryCode,
+      password: "a brand new password",
+    });
+    expect(reset.status).toBe(200);
+    const rotated = (await reset.json() as { recoveryCode: string }).recoveryCode;
+    expect(rotated).toMatch(/^[A-Z2-7]{6}-[A-Z2-7]{6}-[A-Z2-7]{6}-[A-Z2-7]{6}$/u);
+    expect(rotated).not.toBe(account.recoveryCode);
+    expect((await api(app(), "/api/session", "GET", undefined, account.token)).status).toBe(401);
+    expect((await api(app(), "/auth/password", "POST", { email: "recover@example.test", password: PASSWORD })).status).toBe(401);
+    expect((await api(app(), "/auth/password", "POST", { email: "recover@example.test", password: "a brand new password" })).status).toBe(200);
+    expect((await api(app(), "/auth/password/reset", "POST", { email: "recover@example.test", recoveryCode: account.recoveryCode, password: "another password value" })).status).toBe(401);
+    expect((await api(app(), "/auth/password/reset", "POST", { email: "recover@example.test", recoveryCode: rotated, password: "another password value" })).status).toBe(200);
+    expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.password_reset'")).toBe(2);
+  });
+
+  it("locks recovery attempts and rejects unknown emails, weak passwords and another account's code", async () => {
+    const account = await registerAccount("recovery-lock@example.test");
+    const other = await registerAccount("other-recovery@example.test");
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      expect((await api(app(), "/auth/password/reset", "POST", { email: "recovery-lock@example.test", recoveryCode: "AAAAAA-AAAAAA-AAAAAA-AAAAAA", password: "another password value" })).status).toBe(401);
+    }
+    expect((await api(app(), "/auth/password/reset", "POST", { email: "recovery-lock@example.test", recoveryCode: "AAAAAA-AAAAAA-AAAAAA-AAAAAA", password: "another password value" })).status).toBe(429);
+    expect((await api(app(), "/auth/password/reset", "POST", { email: "recovery-lock@example.test", recoveryCode: account.recoveryCode, password: "another password value" })).status).toBe(429);
+    expect((await api(app(), "/auth/password/reset", "POST", { email: "unknown@example.test", recoveryCode: account.recoveryCode, password: "another password value" })).status).toBe(401);
+    expect((await api(app(), "/auth/password/reset", "POST", { email: "other-recovery@example.test", recoveryCode: account.recoveryCode, password: "another password value" })).status).toBe(401);
+    expect((await api(app(), "/auth/password/reset", "POST", { email: "other-recovery@example.test", recoveryCode: other.recoveryCode, password: WEAK })).status).toBe(400);
+    expect((await api(app(), "/auth/password/reset", "POST", { email: "other-recovery@example.test", recoveryCode: "short", password: "another password value" })).status).toBe(400);
+    expect((await api(app(), "/auth/password/reset", "GET")).status).toBe(405);
+  });
+
+  it("lets exactly one of two simultaneous resets win", async () => {
+    const account = await registerAccount("reset-race@example.test");
+    const body = { email: "reset-race@example.test", recoveryCode: account.recoveryCode, password: "another password value" };
+    const responses = await Promise.all([
+      api(app(), "/auth/password/reset", "POST", body),
+      api(app(), "/auth/password/reset", "POST", body),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+  });
+
+  async function registerAccount(email: string): Promise<{ recoveryCode: string; token: string }> {
+    const response = await api(app(), "/auth/register", "POST", { email, password: PASSWORD });
+    expect(response.status, email).toBe(201);
+    const body = await response.json() as { recoveryCode: string };
+    const cookie = response.headers.get("set-cookie") ?? "";
+    return { recoveryCode: body.recoveryCode, token: cookie.split(";", 1)[0]!.slice("__Host-memory-session=".length) };
+  }
 
   async function register(email: string): Promise<Response> {
     const response = await api(app(), "/auth/register", "POST", { email, password: PASSWORD });

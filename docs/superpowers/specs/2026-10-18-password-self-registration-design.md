@@ -11,17 +11,18 @@
 ## 决策
 
 1. **开放自注册。** `POST /auth/register` 接受 canonical email 与 12–128 位密码，创建 active contributor，并立即下发会话。
-2. **邮箱唯一。** `members(LOWER(TRIM(email)))` 唯一索引；注册先查重，唯一索引兜住并发。已有成员（包括只有 GitHub 身份的成员）不能被注册覆盖，避免未验证邮箱接管账户。
-3. **密码存储。** PBKDF2-HMAC-SHA256，100,000 次，16 字节随机盐，32 字节输出；格式 `pbkdf2-sha256$100000$<salt>$<hash>`。Workerd 实测 100k 约 6ms，适合当前免费 Worker 预算。
-4. **登录锁定。** 连续 5 次密码错误后锁定 15 分钟；成功登录清零。未知邮箱也执行一次 PBKDF2，避免明显的时序枚举。
-5. **注册限流。** 按 `CF-Connecting-IP` 的 SHA-256 每小时最多 5 个新账户；不存原始 IP。
-6. **移除旧路径。** 删除邮箱验证码、Resend、管理员邀请码、OTP 组件与相关表；GitHub OAuth 保持原 allowlist 语义。
+2. **恢复码。** 注册成功时生成 120 位恢复码（24 位 base32，四组），只返回一次并只存 SHA-256；忘记密码时用邮箱 + 恢复码 + 新密码重置。重置轮换恢复码、清零失败计数并删除该成员全部会话。恢复码错误 5 次锁定 15 分钟。
+3. **邮箱唯一。** `members(LOWER(TRIM(email)))` 唯一索引；注册先查重，唯一索引兜住并发。已有成员（包括只有 GitHub 身份的成员）不能被注册覆盖，避免未验证邮箱接管账户。
+4. **密码存储。** PBKDF2-HMAC-SHA256，100,000 次，16 字节随机盐，32 字节输出；格式 `pbkdf2-sha256$100000$<salt>$<hash>`。Workerd 实测 100k 约 6ms，适合当前免费 Worker 预算。
+5. **登录锁定。** 连续 5 次密码错误后锁定 15 分钟；成功登录清零。未知邮箱也执行一次 PBKDF2，避免明显的时序枚举。
+6. **注册限流。** 按 `CF-Connecting-IP` 的 SHA-256 每小时最多 5 个新账户；不存原始 IP。
+7. **移除旧路径。** 删除邮箱验证码、Resend、管理员邀请码、OTP 组件与相关表；GitHub OAuth 保持原 allowlist 语义。
 
 ## 接口
 
 匿名、要求同源 `Origin`：
 
-- `POST /auth/register`，`{ email, password }` → `201 { member: { id, email, role: "contributor" } }` + `__Host-memory-session`
+- `POST /auth/register`，`{ email, password }` → `201 { member: { id, email, role: "contributor" }, recoveryCode }` + `__Host-memory-session`
   - `400 PASSWORD_AUTH_REQUEST_INVALID` / `400 PASSWORD_POLICY_INVALID`
   - `409 REGISTRATION_EMAIL_TAKEN`
   - `429 REGISTRATION_RATE_LIMITED`
@@ -29,11 +30,16 @@
   - `401 PASSWORD_LOGIN_INVALID`（邮箱不存在、无密码、密码错误统一）
   - `429 PASSWORD_LOGIN_LOCKED`，`details.retryAfterSeconds`
   - `403 MEMBER_DISABLED`（仅在密码正确后）
+- `POST /auth/password/reset`，`{ email, recoveryCode, password }` → `200 { recoveryCode }`（新恢复码；不创建会话）
+  - `400 PASSWORD_RESET_REQUEST_INVALID` / `400 PASSWORD_POLICY_INVALID`
+  - `401 PASSWORD_RESET_INVALID`（未知邮箱、无恢复码、码错、并发失败统一）
+  - `429 PASSWORD_RESET_LOCKED`，`details.retryAfterSeconds`
 - `GET /api/auth/providers` 保持 `{ github, wechat }`，不再有 `emailCode`。
 
-## 数据（0078）
+## 数据（0078 + 0079）
 
 - `members.password_hash TEXT`、`failed_login_count INTEGER NOT NULL DEFAULT 0`、`locked_until TEXT`。
+- `members.recovery_code_hash TEXT`、`recovery_attempt_count INTEGER NOT NULL DEFAULT 0`、`recovery_locked_until TEXT`。
 - 唯一索引 `members_canonical_email ON members(LOWER(TRIM(email)))`。
 - `password_registration_attempts(ip_hash, created_at)` 与 `(ip_hash, created_at DESC)` 索引。
 - 删除 `email_login_codes` 与 `member_login_invitations`。
@@ -44,11 +50,12 @@
 2. 注册不能覆盖任何已有 email；并发注册只有一个成功。
 3. 登录失败计数与锁定是持久化条件更新；成功登录清零。
 4. 新账户恒为 contributor，不走 bootstrap admin 提升。
-5. 无邮件验证、无自助找回密码；这是开放注册方案的产品边界，不是遗漏。
+5. 无邮件验证、无邮件找回密码；恢复码是唯一自助重置凭据，只显示一次，丢失后需管理员处理。
+6. 重置使用条件更新 `WHERE recovery_code_hash = 旧哈希`；并发重置只有一个成功，成功时删除该成员全部会话并写 `member.password_reset` 审计。
 
 ## 明确不做
 
-- 不做邮箱验证、验证码、Magic Link 或密码重置邮件。
+- 不做邮箱验证、验证码、Magic Link 或密码重置邮件；恢复码方案不依赖邮件。
 - 不做管理员代设密码或邀请码；管理员仍可禁用账户。
 - 不引入新的 Secret/环境变量。
 - 本轮不迁移生产、不部署、不做真实浏览器验收。

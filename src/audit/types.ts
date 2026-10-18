@@ -9,6 +9,7 @@ export type AuditActorKind = "member" | "automation" | "system";
 
 export interface AuditActionMap {
   "member.login": { resourceType: "member"; metadata: { role: MemberRole } };
+  "member.password_reset": { resourceType: "member"; metadata: Record<string, never> };
   "member.identity_linked": { resourceType: "member"; metadata: { provider: "github" | "wechat" } };
   "member.status_updated": { resourceType: "member"; metadata: { previousStatus: MemberStatus; newStatus: MemberStatus } };
   "member.invitation_issued": { resourceType: "member_invitation"; metadata: { email: string; expiresAt: string } };
@@ -70,6 +71,7 @@ export interface AuditActionMap {
 export type AuditAction = keyof AuditActionMap;
 export const auditActions = Object.freeze<readonly AuditAction[]>([
   "member.login",
+  "member.password_reset",
   "member.identity_linked",
   "member.status_updated",
   "member.invitation_issued",
@@ -193,6 +195,11 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["role"]));
       if (!isMemberRole(metadata.role)) throw invalidMetadata();
       return safeMetadata({ role: metadata.role });
+    }
+    case "member.password_reset": {
+      assertResourceType(resourceType, "member");
+      readPlainDataObject(input, new Set());
+      return safeMetadata({});
     }
     case "member.identity_linked": {
       assertResourceType(resourceType, "member");
