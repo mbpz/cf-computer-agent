@@ -78,5 +78,6 @@
 
 - 产品改为“忘记密码 = 邮箱 + 新密码直接重置”；删除 `0079_password_recovery.sql`、`src/password/recovery.ts`、恢复码单元测试及恢复码 UI/文案。
 - `POST /auth/password/reset` 现接受 `{ email, password }` 并返回 `204`；重置清空登录失败计数、删除该成员全部会话并写 `member.password_reset` 审计。
-- 该流程不校验邮箱所有权；任何知道已注册邮箱的人都能替换密码，这是当前产品决策的已知风险，不是安全缺陷修复。
-- 本次本地复核：`npx vitest run test/worker` 78 文件 / 1303 测试通过；密码相关 unit 3 文件 / 21 测试通过；`npm run typecheck`、`npm run verify:m1:migrations -- --files`（`count=78`）与 `npm run test:smoke`（88 测试）通过。未做生产迁移、部署或真实浏览器验收。
+- 该流程不校验邮箱所有权；任何知道可重置邮箱的人都能替换密码，这是当前产品决策的已知风险，不是安全缺陷修复。
+- 旧一次性授权码账户（`access_sub` 以 `code:` 开头、`password_hash` 为 NULL）可以在忘记密码处设置首个密码；GitHub/微信专属账户仍返回 `401 PASSWORD_RESET_INVALID`。条件更新改用空值安全的 `password_hash IS ?`，成功后撤销该成员全部会话。
+- 本次本地复核：`npx vitest run test/worker` 78 文件 / 1304 测试通过；密码相关 unit 3 文件 / 22 测试通过；`npm run typecheck`、`npm run verify:m1:migrations -- --files`（`count=78`）与 `npm run test:smoke`（88 测试）通过。未做生产迁移、部署或真实浏览器验收。

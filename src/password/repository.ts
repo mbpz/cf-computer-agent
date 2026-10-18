@@ -30,7 +30,7 @@ export interface PasswordRepositoryPort {
   /** Replaces the password, clears login locks and revokes sessions. */
   resetPassword(
     id: string,
-    expectedPasswordHash: string,
+    expectedPasswordHash: string | null,
     passwordHash: string,
     now: string,
     audit: CreateAuditEvent,
@@ -112,7 +112,7 @@ export class PasswordRepository implements PasswordRepositoryPort {
 
   async resetPassword(
     id: string,
-    expectedPasswordHash: string,
+    expectedPasswordHash: string | null,
     passwordHash: string,
     now: string,
     audit: CreateAuditEvent,
@@ -124,13 +124,13 @@ export class PasswordRepository implements PasswordRepositoryPort {
       this.db.prepare(
         `UPDATE members
          SET password_hash = ?, failed_login_count = 0, locked_until = NULL, updated_at = ?
-         WHERE id = ? AND password_hash = ?`,
+         WHERE id = ? AND password_hash IS ?`,
       ).bind(passwordHash, now, id, expectedPasswordHash),
       this.audit.prepareChangedRowAudit(audit),
       this.db.prepare(
         `DELETE FROM auth_sessions
          WHERE member_id = ? AND EXISTS (
-           SELECT 1 FROM members WHERE id = ? AND password_hash = ? AND updated_at = ?
+           SELECT 1 FROM members WHERE id = ? AND password_hash IS ? AND updated_at = ?
          )`,
       ).bind(id, id, passwordHash, now),
     ]);

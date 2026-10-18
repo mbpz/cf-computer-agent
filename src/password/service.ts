@@ -25,8 +25,10 @@ export interface PasswordAuthServiceOptions {
  * the account then locks for fifteen minutes.
  *
  * A forgotten password is replaced directly from the canonical email and a new
- * password. There is no email or recovery-code proof, so anyone who knows a
- * password account's email can replace its password and revoke its sessions.
+ * password. There is no email or recovery-code proof, so anyone who knows an
+ * eligible account's email can replace its password and revoke its sessions.
+ * Accounts created by the retired one-time-code login may set a first password;
+ * GitHub/WeChat-only accounts remain ineligible.
  */
 export class PasswordAuthService {
   private readonly id: () => string;
@@ -145,8 +147,11 @@ export class PasswordAuthService {
     const record = await this.repository.findByCanonicalEmail(email);
     // Always pay the PBKDF2 cost so an unknown email is not visibly faster.
     const newPasswordHash = await hashPassword(input.password);
-    if (!record?.passwordHash) {
-      throw new AppError("PASSWORD_RESET_INVALID", "This email is not registered for password sign-in", 401);
+    // Password accounts can replace their password. Members created by the
+    // retired email one-time-code login (subject `code:`) never had a password,
+    // so they may set one here. GitHub/WeChat-only members stay excluded.
+    if (!record || (!record.passwordHash && !record.member.identitySubject.startsWith("code:"))) {
+      throw new AppError("PASSWORD_RESET_INVALID", "This email cannot set a password", 401);
     }
     const reset = await this.repository.resetPassword(
       record.member.id,

@@ -195,6 +195,32 @@ describe("password registration and login", () => {
     expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.password_reset'")).toBe(2);
   });
 
+  it("lets a legacy one-time-code member set a first password and revokes its sessions", async () => {
+    await env.DB.prepare(
+      `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES
+       ('legacy-code-user', 'code:legacy', 'legacy@example.test', 'contributor', 'active', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO auth_sessions (token_hash, member_id, created_at, expires_at, last_seen_at) VALUES
+       (?, 'legacy-code-user', '2026-10-18T12:00:00.000Z', '2026-11-18T12:00:00.000Z', '2026-10-18T12:00:00.000Z')`,
+    ).bind("a".repeat(64)).run();
+    expect(await env.DB.prepare("SELECT password_hash FROM members WHERE id = 'legacy-code-user'").first())
+      .toEqual({ password_hash: null });
+
+    const reset = await api(app(), "/auth/password/reset", "POST", {
+      email: "legacy@example.test",
+      password: "a brand new password",
+    });
+    expect(reset.status).toBe(204);
+    const row = await env.DB.prepare("SELECT password_hash FROM members WHERE id = 'legacy-code-user'")
+      .first<{ password_hash: string }>();
+    expect(row!.password_hash).toMatch(/^pbkdf2-sha256\$100000\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$/u);
+    expect(await count("SELECT COUNT(*) AS total FROM auth_sessions WHERE member_id = 'legacy-code-user'")).toBe(0);
+    expect((await api(app(), "/auth/password", "POST", { email: "legacy@example.test", password: PASSWORD })).status).toBe(401);
+    expect((await api(app(), "/auth/password", "POST", { email: "legacy@example.test", password: "a brand new password" })).status).toBe(200);
+    expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.password_reset'")).toBe(1);
+  });
+
   it("rejects unknown emails, GitHub-only accounts, weak passwords and malformed resets", async () => {
     await register("other-reset@example.test");
     for (const email of ["unknown@example.test", "existing@example.test"]) {
