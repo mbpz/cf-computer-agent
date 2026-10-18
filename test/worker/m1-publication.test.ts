@@ -570,17 +570,20 @@ describe("M1 publication control plane", () => {
       action: "knowledge.rolled_back",
       metadata: JSON.stringify({ fromRevisionId: "revision-rollback-next", toRevisionId: "revision-rollback-base" }),
     });
+    // KB-011 contract: rolling back to the revision that is already current is
+    // not a write; the service reports a conflict and adds no audit row.
     await expect(service.rollback(
       adminReviewer, "knowledge-rollback-m3", "revision-rollback-base",
-    )).resolves.toMatchObject({ id: "revision-rollback-base", searchStatus: "indexed" });
+    )).rejects.toMatchObject({ code: "ROLLBACK_STATE_CONFLICT", status: 409 });
     await expect(env.DB.prepare(
       "SELECT count(*) AS count FROM audit_events WHERE action = 'knowledge.rolled_back'",
     ).first()).resolves.toEqual({ count: 1 });
   });
 
-  it("rolls back the pointer and index schedule atomically when the audit write fails", async () => {
+  it("keeps the pointer and index schedule atomic when the item changes during rollback", async () => {
     await seedReviewPendingSubmission("submission-rollback-failure");
-    const repository = repositoryWithIds("knowledge-rollback-failure", "revision-rollback-failure-base");
+    const boundary = repositoryWithBatchMutation("knowledge-rollback-failure", "revision-rollback-failure-base");
+    const repository = boundary.repository;
     const service = new PublicationService(repository, durableContentCommitter());
     await service.publish(adminReviewer, "submission-rollback-failure", publicationInput);
     const replacement = await parseSource({ kind: "markdown", content: "# Later\n\nFailure rollback marker.\n" });
@@ -596,17 +599,26 @@ describe("M1 publication control plane", () => {
       "knowledge-rollback-failure", JSON.stringify({ fromRevisionId: "other", toRevisionId: "other" }), now,
     ).run();
 
+    // A concurrent lifecycle write makes the guarded pointer update match no
+    // row; the batch must leave the pointer, jobs and audit untouched.
+    boundary.mutateBeforeBatch(async () => {
+      await env.DB.prepare("UPDATE knowledge_items SET status = 'trashed' WHERE id = ?")
+        .bind("knowledge-rollback-failure").run();
+    });
     await expect(service.rollback(
       adminReviewer, "knowledge-rollback-failure", "revision-rollback-failure-base",
-    )).rejects.toThrow();
+    )).rejects.toMatchObject({ code: "ROLLBACK_STATE_CONFLICT", status: 409 });
     await expect(env.DB.prepare(
-      "SELECT current_revision_id, search_status FROM knowledge_items WHERE id = ?",
+      "SELECT current_revision_id, search_status, status FROM knowledge_items WHERE id = ?",
     ).bind("knowledge-rollback-failure").first()).resolves.toEqual({
-      current_revision_id: "revision-rollback-failure-next", search_status: "indexed",
+      current_revision_id: "revision-rollback-failure-next", search_status: "indexed", status: "trashed",
     });
     await expect(env.DB.prepare(
       "SELECT state FROM jobs WHERE resource_id = ?",
     ).bind("revision-rollback-failure-base").first()).resolves.toEqual({ state: "completed" });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM audit_events WHERE action = 'knowledge.rolled_back'",
+    ).first()).resolves.toEqual({ count: 1 });
   });
 
   it("publishes an audited final metadata patch to another active Space without mutating requested metadata", async () => {

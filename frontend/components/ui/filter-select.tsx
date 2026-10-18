@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Combobox, ComboboxContent, ComboboxItem, ComboboxList, ComboboxTrigger } from "../motion/combobox";
 import { cn } from "../../lib/utils";
 
@@ -31,10 +32,19 @@ export function FilterSelect({ label, ariaLabel, value, options, onChange, disab
   className?: string;
 }) {
   const selected = options.find((option) => option.value === value) ?? options[0];
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+  const [alignEnd, setAlignEnd] = useState(false);
   return (
-    <span className={cn("flex items-center gap-2 text-sm text-muted-foreground", className)}>
+    <span ref={rootRef} className={cn("flex items-center gap-2 text-sm text-muted-foreground", className)}>
       {label}
-      <Combobox value={value} onValueChange={onChange} disabled={disabled} className="w-auto min-w-0">
+      <Combobox value={value} onValueChange={onChange} disabled={disabled} className="w-auto min-w-0" open={open} onOpenChange={(next) => {
+        if (next) {
+          const bounds = rootRef.current?.getBoundingClientRect();
+          setAlignEnd(Boolean(bounds && bounds.right + 224 > window.innerWidth));
+        }
+        setOpen(next);
+      }}>
         {/* The trigger stands at the shared field height (44px, the same floor the other
             fields enforce below `lg`), so a filter row and the fields it sits beside are
             one row. */}
@@ -47,7 +57,7 @@ export function FilterSelect({ label, ariaLabel, value, options, onChange, disab
         </ComboboxTrigger>
         {/* Enum filters can be long (the audit action list runs past 40 entries): the panel
             scrolls instead of running the viewport. */}
-        <ComboboxContent inline>
+        <ComboboxContent inline className={alignEnd ? "left-auto right-0" : undefined}>
           <ComboboxList className="max-h-80 overflow-y-auto">
             {options.map((option) => <ComboboxItem key={option.value} value={option.value}>{option.label}</ComboboxItem>)}
           </ComboboxList>
