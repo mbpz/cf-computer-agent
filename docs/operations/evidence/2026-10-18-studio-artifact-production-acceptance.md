@@ -40,7 +40,7 @@
 - 管理员签发一次性邀请（测试邮箱，代码只返回一次，未写入文档）；在隔离的 managed Chromium 中通过 `/auth/code` 换取 contributor session（成员 `0766bf9d…`）。
 - 贡献者打开同一阅读器；**仅用键盘**把焦点移到"记忆卡"并按 Enter，约 25s 完成；产物 `e676f5b7-bb6b-415c-b4b7-e63f534ad49a` 自动保留并出现在已保存列表。
 - 焦点移到已保存条目并按 Enter，面板回到 `ready`；焦点移到删除并按 Enter，列表清空、空态出现。
-- 结束后管理员将临时贡献者置为 `disabled`；远程计数 `studio_artifacts=0`、`artifact_created=2`、`artifact_deleted=2`（含管理员一次）。
+- 结束后管理员将临时贡献者置为 `disabled`；当次计数 `studio_artifacts=0`、`artifact_created=2`、`artifact_deleted=2`（含管理员一次）。随后为 AX 检查额外创建并删除一件产物，最终远程为 `created=3`、`deleted=3`、残留 0。
 
 ## 键盘与视口
 
@@ -48,6 +48,18 @@
 - 生成、重开、删除均通过 `focus()` + Enter 完成，未使用鼠标点击。
 - 已保存条目的打开/删除按钮带可访问名称；组件测试同时断言 `aria-label`。
 - 阅读器结果标签显示"结果 · 思维导图、闪卡与测验已保存到你的 Studio 内容"。
+
+## 真实屏幕阅读器方案（REA）
+
+- **浏览器 AX 树已验证**：`rea inspect-web-page`（证据 `ev_261a8a8260dfde35c6ffb323321b6e1c33113f0ad3953f31fc7d3c765280de15`）在真实生产阅读器上捕获 509 个无障碍节点，其中：
+  - `button` name=`打开 2026-10-18T04:24:17.909Z 保存的记忆卡`，`ignored=false`
+  - `button` name=`删除已保存内容`，`ignored=false`
+  - `StaticText` name=`已保存内容`
+
+  这是 Chrome 通过 CDP 暴露、并进一步映射到 macOS `NSAccessibility` 的同一棵树；VoiceOver 消费的正是这里的 role/name。为完成该检查临时创建的产物 `949e277c…` 已在捕获后删除，不留残置。
+- **原生 AX 路径被系统权限阻塞**：`rea observe-native-ui` 返回 `screen-recording-denied`。修复步骤：系统设置 → 隐私与安全性 → 屏幕录制（以及辅助功能）勾选 omp/终端宿主，然后重试：
+  `rea observe-native-ui "/Applications/Google Chrome.app" --pid <Chrome PID> --window-id <CGWindowID> --max-accessibility-nodes 800`
+- VoiceOver 的语音输出没有可靠的程序化抓取方式；授予权限后可用 REA 捕获同一窗口的原生 AX 树，作为屏幕阅读器读取面的直接证据。真正的语音播报仍需人工旁听。
 
 ## 边界
 
