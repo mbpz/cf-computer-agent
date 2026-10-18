@@ -107,7 +107,6 @@ export async function routeAuth(
     const session = await services.sessions.create(member);
     const response = jsonResponse({
       member: { id: member.id, email: member.email, role: member.role },
-      recoveryCode: registered.recoveryCode,
     }, 201, context.requestId);
     response.headers.append("set-cookie", sessionCookie(session.token));
     return response;
@@ -118,8 +117,8 @@ export async function routeAuth(
     requireNoQuery(url);
     requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
     const input = await parsePasswordResetRequest(request);
-    const reset = await services.passwords.resetPassword(input);
-    return jsonResponse({ recoveryCode: reset.recoveryCode }, 200, context.requestId);
+    await services.passwords.resetPassword(input);
+    return authResponse(null, 204, context);
   }
 
   if (url.pathname === "/auth/password") {
@@ -169,16 +168,16 @@ export function clearSessionCookie(response: Response): Response {
   return response;
 }
 
-async function parsePasswordResetRequest(request: Request): Promise<{ email: string; recoveryCode: string; password: string }> {
+async function parsePasswordResetRequest(request: Request): Promise<{ email: string; password: string }> {
   const input = strictRecord(
     await parseJsonRequestAs(request, "PASSWORD_RESET_REQUEST_INVALID"),
-    ["email", "recoveryCode", "password"],
+    ["email", "password"],
     "PASSWORD_RESET_REQUEST_INVALID",
   );
-  if (typeof input.email !== "string" || typeof input.recoveryCode !== "string" || typeof input.password !== "string") {
+  if (typeof input.email !== "string" || typeof input.password !== "string") {
     throw new AppError("PASSWORD_RESET_REQUEST_INVALID", "Password reset request is invalid", 400);
   }
-  return { email: input.email, recoveryCode: input.recoveryCode, password: input.password };
+  return { email: input.email, password: input.password };
 }
 
 async function parsePasswordAuthRequest(request: Request): Promise<{ email: string; password: string }> {

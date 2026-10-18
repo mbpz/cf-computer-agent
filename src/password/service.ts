@@ -2,7 +2,6 @@ import { AppError } from "../http";
 import { canonicalEmail } from "../identity/email";
 import type { Member } from "../members/types";
 import { hashPassword, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, verifyPassword } from "./hash";
-import { generateRecoveryCode, hashRecoveryCode, normalizeRecoveryCode, recoveryCodeMatches } from "./recovery";
 import type { PasswordRepositoryPort } from "./repository";
 
 const encoder = new TextEncoder();
@@ -24,6 +23,10 @@ export interface PasswordAuthServiceOptions {
  * GitHub-only member), so an unverified public form can never claim an
  * existing account. Password login is limited to five failures per account;
  * the account then locks for fifteen minutes.
+ *
+ * A forgotten password is replaced directly from the canonical email and a new
+ * password. There is no email or recovery-code proof, so anyone who knows a
+ * password account's email can replace its password and revoke its sessions.
  */
 export class PasswordAuthService {
   private readonly id: () => string;
@@ -45,7 +48,7 @@ export class PasswordAuthService {
     this.lockMs = options.lockMs ?? 15 * 60 * 1_000;
   }
 
-  async register(input: { email: string; password: string; ip: string }): Promise<{ member: Member; recoveryCode: string }> {
+  async register(input: { email: string; password: string; ip: string }): Promise<{ member: Member }> {
     const email = canonicalEmail(input.email);
     if (!email || !this.passwordAllowed(input.password)) {
       throw new AppError("PASSWORD_POLICY_INVALID", "Enter a valid email and a password of 12-128 characters", 400);
@@ -62,7 +65,6 @@ export class PasswordAuthService {
 
     const id = this.id();
     const createdAt = now.toISOString();
-    const recoveryCode = generateRecoveryCode();
     try {
       const record = await this.repository.insertMember({
         id,
@@ -71,7 +73,6 @@ export class PasswordAuthService {
         role: "contributor",
         status: "active",
         passwordHash: await hashPassword(input.password),
-        recoveryCodeHash: await hashRecoveryCode(normalizeRecoveryCode(recoveryCode)!),
         createdAt,
         updatedAt: createdAt,
         registrationIpHash: ipHash,
@@ -85,7 +86,7 @@ export class PasswordAuthService {
         metadata: { role: "contributor" },
         createdAt,
       });
-      return { member: record.member, recoveryCode };
+      return { member: record.member };
     } catch (error) {
       if (error instanceof Error && /members_canonical_email|UNIQUE constraint failed: members\.email/iu.test(error.message)) {
         throw new AppError("REGISTRATION_EMAIL_TAKEN", "This email is already registered", 409);
@@ -132,10 +133,9 @@ export class PasswordAuthService {
     return record.member;
   }
 
-  async resetPassword(input: { email: string; recoveryCode: string; password: string }): Promise<{ recoveryCode: string }> {
+  async resetPassword(input: { email: string; password: string }): Promise<void> {
     const email = canonicalEmail(input.email);
-    const normalized = normalizeRecoveryCode(input.recoveryCode);
-    if (!email || !normalized) {
+    if (!email) {
       throw new AppError("PASSWORD_RESET_REQUEST_INVALID", "Password reset request is invalid", 400);
     }
     if (!this.passwordAllowed(input.password)) {
@@ -145,34 +145,13 @@ export class PasswordAuthService {
     const record = await this.repository.findByCanonicalEmail(email);
     // Always pay the PBKDF2 cost so an unknown email is not visibly faster.
     const newPasswordHash = await hashPassword(input.password);
-    if (!record?.recoveryCodeHash) {
-      throw new AppError("PASSWORD_RESET_INVALID", "Email or recovery code is invalid", 401);
+    if (!record?.passwordHash) {
+      throw new AppError("PASSWORD_RESET_INVALID", "This email is not registered for password sign-in", 401);
     }
-    const lockedUntil = record.recoveryLockedUntil ? Date.parse(record.recoveryLockedUntil) : Number.NaN;
-    if (Number.isFinite(lockedUntil) && lockedUntil > now.getTime()) {
-      throw new AppError("PASSWORD_RESET_LOCKED", "Too many reset attempts", 429, true, {
-        retryAfterSeconds: Math.max(1, Math.ceil((lockedUntil - now.getTime()) / 1_000)),
-      });
-    }
-    if (!recoveryCodeMatches(record.recoveryCodeHash, await hashRecoveryCode(normalized))) {
-      const failure = await this.repository.recordRecoveryFailure(
-        record.member.id,
-        this.loginFailureThreshold,
-        new Date(now.getTime() + this.lockMs).toISOString(),
-      );
-      if (failure.locked) {
-        throw new AppError("PASSWORD_RESET_LOCKED", "Too many reset attempts", 429, true, {
-          retryAfterSeconds: Math.ceil(this.lockMs / 1_000),
-        });
-      }
-      throw new AppError("PASSWORD_RESET_INVALID", "Email or recovery code is invalid", 401);
-    }
-    const recoveryCode = generateRecoveryCode();
     const reset = await this.repository.resetPassword(
       record.member.id,
-      record.recoveryCodeHash,
+      record.passwordHash,
       newPasswordHash,
-      await hashRecoveryCode(normalizeRecoveryCode(recoveryCode)!),
       now.toISOString(),
       {
         id: this.auditId(),
@@ -185,8 +164,7 @@ export class PasswordAuthService {
         createdAt: now.toISOString(),
       },
     );
-    if (!reset) throw new AppError("PASSWORD_RESET_INVALID", "Email or recovery code is invalid", 401);
-    return { recoveryCode };
+    if (!reset) throw new AppError("PASSWORD_RESET_INVALID", "Password reset could not be completed", 401);
   }
 
   private passwordAllowed(password: unknown): boolean {

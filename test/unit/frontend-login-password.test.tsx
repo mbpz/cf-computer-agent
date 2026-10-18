@@ -51,11 +51,8 @@ describe("password login page", () => {
     expect(navigate).toHaveBeenCalledWith("/");
   });
 
-  it("switches to registration, validates confirmation and shows the recovery code", async () => {
-    const register = vi.fn().mockResolvedValue({
-      member: { id: "m2", email: "new@example.test", role: "contributor" },
-      recoveryCode: "ABC234-DEF567-GHI234-JKL567",
-    });
+  it("switches to registration, validates confirmation and enters the workspace", async () => {
+    const register = vi.fn().mockResolvedValue({ id: "m2", email: "new@example.test", role: "contributor" });
     const navigate = vi.fn();
     await act(async () => root.render(<LoginPage locale={locale} register={register} navigate={navigate} />));
     await act(async () => toggle().click());
@@ -69,29 +66,21 @@ describe("password login page", () => {
     await act(async () => setValue("#login-password-confirm", PASSWORD));
     await submit();
     expect(register).toHaveBeenCalledWith("new@example.test", PASSWORD);
-    expect(container.querySelector("[data-recovery-code]")).toBeTruthy();
-    expect(container.textContent).toContain("ABC234-DEF567-GHI234-JKL567");
-    expect(navigate).not.toHaveBeenCalled();
-    const continueButton = [...container.querySelectorAll("button")].find((button) => button.textContent === "Continue to workspace") as HTMLButtonElement;
-    await act(async () => continueButton.click());
     expect(navigate).toHaveBeenCalledWith("/");
   });
 
-  it("resets a forgotten password with the recovery code and shows the rotated code", async () => {
-    const reset = vi.fn().mockResolvedValue("MNO234-PQR567-STU234-VWX567");
+  it("resets a forgotten password with a new password only", async () => {
+    const reset = vi.fn().mockResolvedValue(undefined);
     await act(async () => root.render(<LoginPage locale={locale} reset={reset} navigate={vi.fn()} />));
     await act(async () => (container.querySelector("[data-login-forgot]") as HTMLButtonElement).click());
     expect(container.textContent).toContain("Reset your password");
-    expect(container.querySelector("#login-recovery-code")).toBeTruthy();
+    expect(container.querySelector("#login-recovery-code")).toBeNull();
     await act(async () => setValue("#login-email", "new@example.test"));
-    await act(async () => setValue("#login-recovery-code", "ABC234-DEF567-GHI234-JKL567"));
     await act(async () => setValue("#login-password", "another password value"));
     await act(async () => setValue("#login-password-confirm", "another password value"));
     await submit();
-    expect(reset).toHaveBeenCalledWith("new@example.test", "ABC234-DEF567-GHI234-JKL567", "another password value");
-    expect(container.textContent).toContain("MNO234-PQR567-STU234-VWX567");
-    const back = [...container.querySelectorAll("button")].find((button) => button.textContent === "Back to sign in") as HTMLButtonElement;
-    await act(async () => back.click());
+    expect(reset).toHaveBeenCalledWith("new@example.test", "another password value");
+    expect(container.textContent).toContain("Password reset. Sign in with your new password.");
     expect(container.textContent).toContain("Sign in with email");
   });
 

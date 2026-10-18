@@ -7,9 +7,6 @@ export interface PasswordMemberRecord {
   passwordHash: string | null;
   failedLoginCount: number;
   lockedUntil: string | null;
-  recoveryCodeHash: string | null;
-  recoveryAttemptCount: number;
-  recoveryLockedUntil: string | null;
 }
 
 export interface InsertPasswordMember {
@@ -19,7 +16,6 @@ export interface InsertPasswordMember {
   role: MemberRole;
   status: MemberStatus;
   passwordHash: string;
-  recoveryCodeHash: string;
   createdAt: string;
   updatedAt: string;
   registrationIpHash: string;
@@ -31,13 +27,11 @@ export interface PasswordRepositoryPort {
   insertMember(member: InsertPasswordMember, audit: CreateAuditEvent): Promise<PasswordMemberRecord>;
   recordLoginFailure(id: string, threshold: number, lockedUntil: string): Promise<{ locked: boolean }>;
   resetLoginFailures(id: string): Promise<void>;
-  recordRecoveryFailure(id: string, threshold: number, lockedUntil: string): Promise<{ locked: boolean }>;
-  /** Conditional single-use reset: rotates the password and recovery code and clears sessions. */
+  /** Replaces the password, clears login locks and revokes sessions. */
   resetPassword(
     id: string,
-    expectedRecoveryHash: string,
+    expectedPasswordHash: string,
     passwordHash: string,
-    recoveryCodeHash: string,
     now: string,
     audit: CreateAuditEvent,
   ): Promise<boolean>;
@@ -55,9 +49,6 @@ type PasswordMemberRow = {
   password_hash: string | null;
   failed_login_count: number;
   locked_until: string | null;
-  recovery_code_hash: string | null;
-  recovery_attempt_count: number;
-  recovery_locked_until: string | null;
 };
 
 export class PasswordRepository implements PasswordRepositoryPort {
@@ -83,9 +74,9 @@ export class PasswordRepository implements PasswordRepositoryPort {
     }
     const results = await this.db.batch([
       this.db.prepare(
-        `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at, password_hash, recovery_code_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(member.id, member.accessSub, member.email, member.role, member.status, member.createdAt, member.updatedAt, member.passwordHash, member.recoveryCodeHash),
+        `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at, password_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(member.id, member.accessSub, member.email, member.role, member.status, member.createdAt, member.updatedAt, member.passwordHash),
       this.audit.prepareResourceWriteAudit(audit, { table: "members", id: member.id }),
       this.db.prepare(
         "DELETE FROM password_registration_attempts WHERE created_at < ?",
@@ -119,22 +110,10 @@ export class PasswordRepository implements PasswordRepositoryPort {
     ).bind(id).run();
   }
 
-  async recordRecoveryFailure(id: string, threshold: number, lockedUntil: string): Promise<{ locked: boolean }> {
-    const row = await this.db.prepare(
-      `UPDATE members
-       SET recovery_attempt_count = recovery_attempt_count + 1,
-           recovery_locked_until = CASE WHEN recovery_attempt_count + 1 >= ? THEN ? ELSE recovery_locked_until END
-       WHERE id = ?
-       RETURNING recovery_attempt_count, recovery_locked_until`,
-    ).bind(threshold, lockedUntil, id).first<{ recovery_attempt_count: number; recovery_locked_until: string | null }>();
-    return { locked: Boolean(row?.recovery_locked_until) };
-  }
-
   async resetPassword(
     id: string,
-    expectedRecoveryHash: string,
+    expectedPasswordHash: string,
     passwordHash: string,
-    recoveryCodeHash: string,
     now: string,
     audit: CreateAuditEvent,
   ): Promise<boolean> {
@@ -144,26 +123,23 @@ export class PasswordRepository implements PasswordRepositoryPort {
     const results = await this.db.batch([
       this.db.prepare(
         `UPDATE members
-         SET password_hash = ?, recovery_code_hash = ?, recovery_attempt_count = 0,
-             recovery_locked_until = NULL, failed_login_count = 0, locked_until = NULL, updated_at = ?
-         WHERE id = ? AND recovery_code_hash = ?
-           AND (recovery_locked_until IS NULL OR recovery_locked_until <= ?)`,
-      ).bind(passwordHash, recoveryCodeHash, now, id, expectedRecoveryHash, now),
+         SET password_hash = ?, failed_login_count = 0, locked_until = NULL, updated_at = ?
+         WHERE id = ? AND password_hash = ?`,
+      ).bind(passwordHash, now, id, expectedPasswordHash),
       this.audit.prepareChangedRowAudit(audit),
       this.db.prepare(
         `DELETE FROM auth_sessions
          WHERE member_id = ? AND EXISTS (
-           SELECT 1 FROM members WHERE id = ? AND recovery_code_hash = ? AND updated_at = ?
+           SELECT 1 FROM members WHERE id = ? AND password_hash = ? AND updated_at = ?
          )`,
-      ).bind(id, id, recoveryCodeHash, now),
+      ).bind(id, id, passwordHash, now),
     ]);
     return results[0]?.meta.changes === 1;
   }
 }
 
 const passwordMemberSelect = `SELECT id, access_sub, email, role, status, created_at, updated_at, last_seen_at,
-  password_hash, failed_login_count, locked_until,
-  recovery_code_hash, recovery_attempt_count, recovery_locked_until FROM members`;
+  password_hash, failed_login_count, locked_until FROM members`;
 
 function mapRecord(row: PasswordMemberRow): PasswordMemberRecord {
   return {
@@ -180,8 +156,5 @@ function mapRecord(row: PasswordMemberRow): PasswordMemberRecord {
     passwordHash: row.password_hash,
     failedLoginCount: row.failed_login_count,
     lockedUntil: row.locked_until,
-    recoveryCodeHash: row.recovery_code_hash,
-    recoveryAttemptCount: row.recovery_attempt_count,
-    recoveryLockedUntil: row.recovery_locked_until,
   };
 }

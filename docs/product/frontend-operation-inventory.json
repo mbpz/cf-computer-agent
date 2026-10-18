@@ -5917,18 +5917,15 @@
         "frontend/components/ui/input.tsx:37:3",
         "frontend/components/ui/label.tsx:11:37",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
-        "frontend/pages/login-page.tsx:163:17",
-        "frontend/pages/login-page.tsx:168:15",
-        "frontend/pages/login-page.tsx:174:19",
-        "frontend/pages/login-page.tsx:177:15",
-        "frontend/pages/login-page.tsx:185:19",
-        "frontend/pages/login-page.tsx:189:19",
-        "frontend/pages/login-page.tsx:193:19",
-        "frontend/pages/login-page.tsx:197:19",
-        "frontend/pages/login-page.tsx:199:17",
-        "frontend/pages/login-page.tsx:204:21",
-        "frontend/pages/login-page.tsx:205:21",
-        "frontend/pages/login-page.tsx:206:25"
+        "frontend/pages/login-page.tsx:128:19",
+        "frontend/pages/login-page.tsx:131:15",
+        "frontend/pages/login-page.tsx:140:19",
+        "frontend/pages/login-page.tsx:144:19",
+        "frontend/pages/login-page.tsx:148:19",
+        "frontend/pages/login-page.tsx:150:17",
+        "frontend/pages/login-page.tsx:155:21",
+        "frontend/pages/login-page.tsx:156:21",
+        "frontend/pages/login-page.tsx:157:25"
       ],
       "unresolvedSymbols": [
         "frontend/components/ui/button.tsx#StatefulButton",
@@ -55352,70 +55349,10 @@
       ]
     },
     {
-      "id": "frontend/pages/login-page.tsx:163:17",
+      "id": "frontend/pages/login-page.tsx:128:19",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 163,
-      "column": 17,
-      "kind": "jsx",
-      "tag": "Button",
-      "attributes": {
-        "type": "\"button\"",
-        "size": "\"sm\"",
-        "variant": "\"outline\"",
-        "onClick": "() => void copyRecovery()"
-      },
-      "handlers": {
-        "onClick": "() => void copyRecovery()"
-      },
-      "spreads": [],
-      "labels": [
-        "frontendText(locale, copied ? \"LOGIN_RECOVERY_COPIED\" : \"LOGIN_RECOVERY_COPY\")"
-      ],
-      "context": [
-        {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "true"
-        }
-      ],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/pages/login-page.tsx:168:15",
-      "path": "frontend/pages/login-page.tsx",
-      "owner": "LoginPage",
-      "line": 168,
-      "column": 15,
-      "kind": "jsx",
-      "tag": "Button",
-      "attributes": {
-        "type": "\"button\"",
-        "className": "\"h-11 w-full\"",
-        "size": "\"lg\"",
-        "onClick": "finishRecovery"
-      },
-      "handlers": {
-        "onClick": "finishRecovery"
-      },
-      "spreads": [],
-      "labels": [
-        "frontendText(locale, recoveryFor === \"register\" ? \"LOGIN_RECOVERY_CONTINUE\" : \"LOGIN_RECOVERY_BACK_TO_LOGIN\")"
-      ],
-      "context": [
-        {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "true"
-        }
-      ],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/pages/login-page.tsx:174:19",
-      "path": "frontend/pages/login-page.tsx",
-      "owner": "LoginPage",
-      "line": 174,
+      "line": 128,
       "column": 19,
       "kind": "jsx",
       "tag": "Button",
@@ -55434,11 +55371,6 @@
       "context": [
         {
           "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        },
-        {
-          "kind": "branch",
           "expression": "githubEnabled",
           "branch": "true"
         }
@@ -55446,10 +55378,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:177:15",
+      "id": "frontend/pages/login-page.tsx:131:15",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 177,
+      "line": 131,
       "column": 15,
       "kind": "jsx",
       "tag": "form",
@@ -55463,20 +55395,14 @@
       },
       "spreads": [],
       "labels": [],
-      "context": [
-        {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        }
-      ],
+      "context": [],
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:185:19",
+      "id": "frontend/pages/login-page.tsx:140:19",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 185,
+      "line": 140,
       "column": 19,
       "kind": "jsx",
       "tag": "Input",
@@ -55495,11 +55421,6 @@
       "labels": [],
       "context": [
         {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        },
-        {
           "kind": "container",
           "tag": "form",
           "attributes": {
@@ -55510,53 +55431,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:189:19",
+      "id": "frontend/pages/login-page.tsx:144:19",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 189,
-      "column": 19,
-      "kind": "jsx",
-      "tag": "Input",
-      "attributes": {
-        "id": "\"login-recovery-code\"",
-        "type": "\"text\"",
-        "autoComplete": "\"off\"",
-        "spellCheck": "false",
-        "value": "recoveryInput",
-        "disabled": "pending",
-        "onChange": "(value) => { setRecoveryInput(value); if (formError) setFormError(undefined); }"
-      },
-      "handlers": {
-        "onChange": "(value) => { setRecoveryInput(value); if (formError) setFormError(undefined); }"
-      },
-      "spreads": [],
-      "labels": [],
-      "context": [
-        {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        },
-        {
-          "kind": "container",
-          "tag": "form",
-          "attributes": {
-            "aria-busy": "pending || undefined"
-          }
-        },
-        {
-          "kind": "logical",
-          "expression": "resetting",
-          "operator": "&&"
-        }
-      ],
-      "earlyReturns": []
-    },
-    {
-      "id": "frontend/pages/login-page.tsx:193:19",
-      "path": "frontend/pages/login-page.tsx",
-      "owner": "LoginPage",
-      "line": 193,
+      "line": 144,
       "column": 19,
       "kind": "jsx",
       "tag": "Input",
@@ -55575,11 +55453,6 @@
       "labels": [],
       "context": [
         {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        },
-        {
           "kind": "container",
           "tag": "form",
           "attributes": {
@@ -55590,10 +55463,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:197:19",
+      "id": "frontend/pages/login-page.tsx:148:19",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 197,
+      "line": 148,
       "column": 19,
       "kind": "jsx",
       "tag": "Input",
@@ -55612,11 +55485,6 @@
       "labels": [],
       "context": [
         {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        },
-        {
           "kind": "container",
           "tag": "form",
           "attributes": {
@@ -55632,10 +55500,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:199:17",
+      "id": "frontend/pages/login-page.tsx:150:17",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 199,
+      "line": 150,
       "column": 17,
       "kind": "jsx",
       "tag": "StatefulButton",
@@ -55654,11 +55522,6 @@
       ],
       "context": [
         {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        },
-        {
           "kind": "container",
           "tag": "form",
           "attributes": {
@@ -55669,10 +55532,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:204:21",
+      "id": "frontend/pages/login-page.tsx:155:21",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 204,
+      "line": 155,
       "column": 21,
       "kind": "jsx",
       "tag": "Button",
@@ -55693,11 +55556,6 @@
       ],
       "context": [
         {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        },
-        {
           "kind": "container",
           "tag": "form",
           "attributes": {
@@ -55713,10 +55571,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:205:21",
+      "id": "frontend/pages/login-page.tsx:156:21",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 205,
+      "line": 156,
       "column": 21,
       "kind": "jsx",
       "tag": "Button",
@@ -55737,11 +55595,6 @@
       ],
       "context": [
         {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        },
-        {
           "kind": "container",
           "tag": "form",
           "attributes": {
@@ -55757,10 +55610,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/login-page.tsx:206:25",
+      "id": "frontend/pages/login-page.tsx:157:25",
       "path": "frontend/pages/login-page.tsx",
       "owner": "LoginPage",
-      "line": 206,
+      "line": 157,
       "column": 25,
       "kind": "jsx",
       "tag": "Button",
@@ -55780,11 +55633,6 @@
         "frontendText(locale, \"LOGIN_SWITCH_TO_LOGIN\")"
       ],
       "context": [
-        {
-          "kind": "branch",
-          "expression": "recoveryDisplay",
-          "branch": "false"
-        },
         {
           "kind": "container",
           "tag": "form",

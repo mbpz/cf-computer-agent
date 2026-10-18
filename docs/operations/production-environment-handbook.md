@@ -25,7 +25,7 @@
   → 只能访问 legacy health/notes/search/chat，不能成为管理员
 ```
 
-D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 nonce；`KnowledgeBase` Durable Object 保存已发布笔记和索引。D1 migration 与 Durable Object `v1` 都只能向前兼容，不能靠删表、删数据或重置 DO 回滚。当前登录入口为 GitHub 与邮箱密码；微信 OAuth 适配器暂不在前端开放。邮箱密码账户可自行注册，密码以 PBKDF2-SHA256 加盐存储，连续失败 5 次锁定 15 分钟，注册按 IP 限流；GitHub 仍受 allowlist 限制。注册时一次性返回恢复码，忘记密码可用“邮箱 + 恢复码 + 新密码”重置；重置会轮换恢复码并删除该成员全部会话。系统不发送邮件。
+D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 nonce；`KnowledgeBase` Durable Object 保存已发布笔记和索引。D1 migration 与 Durable Object `v1` 都只能向前兼容，不能靠删表、删数据或重置 DO 回滚。当前登录入口为 GitHub 与邮箱密码；微信 OAuth 适配器暂不在前端开放。邮箱密码账户可自行注册，密码以 PBKDF2-SHA256 加盐存储，连续失败 5 次锁定 15 分钟，注册按 IP 限流；GitHub 仍受 allowlist 限制。忘记密码可用“邮箱 + 新密码”直接重置；重置会删除该成员全部会话。系统不发送邮件，也不校验邮箱所有权。
 
 ## 2. 生产配置
 
@@ -47,7 +47,7 @@ D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 n
 
 禁止把这些值写入仓库、`wrangler.jsonc`、`.dev.vars`、命令参数、URL、日志、截图或聊天。已经公开过的值必须轮换。
 
-邮箱密码登录还需要 `0078_password_auth.sql` 与 `0079_password_recovery.sql`：增加密码哈希、登录/恢复锁定列与恢复码哈希，建立 canonical email 唯一索引，并删除旧验证码/邀请表。两个迁移都只向前兼容；应用前需备份 D1。注册开放，现有邮箱（包括仅 GitHub 成员）不能被注册覆盖；恢复码只显示一次，丢失后无法自助重置。
+邮箱密码登录还需要 `0078_password_auth.sql`：增加密码哈希与登录锁定列，建立 canonical email 唯一索引，并删除旧验证码/邀请表。该迁移只向前兼容；应用前需备份 D1。注册开放，现有邮箱（包括仅 GitHub 成员）不能被注册覆盖；忘记密码使用邮箱 + 新密码直接重置，不校验邮箱所有权，也没有恢复码。
 
 ## 3. GitHub OAuth App
 

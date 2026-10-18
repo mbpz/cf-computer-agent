@@ -38,10 +38,7 @@ export function LoginPage({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [recoveryInput, setRecoveryInput] = useState("");
-  const [recoveryDisplay, setRecoveryDisplay] = useState<string>();
-  const [recoveryFor, setRecoveryFor] = useState<"register" | "reset">("register");
-  const [copied, setCopied] = useState(false);
+  const [notice, setNotice] = useState<string>();
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string>();
   const inFlight = useRef(false);
@@ -56,7 +53,6 @@ export function LoginPage({
     if (reason === "locked") return "LOGIN_PASSWORD_LOCKED";
     if (reason === "disabled") return "LOGIN_PASSWORD_DISABLED";
     if (reason === "reset_rejected") return "LOGIN_RESET_REJECTED";
-    if (reason === "reset_locked") return "LOGIN_RESET_LOCKED";
     return mode === "login" ? "LOGIN_PASSWORD_ERROR" : mode === "reset" ? "LOGIN_RESET_ERROR" : "LOGIN_REGISTER_ERROR";
   };
 
@@ -79,24 +75,20 @@ export function LoginPage({
         return;
       }
     }
-    if (mode === "reset" && recoveryInput.trim().length === 0) {
-      setFormError(frontendText(locale, "LOGIN_RESET_INVALID"));
-      return;
-    }
     inFlight.current = true;
     setPending(true);
     setFormError(undefined);
+    setNotice(undefined);
     try {
       if (mode === "register") {
-        const registered = await register(target, password);
-        setRecoveryDisplay(registered.recoveryCode);
-        setRecoveryFor("register");
-        setCopied(false);
+        await register(target, password);
+        navigate("/");
       } else if (mode === "reset") {
-        const rotated = await reset(target, recoveryInput.trim(), password);
-        setRecoveryDisplay(rotated);
-        setRecoveryFor("reset");
-        setCopied(false);
+        await reset(target, password);
+        setMode("login");
+        setPassword("");
+        setConfirm("");
+        setNotice(frontendText(locale, "LOGIN_RESET_SUCCESS"));
       } else {
         await login(target, password);
         navigate("/");
@@ -114,28 +106,8 @@ export function LoginPage({
     setMode(next);
     setPassword("");
     setConfirm("");
-    setRecoveryInput("");
-    setRecoveryDisplay(undefined);
-    setCopied(false);
+    setNotice(undefined);
     setFormError(undefined);
-  };
-
-  const copyRecovery = async () => {
-    if (!recoveryDisplay) return;
-    try {
-      await navigator.clipboard.writeText(recoveryDisplay);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  const finishRecovery = () => {
-    if (recoveryFor === "register") {
-      navigate("/");
-      return;
-    }
-    switchMode("login");
   };
 
   const registering = mode === "register";
@@ -152,25 +124,7 @@ export function LoginPage({
         <CardHeader><CardTitle>{frontendText(locale, "LOGIN_CARD_TITLE")}</CardTitle><CardDescription>{frontendText(locale, "LOGIN_CARD_DESCRIPTION")}</CardDescription></CardHeader>
         <CardContent className="space-y-3">
           {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-          {recoveryDisplay
-            ? <div className="space-y-3" data-recovery-code>
-              <div>
-                <h2 className="text-sm font-medium">{frontendText(locale, "LOGIN_RECOVERY_TITLE")}</h2>
-                <p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, "LOGIN_RECOVERY_DESCRIPTION")}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <code className="rounded-md bg-muted px-3 py-2 font-mono text-sm break-all">{recoveryDisplay}</code>
-                <Button type="button" size="sm" variant="outline" onClick={() => void copyRecovery()}>
-                  {frontendText(locale, copied ? "LOGIN_RECOVERY_COPIED" : "LOGIN_RECOVERY_COPY")}
-                </Button>
-              </div>
-              {!copied && <p className="text-xs text-muted-foreground">{frontendText(locale, "LOGIN_RECOVERY_COPY_HINT")}</p>}
-              <Button type="button" className="h-11 w-full" size="lg" onClick={finishRecovery}>
-                {frontendText(locale, recoveryFor === "register" ? "LOGIN_RECOVERY_CONTINUE" : "LOGIN_RECOVERY_BACK_TO_LOGIN")}
-              </Button>
-            </div>
-            : <>
-              {githubEnabled
+          {githubEnabled
                 ? <Button className="h-11 w-full" size="lg" onClick={() => { window.location.href = "/auth/github"; }}><GithubLogo size={20} weight="fill" />{frontendText(locale, "LOGIN_GITHUB")}</Button>
                 : <p className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">{frontendText(locale, "LOGIN_GITHUB_UNAVAILABLE")}</p>}
               <div className="border-t pt-3" />
@@ -179,15 +133,12 @@ export function LoginPage({
                   <h2 className="text-sm font-medium">{frontendText(locale, mode === "login" ? "LOGIN_PASSWORD_TITLE" : resetting ? "LOGIN_RESET_TITLE" : "LOGIN_REGISTER_TITLE")}</h2>
                   <p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, mode === "login" ? "LOGIN_PASSWORD_DESCRIPTION" : resetting ? "LOGIN_RESET_DESCRIPTION" : "LOGIN_REGISTER_DESCRIPTION")}</p>
                 </div>
+                {notice && <Alert><AlertDescription>{notice}</AlertDescription></Alert>}
                 {formError && <Alert variant="destructive"><AlertDescription>{formError}</AlertDescription></Alert>}
                 <div className="space-y-1">
                   <Label htmlFor="login-email">{frontendText(locale, "LOGIN_EMAIL_LABEL")}</Label>
                   <Input id="login-email" type="email" autoComplete="email" value={email} disabled={pending} onChange={(value) => { setEmail(value); if (formError) setFormError(undefined); }} />
                 </div>
-                {resetting && <div className="space-y-1">
-                  <Label htmlFor="login-recovery-code">{frontendText(locale, "LOGIN_RECOVERY_CODE_LABEL")}</Label>
-                  <Input id="login-recovery-code" type="text" autoComplete="off" spellCheck={false} value={recoveryInput} disabled={pending} onChange={(value) => { setRecoveryInput(value); if (formError) setFormError(undefined); }} />
-                </div>}
                 <div className="space-y-1">
                   <Label htmlFor="login-password">{frontendText(locale, resetting ? "LOGIN_RESET_NEW_PASSWORD_LABEL" : "LOGIN_PASSWORD_LABEL")}</Label>
                   <Input id="login-password" type="password" autoComplete={registering || resetting ? "new-password" : "current-password"} value={password} disabled={pending} onChange={(value) => { setPassword(value); if (formError) setFormError(undefined); }} />
@@ -207,7 +158,6 @@ export function LoginPage({
                 </div>
                 <p className="text-center text-xs leading-relaxed text-muted-foreground">{frontendText(locale, "LOGIN_ALLOWLIST_NOTE")}</p>
               </form>
-            </>}
         </CardContent>
       </Card>
     </div>
