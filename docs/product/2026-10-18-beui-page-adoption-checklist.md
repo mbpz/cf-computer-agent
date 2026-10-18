@@ -19,8 +19,10 @@
   - 已完成：`/tasks` 与 `/inbox` 行操作改走 `overflow-actions`，逐项 `ariaLabel` 与原测试查询一致（`Delete/Complete/Reopen/Archive/Restore/Turn into task`）。
 - [x] 0.3 **图表**：把 `composition-chart`、`heat-calendar` 以 registry 源补进 `components/charts/`；仅在有对应数据语义的页面使用（见各页条目），禁止用占比图表达不可加总的 UV。
   - 已完成：两组 registry 源落地 `frontend/components/charts/{composition-chart,heat-calendar}/`，typecheck 通过；按页面条目再接线。
-- [ ] 0.4 **表单段落**：多段表单统一 `bouncy-accordion` 分组 + `button-stateful` 提交；保留草稿/失败/未知结果三态。
+- [x] 0.4 **表单段落**：多段表单统一 `bouncy-accordion` 分组 + `button-stateful` 提交；保留草稿/失败/未知结果三态。
+  - 已完成：`/submit` 与 `/login` 的提交改 `StatefulButton`（loading 文案与 disabled 语义不变）；`bouncy-accordion` 只用于可选分组（FAQ 已用），必填字段表单不折叠——折叠会让字段进入 `inert`，破坏草稿恢复、校验与既有键盘测试；按页在 2.2/2.9 的可选段再接。
 - [ ] 0.5 **加载与空态**：内容区 loading 统一 `loader`（表格行用 `skeleton` 行）；长任务用 `agent-progress`，推理/搜索阶段用 `thinking-shimmer`。移除手写 `<p aria-busy>` 文案块。
+  - 进行中：`/login` 与 `/settings` 的手写 `role="alert"` 已换 beUI `Alert`；`PageState` 本身已是 loader/card/alert 组合。剩余 bypass：environments、app bootstrap、`ui/skeleton`。
 - [ ] 0.6 **浮层**：一律走 `ui/sheet`（drawer/bottom-sheet）或 `ui/dialog`（center-morph-modal）；landing 里直接挂 `motion/drawer` 的一处并入适配层。
 - [ ] 0.7 **契约闸门**：扩展前端遗留审计脚本，禁止页面内容区新增手写 `motion/react` 图表/列表/浮层；`keep-in-repo` 列表加入白名单。
 

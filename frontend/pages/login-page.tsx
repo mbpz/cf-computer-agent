@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GithubLogo, ShieldCheck } from "@phosphor-icons/react";
+import { Alert, AlertDescription } from "../components/ui/alert";
 import { Button, StatefulButton } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -39,14 +40,14 @@ export function LoginPage({ locale, error, githubEnabled = true, submit = submit
       <Card className="mx-auto w-full max-w-md shadow-lg shadow-primary/5">
         <CardHeader><CardTitle>{frontendText(locale, "LOGIN_CARD_TITLE")}</CardTitle><CardDescription>{frontendText(locale, "LOGIN_CARD_DESCRIPTION")}</CardDescription></CardHeader>
         <CardContent className="space-y-3">
-          {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+          {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
           {githubEnabled
             ? <Button className="h-11 w-full" size="lg" onClick={() => { window.location.href = "/auth/github"; }}><GithubLogo size={20} weight="fill" />{frontendText(locale, "LOGIN_GITHUB")}</Button>
             : <p className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">{frontendText(locale, "LOGIN_GITHUB_UNAVAILABLE")}</p>}
           <div className="border-t pt-3" />
           <form className="space-y-3" aria-busy={pending || undefined} onSubmit={(event) => { event.preventDefault(); void onCodeSubmit(); }}>
             <div><h2 className="text-sm font-medium">{frontendText(locale, "LOGIN_CODE_TITLE")}</h2><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, "LOGIN_CODE_DESCRIPTION")}</p></div>
-            {formError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{formError}</p>}
+            {formError && <Alert variant="destructive"><AlertDescription>{formError}</AlertDescription></Alert>}
             <div className="space-y-1"><Label htmlFor="login-code-email">{frontendText(locale, "LOGIN_CODE_EMAIL_LABEL")}</Label><Input id="login-code-email" type="email" autoComplete="email" value={email} disabled={pending} onChange={(event) => setEmail(event.target.value)} /></div>
             <div className="space-y-1"><Label htmlFor="login-code-code">{frontendText(locale, "LOGIN_CODE_CODE_LABEL")}</Label><Input id="login-code-code" type="text" autoComplete="one-time-code" className="font-mono" value={code} disabled={pending} onChange={(event) => setCode(event.target.value)} /></div>
             <StatefulButton type="submit" className="h-11 w-full" size="lg" state={pending ? "loading" : "idle"} loadingText={frontendText(locale, "LOGIN_CODE_PENDING")} disabled={!canSubmit}>{frontendText(locale, "LOGIN_CODE_SUBMIT")}</StatefulButton>

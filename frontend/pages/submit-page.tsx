@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Alert, AlertDescription } from "../components/ui/alert";
-import { Button } from "../components/ui/button";
+import { Button, StatefulButton } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { ConfirmAction } from "../components/ui/confirm-action";
 import { Label } from "../components/ui/label";
@@ -138,7 +138,7 @@ export function SubmitPage({ draft, state, locale, onSubmit, onDraftChange, reco
         </div>}
         {!resubmitting && <AssetAvailabilityPanel locale={locale} memberId={memberId} title={draft.title} target={target} />}
         {resubmitting && <p data-submission-resubmit-no-asset className="text-xs text-muted-foreground">{frontendText(locale, "SUBMIT_RESUBMIT_NO_ASSET")}</p>}
-        {!resubmitted && <Button type="submit" disabled={submitDisabled}>{frontendText(locale, pending ? "SUBMIT_BUTTON_PENDING" : resubmitting ? "SUBMIT_RESUBMIT_SUBMIT" : "SUBMIT_BUTTON")}</Button>}
+        {!resubmitted && <StatefulButton type="submit" state={pending ? "loading" : "idle"} loadingText={frontendText(locale, "SUBMIT_BUTTON_PENDING")} disabled={submitDisabled}>{frontendText(locale, resubmitting ? "SUBMIT_RESUBMIT_SUBMIT" : "SUBMIT_BUTTON")}</StatefulButton>}
       </CardContent></Card>
     </form>
     {resubmit && comments && <SubmissionCommentsPanel locale={locale} state={comments.state} onRetry={comments.onRetry} />}
