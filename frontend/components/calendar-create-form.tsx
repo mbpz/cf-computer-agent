@@ -130,9 +130,9 @@ export function CalendarCreateForm({ locale, createMemberId, pending = false, is
     {recordBlocked && <div role="alert" data-calendar-draft-blocked className="space-y-2 text-sm"><p>{frontendText(locale, "CALENDAR_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardRecord}>{frontendText(locale, "CALENDAR_DRAFT_RECORD_DISCARD")}</Button></div>}
     {recordNotice && <p role="alert">{recordNotice}</p>}
     <div className="grid gap-3 sm:grid-cols-3">
-      <Input aria-label={frontendText(locale, "CALENDAR_TITLE_FIELD")} value={title} disabled={locked} maxLength={240} onChange={e => draft.edit("title", e.currentTarget.value)} placeholder={frontendText(locale, "CALENDAR_TITLE_PLACEHOLDER")} />
-      <Input aria-label={frontendText(locale, "CALENDAR_START_FIELD")} type="datetime-local" value={startsAt} disabled={locked} onChange={e => draft.edit("startsAt", e.currentTarget.value)} />
-      <Input aria-label={frontendText(locale, "CALENDAR_END_FIELD")} type="datetime-local" value={endsAt} disabled={locked} onChange={e => draft.edit("endsAt", e.currentTarget.value)} />
+      <Input aria-label={frontendText(locale, "CALENDAR_TITLE_FIELD")} value={title} disabled={locked} maxLength={240} onChange={value => draft.edit("title", value)} placeholder={frontendText(locale, "CALENDAR_TITLE_PLACEHOLDER")} />
+      <Input aria-label={frontendText(locale, "CALENDAR_START_FIELD")} type="datetime-local" value={startsAt} disabled={locked} onChange={value => draft.edit("startsAt", value)} />
+      <Input aria-label={frontendText(locale, "CALENDAR_END_FIELD")} type="datetime-local" value={endsAt} disabled={locked} onChange={value => draft.edit("endsAt", value)} />
     </div>
     {phase === "storage-blocked" ? <><p role="alert">{frontendText(locale, "CALENDAR_CREATE_STORAGE_BLOCKED")}</p><Button type="button" data-create-storage-retry disabled={pending} onClick={reloadStored}>{frontendText(locale, "CALENDAR_CREATE_STORAGE_RETRY")}</Button></>
       : phase === "unknown" ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "CALENDAR_CREATE_UNKNOWN")}</p><Button type="button" data-create-retry disabled={pending} onClick={() => void submit()}>{frontendText(locale, "CALENDAR_CREATE_RETRY")}</Button></>

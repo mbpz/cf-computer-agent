@@ -1,10 +1,10 @@
 "use client";
 // beui.dev/components/motion/animated-sidebar
 //
-// Localized fork — payload `@beui/animated-sidebar` (registry
-// `components/motion/animated-sidebar.tsx`, 1175 lines at fork time), installed
-// for the desktop shell rail. Only the §17 patch classes are applied; the
-// animation, portal, focus and layout logic below is the payload's.
+// Localized payload — `@beui/animated-sidebar` (registry
+// `components/motion/animated-sidebar.tsx`, 1175 lines at adoption), plus the
+// §17 patch classes listed below; the animation, portal, focus and layout logic
+// below is the payload's.
 //
 // 1. 属性透传 (attribute passthrough): `AnimatedSidebarMenuButton` and
 //    `AnimatedSidebarMenuSubButton` now accept and spread the rest props onto

@@ -43,7 +43,7 @@ describe("calendar scrolling range through App", () => {
     expect(scroller).toBeTruthy();
     await act(async()=>{ scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new app!.browser.Event("scroll", { bubbles: true })); await new Promise(resolve=>setTimeout(resolve,0)); });
   }
-  async function input(label: string, value: string) { await act(async()=> {const node=document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; const key=Object.keys(node).find(key=>key.startsWith("__reactProps$"))!; (node as unknown as Record<string, {onChange: (event: {currentTarget: {value: string}}) => void}>)[key]!.onChange({currentTarget:{value}});}); }
+  async function input(label: string, value: string) { await act(async()=> {const node=document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; const key=Object.keys(node).find(key=>key.startsWith("__reactProps$"))!; (node as unknown as Record<string, {onChange: (event: {currentTarget: {value: string}}) => void}>)[key]!.onChange(({ currentTarget: {value}, target: {value} }) as never);}); }
   const applyRange = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(n=>n.textContent==="Apply range")!;
   afterEach(async()=>{await app?.unmount(); app=undefined;});
 

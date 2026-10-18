@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DataTable } from "../../frontend/components/data-table";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -63,8 +64,9 @@ describe("shared data table", () => {
     expect(container.textContent).toContain("1–20");
     await act(async () => (container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
     expect(onPageChange).toHaveBeenCalledWith(2);
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
-    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLSelectElement.prototype, "value")!.set!.call(select, "50"); select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    const select = container.querySelector<HTMLButtonElement>('button[aria-label="Rows per page"][aria-haspopup="listbox"]')!;
+    expect(select).toBeTruthy();
+    await chooseValue(select, "50");
     expect(onPageSizeChange).toHaveBeenCalledWith(50);
   });
 

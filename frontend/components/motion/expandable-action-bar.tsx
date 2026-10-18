@@ -1,11 +1,10 @@
 "use client";
 // beui.dev/components/blocks/expandable-action-bar
 //
-// Localized fork — payload `@beui/expandable-action-bar` (registry
-// `components/motion/expandable-action-bar.tsx`, 413 lines at fork time),
-// adopted for the shell's topbar collaboration strip. Only the §17 patch
-// classes are applied; the animation, layout and gesture logic below is the
-// payload's.
+// Localized payload — `@beui/expandable-action-bar` (registry
+// `components/motion/expandable-action-bar.tsx`, 413 lines at adoption), plus
+// the §17 patch classes listed below; the animation, layout and gesture logic
+// below is the payload's.
 //
 // 1. 属性透传 (attribute passthrough): an item may name an `href`, in which
 //    case the action renders as `motion.a` instead of `motion.button` (an

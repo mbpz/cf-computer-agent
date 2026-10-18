@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
-import { Select } from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import { Input } from "../ui/input";
 import type { ResearchDraftTarget, ResearchRunView } from "../../lib/knowledge-derivatives-data";
 import type { ItemResearchRunsController, ResearchActionName } from "../../lib/use-knowledge-derivatives";
 
@@ -152,15 +153,16 @@ export function KnowledgeResearchRunPanel(props: {
             <h4 className="text-sm font-medium">{frontendText(locale, "KNOWLEDGE_RESEARCH_QUERY_TITLE")}</h4>
             <label className="block text-xs font-medium" htmlFor="research-query-subquestion">{frontendText(locale, "KNOWLEDGE_RESEARCH_QUERY_SUBQUESTION")}</label>
             <Select
-              id="research-query-subquestion"
-              data-research-query-subquestion="true"
               value={querySubquestion?.id ?? ""}
-              onChange={(event) => setQuerySubquestionId(event.target.value)}
-            >{selected.subquestions.map((item) => <option key={item.id} value={item.id}>{item.question}</option>)}</Select>
+              onValueChange={(value) => setQuerySubquestionId(value)}
+            >
+              <SelectTrigger id="research-query-subquestion" data-research-query-subquestion="true"><SelectValue placeholder={selected.subquestions[0]?.question} /></SelectTrigger>
+              <SelectContent>{selected.subquestions.map((item) => <SelectItem key={item.id} value={item.id}>{item.question}</SelectItem>)}</SelectContent>
+            </Select>
             <label className="block text-xs font-medium" htmlFor="research-query-text">{frontendText(locale, "KNOWLEDGE_RESEARCH_QUERY_TEXT")}</label>
-            <input id="research-query-text" data-research-query-text="true" className="w-full rounded-md border px-2 py-1 text-sm" value={queryText} onChange={(event) => setQueryText(event.target.value)} />
+            <Input id="research-query-text" data-research-query-text="true" classNames={{ field: "h-9 rounded-md" }} value={queryText} onChange={setQueryText} />
             <label className="block text-xs font-medium" htmlFor="research-query-rationale">{frontendText(locale, "KNOWLEDGE_RESEARCH_QUERY_RATIONALE")}</label>
-            <input id="research-query-rationale" data-research-query-rationale="true" className="w-full rounded-md border px-2 py-1 text-sm" value={queryRationale} onChange={(event) => setQueryRationale(event.target.value)} />
+            <Input id="research-query-rationale" data-research-query-rationale="true" classNames={{ field: "h-9 rounded-md" }} value={queryRationale} onChange={setQueryRationale} />
             {queryError && <p role="alert" className="text-xs text-destructive" data-research-query-error="true">{frontendText(locale, "KNOWLEDGE_RESEARCH_QUERY_INVALID")}</p>}
             <Button type="button" size="sm" variant="outline" data-research-query-submit="true" disabled={research.action?.name === "query"} onClick={submitQuery}>{frontendText(locale, "KNOWLEDGE_RESEARCH_QUERY_SUBMIT")}</Button>
           </div>
@@ -184,7 +186,7 @@ export function KnowledgeResearchRunPanel(props: {
         <h3 className="text-sm font-semibold">{frontendText(locale, "KNOWLEDGE_RESEARCH_START_TITLE")}</h3>
         <p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RESEARCH_START_SCOPE")}</p>
         <label className="block text-xs font-medium" htmlFor="research-goal">{frontendText(locale, "KNOWLEDGE_RESEARCH_START_GOAL")}</label>
-        <input id="research-goal" data-research-goal="true" className="w-full rounded-md border px-2 py-1 text-sm" value={goal} onChange={(event) => setGoal(event.target.value)} />
+        <Input id="research-goal" data-research-goal="true" classNames={{ field: "h-9 rounded-md" }} value={goal} onChange={setGoal} />
         <label className="block text-xs font-medium" htmlFor="research-completion">{frontendText(locale, "KNOWLEDGE_RESEARCH_START_COMPLETION")}</label>
         <Textarea id="research-completion" data-research-completion="true" value={completion} onChange={(event) => setCompletion(event.target.value)} />
         <label className="block text-xs font-medium" htmlFor="research-steps">{frontendText(locale, "KNOWLEDGE_RESEARCH_START_STEPS")}</label>

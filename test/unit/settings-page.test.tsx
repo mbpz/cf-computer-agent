@@ -1,5 +1,6 @@
 // @vitest-environment node
 import React, { act } from "react";
+import { chooseOption } from "./helpers/listbox";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -28,9 +29,12 @@ describe("settings page", () => {
     expect(html).toMatch(/<h1[^>]*>设置<\/h1>/u);
     expect(html.indexOf("<h1")).toBeLessThan(html.indexOf("管理工作区偏好设置。"));
     expect(html.indexOf("<h1")).toBeLessThan(html.indexOf(">账号<"));
-    // The language preference keeps its historical accessible name and native control.
+    // The language preference keeps its historical accessible name, and the picker
+    // is beUI's listbox trigger rather than a native select.
     expect(html).toContain('class="sr-only">语言</span>');
-    expect(html).toContain("<select");
+    expect(html).not.toContain("<select");
+    expect(html).toContain('aria-haspopup="listbox"');
+    expect(html).toContain('aria-label="语言"');
   });
 });
 
@@ -80,8 +84,7 @@ describe("settings persistence boundary", () => {
   it("keeps the language failure recoverable without claiming it was saved", async () => {
     const blocked = vi.spyOn(browser.localStorage, "setItem").mockImplementation(() => { throw new Error("blocked"); });
     await mount();
-    const select = container.querySelector("select")!;
-    await act(async () => { select.value = "zh-CN"; select.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush();
+    await chooseOption(container.querySelector('[aria-haspopup="listbox"]'), "简体中文"); await flush();
     expect(save().getAttribute("data-settings-save")).toBe("failed");
     expect(save().getAttribute("data-settings-save-preference")).toBe("language");
     expect(language.locale).toBe("zh-CN");

@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { DataTable } from "../../components/data-table";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
-import { Select, SelectOption } from "../../components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { SortableList, SortableListGroup, SortableListItem } from "../../components/motion/sortable-list";
 import { Loader } from "../../components/motion/loader";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -120,9 +120,12 @@ function ReadyColumn({ status, state, locale, actionPendingId, movesLocked, onRe
         <h3 className="line-clamp-2 break-words text-sm font-medium">{title}</h3>
         <Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge>
       </div>
-      <Select aria-label={frontendText(locale, "BOARDS_MOVE_TASK").replace("{title}", title).replace("{status}", statusLabel)} value="" disabled={writeLocked} onChange={(event) => onStatusChange(task, event.currentTarget.value as BoardTargetStatus)}>
-        <SelectOption value="" disabled>{frontendText(locale, "BOARDS_MOVE_TO")}</SelectOption>
-        {boardStatusTargets(status).map((target) => <SelectOption key={target} value={target}>{frontendText(locale, taskStatusKey(target))}</SelectOption>)}
+      <Select value="" onValueChange={(value) => onStatusChange(task, value as BoardTargetStatus)} disabled={writeLocked}>
+        <SelectTrigger aria-label={frontendText(locale, "BOARDS_MOVE_TASK").replace("{title}", title).replace("{status}", statusLabel)}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="" disabled>{frontendText(locale, "BOARDS_MOVE_TO")}</SelectItem>
+          {boardStatusTargets(status).map((target) => <SelectItem key={target} value={target}>{frontendText(locale, taskStatusKey(target))}</SelectItem>)}
+        </SelectContent>
       </Select>
     </div>;
   };

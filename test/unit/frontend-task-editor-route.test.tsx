@@ -1,5 +1,6 @@
 // @vitest-environment node
 import React, { act } from "react";
+import { chooseValue, fieldValue } from "./helpers/listbox";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskItem } from "../../frontend/lib/tasks-data";
@@ -49,14 +50,15 @@ describe("task editor through the real route", () => {
   async function change(label: string, value: string) {
     const node = document.querySelector(`[aria-label="${label}"]`) as HTMLInputElement;
     expect(node, label).toBeTruthy();
+    // A picker is beUI's listbox trigger: choose the option carrying the value.
+    if (node.getAttribute("aria-haspopup") === "listbox") { await chooseValue(node, value); return; }
     await act(async () => {
       node.value = value;
-      if (node.tagName === "SELECT") node.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
-      else {
+      {
         // React was imported before the DOM harness, matching the existing route test setup.
         const key = Object.keys(node).find((value) => value.startsWith("__reactProps$"))!;
         const props = (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!;
-        props.onChange({ currentTarget: node });
+        props.onChange(({ currentTarget: node, target: node }) as never);
       }
     });
   }
@@ -86,7 +88,7 @@ describe("task editor through the real route", () => {
     const key = Object.keys(node).find(value => value.startsWith("__reactProps$"))!;
     await act(async () => {
       node.value = "Synchronous draft";
-      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange({ currentTarget: node });
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange(({ currentTarget: node, target: node }) as never);
       expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred");
     });
     expect(browser.location.pathname).toBe("/tasks"); expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
@@ -175,7 +177,7 @@ describe("task editor through the real route", () => {
     await act(async () => { expect(writeWorkspaceHistory("replace", "/tasks?page=2")).toBe("deferred"); });
     await act(async () => document.querySelector('[role="alertdialog"]')!.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as Event));
     expect(browser.location.search).toBe("");
-    expect((document.querySelector(`[aria-label="${label}"]`) as HTMLInputElement).value).toBe(value);
+    expect(fieldValue(document.querySelector(`[aria-label="${label}"]`))).toBe(value);
     expect(writes).toHaveLength(0);
   });
   it("allows clean navigation and closes the editor only on the admitted location event", async () => {
@@ -222,15 +224,9 @@ describe("task editor through the real route", () => {
     ["Knowledge item ID", "fresh-knowledge", "Link knowledge", "knowledgeItemId"],
   ])("submits the same fresh %s snapshot used by navigation admission", async (label, value, submit, key) => {
     await mount(); await click("Edit: Alpha (task-alpha)");
-    const node = document.querySelector(`[aria-label="${label}"]`) as HTMLInputElement;
-    const propKey = Object.keys(node).find(value => value.startsWith("__reactProps$"))!;
+    await change(label, value);
     const button = [...document.querySelectorAll("button")].find(node => node.textContent === submit)!;
-    await act(async () => {
-      node.value = value;
-      if (node.tagName === "SELECT") node.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
-      else (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[propKey]!.onChange({ currentTarget: node });
-      button.click();
-    }); await flush();
+    await act(async () => { button.click(); }); await flush();
     expect(writes).toHaveLength(1);
     expect(writes[0]!.body[key]).toEqual(key === "tags" ? ["fresh"] : key === "progress" ? 40 : value);
     if (key === "status") expect(writes[0]!.body.expectedStatus).toBe(task.status);
@@ -380,7 +376,7 @@ describe("task editor through the real route", () => {
     expect(confirmation?.textContent).toContain("task-alpha"); expect(confirmation?.textContent).toContain("No changes will be submitted");
     expect(browser.document.activeElement?.textContent).toBe("Keep editing"); expect(writes).toHaveLength(0);
     await click("Keep editing"); expect(document.querySelector('[role="alertdialog"]')).toBeNull();
-    expect((document.querySelector(`[aria-label="${label}"]`) as HTMLInputElement).value).toBe(value);
+    expect(fieldValue(document.querySelector(`[aria-label="${label}"]`))).toBe(value);
     await click("Close task editor"); const discard = document.querySelector('[data-confirm-action]') as HTMLButtonElement;
     await act(async () => { discard.click(); discard.click(); });
     expect(document.querySelector('[role="dialog"]')).toBeNull(); expect(writes).toHaveLength(0);

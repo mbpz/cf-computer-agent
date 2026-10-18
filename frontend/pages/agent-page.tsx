@@ -142,7 +142,7 @@ function AgentSourceControls({ draft, locale, disabled, onStartScope, isWriteBlo
         </SelectContent>
       </Select>
     </Label>
-    {kind !== "all" && <><Label htmlFor="agent-scope-ids">{frontendText(locale, "AGENT_SCOPE_IDS")}</Label><Input id="agent-scope-ids" value={ids} onChange={(event) => draft.edit("ids", event.currentTarget.value)} aria-invalid={invalid} /></>}
+    {kind !== "all" && <><Label htmlFor="agent-scope-ids">{frontendText(locale, "AGENT_SCOPE_IDS")}</Label><Input id="agent-scope-ids" value={ids} onChange={(value) => draft.edit("ids", value)} aria-invalid={invalid} /></>}
     <p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_SCOPE_DETAIL")}</p>
     {invalid && <p role="alert">{frontendText(locale, "AGENT_SCOPE_INVALID")}</p>}
     <Button type="button" variant="outline" disabled={disabled} onClick={apply}>{frontendText(locale, "AGENT_SCOPE_APPLY")}</Button>

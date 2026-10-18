@@ -4,7 +4,8 @@ import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { AdminMenusRoute } from "../../frontend/app";
-import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
+import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -45,10 +46,19 @@ describe("menu write recovery", () => {
     await click("Confirm change");
   }
 
+  /** Editor selects drive a beUI listbox named by the visible label; text fields keep `name`. */
+  const listboxLabels: Record<string, string> = { parentId: "ADMIN_MENUS_PARENT", labelKey: "ADMIN_MENUS_LABEL", status: "ADMIN_MENUS_STATUS", groupName: "ADMIN_MENUS_GROUP" };
+  const listboxTrigger = (name: string) => document.querySelector(`button[aria-haspopup="listbox"][aria-label="${frontendText(locale(), listboxLabels[name]!)}"]`);
+  const parentOptions = () => [...(listboxTrigger("parentId")?.parentElement?.querySelectorAll('[role="option"]') ?? [])].map((option) => option.getAttribute("data-value"));
+
   async function field(name: string, value: string) {
-    const input = document.querySelector(`[name="${name}"]`) as HTMLInputElement;
-    expect(input).toBeTruthy();
-    await act(async () => { const proto = input.tagName === "SELECT" ? browser.HTMLSelectElement.prototype : browser.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(input, value); input.dispatchEvent(new browser.Event(input.tagName === "SELECT" ? "change" : "input", { bubbles: true }) as unknown as Event); });
+    const input = document.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
+    if (!input) {
+      expect(listboxLabels[name]).toBeTruthy();
+      await chooseValue(listboxTrigger(name), value);
+      return;
+    }
+    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new browser.Event("input", { bubbles: true }) as unknown as Event); });
   }
   it.each(["Disable", "Hide", "Delete", "Save menu"])("canceling %s does not send a mutation", async label => {
     const calls: string[] = [];
@@ -77,7 +87,7 @@ describe("menu write recovery", () => {
     const original = menu({ children: [menu({ id: "child", key: "child", path: "/child", parentId: "custom" })] }); let body: Record<string, unknown> = {};
     vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { if (init?.method) { body = JSON.parse(init.body as string); return json({ menu: menu({ ...body, children: [] }) }); } return json({ tree: [original, menu({ id: "other", key: "other", path: "/other" })] }); });
     await render(); await click("Edit menu");
-    const options = [...document.querySelectorAll<HTMLSelectElement>('[name="parentId"] option')].map(option => option.value);
+    const options = parentOptions();
     expect(options).toEqual(["", "other"]);
     await field("parentId", "other"); await field("labelKey", "NAV_SEARCH"); await field("path", "/moved"); await field("requiredBits", "0xA"); await confirmChange("Save menu");
     expect(body).toMatchObject({ parentId: "other", labelKey: "NAV_SEARCH", path: "/moved", requiredBits: "0xa", expected: { parentId: null, path: "/private-menu", position: 1 } });
@@ -116,7 +126,7 @@ describe("menu write recovery", () => {
     const third = menu({ id: "three", key: "three", path: "/three", parentId: "two", children: [fourth] });
     const second = menu({ id: "two", key: "two", path: "/two", parentId: "custom", children: [third] });
     vi.stubGlobal("fetch", async () => json({ tree: [menu({ children: [second] })] }));
-    await render(); await click("Create menu"); expect([...document.querySelectorAll<HTMLOptionElement>('[name="parentId"] option')].map(option => option.value)).toEqual(["", "custom", "two", "three"]);
+    await render(); await click("Create menu"); expect(parentOptions()).toEqual(["", "custom", "two", "three"]);
   });
   it.each(["parentId", "path", "labelKey", "requiredBits"])("does not accept a wrong %s editing receipt", async key => {
     const calls: string[] = []; vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { calls.push(init?.method || "GET"); if (init?.method) { const body = JSON.parse(init.body as string); return json({ menu: menu({ ...body, [key]: key === "parentId" ? "wrong-parent" : key === "requiredBits" ? "0x2" : "wrong" }) }); } return json({ tree: [menu()] }); });

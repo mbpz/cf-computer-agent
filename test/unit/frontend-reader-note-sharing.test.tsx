@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeReaderPage } from "../../frontend/pages/knowledge-reader-page";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -33,10 +34,10 @@ describe("private note sharing decisions", () => {
     }); await render(); await settle();
   }
   function button(text: string) { return Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(b => b.textContent === text)!; }
-  function select() { return container.querySelector("[data-reader-note] select") as HTMLSelectElement; }
+  function trigger() { return container.querySelector("[data-reader-note] button[aria-haspopup=\"listbox\"]") as HTMLButtonElement; }
   function body() { return container.querySelector("#reader-note-body") as HTMLTextAreaElement; }
   function unload() { const e = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(e); return e.defaultPrevented; }
-  async function choose() { await act(async () => { select().value = "member-b"; select().dispatchEvent(new browser.Event("change", { bubbles: true })); }); }
+  async function choose() { await chooseValue(trigger(), "member-b"); }
   async function openShare() { await choose(); await act(async () => button("Share").click()); }
   async function confirm() { const b = document.querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(b).not.toBeNull(); await act(async () => b!.click()); await settle(); }
   async function remount() { await act(async () => root.unmount()); root = createRoot(container); await render(); await settle(); }
@@ -45,28 +46,28 @@ describe("private note sharing decisions", () => {
     await mount(async () => { throw new Error("lost response"); });
     if (kind === "share") await openShare(); else await act(async () => button("Revoke").click());
     await confirm(); await settle(); await remount();
-    expect(container.querySelector("[data-note-share-check]")).not.toBeNull(); expect(select().disabled).toBe(true); expect(unload()).toBe(true);
+    expect(container.querySelector("[data-note-share-check]")).not.toBeNull(); expect(trigger().disabled).toBe(true); expect(unload()).toBe(true);
     rows = kind === "share" ? [share] : [];
     await act(async () => container.querySelector<HTMLButtonElement>("[data-note-share-check]")!.click()); await settle();
-    expect(select().disabled).toBe(false); expect(writes).toEqual([kind === "share" ? "POST" : "DELETE"]);
+    expect(trigger().disabled).toBe(false); expect(writes).toEqual([kind === "share" ? "POST" : "DELETE"]);
     await remount(); expect(container.querySelector("[data-note-share-check]")).toBeNull();
   });
   it("does not POST when tab intent storage is unavailable", async () => {
     await mount(); await openShare();
     const set = vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("denied"); });
-    await confirm(); await settle(); expect(writes).toEqual([]); expect(select().disabled).toBe(true); set.mockRestore();
+    await confirm(); await settle(); expect(writes).toEqual([]); expect(trigger().disabled).toBe(true); set.mockRestore();
   });
   it.each(["applied", "rejected"] as const)("recovers known %s share result after cleanup failure without POST replay", async outcome => {
     await mount(async () => outcome === "applied" ? Response.json({ share }, { status: 201 }) : Response.json({ error: { code: "PRIVATE_NOTE_SHARE_TARGET_INVALID", message: "Invalid", retryable: false } }, { status: 404 }));
     const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementation(() => { throw new Error("denied"); });
-    await openShare(); await confirm(); await settle(); await remount(); expect(select().disabled).toBe(true); remove.mockRestore();
+    await openShare(); await confirm(); await settle(); await remount(); expect(trigger().disabled).toBe(true); remove.mockRestore();
     await act(async () => container.querySelector<HTMLButtonElement>("[data-note-share-check]")!.click()); await settle();
     if (outcome === "rejected") { await act(async () => container.querySelector<HTMLButtonElement>("[data-note-share-retry]")!.click()); await settle(); }
-    expect(select().disabled).toBe(false); expect(writes).toEqual(["POST"]);
+    expect(trigger().disabled).toBe(false); expect(writes).toEqual(["POST"]);
   });
   it("restores the unsaved draft alongside a pending share", async () => {
     await mount(async () => { throw new Error("lost"); });
-    await act(async () => { props<{ onChange: (event: unknown) => void }>(body()).onChange({ currentTarget: { value: "Unsaved body" } }); });
+    await act(async () => { props<{ onChange: (event: unknown) => void }>(body()).onChange(({ currentTarget: { value: "Unsaved body" }, target: { value: "Unsaved body" } }) as never); });
     await openShare(); await confirm(); await settle(); await remount();
     expect(body().value).toBe("Unsaved body"); expect(body().readOnly).toBe(true); expect(writes).toEqual(["POST"]);
   });
@@ -76,7 +77,7 @@ describe("private note sharing decisions", () => {
   });
   it("consumes a confirmed share once and blocks navigation and note edits until receipt", async () => {
     let finish!: (r: Response) => void; await mount(() => new Promise(r => { finish = r; })); await openShare(); const c = document.querySelector("[data-confirm-action]"); expect(c).not.toBeNull(); const accept = props<{onClick: () => void}>(c!).onClick;
-    await act(async () => { accept(); accept(); props<{onChange: (e: unknown) => void}>(body()).onChange({ currentTarget: { value: "race" } }); button("Save note").click(); writeWorkspaceHistory("push", "/tasks"); });
+    await act(async () => { accept(); accept(); props<{onChange: (e: unknown) => void}>(body()).onChange(({ currentTarget: { value: "race" }, target: { value: "race" } }) as never); button("Save note").click(); writeWorkspaceHistory("push", "/tasks"); });
     expect(writes).toEqual(["POST"]); expect(body().value).toBe("Saved body"); expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); expect(unload()).toBe(true);
     await act(async () => finish(Response.json({ share }, { status: 201 }))); await settle(); expect(unload()).toBe(false); expect(button("Revoke")).toBeDefined();
   });
@@ -113,14 +114,14 @@ describe("private note sharing decisions", () => {
     await act(async () => (container.querySelector("[data-note-share-check]") as HTMLButtonElement).click()); await settle(); expect(unload()).toBe(true);
   });
   it("allows explicit retry after an initial share-list error without issuing writes", async () => {
-    let fail = true; await mount(undefined, () => fail ? Response.json({ shares: [{}] }) : Response.json({ shares: [] })); expect(select().disabled).toBe(true); expect(unload()).toBe(false); fail = false;
+    let fail = true; await mount(undefined, () => fail ? Response.json({ shares: [{}] }) : Response.json({ shares: [] })); expect(trigger().disabled).toBe(true); expect(unload()).toBe(false); fail = false;
     await act(async () => (container.querySelector("[data-note-share-retry]") as HTMLButtonElement).click()); await settle(); await openShare(); expect(document.querySelector("[role=alertdialog]")).not.toBeNull(); expect(writes).toEqual([]);
   });
   it("requires list refresh after known pre-write rejection instead of marking success", async () => {
-    await mount(async () => Response.json({ error: { code: "PRIVATE_NOTE_SHARE_TARGET_INVALID", message: "Unavailable", retryable: false } }, { status: 404 })); await openShare(); await confirm(); expect(unload()).toBe(false); expect(select().disabled).toBe(true); expect(container.querySelector("[data-note-share-retry]")).not.toBeNull(); expect(button("Revoke")).toBeUndefined();
+    await mount(async () => Response.json({ error: { code: "PRIVATE_NOTE_SHARE_TARGET_INVALID", message: "Unavailable", retryable: false } }, { status: 404 })); await openShare(); await confirm(); expect(unload()).toBe(false); expect(trigger().disabled).toBe(true); expect(container.querySelector("[data-note-share-retry]")).not.toBeNull(); expect(button("Revoke")).toBeUndefined();
   });
   it("protects dirty input after a sharing confirmation is canceled", async () => {
-    await mount(); await act(async () => props<{onChange: (e: unknown) => void}>(body()).onChange({ currentTarget: { value: "unsaved body" } })); await openShare(); expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Unsaved edits are not shared");
+    await mount(); await act(async () => props<{onChange: (e: unknown) => void}>(body()).onChange(({ currentTarget: { value: "unsaved body" }, target: { value: "unsaved body" } }) as never)); await openShare(); expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Unsaved edits are not shared");
     await act(async () => (document.querySelector("[data-cancel-action]") as HTMLButtonElement).click()); expect(body().value).toBe("unsaved body"); expect(unload()).toBe(true); expect(writes).toEqual([]);
   });
   it("refuses sharing while a note-save callback has synchronously claimed the write", async () => {
@@ -130,7 +131,7 @@ describe("private note sharing decisions", () => {
   });
   it("does not allow sharing from a dirty-navigation confirmation", async () => {
     await mount(); await choose(); const requestShare = props<{onClick: () => void}>(button("Share")).onClick;
-    await act(async () => { props<{onChange: (e: unknown) => void}>(body()).onChange({ currentTarget: { value: "dirty" } }); writeWorkspaceHistory("push", "/tasks"); requestShare(); });
+    await act(async () => { props<{onChange: (e: unknown) => void}>(body()).onChange(({ currentTarget: { value: "dirty" }, target: { value: "dirty" } }) as never); writeWorkspaceHistory("push", "/tasks"); requestShare(); });
     expect(document.querySelectorAll("[role=alertdialog]")).toHaveLength(1); expect(document.querySelector("[role=alertdialog]")?.textContent).not.toContain("recipient@test.dev"); expect(writes).toEqual([]);
   });
   it("ignores a late sharing receipt after a member changes", async () => {
@@ -140,9 +141,9 @@ describe("private note sharing decisions", () => {
   it("loads sharing controls after saving a previously absent note", async () => {
     let exists = false; await mount(async () => { exists = true; return Response.json({ note }); }); const original = fetch;
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith("/note") && !init?.method ? Promise.resolve(Response.json({ note: exists ? note : null })) : original(input, init));
-    await act(async () => root.unmount()); root = createRoot(container); await render(); expect(select().disabled).toBe(true);
-    await act(async () => { props<{onChange: (e: unknown) => void}>(container.querySelector("#reader-note-title")!).onChange({ currentTarget: { value: "Saved title" } }); props<{onChange: (e: unknown) => void}>(body()).onChange({ currentTarget: { value: "Saved body" } }); button("Save note").click(); });
-    await vi.waitFor(async () => { await settle(); expect(select().disabled).toBe(false); }); await openShare(); expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Saved title"); expect(writes).toEqual(["PUT"]);
+    await act(async () => root.unmount()); root = createRoot(container); await render(); expect(trigger().disabled).toBe(true);
+    await act(async () => { props<{onChange: (e: unknown) => void}>(container.querySelector("#reader-note-title")!).onChange(({ currentTarget: { value: "Saved title" }, target: { value: "Saved title" } }) as never); props<{onChange: (e: unknown) => void}>(body()).onChange(({ currentTarget: { value: "Saved body" }, target: { value: "Saved body" } }) as never); button("Save note").click(); });
+    await vi.waitFor(async () => { await settle(); expect(trigger().disabled).toBe(false); }); await openShare(); expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Saved title"); expect(writes).toEqual(["PUT"]);
   });
   it("invalidates an old row callback after revocation and re-sharing the same recipient", async () => {
     rows = [share]; await mount(); const oldRevoke = props<{onClick: () => void}>(button("Revoke")).onClick; await act(async () => oldRevoke()); await confirm(); await openShare(); await confirm();
@@ -153,6 +154,6 @@ describe("private note sharing decisions", () => {
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith("/note") ? Promise.resolve(Response.json({ note: { ...note, ownerId: "member-c" } })) : original(input, init));
     await act(async () => (container.querySelector("[data-note-share-check]") as HTMLButtonElement).click()); await settle(); expect(unload()).toBe(true); expect(writes).toEqual(["POST"]);
   });
-  it("does not offer self-sharing", async () => { await mount(); expect(select().querySelector('option[value="member-a"]')).toBeNull(); });
+  it("does not offer self-sharing", async () => { await mount(); expect(container.querySelector('[data-reader-note] [role="option"][data-value="member-a"]')).toBeNull(); expect(container.querySelector('[data-reader-note] [role="option"][data-value="member-b"]')).not.toBeNull(); });
 });
 function props<T>(node: Element): T { const key = Object.keys(node).find(key => key.startsWith("__reactProps$")); if (!key) throw new Error("Missing React props"); return (node as unknown as Record<string, T>)[key]; }

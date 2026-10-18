@@ -26,7 +26,7 @@ describe("saved view route ownership", () => {
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
   }
   function input() { return document.querySelector('[data-saved-view-controls] input') as HTMLInputElement; }
-  function edit(value: string) { props<{ onChange: (event: unknown) => void }>(input()).onChange({ currentTarget: { value } }); }
+  function edit(value: string) { props<{ onChange: (event: unknown) => void }>(input()).onChange(({ currentTarget: { value }, target: { value } }) as never); }
   function submit() { document.querySelector('[data-saved-view-controls] form')!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); }
   async function click(selector: string) { const button = document.querySelector(selector) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => { button.click(); await new Promise(resolve => setTimeout(resolve, 20)); }); }
   it("does not release an unknown delete on a generic 404, only a verified owner-scoped absence", async () => {

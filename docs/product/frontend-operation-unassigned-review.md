@@ -37,6 +37,9 @@
 
 2026-10-17 成员页页签写入 URL 后重新对账：`AdminMembersRoute` 在 `frontend/app.tsx` 增加 `changeTab`、挂载/搜索条件归一化 effect 与一条 `subscribeWorkspaceLocation` 分支，并新增纯派生助手 `frontend/lib/admin-members-query.ts`（`isAdminMembersTab`/`parseAdminMembersTab`/`writeAdminMembersTab`/`normalizeAdminMembersTab`）。本文件的两个未归属外层候选（AppShell 的 navigate/logout 转发、SettingsPage 的 props 透传）属性、回调与前置条件均未变，仅因新增一行下移至 **236:106 / 263:39**，逐字重记；新助手没有任何 JSX/监听器候选（解析、写串、归一化都无副作用），`members-page.tsx` 的 25 条候选全在该路由 root 内，故未归属候选仍为 **181**。同步 `app.tsx` 与 `lib/workspace-location.ts` 指纹（后者仅一行编辑，其 `63:3` 候选未动）。不扩大本记录的运行验收结论。
 
+2026-10-18 零原生基元后重新对账：本批把共用表单基元全部落到 beUI 载荷——`frontend/components/ui/select.tsx` 改为 `motion/select` 复合列表箱的再导出（原生 `<select>`/`<option>` 实现删除）、`ui/input.tsx` 与 `ui/checkbox.tsx` 改为 `motion/input`／`motion/checkbox` 的适配层、`ui/textarea.tsx` 承接字段壳（beUI 无 textarea slug）、`ui/expandable-tabs.tsx` 改为新落盘载荷 `motion/expandable-tabs.tsx` 的适配层；页面侧把对比产物表格改 `bouncy-accordion`、通知未读数改 `number-ticker`、成员评论改 `agents/message-bubble`。原生 `<option>` 候选随实现消失（`asset-import-panel` 2 条、`knowledge-import-panel` 2 条、`files-panel` 1 条），未归属候选 164 → 159；其余 35 个文件的候选只随行号位移重记，[source:frontend/app.tsx] 的 `app-boundary` 两条仍为 236:106、263:39（本批未改该文件）。索引重生成后为 476 文件 / 1772 候选 / 159 未归属；同步 4 条变更来源指纹（`motion/animated-sidebar.tsx` 仅文件头措辞、三个 environment 文件为输入控件替换），不扩大本记录的运行验收结论。
+
+
 ## 分类结果与下一步
 
 | 分类 | 候选数 | 已确认的源码含义 | 尚需完成 |
@@ -306,8 +309,8 @@ beUI 磁性包装（`Magnetic`），唯一 import 方是同样未被消费的 `b
 | --- | --- | --- | --- |
 | `frontend/components/motion/not-found/shared.tsx:55:7` | app-boundary | 路由 fallback 渲染 404；homeHref 默认 `/` | motion.a 指向 homeHref；whileTap/whileHover 受 reduced-motion 与 hover 能力门控。 |
 | `frontend/components/motion/not-found/shared.tsx:65:9` | unmounted-ui | 仅当调用方传入 browseHref 时渲染 | 第二 CTA 当前没有调用点传 browseHref，因此不出现在工作台界面中。 |
-
 | `frontend/components/motion/not-found/shared.tsx:86:5` | app-boundary | 路由 fallback 渲染 404 舞台节点（NotFoundStage 转发 props） | 转发 props/children 到舞台 div 并携带 data-page-state；无业务写入。 |
+
 ## `frontend/components/motion/popover.tsx`（0）
 
 Wave 4 打补丁后，`components/shell/app-shell.tsx:9` 改为从本文件取 `Popover`/`PopoverTrigger`/`PopoverContent` 渲染账户菜单等点按锚定弹层，两条候选（根节点 `:420:7`、内容面 `:725:11`）也随之进入 root 图并从本记录移除。补丁把原来硬编码的 `role="dialog"` 与 `aria-haspopup` 改为调用方可传的语义插槽（这也是 `ui/dropdown-menu.tsx` 注释里当初否决它的原因被消除之处），行为仍是本地开合 + hover 时序 + 几何计算，没有网络写入。
@@ -397,13 +400,13 @@ Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx`
 | --- | --- | --- | --- |
 | `frontend/features/environments/connector-session.mjs:24:2` | vm-not-mounted | 显式创建连接器会话并取得 lifecycle signal | abort 执行会话清理；不能把监听器注册当作握手、外网转发或设备授权成功。 |
 
-## `frontend/features/environments/files/asset-import-panel.tsx`（23）
+## `frontend/features/environments/files/asset-import-panel.tsx`（21）
 
 由 FilesPanel 在 assetImporter 存在时挂载；模型要求 submission.memberId 非空。正式 [source:frontend/features/environments/environment-files-surface.tsx] 现已挂载 FilesPanel 并传入真实 submission.memberId，因此本面板不再是 harness 专属；但本版本有意不发布 VM 引擎，FilesPanel 的 FileView 在不满足 state.available 时提前返回占位；共同条件 state.kind 非 idle（busy 合并模型和 workflow 状态）因此永远不可达。harness 仍仅传 runtime/locale。A02 的下游为 [source:frontend/features/environments/files/asset-import.ts] 和既有 asset-workflow。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/features/environments/files/asset-import-panel.tsx:25:37` | vm-runtime-unshipped | canUpload 为真且未 busy，用户确认原文件 | setUploadAck；仅修改明确上传确认状态。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:25:7` | vm-runtime-unshipped | canUpload 为真且未 busy，用户确认原文件 | setUploadAck；仅修改明确上传确认状态。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:26:7` | vm-runtime-unshipped | canUpload、已 uploadAck、未 busy 且无 storage 错误 | model.upload，重试固定同一文件/意图；不自动解析。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:31:7` | vm-runtime-unshipped | flow.intent 存在且未 busy | model.refresh 回读服务端状态，不重放写入。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:33:9` | vm-runtime-unshipped | job 为 queued 或 failed_retryable 且未 busy | model.parse 显式启动/重试解析。 |
@@ -415,9 +418,7 @@ Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx`
 | `frontend/features/environments/files/asset-import-panel.tsx:45:58` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新本地审核标题。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:46:99` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新 requestedSpaceId；服务端仍需校验目标权限。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:47:68` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新本地 shared/admin_only 请求范围。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:47:180` | vm-runtime-unshipped | 审核范围 Select 可编辑 | shared 选项；最终范围仍受服务端审核约束。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:47:230` | vm-runtime-unshipped | 审核范围 Select 可编辑 | admin_only 选项；不代表已发布或权限提升。 |
-| `frontend/features/environments/files/asset-import-panel.tsx:48:37` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新明确审核确认 reviewAck。 |
+| `frontend/features/environments/files/asset-import-panel.tsx:48:7` | vm-runtime-unshipped | parsed 存在且无 review、未 busy | 更新明确审核确认 reviewAck。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:49:7` | vm-runtime-unshipped | editable、reviewAck、标题/空间非空且未 busy | model.submit 固定目标与 acknowledged；请求审核而非发布。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:51:34` | vm-runtime-unshipped | state.error 或 flow.error 非空 | role=alert 显示错误与未确认结果；对象存储不可用时不上传，也不退化为直接发布。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:52:32` | vm-runtime-unshipped | flow.kind 为 submitted | role=status 显示 submissionId；不当作发布完成。 |
@@ -427,19 +428,17 @@ Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx`
 | `frontend/features/environments/files/asset-import-panel.tsx:56:12` | vm-runtime-unshipped | busy 时用户点击停止等待 | model.stop；只停止本地等待，不宣称撤销服务端处理。 |
 | `frontend/features/environments/files/asset-import-panel.tsx:57:5` | vm-runtime-unshipped | 非 idle 且未 busy，用户关闭 | model.close；保留成员未决恢复元数据。 |
 
-## `frontend/features/environments/files/files-panel.tsx`（26）
+## `frontend/features/environments/files/files-panel.tsx`（25）
 
 实际消费者有两个：[source:tools/browser-vm/runtime-owner-browser.mjs]（仅传 runtime/locale，未传 submission，因而该 harness 不提供两个导入模型）与正式 [source:frontend/features/environments/environments-page.tsx]。正式页面**已挂载**：选中环境后渲染 `EnvironmentFiles`（[source:frontend/features/environments/environment-files-surface.tsx]），后者经惰性 `import('./files/files-panel')` 挂载本面板并传入真实 submission.memberId；本文件的 34 条候选因此属于新分类 vm-runtime-unshipped。本版本有意不发布 VM 引擎与镜像，owner 作用域 runtime 永远无法进入 running，FileView 的共同条件 state.available 恒为假，组件只渲染“Start an environment…”占位，全部动作（含两个导入面板）永久不可用。blocked=busy、editor、文本导入打开或资产导入打开。各行额外条件如下；所有选项/提示也保留，不把每行等同用户动作。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/features/environments/files/files-panel.tsx:79:41` | vm-runtime-unshipped | prepared.epoch 等于当前 epoch | role=status 呈现本地下载已准备及字节数。 |
-| `frontend/features/environments/files/files-panel.tsx:93:7` | vm-runtime-unshipped | 未 blocked 且 page 大于 1 | manager.load 同目录上一页。 |
-
 | `frontend/features/environments/files/files-panel.tsx:30:129` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:76:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:77:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:78:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:79:41` | vm-runtime-unshipped | prepared.epoch 等于当前 epoch | role=status 呈现本地下载已准备及字节数。 |
 | `frontend/features/environments/files/files-panel.tsx:80:22` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:82:41` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:82:58` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
@@ -448,7 +447,7 @@ Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx`
 | `frontend/features/environments/files/files-panel.tsx:86:23` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:90:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:92:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
-| `frontend/features/environments/files/files-panel.tsx:93:224` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
+| `frontend/features/environments/files/files-panel.tsx:93:7` | vm-runtime-unshipped | 未 blocked 且 page 大于 1 | manager.load 同目录上一页。 |
 | `frontend/features/environments/files/files-panel.tsx:96:23` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:99:7` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:100:45` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
@@ -460,7 +459,8 @@ Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx`
 | `frontend/features/environments/files/files-panel.tsx:109:141` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:110:35` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
 | `frontend/features/environments/files/files-panel.tsx:110:178` | vm-runtime-unshipped | VM 文件面板动作；本版本有意不发布 VM 引擎与镜像，running 环境不可达 | 仅在假设 running 环境出现后才会触发；当前禁用或不可渲染，无业务写入。 |
-## `frontend/features/environments/files/knowledge-import-panel.tsx`（14）
+
+## `frontend/features/environments/files/knowledge-import-panel.tsx`（12）
 
 由 FilesPanel 在 importer 存在时挂载；正式 [source:frontend/features/environments/environment-files-surface.tsx] 已挂载 FilesPanel 并传入真实 submission.memberId，因此 importer 现会被创建；但本版本有意不发布 VM 引擎，FileView 在 state.available 为假时提前返回占位，共同条件非 idle 永远不可达。editable 仅 kind=preview，busy 为 reading/sending。下游 [source:frontend/features/environments/files/knowledge-import.ts] 使用 createSubmission，不自行发布；未知状态保留原载荷/键。
 
@@ -471,9 +471,7 @@ Wave 4 之后本文件已无 import（shell 改用 beUI 的 `motion/popover.tsx`
 | `frontend/features/environments/files/knowledge-import-panel.tsx:23:49` | vm-runtime-unshipped | preview 存在且 editable | 更新本地标题；unknown/sending 状态不可改写原意图。 |
 | `frontend/features/environments/files/knowledge-import-panel.tsx:24:99` | vm-runtime-unshipped | preview 存在且 editable | 更新请求空间 ID；服务端决定是否允许。 |
 | `frontend/features/environments/files/knowledge-import-panel.tsx:25:98` | vm-runtime-unshipped | preview 存在且 editable | 更新请求可见范围；不是已发布范围。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:25:215` | vm-runtime-unshipped | preview 内的范围 Select 可编辑 | shared 选项，继承父 Select 禁用状态。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:25:265` | vm-runtime-unshipped | preview 内的范围 Select 可编辑 | admin_only 选项，继承父 Select 禁用状态。 |
-| `frontend/features/environments/files/knowledge-import-panel.tsx:26:49` | vm-runtime-unshipped | preview 存在且 editable | 用户确认内容/目标/无密钥，更新 ack。 |
+| `frontend/features/environments/files/knowledge-import-panel.tsx:26:7` | vm-runtime-unshipped | preview 存在且 editable | 用户确认内容/目标/无密钥，更新 ack。 |
 | `frontend/features/environments/files/knowledge-import-panel.tsx:27:18` | vm-runtime-unshipped | editable 且 ack、标题和空间非空 | model.confirm 冻结 draft/target/key 并提交审核。 |
 | `frontend/features/environments/files/knowledge-import-panel.tsx:29:19` | vm-runtime-unshipped | state.error 存在 | role=alert 显示未知/格式/校验错误，不自动重放。 |
 | `frontend/features/environments/files/knowledge-import-panel.tsx:30:30` | vm-runtime-unshipped | kind 为 unknown，用户显式点击 | model.retry 使用原键和原载荷。 |
@@ -591,7 +589,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/components/motion/action-swap-roll.tsx`: `271933ba92771ecb6ae5a7769d70cea3953e3c919ad51c324ee6290ce890a35f`
 - `frontend/components/motion/action-swap.tsx`: `b3a886b34a475490e0363fb686080e00cebbcf5745f40d5d8dd4bcab6ed41603`
 - `frontend/components/motion/alert.tsx`: `c511618208d401fb4473a5bb1162f7f3268a6e2fb4cc28f3ad8b71298517bb97`
-- `frontend/components/motion/animated-sidebar.tsx`: `e927e0bbb307449f1204b17dd8a9d6e08e88453bf53062a4bb9758ff64501547`
+- `frontend/components/motion/animated-sidebar.tsx`: `d0e4dfc8313b6620da95b376e5d2bf1c796e7aece1eea9fefa3a6d415fff60c1`
 - `frontend/components/motion/animated-toast-stack.tsx`: `bbfe97a6aa83e2acb5ea270fdf93bc3541764a7bbf80bc9e514e02566a6342e9`
 - `frontend/components/motion/button/magnetic.tsx`: `545d951ad9d66cef1fa00b2af98055796678ccdec5dbf1b0e31d0b5243f0b993`
 - `frontend/components/motion/button/metallic.tsx`: `c066dfcc42f2f1eb819ef756944af5fd00245080540c9c06ca52f9e87c4e9b46`
@@ -620,11 +618,11 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/features/environments/environment-files-surface.tsx`: `f24df6c74cbe83f85a7536bd9a9d2015df21634c1ccbea0fb3643449a70025ed`
 - `frontend/features/environments/environment-vm-composition.ts`: `b26be9b74c008c4bbddbc04e11c6bb0bf9853bc8aa9a0157a7175cd48abd47e7`
 - `frontend/features/environments/environments-page.tsx`: `92d29c2f586d2de028cfec425826274c752c364b859b9e4c597547f51a055d78`
-- `frontend/features/environments/files/asset-import-panel.tsx`: `27e56d8ac0eb52b336bace709dbe383ad1b8197695d6b1bee3c199ccd725b8dd`
+- `frontend/features/environments/files/asset-import-panel.tsx`: `94e99cf3bcb2cc955388350c5ca6c7080bb976eed1dd9d5f0950fd8c2df8d725`
 - `frontend/features/environments/files/asset-import.ts`: `a825ff94a287acd8bc61cd517f27fe92d1ee32cd999948fb9e6f7d3def217338`
 - `frontend/features/environments/files/file-manager.mjs`: `2721e8e7abecd3dda95765eecb055f7bf3272942f1933807a07bba83a7df5ea6`
-- `frontend/features/environments/files/files-panel.tsx`: `9d953cf881d1b23749fb86dca773217225761e92d7c7bc0ba2bfd291d428e9e4`
-- `frontend/features/environments/files/knowledge-import-panel.tsx`: `0b85767dfa44343e7f69ce60120f1be8db217fe34ed4055b3b23bf395cf9ff99`
+- `frontend/features/environments/files/files-panel.tsx`: `233f8e92e2c45bf52a576ea7e37ea60df92d0411399a323572cc09e58af529f2`
+- `frontend/features/environments/files/knowledge-import-panel.tsx`: `be23c88c6b30b2a02a066b72da80b47123ad65d2a121bf8bee912ec286ec9428`
 - `frontend/features/environments/files/knowledge-import.ts`: `bce2bebe39eb4f17650b35b4a020f51f757ba5594b6e178a4a44f98b45028abd`
 - `frontend/features/environments/files/stream-download.mjs`: `b491973525cb44aefce8a265490471e947931c2380b605d15b37226ca7295943`
 - `frontend/features/environments/network-lifecycle.mjs`: `0e40ef5fc54547a8eb8769598176d1bdae454d99a4e62a143981b7f545d89e06`
@@ -632,7 +630,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/lib/use-toast.tsx`: `0b4f788931e28f9eb5d87d8d84414568187c35736094130452ad272891b950a8`
 - `frontend/lib/workspace-location.ts`: `8e5fd84e7f611784f46a05016808cb6c2a5a7b507d4be306ae490afcac31bd35`
 - `frontend/main.tsx`: `9ba6f443d0f7da037015cb7f1d1b3444777989588c66429d3630a0c5fb500391`
-- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `797896e7a11327b89eebdf03c802c55872bf2017517ebd94410f714793974866`
+- `frontend/pages/workbench-landing/public-workbench-page.tsx`: `9aa559e4576cf5eef754a41941fe8db2c926a1b8ebf4c711d4e13cf71e68988e`
 - `frontend/pages/workbench-landing/workbench-scene-runtime.ts`: `19b47d756dd823d4934eacd11d364bb3602b7f8fa09e74e4e5db588affdd761b`
 - `frontend/pages/workbench-landing/workbench-scene.tsx`: `bd5def5c4ef683d0ae1422e26180a8feeca67de86ef4ccbea79b3605cb3fef5a`
 - `frontend/public/sw.js`: `703801312e5cccba0cf162837b97878185fe03e18cdc2182c2fc4c5215923bad`
@@ -765,3 +763,11 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - 无新增行：`frontend/lib/admin-members-query.ts` 没有任何控件、监听器或 spread 候选（解析/写串/归一化都是无副作用的字符串函数），按“有候选才登记”的规则不入表和指纹；`frontend/pages/admin/members-page.tsx` 改为受控页签后仍有 25 条候选，全部已随 `workbench-admin-members` 路由 root 归属，其坐标变化不影响本记录。`subscribeWorkspaceLocation` 本身在 `lib/workspace-location.ts:112:3` 已归属（App 侧使用），新的调用点不会把它变回未归属。
 - 指纹：刷新 2 条——`frontend/app.tsx`（新增导入与路由分支）与 `frontend/lib/workspace-location.ts`（一行编辑；其唯一未归属候选 `63:3` 的 `subscribeWorkspaceHistoryFault` 坐标与语义未变）。无新增、无删除。
 - 门禁：`node --test scripts/frontend-operation-inventory.test.mjs` 10/10 通过（含索引新鲜度）；本轮仍是源码对账，不改变 A01、A02、A05、D04 的开放状态。
+
+### 2026-10-18 落地页版面并入工具类后重新对账
+
+- 触发变化：`frontend/pages/workbench-landing/public-workbench-page.tsx` 与 `workbench-feature-panel.tsx` 的版面、排版类名从 `workbench-landing.css` 的手写类改成 Tailwind 工具类，`workbench-landing.css` 只留调色板、祖先滚动锁、场景/媒体规则、模态层与两条无法用工具类表达的规则。**未归属候选与分类均不变（仍 159 条）**：本轮的编辑只改 `className` 字符串与样式表，没有新增控件、监听器、spread 或条件分支，因此没有新增/删除/重锚行。
+- 语义未变，逐项核对：落地页的 5 个功能按钮、开始/探索/暂停/下一步/重放、语言列表箱、场景角度页签、关闭与引用返回按钮的 handler、`aria-*` 与 `data-demo-action` 全部原样保留（`className` 之外属性逐字对比）。`workbench-feature-panel.tsx` 的抽屉开关、引用跳转、任务完成同样未动。
+- 两条与工具类不兼容的约束（按源码实测，记录以免下轮再撞）：`frontend/styles/globals.css:92` 的 `* { border-color: var(--border) }` 不在任何 cascade layer 内，因此压过 `@layer utilities` 里的全部 `border-*` 颜色工具类——落地页头部去掉了会变实线的 `border-transparent`，选语言触发器的 `border-input` 也不再用工具类表达；引用段落的 3px 主色竖线因此留在 `.workbench-source [data-cited]` 的普通规则里。另一条是 `figure.workbench-studio`：`.workbench-studio picture/img` 规则被保留，标记侧的类名也必须保留，否则海报圆角与移动端 9/11 比例静默丢失（本轮实测发现并修复）。
+- 指纹：刷新 1 条（`frontend/pages/workbench-landing/public-workbench-page.tsx`）。`workbench-feature-panel.tsx`、`workbench-landing.css` 没有未归属候选也没有 caller 证据，按“有候选才登记”的规则不入表。同轮生成的索引（476 文件 / 1772 候选 / 159 未归属）是相对工作树的重新生成，包含此前未入索引的 beUI 表单基元批次，不是本轮引入的候选变化。
+- 门禁：`npm run audit:frontend-operations` 与 `node --test scripts/frontend-operation-inventory.test.mjs` 10/10 通过；本轮仍只做源码对账，不改变 A01、A02、A05、D04 的开放状态。

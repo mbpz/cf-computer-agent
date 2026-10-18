@@ -91,7 +91,7 @@ describe("Goals create dialog", () => {
   async function click(node: HTMLElement) { await act(async () => node.click()); }
   async function type(value: string) {
     const node = title(); const key = Object.keys(node).find(candidate => candidate.startsWith("__reactProps$"))!;
-    await act(async () => { (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange({ currentTarget: { value } }); });
+    await act(async () => { (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange(({ currentTarget: { value }, target: { value } }) as never); });
   }
   it("stays closed on a plain visit, opens from the add control, and closes on cancel or Escape", async () => {
     await mount();

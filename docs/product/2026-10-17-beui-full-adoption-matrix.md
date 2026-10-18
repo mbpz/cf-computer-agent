@@ -94,7 +94,7 @@
 
 **新增 beUI 源（手工落盘；统一把 `lucide-react` 译为 `@phosphor-icons/react`、`@/lib` 改相对路径、`process.env` 改 `import.meta.env.DEV`；未新增任何依赖）**：`motion/{card,alert,animated-badge,button/stateful,tooltip,tooltip-surface,popover,popover-morph,popover-position,context-menu,breadcrumb}`、`motion/tooltip/{grace,positioner,use-position}`、`lib/hooks/{use-dismiss,use-hover-gesture,use-tap-gesture}`。
 
-**已重架的基元（导出名与 props 不变，调用点除下述一处外全部不动）**：`ui/button`（新增 `StatefulButton`＝beUI `button-stateful`）、`ui/badge`（→ animated-badge，`size="sm"` 默认保住 21 处表格 pill）、`ui/card`（纯 re-export）、`ui/alert`（variant 映射 + children 分流）、`ui/tooltip`（**真采用**，`@radix-ui/react-tooltip` 已从依赖树移除）、`ui/input`/`textarea`（共用 `fieldShellClass` 字段壳）、`ui/checkbox`（beUI 几何）、`ui/label`、`ui/select`（保留原生 `<select>`：套件按原生控件驱动）、`ui/filter-select`（无障碍名与 44px 保持，长列表面板可滚动）、`ui/applied-filters`（`×` 字形→Phosphor `X`）、`ui/page-state`（五态不变）、`ui/skeleton`、`ui/confirm-action`、`ui/typed-confirm-action`、`ui/pagination`（走共享 Button + `--radius`）、壳内 breadcrumb（→ beUI `breadcrumb`）。
+**已重架的基元（导出名与 props 不变，调用点除下述一处外全部不动）**：`ui/button`（新增 `StatefulButton`＝beUI `button-stateful`）、`ui/badge`（→ animated-badge，`size="sm"` 默认保住 21 处表格 pill）、`ui/card`（纯 re-export）、`ui/alert`（variant 映射 + children 分流）、`ui/tooltip`（**真采用**，`@radix-ui/react-tooltip` 已从依赖树移除）、`ui/input`/`textarea`（共用 `fieldShellClass` 字段壳；两者已在 §29 换成 beUI 适配层，仅 `textarea` 保留原生元素）、`ui/checkbox`（beUI 几何；§29 改为 beUI 载荷适配层）、`ui/label`、`ui/select`（当时保留原生 `<select>`：套件按原生控件驱动；§29 已改为 beUI 复合列表箱并移除原生实现）、`ui/filter-select`（无障碍名与 44px 保持，长列表面板可滚动）、`ui/applied-filters`（`×` 字形→Phosphor `X`）、`ui/page-state`（五态不变）、`ui/skeleton`、`ui/confirm-action`、`ui/typed-confirm-action`、`ui/pagination`（走共享 Button + `--radius`）、壳内 breadcrumb（→ beUI `breadcrumb`）。
 
 **顺带修掉的真缺陷**：已装 payload 里 `text-(--color-success)` 与 `hover:border-(--color-border-strong)` 是**本主题下的死 CSS**（改为 `text-primary` / `hover:border-foreground/40`，不新增颜色）；已装 input 丢失的 `strokeWidth={2.5}` 复原；移动端分页按钮 36px → **44px**；badge 重架让 boards 测试的 `bg-secondary` 选择器失效 → 改为语义钩子 `data-board-column-total`（**断言本身未改**，不回钉类名）。
 
@@ -335,7 +335,7 @@ payload 行号（live registry 取回逐行核对）：`CenterMorphModalContent`
   - 侧栏「即将推出」行、分组切换行（桌面 + 移动抽屉两处）由手写 `<button>` 换成 `ui/button` 的 `Button`（`variant="ghost"`，行几何仍用 `className` 表达：`h-9`/`min-h-10`、`justify-start`、`gap-3`、`rounded-md`、`font-normal`，并 `hover:bg-transparent`——该栏的 hover 反馈仍由共享 `layoutId` pill 单独承担）；caret 切换换成 `Button size="icon"`（`h-8 w-8`，命中区 22px → 32px）。`data-nav-node`/`data-nav-depth`/`aria-expanded`/`aria-disabled` 原样保留。回归断言：`test/unit/workspace-shell.test.tsx:139-162`（分组展开/折叠 + `aria-expanded` 翻转 + 子项出现/消失）。
   - 面包屑：可见性只留在 topbar 包装层（`lg:flex`），`Breadcrumb` 自身只留 `min-w-0`——原先"`sm:flex` 包装 + 组件 `hidden lg:flex`"造成的 640–1023 空层消失；首级「首页」crumb 改为 `event.preventDefault(); onNavigate("/")`，与侧栏/协作链接同一套 SPA 导航（原先整页刷新）。回归断言：`test/unit/workspace-shell.test.tsx:164-173`。
 - `frontend/components/shell/context-rail.tsx`：「打开模块」CTA 由手写 `<a class="border px-3 py-2 …">` 换成 beUI `ButtonLink variant="outline" size="md"`（`motion/button/base`，Wave 1 对"链接形按钮"的既有约定）；模块行/动作行仍是行（不是按钮），与侧栏行同一套几何，未动。
-- 有意未改：移动导航真实开关仍是 `<details><summary>`（`app-shell.tsx:311`；`workspace-shell.test.tsx:327-357` 与截图验收都锁这条通道）；`command-palette.tsx` 的行按钮（`role="option"` 的 listbox 契约 + `data-command-id`）；`shell/*` 内无 skeleton（`grep -n "keleton" frontend/components/shell/*` 无命中），故无骨架可对齐。
+- 有意未改：`command-palette.tsx` 的行按钮（`role="option"` 的 listbox 契约 + `data-command-id`，属载荷）；`shell/*` 内无 skeleton（`grep -n "keleton" frontend/components/shell/*` 无命中），故无骨架可对齐。（2026-10-18 更新：移动导航的 `<details>/<summary>` 已换成 `ui/button` + `aria-expanded`（`data-mobile-nav-trigger`），`workspace-shell.test.tsx` 4 处选择器同步改为新钩子、行为期望未动；本行原记"仍保留原生 details"已不成立，见 `docs/operations/evidence/2026-10-18-beui-page-adoption.md` 的"第一方交互面原生元素归零"一节。）
 - 两处"已装件用不上"的记录：`motion/animated-badge` 不能当外壳未读数 pill——它的 `AnimatePresence mode="popLayout"` 会在退出动画期间保留旧标签（`animated-badge.tsx:238-260`），而套件按精确 `textContent` 断言（`test/unit/frontend-shell-notifications.test.tsx:40-46`）；`motion/shared-layout-bg` 见 §8.1.5（blur）。
 
 ### 8.4 落在 wrapper 上的 `data-*` 钩子
@@ -1200,3 +1200,108 @@ i18n：新增 2 个键（`COMMON_CHIP_SELECTED`、`COMMON_CHIP_REMOVED`，中英
 - 连带复核 **3 文件 / 30 测试全绿**：`frontend-user-read-pages`、`frontend-read-pages-paging`、`frontend-knowledge-submissions-header`（均 SSR/布局断言涉及搜索页）。
 - 契约冒烟：`i18n-contract`、`wcag-contract`（15 测试）与 `frontend-i18n`（8 测试）全绿。
 - 按要求未跑整仓 `npm test`、build、deploy；未重生成 operation inventory 与复核台账（父级统一处理）。**新组件文件需要父级在 inventory 中登记**：`components/motion/morphing-search-chips.tsx`、`components/ui/search-chips-field.tsx`。
+
+## 29. Wave 5 · 零原生基元（2026-10-18）
+
+用户在这一轮把验收口径推到"**零原生基元**"：不仅页面内容区，连共用表单控件（`input`／`select`／`checkbox`）与手写基元也必须落在 beUI 载荷上。判据因此比 §1.5 更严：**页面与 feature 里不得出现原生 `<select>`、`<input type="checkbox">`、文本 `<input>`／`<textarea>`**，共用基元只保留 beUI 载荷或其适配层。
+
+### 29.1 结论
+
+| 现值 | slug | 动作 | 说明 |
+| --- | --- | --- | --- |
+| `ui/select.tsx` | `select`（已装 `motion/select`） | **改为再导出** | 原生 `<select>`／`<option>`／`SelectOption` 实现删除；`Select` 变复合件（`Select`／`SelectTrigger`／`SelectValue`／`SelectContent`／`SelectItem`）。§17 补丁两处：`SelectTrigger` 透传 `id`／`aria-*`／`data-*`（面板改用已渲染的 trigger 元素测量与命名，不再 `getElementById`），`SelectItem` 透传 `data-*` 并加 `data-value` 值钩子。20 个调用点迁移（含 `components/` 内 8 个）。 |
+| `ui/input.tsx` | `input`（已装 `motion/input`） | **改为适配层** | `onChange(value: string)`、`label`／`error`／`leftIcon`／`rightIcon`／`classNames` 由载荷提供；`aria-label`／`id`／`type`／`required`／`maxLength`／`data-*` 落到内层 `<input>`，`className` 落到字段列。21 个文件的 40 处调用点改为值式 `onChange`。 |
+| `ui/checkbox.tsx` | `checkbox`（已装 `motion/checkbox`） | **改为适配层** | 载荷渲染 `button[role="checkbox"][aria-checked]`；`data-*` 落在包裹 `<span>`（载荷不透传任意属性），可见文案走载荷 `label`／`description`，不再用外层 `<label>` 包裹（避免嵌套 label）。5 个调用点迁移。 |
+| `ui/textarea.tsx` | 无 slug | **保留原生**（唯一例外） | beUI 没有 textarea 载荷；字段壳 token 从 `ui/input.tsx` 移入本文件，`ui/input.tsx` 变为纯适配层。审计白名单登记。 |
+| `components/admin/tag-admin-panel.tsx` | `input` | **改用适配层** | 标签新建的 slug／名称两个原生 `<input>` 换成 `ui/input`，`id`／`data-admin-tag-*` 不变。 |
+| `components/knowledge/knowledge-research-panel.tsx` | `input` | **改用适配层** | 研究查询文本／理由／研究目标三个原生 `<input>` 换成 `ui/input`（`classNames.field: h-9` 保留面板密度），`id`／`data-research-*` 不变。 |
+| `components/assets/asset-upload-panel.tsx` | `input` | **改用适配层** | 资产 URL 的 `input[type="url"]` 换成 `ui/input`，`id="asset-url-input"`／`data-asset-url-input`／`inputMode` 不变。 |
+| 页面内的原生 `<button>` | `button-base`（经 `ui/button`） | **改用适配层** | 6 个页面里的 11 处原生 `<button>`（`home-page` 4、`knowledge-reader` 2、`search` 2、`task-editor`／`focus`／`thread` 各 1）换成 `Button`；`data-home-more`／`data-saved-view-apply`／`aria-label`／`role="listitem"`／`aria-pressed` 全部保留。 |
+| `ui/expandable-tabs.tsx` | `expandable-tabs` | **改为载荷适配层** | 新落盘 `motion/expandable-tabs.tsx`（registry 14718 字节源，`@/lib` 改相对路径）+ §17 三类补丁：`attributes`／`controls` 属性透传、`ariaLabel` 命名、`barOnly` in-flow 模式（跳过固定尺寸外壳、保留面板与 outside-click 关闭）。阅读器移动端页签的 `role="tab"`／`aria-selected`／`aria-controls`／`data-expandable-tab` 全部保留。 |
+| 对比产物矩阵（`knowledge-derivatives-panel.tsx`） | `bouncy-accordion`（已装） | **表格替换** | `case "comparison"` 的 `<table>` 改为按主题分行的手风琴；`data-comparison-topic`／`data-comparison-cell` 经载荷 `attributes` 与单元格 `data-*` 保留。共识／冲突段不变。 |
+| 通知未读数（`notifications-page.tsx`） | `number-ticker`（已装） | **接入** | `NumberTicker`（`startOnView={false}`，`aria-live="polite"` 外层不变）；读屏文本仍是纯数字。 |
+| 提交评论（`submission-comments-panel.tsx`） | `message-bubble`（已装） | **接入** | 每条评论为 `MessageBubble variant="soft"` + `MessageBubbleContent`，`data-submission-comment` 留在 `<li>`，列表 `aria-label` 不变。 |
+
+### 29.2 守住的契约
+
+- **表单关联**：外部 `<Label htmlFor>` 指向的 id 从 `<select>` 移到 trigger（`admin-record-status`／`admin-record-parent`／`submission-mode`／`admin-analytics-range`／`reader-note-title` 等），`aria-controls` 指向列表箱；可见 caption 仍在原位置。
+- **`data-*` 钩子**：`data-submission-target-*`、`data-saved-view-*`、`data-batch-reason`、`data-review-reason`、`data-import-*`、`data-vm-asset-*`、`data-trash-purge-confirm` 等一个不少——选择器的钩子在 trigger 上，复选类的钩子在包裹 `<span>` 上。
+- **值语义**：`name`／`required` 不再存在（页面本来就用状态提交，没有 FormData 读取）；为套件与脚本保留了 option 的 `data-value`。
+- **44px**：trigger 保留 `max-lg:min-h-11`，页签行经 `classNames.tab` 保留 `max-lg:min-h-11`。
+- **i18n**：`KNOWLEDGE_DERIVATIVES_COMPARISON_TOPIC`／`_CELLS` 随表格移除而删除（中英各一条），无新增键。
+
+### 29.3 无 slug 的组合层（保留自研，内部只用 beUI 件与令牌）
+
+`ui/pagination.tsx`、`ui/page-header.tsx`、`ui/applied-filters.tsx`、`ui/summary-row.tsx`、`ui/filter-disclosure.tsx`、`ui/skeleton.tsx` 保留现有实现（beUI 无对应 slug），内部只用 beUI `button`／`card`／`loader`／排版令牌；`ui/label.tsx` 保留原生 `<label>`（表单关联必需，beUI 无 label slug）。
+
+### 29.4 闸门
+
+`scripts/frontend-legacy-audit.mjs` 的 `scanContent` 新增四条规则：`<select>`、`type="checkbox"`、文本 `<input>`（`hidden`／`file`／`range`／`radio` 之外）、`<textarea>`；命中即 `contentViolations`。规则对 `frontend/pages`、`frontend/features` **与 `frontend/components`** 同样生效（共享组件也渲染在页面上；表格／弹层／`motion/react` 三条导入规则仍只作用于页面，因为适配层合法地导入它所适配的载荷）。
+
+白名单只有三处，都是"beUI 没有对应 slug 或元素：载荷自身"的判据：
+- `frontend/components/ui/textarea.tsx` —— beUI 无 textarea slug。
+- `frontend/components/agents/prompt-input.tsx` —— vendored `prompt-input` 载荷，其 textarea 就是载荷自己的控件。
+- `frontend/components/motion/**` —— 载荷层。
+
+页面里也不再有原生 `<button>`：`RAW_NATIVE_BUTTON` 规则同样命中即失败，但只作用于 `frontend/pages`／`frontend/features`——共享组件的适配层（`ui/sheet`、`ui/filter-select`）与载荷（`components/agents/*`）拥有自己的触发元素，那是适配层/payload 本身。
+
+规则本身排除的非文本控件：`input[type="file"]`（`features/.../files-panel.tsx` 的上传选择器，文件选择器是操作系统自己的对话框）与 `input[type="range"]`（`components/charts/{status-bar,composition-chart}/plot.tsx` 的逐期检查滑块）。测试 `scripts/frontend-legacy-audit.test.mjs` 的 fixture 覆盖：含 `<select>`／`type="checkbox"`／文本 `<input>`／`<textarea>` 的页面、`components/ui/legacy.tsx` 的原生 `<input>`（必须报错）、`type="file"`（不报错）、`components/ui/textarea.tsx` 与 `components/motion/*.tsx`（不报错）。
+
+### 29.5 套件迁移（只换驱动方式，不放宽断言）
+
+新增 `test/unit/helpers/listbox.ts`：`chooseValue(trigger, value)`、`chooseOption(trigger, label|index)`、`fieldValue(node)`（输入框读 `.value`，选择器读所选 option 的 `data-value`）、`settle()`。33 个套件按三种形态迁移：
+
+1. `select.value = x` + `dispatchEvent("change")` → `chooseValue(trigger, x)`；`select.value` 读取 → `fieldValue(...)`。
+2. React prop 直接触发 `onChange` 的桩（`__reactProps$…`）→ 传 `{ currentTarget, target }`，因为载荷读 `e.target.value`；textarea 仍读 `currentTarget`。
+3. `input[type="checkbox"]`／`.checked` → `[role="checkbox"]`／`aria-checked`；`option[value=…]` → `[role="option"][data-value=…]`；通知未读数从"连续文本"改为断言 `sr-only` 的可访问数字。
+
+### 29.6 门禁结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run typecheck` | 干净（worker + frontend） |
+| `npm run build:ui` | 通过（含 `verify:browser-vm:build`） |
+| `npx vitest run test/unit` | **408 文件 / 5644 测试全绿** |
+| `npm run verify:wcag` | 通过 |
+| `npm run verify:i18n` | `keys=434 placeholders=55`，硬编码副本检查通过 |
+| `npm run verify:delivery-status` | 30/30 |
+| `node scripts/frontend-legacy-audit.mjs` | 通过（无原生选择器/复选框/文本输入/textarea） |
+| `npm run audit:frontend-operations` | 通过（476 文件 / 1772 候选）；索引与复核台账已重生成，未归属 164 → 159（5 条原生 `<option>` 候选随实现消失） |
+
+**未做**：生产浏览器逐页验收（`/settings` 语言切换、`/notifications` 读数、对比产物展开、`/admin/members` 与 `/admin/audit` 筛选、`/submit` 输入与草稿、`/login` 验证码）需在已登录的真实会话上人工执行；本轮的运行证据是套件、构建与四道静态门禁。
+
+### 29.7 页面级终态（2026-10-18）
+
+`frontend/pages` 共 **49 个页面文件**，机械核对结果：
+
+| 检查 | 结果 |
+| --- | --- |
+| 原生 `<select>` / `<input>` / `<textarea>` | **0** |
+| 原生 `<button>` | **0**（11 处已换 `ui/button`，规则 `native-button` 常驻守护） |
+| `motion/react` 直接导入 | 0（闸门原有规则） |
+| 原生 `<table>` | 0（闸门原有规则） |
+| 剩余原生元素 | 14 个文件里的 `<a href>` 导航/内容链接——beUI 除 `ButtonLink`（CTA 形链接，落地页在用）外没有 anchor 基元，正文链接保持原生 `<a>` 是正确的语义 |
+
+**唯一视觉层不是 beUI 令牌的页面**：`frontend/pages/workbench-landing/public-workbench-page.tsx`（落地页）。它使用 beUI `Button`／`ButtonLink`／`Select` 做交互，但版面来自自己的 `workbench-*` 样式表（33 处类名），是独立设计锁的营销页，不是产品工作台界面。若要把它也并入 beUI 令牌体系，需要一次明确的视觉改版决定，不属于基元改造。
+
+**门禁**：`node scripts/frontend-legacy-audit.mjs` 通过；`npm test` 全绿（smoke 88 / i18n 14 / delivery 30 / unit 408 文件 5644 测试 / worker 78 文件 1310 测试）。
+
+### 29.8 上线与真人点检（2026-10-18）
+
+**发布**：`npm run build`（含 build:ui、verify:landing、build:secrets、legacy-audit、`wrangler deploy --dry-run`）通过 → `npm run deploy` 成功（上传 8 资产，`memory-garden-agent` 版本发布，custom domain `memory.crgmhrc.asia`）。
+
+**上线后真人点检**（omp relay 驱动真实 Chrome，admin 会话；工具为真实鼠标/键盘事件）：
+
+| 面 | 结果 |
+| --- | --- |
+| `/admin/assets` | 原生 `<select>` **1 → 0**（部署前该页仍有原生选择器），listbox 触发器 1，横向溢出 0 |
+| `/admin/roles/role-admin` | 21 个 `[role="checkbox"]`、0 原生 checkbox、5 组权限 legend；系统角色按设计禁用（`disabled` + 禁用 fieldset） |
+| 非系统角色权限勾选（本地临时种子角色） | 点击 `aria-checked`：`true → false → true`，可逆、无原生控件 |
+| `/admin/submissions` | 队列 0 条 ⇒ 全选 `disabled`、`已选 0/0`（正确，非缺陷） |
+| `/knowledge/:id` @375 | beUI 页签：`data-expandable-tab` = `outline`／`sources`、`aria-controls` 指向两个面板、`role="tablist"` 名"阅读器面板"、高 44px；点击选中、再点清空；溢出 0 |
+| `/login`（未登录） | 两个 beUI 字段（44px、`data-state="idle"`）、0 原生控件、提交按钮初始禁用 |
+| 对比产物手风琴 | 线上无 comparison 衍生件（`[data-comparison-topic]` = 0、`table` = 0）⇒ 未能点检，由 `frontend-knowledge-reader-derivatives-surface` 覆盖 |
+
+**更早一轮（同一构建、本地 + 临时会话）**：31 路由 × 1280/375 = 62 次加载，原生控件 0、溢出 0；语言切换 `zh-CN→en→zh-CN` 均 `data-settings-save=saved`；`?status=active`、`?action=role.updated`、`?tab=invitations` 三处筛选/页签写入 URL；`/submit` 真实键入 + 草稿 `unconfirmed`（本地无目标）并显示「Save draft now」而非伪称已保存。
+
+**清理**：临时 `auth_sessions` 与探测角色已从本地 D1 删除，本地服务已停止，浏览器标签已释放；生产账号的偏好未被改动（语言切换只在本地构建验证）。

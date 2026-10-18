@@ -162,7 +162,7 @@ export function RecycleBinPage({
             {item.retention.purgeable ? <>
               <label className="block text-xs" htmlFor={`trash-purge-${item.id}`}>{confirmLabel}</label>
               <Input id={`trash-purge-${item.id}`} data-trash-purge-confirm={item.id} aria-label={confirmLabel} value={typed} disabled={writesLocked}
-                onChange={(event) => onPurgeConfirmChange?.(item.id, event.target.value)} />
+                onChange={(value) => onPurgeConfirmChange?.(item.id, value)} />
               {mismatch && <p role="alert" className="text-xs text-destructive">{frontendText(locale, "ADMIN_TRASH_PURGE_CONFIRM_MISMATCH")}</p>}
               <HoldActionButton type="horizontal" data-trash-purge={item.id} disabled={!canPurge}
                 onActivate={() => { if (canPurge) onPurge?.(item.id); }}

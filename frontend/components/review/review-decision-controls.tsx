@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { OverflowActions } from "../motion/overflow-actions";
 import { Label } from "../ui/label";
-import { Select } from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { MAX_REVIEW_NOTE_BYTES, validReviewNote, type ReviewDecision, type ReviewNoteInput, type ReviewReceipt, type ReviewRecovery } from "./review-detail-data";
@@ -143,10 +143,13 @@ export function ReviewDecisionForm({ action, details, onChange, disabled, locale
   return <form className="space-y-3 rounded-md border bg-muted/20 p-3" onSubmit={(event) => { event.preventDefault(); if (!disabled && valid) onSubmit({ reasonCode, note }); }}>
     {action === "reject" && <div className="space-y-2">
       <Label htmlFor={`${id}-reason`}>{frontendText(locale, "SUBMISSIONS_REVIEW_REASON")}</Label>
-      <Select id={`${id}-reason`} data-review-reason disabled={disabled} value={reasonCode} onChange={(event) => onChange({ ...details, reasonCode: event.target.value as ReviewNoteInput["reasonCode"] })}>
-        <option value="not_relevant">{frontendText(locale, "ADMIN_REVIEW_REASON_NOT_RELEVANT")}</option>
-        <option value="duplicate">{frontendText(locale, "ADMIN_REVIEW_REASON_DUPLICATE")}</option>
-        <option value="unsafe">{frontendText(locale, "ADMIN_REVIEW_REASON_UNSAFE")}</option>
+      <Select value={reasonCode} disabled={disabled} onValueChange={(value) => onChange({ ...details, reasonCode: value as ReviewNoteInput["reasonCode"] })}>
+        <SelectTrigger id={`${id}-reason`} data-review-reason><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="not_relevant">{frontendText(locale, "ADMIN_REVIEW_REASON_NOT_RELEVANT")}</SelectItem>
+          <SelectItem value="duplicate">{frontendText(locale, "ADMIN_REVIEW_REASON_DUPLICATE")}</SelectItem>
+          <SelectItem value="unsafe">{frontendText(locale, "ADMIN_REVIEW_REASON_UNSAFE")}</SelectItem>
+        </SelectContent>
       </Select>
     </div>}
     <div className="space-y-2">

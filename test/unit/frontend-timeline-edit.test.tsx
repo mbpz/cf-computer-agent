@@ -4,6 +4,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, forceRemountAppAt, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
+import { chooseValue, fieldValue } from "./helpers/listbox";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const oldVersion = "2026-09-27T00:00:00.000Z", newVersion = "2026-09-27T00:00:00.001Z";
 const row = (fresh = false) => ({ id: "row", projectId: "project", clientKey: "row", kind: "action_item", title: fresh ? "Fresh action" : "Stale action", body: "private notes", status: "open", startsAt: null, dueAt: null, createdAt: oldVersion, updatedAt: fresh ? newVersion : oldVersion });
@@ -16,8 +17,8 @@ describe("timeline content editing through real App", () => {
   const button = (text: string) => [...document.querySelectorAll("button")].find(node => node.textContent === text)!;
   const field = (label: string) => main().querySelector<HTMLInputElement>(`[aria-label="${label}"]`)!;
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); }); }
-  async function fill(label: string, value: string) { const n = field(label); expect(n).toBeTruthy(); if (n.tagName === "SELECT") { await act(async () => { n.value = value; n.dispatchEvent(new app!.browser.Event("change", { bubbles: true })); }); return; } const key = Object.keys(n).find(k => k.startsWith("__reactProps$"))!; await act(async () => (n as any)[key].onChange({ currentTarget: { value } })); }
-  function captured(node: HTMLElement, name = "onClick") { const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!; return (node as any)[key][name]; }
+  async function fill(label: string, value: string) { const n = field(label); expect(n).toBeTruthy(); if (n.getAttribute("aria-haspopup") === "listbox") { await chooseValue(n, value); return; } const key = Object.keys(n).find(k => k.startsWith("__reactProps$"))!; const props = (n as unknown as Record<string, { onChange: (event: { currentTarget: { value: string }; target: { value: string } }) => void }>)[key]; await act(async () => props.onChange({ currentTarget: { value }, target: { value } })); }
+  function captured(node: HTMLElement, name = "onClick"): (...args: unknown[]) => unknown { const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!; return (node as unknown as Record<string, Record<string, (...args: unknown[]) => unknown>>)[key][name]; }
   const confirm = () => document.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
   const keep = () => document.querySelector<HTMLButtonElement>("[data-cancel-action]")!;
   const unload = () => { const event = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(event); return event.defaultPrevented; };
@@ -70,7 +71,7 @@ describe("timeline content editing through real App", () => {
     await mount(); await click(button("Edit timeline item")); await fill(label, value);
     expect(unload()).toBe(true); await click(button("Cancel editing"));
     expect(document.querySelector('[role="alertdialog"]')).toBeTruthy(); expect(document.activeElement).toBe(keep());
-    await click(keep()); expect(field(label).value).toBe(value); expect(writes).toHaveLength(0);
+    await click(keep()); expect(fieldValue(field(label))).toBe(value); expect(writes).toHaveLength(0);
     await click(button("Cancel editing")); const approve = captured(confirm());
     await act(async () => { approve(); approve(); });
     expect(field("Edit title")).toBeNull(); expect(unload()).toBe(false); expect(writes).toHaveLength(0);
@@ -96,14 +97,14 @@ describe("timeline content editing through real App", () => {
   it("protects a same-event edit followed by navigation and rejects captured save during its prompt", async () => {
     await mount(); await click(button("Edit timeline item")); const save = captured(button("Save timeline item"));
     const change = captured(field("Edit title"), "onChange");
-    await act(async () => { change({ currentTarget: { value: "fresh private title" } }); expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"); save(); });
+    await act(async () => { change({ currentTarget: { value: "fresh private title" }, target: { value: "fresh private title" } }); expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"); save(); });
     expect(writes).toHaveLength(0); await click(keep()); expect(field("Edit title").value).toBe("fresh private title");
   });
   it("saves freshest same-event input once and locks captured cancel/edit/navigation before rerender", async () => {
     await mount(); await click(button("Edit timeline item")); let resolve!: (r: Response) => void; patch = () => new Promise(done => { resolve = done; });
     const save = captured(button("Save timeline item")), cancel = captured(button("Cancel editing"));
     const change = captured(field("Edit title"), "onChange");
-    await act(async () => { change({ currentTarget: { value: "fresh private title" } }); save(); save(); cancel(); change({ currentTarget: { value: "too late" } }); expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
+    await act(async () => { change({ currentTarget: { value: "fresh private title" }, target: { value: "fresh private title" } }); save(); save(); cancel(); change({ currentTarget: { value: "too late" }, target: { value: "too late" } }); expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
     expect(writes).toHaveLength(1); expect(writes[0].title).toBe("fresh private title"); expect(field("Edit title").value).toBe("fresh private title"); expect(unload()).toBe(true);
     saved = { ...saved, title: "fresh private title", updatedAt: newVersion };
     await act(async () => resolve(Response.json(saved))); await waitForApp(() => !button("Save timeline item")); expect(unload()).toBe(false);
@@ -111,7 +112,7 @@ describe("timeline content editing through real App", () => {
   it("revalidates same-event invalid input instead of submitting the older valid render", async () => {
     await mount(); await click(button("Edit timeline item")); const save = captured(button("Save timeline item"));
     const change = captured(field("Edit title"), "onChange");
-    await act(async () => { change({ currentTarget: { value: " " } }); save(); });
+    await act(async () => { change({ currentTarget: { value: " " }, target: { value: " " } }); save(); });
     expect(writes).toHaveLength(0); expect(button("Save timeline item").disabled).toBe(true);
   });
   it("keeps the route locked after failed readback removes the editor, until explicit read recovery", async () => {

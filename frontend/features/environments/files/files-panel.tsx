@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
-import { Select } from '../../../components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
 import { Textarea } from '../../../components/ui/textarea';
 import { Dialog, DialogContent, DialogTitle } from '../../../components/ui/dialog';
 import { CloudArrowDown, DownloadSimple, FileText, FolderOpen, ImageSquare, PencilSimple, TextAa, Trash } from '@phosphor-icons/react';
@@ -76,7 +76,7 @@ function FileView({ manager, importer, assetImporter, locale = 'en', onDownload,
       <Button disabled={blocked || state.path === '/'} onClick={() => void manager.load(state.path.slice(0, state.path.lastIndexOf('/')) || '/', 1)}>{t('Up', '上一级')}</Button>
       <Button disabled={blocked} onClick={() => void manager.load()}>{t('Refresh', '刷新')}</Button>
       <Button disabled={blocked} onClick={() => openModal('mkdir')}>{t('New folder', '新建文件夹')}</Button>
-      <label>{t('Upload files', '上传文件')}<Input ref={upload} type="file" multiple disabled={blocked} onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ''; if (files.length) void manager.upload(files); }} /></label>
+      <label>{t('Upload files', '上传文件')}<input ref={upload} type="file" multiple disabled={blocked} className="ml-2 text-sm text-muted-foreground file:mr-2 file:cursor-pointer file:rounded-full file:border file:border-border file:bg-transparent file:px-3 file:py-1.5 file:text-sm file:text-foreground hover:file:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-60" onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ''; if (files.length) void manager.upload(files); }} /></label>
       {state.busy && <Button disabled={state.cancelling} onClick={() => manager.cancel()}>{t('Cancel unsent work', '取消未发送操作')}</Button>}
     </div>
     {prepared?.epoch === state.epoch && <p role="status"><a className="underline" href={prepared.url} download={prepared.name}>{t('Save to this device', '保存到本机')} · {prepared.name}</a> ({prepared.bytes} {t('bytes ready', '字节已就绪')})</p>}
@@ -90,7 +90,7 @@ function FileView({ manager, importer, assetImporter, locale = 'en', onDownload,
       <Button disabled={blocked || state.page <= 1} onClick={() => void manager.load(state.path, state.page - 1)}>{t('Previous', '上一页')}</Button>
       <span>{state.page} / {state.pages} · {state.total}</span>
       <Button disabled={blocked || state.page >= state.pages} onClick={() => void manager.load(state.path, state.page + 1)}>{t('Next', '下一页')}</Button>
-      <Select aria-label={t('Files per page', '每页文件数')} value={state.pageSize} disabled={blocked} onChange={event => void manager.load(state.path, 1, Number(event.target.value) as 20 | 50 | 100)}>{[20, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}</Select>
+      <Select value={String(state.pageSize)} disabled={blocked} onValueChange={value => void manager.load(state.path, 1, Number(value) as 20 | 50 | 100)}><SelectTrigger aria-label={t('Files per page', '每页文件数')} className="w-auto"><SelectValue /></SelectTrigger><SelectContent>{[20, 50, 100].map(size => <SelectItem key={size} value={String(size)}>{size}</SelectItem>)}</SelectContent></Select>
     </nav>
     {!importer&&<p className="text-xs text-muted-foreground">{t('Knowledge submission requires an authenticated app integration; diagnostic previews cannot submit.','知识提交需已认证应用接入；独立诊断预览不可提交。')}</p>}
     {assetImporter&&<><Button disabled={blocked} onClick={()=>void assetImporter.recover()}>{t('Recover pending asset (read only)','恢复未决资产（只读）')}</Button><VmAssetImportPanel model={assetImporter} locale={locale}/></>}
@@ -100,13 +100,13 @@ function FileView({ manager, importer, assetImporter, locale = 'en', onDownload,
       <div className="flex flex-wrap gap-2"><Button data-file-save disabled={state.busy || state.editor.conflict || !state.editor.dirty} onClick={() => void manager.save()}>{t('Save', '保存')}</Button>
         <Button data-file-reload disabled={state.busy} onClick={() => void manager.open(state.editor!.name)}>{t('Reload (discard draft)', '重新加载（丢弃草稿）')}</Button>
         <Button disabled={state.busy} onClick={() => { manager.closeEditor(); setSaveName(''); }}>{t('Discard draft / close', '丢弃草稿 / 关闭')}</Button></div>
-      <label>{t('New copy name', '副本新名称')}<Input disabled={state.busy} value={saveName} onChange={event => setSaveName(event.target.value)} /></label>
+      <label>{t('New copy name', '副本新名称')}<Input disabled={state.busy} value={saveName} onChange={value => setSaveName(value)} /></label>
       <Button data-file-save-as disabled={state.busy || !saveName.trim()} onClick={() => { void manager.saveAs(saveName); setSaveName(''); }}>{t('Save as new file', '另存为新文件')}</Button>
     </div>}
     {!!state.results.length && <ul aria-label={t('Upload results', '上传结果')}>{state.results.map((result, index) => <li key={index}>{result.name} — {result.status} {result.error}</li>)}</ul>}
     <Dialog open={modal?.epoch === state.epoch} onOpenChange={open => { if (!open) { setModal(null); setName(''); } }}><DialogContent aria-labelledby={titleId} dismissLabel={t('Dismiss', '忽略')}>
       <DialogTitle id={titleId}>{modal?.action === 'remove' ? t('Confirm removal', '确认删除') : modal?.action === 'rename' ? t('Rename', '重命名') : t('New folder', '新建文件夹')}</DialogTitle>
-      {modal?.action === 'remove' ? <p>{t('Remove this file or empty directory?', '删除此文件或空目录？')} {modal.name}</p> : <label>{t('Name', '名称')}<Input autoFocus value={name} onChange={event => setName(event.target.value)} /></label>}
+      {modal?.action === 'remove' ? <p>{t('Remove this file or empty directory?', '删除此文件或空目录？')} {modal.name}</p> : <label>{t('Name', '名称')}<Input autoFocus value={name} onChange={value => setName(value)} /></label>}
       <div className="flex gap-2"><Button data-file-confirm disabled={state.busy || (modal?.action !== 'remove' && !name.trim())} onClick={confirm}>{t('Confirm', '确认')}</Button><Button onClick={() => { setModal(null); setName(''); }}>{t('Cancel', '取消')}</Button></div>
     </DialogContent></Dialog>
   </section>;

@@ -45,7 +45,7 @@ describe("parameterized project timeline through real App", () => {
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
   async function fill(text: string) {
     const node = title(); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
-    await act(async () => (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange({ currentTarget: { value: text } }));
+    await act(async () => (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange(({ currentTarget: { value: text }, target: { value: text } }) as never));
   }
   async function navigate(id: string) { await act(async () => { expect(writeWorkspaceHistory("push", `/projects/${id}/timeline`)).toBe("committed"); }); }
   afterEach(async () => { await app?.unmount(); app = undefined; });
@@ -217,7 +217,7 @@ describe("parameterized project timeline through real App", () => {
     await mount(); await fill("Date validation"); const inputs = main().querySelectorAll<HTMLInputElement>('input[type="datetime-local"]');
     const change = async (node: HTMLInputElement, value: string) => {
       const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
-      await act(async () => (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange({ currentTarget: { value } }));
+      await act(async () => (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange(({ currentTarget: { value }, target: { value } }) as never));
     };
     await change(inputs[0], "2026-09-28T12:00"); await change(inputs[1], "2026-09-27T12:00");
     await click(button("Add to timeline")); expect(writes()).toHaveLength(0); expect(title().value).toBe("Date validation");
@@ -240,7 +240,7 @@ describe("parameterized project timeline through real App", () => {
   async function details(value: string) {
     const node = main().querySelector('textarea[aria-label="Details"]')!;
     const prop = Object.keys(node).find(name => name.startsWith("__reactProps$"))!;
-    await act(async () => (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[prop].onChange({ currentTarget: { value } }));
+    await act(async () => (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[prop].onChange(({ currentTarget: { value }, target: { value } }) as never));
   }
   it("keeps an unsent timeline item after refresh without creating", async () => {
     await mount(); await fill("Keep this title"); await details("Keep this note");

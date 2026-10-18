@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { SpacesPage } from "../../frontend/pages/admin/spaces-page";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -80,7 +81,7 @@ describe("space and collection confirmation", () => {
   it("does not replay detached confirmation after denial",async()=>{await mount();await click("Edit space: Space");await submit();const old=button("Confirm changes");await mount({error:"Denied"});await act(async()=>old.click());expect(onManage).not.toHaveBeenCalled();});
   it("shows the server-provided archive impact before confirming an active space archive",async()=>{
     await mount();await click("Edit space: Space");
-    await act(async()=>{const el=document.querySelector("#admin-record-status") as HTMLSelectElement;el.value="disabled";el.dispatchEvent(new browser.Event("change",{bubbles:true}));});
+    await chooseValue(document.querySelector("#admin-record-status"), "disabled");
     await submit();
     expect(onManage).not.toHaveBeenCalled();
     expect(dialog()?.textContent).toContain("Archiving this space removes the listed content from search and reading:");
@@ -100,7 +101,7 @@ describe("space and collection confirmation", () => {
     // A row from before the archive-impact contract carries no impact: the page
     // must keep working and must not fabricate a count for the confirmation.
     await mount({spaces:[{...space,impact:undefined}]});await click("Edit space: Space");
-    await act(async()=>{const el=document.querySelector("#admin-record-status") as HTMLSelectElement;el.value="disabled";el.dispatchEvent(new browser.Event("change",{bubbles:true}));});
+    await chooseValue(document.querySelector("#admin-record-status"), "disabled");
     await submit();
     expect(dialog()?.textContent).not.toContain("Archiving this space removes the listed content from search and reading:");
     expect(dialog()?.textContent).toContain("Active → Disabled");
@@ -110,13 +111,13 @@ describe("space and collection confirmation", () => {
   });
   it("shows all changed space settings before sending the captured command",async()=>{
     await mount();await click("Edit space: Space");await input("admin-record-slug","new-slug");await input("admin-record-description","New description");await input("admin-record-position","8");
-    await act(async()=>{const el=document.querySelector("#admin-record-status") as HTMLSelectElement;el.value="disabled";el.dispatchEvent(new browser.Event("change",{bubbles:true}));});
+    await chooseValue(document.querySelector("#admin-record-status"), "disabled");
     await submit();for(const value of ["space → new-slug","New description","0 → 8","Active → Disabled"]) expect(dialog()?.textContent).toContain(value);
     await click("Confirm changes");expect(onManage.mock.calls[0][0].input).toMatchObject({slug:"new-slug",description:"New description",position:8,status:"disabled"});
   });
   it("shows parent change and collection identity without changing the captured version",async()=>{
     const parent={...collection,id:"parent-2",name:"Parent"};await mount({spaces:[{...space,collections:[collection,parent]}]});await click("Edit collection: Collection");
-    await act(async()=>{const el=document.querySelector("#admin-record-parent") as HTMLSelectElement;el.value="parent-2";el.dispatchEvent(new browser.Event("change",{bubbles:true}));});
+    await chooseValue(document.querySelector("#admin-record-parent"), "parent-2");
     await submit();expect(dialog()?.textContent).toContain("No parent (root) → parent-2");await click("Confirm changes");expect(onManage.mock.calls[0][0]).toMatchObject({collectionId:"collection-1",input:{parentId:"parent-2",expectedUpdatedAt:"2026-09-28T00:00:00.000Z"}});
   });
   it("does not abandon an in-flight confirmed write",async()=>{onManage.mockImplementation(()=>new Promise(()=>{}));await mount();await click("Edit space: Space");await input("admin-record-name","Draft");await submit();await click("Confirm changes");expect(button("Cancel").disabled).toBe(true);await click("Cancel");expect(document.querySelector("form")).toBeTruthy();expect(onManage).toHaveBeenCalledTimes(1);});

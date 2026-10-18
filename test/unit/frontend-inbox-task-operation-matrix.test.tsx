@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { forceRemountAppAt, mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { chooseValue } from "./helpers/listbox";
 import type { TaskDetail, TaskSubtask, TaskDependency } from "../../frontend/lib/tasks-data";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 
@@ -82,13 +83,17 @@ describe.each(operations)("Inbox target editor $op journey", operation => {
   }
   async function enter() {
     if (operation.field) {
-      const input = app!.browser.document.querySelector(`input[aria-label="${operation.field}"], select[aria-label="${operation.field}"]`) as unknown as HTMLInputElement;
-      expect(input).toBeTruthy();
+      const field = app!.browser.document.querySelector<HTMLElement>(`input[aria-label="${operation.field}"], button[aria-haspopup="listbox"][aria-label="${operation.field}"]`);
+      expect(field).toBeTruthy();
+      if (field!.getAttribute("aria-haspopup") === "listbox") { await chooseValue(field, operation.value!); return; }
+      const input = field as HTMLInputElement;
       const props = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
+      // React stores the element's latest props under a private key; this suite
+      // reads them to drive a same-event edit the way the controlled input does.
+      const latest = (input as unknown as Record<string, { onChange(event: { currentTarget: HTMLInputElement; target: HTMLInputElement }): void }>)[props];
       await act(async () => {
         input.value = operation.value!;
-        if (input.tagName === "SELECT") input.dispatchEvent(new app!.browser.Event("change", { bubbles: true }) as unknown as Event);
-        else (input as any)[props].onChange({ currentTarget: input });
+        latest.onChange({ currentTarget: input, target: input });
       });
     }
   }

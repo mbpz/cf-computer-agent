@@ -6,6 +6,8 @@ import { xhrUploadRequester } from "../../lib/asset-upload-transport";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { AssetDropzone } from "./asset-dropzone";
 import { Textarea } from "../ui/textarea";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
 
 const idleState: AssetWorkflowState = { kind: "idle", busy: false, uploading: false, progress: null };
 const errorKeys: Record<AssetWorkflowError, string> = { storage: "ASSET_FLOW_STORAGE", validation: "SUBMIT_ASSET_INVALID", different_file: "ASSET_FLOW_DIFFERENT", request: "ASSET_FLOW_ERROR", cancel_conflict: "ASSET_FLOW_CANCEL_CONFLICT", not_ready: "ASSET_FLOW_NOT_READY", alternative_unavailable: "ASSET_ALTERNATIVE_UNAVAILABLE" };
@@ -35,11 +37,11 @@ export function AssetUploadView({ maxBytes, title, locale, fileState, urlState, 
     <form data-asset-url-form className="space-y-2 text-sm" onSubmit={event => { event.preventDefault(); onCreateUrl(url); }}>
       <p className="font-medium">{text("ASSET_URL_TITLE")}</p>
       <label className="block" htmlFor="asset-url-input">{text("ASSET_URL_LABEL")}
-        <input id="asset-url-input" data-asset-url-input type="url" inputMode="url" maxLength={2048} value={url} disabled={state.busy} className="mt-1 w-full rounded-md border px-2 py-1" onChange={event => setUrl(event.target.value)} />
+        <Input className="mt-1" id="asset-url-input" data-asset-url-input type="url" inputMode="url" maxLength={2048} value={url} disabled={state.busy} onChange={setUrl} />
       </label>
-      <button type="submit" data-asset-url-submit disabled={state.busy || state.error === "storage"} className="rounded-md border px-3 py-2">{text("ASSET_URL_SUBMIT")}</button>
+      <Button variant="outline" size="sm" type="submit" data-asset-url-submit disabled={state.busy || state.error === "storage"} className="max-lg:min-h-11">{text("ASSET_URL_SUBMIT")}</Button>
       <p data-asset-url-status={urlStatusKey} className="text-muted-foreground">{text(urlStatusKey)}</p>
-      {usingUrl && (urlState.kind === "unknown" || urlState.kind === "missing") && urlState.error !== "storage" && <button type="button" data-asset-url-retry disabled={state.busy} className="rounded-md border px-3 py-2" onClick={onRefresh}>{text("ASSET_URL_RECHECK")}</button>}
+      {usingUrl && (urlState.kind === "unknown" || urlState.kind === "missing") && urlState.error !== "storage" && <Button variant="outline" size="sm" type="button" data-asset-url-retry disabled={state.busy} className="max-lg:min-h-11" onClick={onRefresh}>{text("ASSET_URL_RECHECK")}</Button>}
     </form>
     <div role="status" aria-live="polite" className="space-y-2 text-sm">
       {state.intent && <p className="break-words">{state.intent.file?.name ?? state.intent.source?.url}{state.intent.review ? ` — ${state.intent.review.title}` : ""}</p>}
@@ -57,14 +59,14 @@ export function AssetUploadView({ maxBytes, title, locale, fileState, urlState, 
       {job === "succeeded" && <a data-asset-parsed-link className="underline" href={assetDownloadHref(state.record.asset.id, "parsed")}>{text("ASSET_PARSED_DOWNLOAD")}</a>}
     </div>}
     <div className="flex flex-wrap gap-2">
-      {state.uploading && <button type="button" data-asset-stop className="rounded-md border px-3 py-2 text-sm" onClick={onStop}>{text("ASSET_FLOW_STOP")}</button>}
-      {state.intent && <button type="button" data-asset-refresh disabled={state.busy || state.error === "storage"} className="rounded-md border px-3 py-2 text-sm" onClick={onRefresh}>{text("ASSET_FLOW_REFRESH")}</button>}
+      {state.uploading && <Button variant="outline" size="sm" type="button" data-asset-stop className="max-lg:min-h-11" onClick={onStop}>{text("ASSET_FLOW_STOP")}</Button>}
+      {state.intent && <Button variant="outline" size="sm" type="button" data-asset-refresh disabled={state.busy || state.error === "storage"} className="max-lg:min-h-11" onClick={onRefresh}>{text("ASSET_FLOW_REFRESH")}</Button>}
       {(job === "queued" || job === "failed_retryable") && <>
-        <button type="button" data-asset-parse disabled={state.busy || state.error === "storage"} className="rounded-md border px-3 py-2 text-sm" onClick={onParse}>{text("ASSET_FLOW_PARSE")}</button>
-        <button type="button" data-asset-cancel disabled={state.busy || state.error === "storage"} className="rounded-md border px-3 py-2 text-sm" onClick={onCancel}>{text("ASSET_FLOW_CANCEL")}</button>
+        <Button variant="outline" size="sm" type="button" data-asset-parse disabled={state.busy || state.error === "storage"} className="max-lg:min-h-11" onClick={onParse}>{text("ASSET_FLOW_PARSE")}</Button>
+        <Button variant="outline" size="sm" type="button" data-asset-cancel disabled={state.busy || state.error === "storage"} className="max-lg:min-h-11" onClick={onCancel}>{text("ASSET_FLOW_CANCEL")}</Button>
       </>}
-      {job === "failed_terminal" && <button type="button" data-asset-release disabled={state.busy || state.error === "storage"} className="rounded-md border px-3 py-2 text-sm" onClick={onRelease}>{text("ASSET_FLOW_RELEASE")}</button>}
-      {job === "succeeded" && <button type="button" data-asset-submit disabled={state.busy || state.error === "storage" || (!state.intent?.review && !title.trim())} className="rounded-md border px-3 py-2 text-sm" onClick={onSubmit}>{text("ASSET_FLOW_SUBMIT")}</button>}
+      {job === "failed_terminal" && <Button variant="outline" size="sm" type="button" data-asset-release disabled={state.busy || state.error === "storage"} className="max-lg:min-h-11" onClick={onRelease}>{text("ASSET_FLOW_RELEASE")}</Button>}
+      {job === "succeeded" && <Button variant="outline" size="sm" type="button" data-asset-submit disabled={state.busy || state.error === "storage" || (!state.intent?.review && !title.trim())} className="max-lg:min-h-11" onClick={onSubmit}>{text("ASSET_FLOW_SUBMIT")}</Button>}
     </div>
     {(job === "failed_retryable" || job === "failed_terminal") && <form data-asset-alternative-form className="space-y-2 text-sm" onSubmit={event => { event.preventDefault(); onAlternative(alternative); }}>
       <p className="font-medium">{text("ASSET_ALTERNATIVE_TITLE")}</p>
@@ -73,7 +75,7 @@ export function AssetUploadView({ maxBytes, title, locale, fileState, urlState, 
         <Textarea id="asset-alternative-input" data-asset-alternative-input rows={4} value={alternative} disabled={state.busy} className="mt-1" onChange={event => setAlternative(event.target.value)} />
       </label>
       {alternativeErrorKey && <p role="alert" data-asset-alternative-error className="text-destructive">{text(alternativeErrorKey)}</p>}
-      <button type="submit" data-asset-alternative-submit disabled={state.busy || state.error === "storage" || !alternative.trim() || !title.trim()} className="rounded-md border px-3 py-2">{text("ASSET_ALTERNATIVE_SUBMIT")}</button>
+      <Button variant="outline" size="sm" type="submit" data-asset-alternative-submit disabled={state.busy || state.error === "storage" || !alternative.trim() || !title.trim()} className="max-lg:min-h-11">{text("ASSET_ALTERNATIVE_SUBMIT")}</Button>
     </form>}
   </div>;
 }

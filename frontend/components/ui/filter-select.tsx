@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Combobox, ComboboxContent, ComboboxItem, ComboboxList, ComboboxTrigger } from "../motion/combobox";
 import { cn } from "../../lib/utils";
+import { Button } from "./button";
 
 /**
  * The one filter control for page toolbars, built on beUI's `combobox` so every queue
@@ -51,7 +52,7 @@ export function FilterSelect({ label, ariaLabel, value, options, onChange, disab
         <ComboboxTrigger
           keyboard="trigger"
           label={ariaLabel}
-          render={<button type="button" disabled={disabled} className="h-11 w-auto min-w-32 max-w-64" />}
+          render={<Button type="button" variant="outline" size="sm" disabled={disabled} className="h-11 w-auto min-w-32 max-w-64 justify-between font-normal" />}
         >
           <span className="min-w-0 truncate">{selected?.label}</span>
         </ComboboxTrigger>

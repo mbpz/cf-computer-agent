@@ -258,7 +258,7 @@ export function GraphPage({ locale, state, memberId, query = "", lens = "workspa
         <CardHeader><CardTitle>{frontendText(locale, "GRAPH_LENS_TITLE")}</CardTitle></CardHeader>
         <CardContent>
           <FilterDisclosure label={frontendText(locale, "COMMON_FILTERS")} appliedCount={appliedFilters.length} rowClassName="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_12rem_12rem]">
-            <Input data-graph-query aria-label={frontendText(locale, "GRAPH_QUERY_LABEL")} placeholder={frontendText(locale, "GRAPH_QUERY_PLACEHOLDER")} value={query} onChange={(event) => onQueryChange?.(event.currentTarget.value)} />
+            <Input data-graph-query aria-label={frontendText(locale, "GRAPH_QUERY_LABEL")} placeholder={frontendText(locale, "GRAPH_QUERY_PLACEHOLDER")} value={query} onChange={(value) => onQueryChange?.(value)} />
             <FilterSelect label={frontendText(locale, "GRAPH_LENS_LABEL")} ariaLabel={frontendText(locale, "GRAPH_LENS_LABEL")} value={lens} onChange={(value) => onLensChange?.(value as GraphLens)} options={lensOptions} />
             <FilterSelect label={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} ariaLabel={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} value={temporalRange} onChange={(value) => onTemporalRangeChange?.(value as GraphTemporalRange)} options={temporalRangeOptions} />
             <FilterSelect label={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} ariaLabel={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} value={changeKind} onChange={(value) => onChangeKindChange?.(value as NonNullable<GraphPageProps["changeKind"]>)} options={changeKindOptions} />

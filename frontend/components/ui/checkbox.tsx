@@ -1,17 +1,58 @@
-import * as React from "react";
-import { cn } from "../../lib/utils";
-
-export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {}
+import { Checkbox as BeuiCheckbox } from "../motion/checkbox";
 
 /**
- * The app's checkbox, drawn in beUI's checkbox geometry (`motion/checkbox.tsx`):
- * a 20px box with the primary accent and the same ring + offset focus. It stays a
- * native input on purpose — call sites bind `checked`/`onChange` and pass their
- * `data-*` hooks, and the suites that drive them assert a real `input[type=checkbox]`
- * (`test/unit/frontend-review-batch.test.tsx`, `test/unit/frontend-admin-asset-hygiene.test.tsx`).
- * `motion/checkbox` is the animated control for surfaces that own their own state;
- * it takes `checked`/`onCheckedChange` and forwards no arbitrary props.
+ * The app's one checkbox: beUI's `motion/checkbox`, re-exported so call sites
+ * keep a `checked` / `onCheckedChange` contract instead of binding a native
+ * `input[type=checkbox]`. The payload renders a `button[role=checkbox]` with
+ * `aria-checked` and the animated tick, so a selection is announced by its role
+ * and state rather than by a form control.
+ *
+ * The payload spreads no arbitrary props, so the `data-*` hooks the suites and
+ * the layout use settle on one wrapper element around it. Everything else —
+ * the visible `label`, the `description` under it, `aria-label` and
+ * `aria-describedby` — goes to the payload, which names the control from the
+ * text it renders.
  */
-export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox({ className, ...props }, ref) {
-  return <input ref={ref} type="checkbox" className={cn("size-5 shrink-0 cursor-pointer rounded-md accent-primary transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60", className)} {...props} />;
-});
+export interface CheckboxProps {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  disabled?: boolean;
+  /** Visible label beside the box; also the control's accessible name. */
+  label?: string;
+  /** Supporting text under the label, announced as the description. */
+  description?: string;
+  id?: string;
+  className?: string;
+  "aria-label"?: string;
+  "aria-describedby"?: string;
+  [key: `data-${string}`]: string | number | boolean | undefined;
+}
+
+export function Checkbox({
+  checked,
+  onCheckedChange,
+  disabled,
+  label,
+  description,
+  id,
+  className,
+  "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedBy,
+  ...data
+}: CheckboxProps) {
+  return (
+    <span {...data}>
+      <BeuiCheckbox
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        disabled={disabled}
+        label={label}
+        description={description}
+        id={id}
+        className={className}
+        aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
+      />
+    </span>
+  );
+}

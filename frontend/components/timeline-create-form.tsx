@@ -7,7 +7,7 @@ import type { TimelineCreateIntent, ProjectTimelineKind } from "../lib/projects-
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
-import { Select } from "./ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { loadTimelineIntent, saveTimelineIntent, acknowledgeTimelineIntent, clearTimelineIntent } from "../lib/timeline-create-intent";
 import { discardBlockedTimelineDraft, loadTimelineDraft, persistTimelineDraft } from "../lib/timeline-draft";
@@ -144,22 +144,25 @@ export function TimelineCreateForm({ locale, createMemberId, createProjectId, pe
       <fieldset disabled={locked} className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1 text-sm">
           <span>{frontendText(locale, "PROJECT_TIMELINE_KIND")}</span>
-          <Select disabled={locked} value={kind} onChange={(event) => draft.edit("kind", event.currentTarget.value as ProjectTimelineKind)}>
-            <option value="meeting">{frontendText(locale, "PROJECT_TIMELINE_KIND_MEETING")}</option>
-            <option value="decision">{frontendText(locale, "PROJECT_TIMELINE_KIND_DECISION")}</option>
-            <option value="action_item">{frontendText(locale, "PROJECT_TIMELINE_KIND_ACTION")}</option>
-            <option value="milestone">{frontendText(locale, "PROJECT_TIMELINE_KIND_MILESTONE")}</option>
+          <Select disabled={locked} value={kind} onValueChange={(value) => draft.edit("kind", value as ProjectTimelineKind)}>
+            <SelectTrigger aria-label={frontendText(locale, "PROJECT_TIMELINE_KIND")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="meeting">{frontendText(locale, "PROJECT_TIMELINE_KIND_MEETING")}</SelectItem>
+              <SelectItem value="decision">{frontendText(locale, "PROJECT_TIMELINE_KIND_DECISION")}</SelectItem>
+              <SelectItem value="action_item">{frontendText(locale, "PROJECT_TIMELINE_KIND_ACTION")}</SelectItem>
+              <SelectItem value="milestone">{frontendText(locale, "PROJECT_TIMELINE_KIND_MILESTONE")}</SelectItem>
+            </SelectContent>
           </Select>
         </label>
-        <Input disabled={locked} aria-label={frontendText(locale, "PROJECT_TIMELINE_TITLE_FIELD")} value={title} onChange={(event) => draft.edit("title", event.currentTarget.value)} placeholder={frontendText(locale, "PROJECT_TIMELINE_TITLE_PLACEHOLDER")} />
+        <Input disabled={locked} aria-label={frontendText(locale, "PROJECT_TIMELINE_TITLE_FIELD")} value={title} onChange={(value) => draft.edit("title", value)} placeholder={frontendText(locale, "PROJECT_TIMELINE_TITLE_PLACEHOLDER")} />
         <Textarea disabled={locked} className="md:col-span-2" aria-label={frontendText(locale, "PROJECT_TIMELINE_BODY_FIELD")} value={body} onChange={(event) => draft.edit("body", event.currentTarget.value)} placeholder={frontendText(locale, "PROJECT_TIMELINE_BODY_PLACEHOLDER")} rows={3} />
         <label className="space-y-1 text-sm">
           <span>{frontendText(locale, "PROJECT_TIMELINE_STARTS_AT")}</span>
-          <Input disabled={locked} type="datetime-local" value={startsAt} onChange={(event) => draft.edit("startsAt", event.currentTarget.value)} />
+          <Input disabled={locked} type="datetime-local" value={startsAt} onChange={(value) => draft.edit("startsAt", value)} />
         </label>
         <label className="space-y-1 text-sm">
           <span>{frontendText(locale, "PROJECT_TIMELINE_DUE_AT")}</span>
-          <Input disabled={locked} type="datetime-local" value={dueAt} onChange={(event) => draft.edit("dueAt", event.currentTarget.value)} />
+          <Input disabled={locked} type="datetime-local" value={dueAt} onChange={(value) => draft.edit("dueAt", value)} />
         </label>
         <div className="md:col-span-2"><Button type="button" onClick={() => void submit()} disabled={locked || !title.trim() || !onCreate}>{frontendText(locale, "PROJECT_TIMELINE_CREATE")}</Button></div>
       </fieldset>

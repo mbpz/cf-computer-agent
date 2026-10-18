@@ -27,11 +27,11 @@ describe("search query draft ownership", () => {
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
   }
   function input() { return document.querySelector('[data-saved-view-controls] input') as HTMLInputElement; }
-  function edit(value: string) { props<{ onChange: (event: unknown) => void }>(input()).onChange({ currentTarget: { value } }); }
+  function edit(value: string) { props<{ onChange: (event: unknown) => void }>(input()).onChange(({ currentTarget: { value }, target: { value } }) as never); }
   function submit() { document.querySelector('[data-saved-view-controls] form')!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); }
   async function click(selector: string) { const button = document.querySelector(selector) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => { button.click(); await new Promise(resolve => setTimeout(resolve, 20)); }); }
   function queryInput() { return document.querySelector("#knowledge-search") as HTMLInputElement; }
-  function editQuery(value: string) { props<{ onChange: (event: unknown) => void }>(queryInput()).onChange({ currentTarget: { value } }); }
+  function editQuery(value: string) { props<{ onChange: (event: unknown) => void }>(queryInput()).onChange(({ currentTarget: { value }, target: { value } }) as never); }
   function searchSubmit() { queryInput().closest("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); }
   function unloadWarns() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
   it("does not append duplicate history entries for synchronous repeated submits", async () => {
@@ -111,7 +111,7 @@ describe("search query draft ownership", () => {
     const deleteClick = props<{ onClick: () => void }>(document.querySelector('button[aria-label="Delete saved view: Docs"]') as HTMLElement).onClick;
     await act(async () => editQuery("unsent"));
     await act(async () => writeWorkspaceHistory("push", "/knowledge"));
-    await act(async () => { nameEdit({ currentTarget: { value: "blocked name" } }); savedSubmit({ preventDefault() {} }); deleteClick(); editQuery("late"); searchSubmit(); });
+    await act(async () => { nameEdit({ currentTarget: { value: "blocked name" }, target: { value: "blocked name" } }); savedSubmit({ preventDefault() {} }); deleteClick(); editQuery("late"); searchSubmit(); });
     expect(writes).toBe(0); expect(input().value).toBe(""); expect(queryInput().value).toBe("unsent"); expect(browser.location.pathname).toBe("/search");
     await click("[data-cancel-action]"); expect(queryInput().value).toBe("unsent");
   });
@@ -120,7 +120,7 @@ describe("search query draft ownership", () => {
     const oldEdit = props<{ onChange: (event: unknown) => void }>(queryInput()).onChange;
     const oldSubmit = props<{ onSubmit: (event: unknown) => void }>(queryInput().closest("form")!).onSubmit;
     await act(async () => root.render(<SearchRoute memberId="member-b" locale={createLocaleRuntime({ navigatorLanguage: "en" })} search={browser.location.search} />));
-    await act(async () => { oldEdit({ currentTarget: { value: "late a" } }); oldSubmit({ preventDefault() {} }); });
+    await act(async () => { oldEdit({ currentTarget: { value: "late a" }, target: { value: "late a" } }); oldSubmit({ preventDefault() {} }); });
     expect(browser.location.search).toBe("?q=docs"); expect(queryInput().value).toBe("docs"); expect(unloadWarns()).toBe(false);
   });
   it("confirms unsent query discard before applying a saved view and uses the applied view as baseline", async () => {
@@ -180,7 +180,7 @@ describe("search query draft ownership", () => {
     expect(unloadWarns()).toBe(false);
   });
   function filterInput(selector: string) { return document.querySelector(selector) as HTMLInputElement; }
-  function editFilter(selector: string, value: string) { props<{ onChange: (event: unknown) => void }>(filterInput(selector)).onChange({ currentTarget: { value } }); }
+  function editFilter(selector: string, value: string) { props<{ onChange: (event: unknown) => void }>(filterInput(selector)).onChange(({ currentTarget: { value }, target: { value } }) as never); }
   async function submitFilters() { await act(async () => { document.querySelector("[data-search-filters]")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); await new Promise(resolve => setTimeout(resolve, 20)); }); }
   async function chooseKind(optionLabel: string) {
     const trigger = [...document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find((node) => node.querySelector(".sr-only")?.textContent === "Type");

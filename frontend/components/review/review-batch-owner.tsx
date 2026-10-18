@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Label } from "../ui/label";
-import { Select, SelectOption } from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import {
   BATCH_REJECT_REASON_CODES, BATCH_REVISION_REASON_CODE, batchScope, failedRetryActions, planBatchActions,
@@ -230,8 +230,11 @@ export function ReviewBatchToolbar({ batch, rows, page, pageSize, locale }: {
         {batch.decision === "reject"
           ? <div className="space-y-1">
             <Label htmlFor={reasonId}>{frontendText(locale, "SUBMISSIONS_REVIEW_REASON")}</Label>
-            <Select id={reasonId} data-batch-reason value={batch.reasonCode} disabled={frozen} aria-label={frontendText(locale, "SUBMISSIONS_REVIEW_REASON")} onChange={(event) => batch.setReasonCode(event.target.value)}>
-              {BATCH_REJECT_REASON_CODES.map((code) => <SelectOption key={code} value={code}>{frontendText(locale, `ADMIN_REVIEW_REASON_${code.toUpperCase()}`)}</SelectOption>)}
+            <Select value={batch.reasonCode} disabled={frozen} onValueChange={(value) => batch.setReasonCode(value)}>
+              <SelectTrigger id={reasonId} data-batch-reason aria-label={frontendText(locale, "SUBMISSIONS_REVIEW_REASON")}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {BATCH_REJECT_REASON_CODES.map((code) => <SelectItem key={code} value={code}>{frontendText(locale, `ADMIN_REVIEW_REASON_${code.toUpperCase()}`)}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
           : <p data-batch-reason-fixed className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_REASON_NEEDS_REVISION")}</p>}

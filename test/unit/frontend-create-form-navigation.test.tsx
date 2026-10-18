@@ -8,6 +8,7 @@ import { CalendarCreateForm } from "../../frontend/components/calendar-create-fo
 import { TimelineCreateForm } from "../../frontend/components/timeline-create-form";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory, registerWorkspaceLeaveGuard } from "../../frontend/lib/workspace-location";
+import { chooseValue, fieldValue } from "./helpers/listbox";
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
 vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
@@ -35,7 +36,7 @@ describe.each(variants)("%s create form navigation", variant => {
   function change(node: HTMLInputElement | HTMLTextAreaElement, value: string) {
     node.value = value;
     const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!;
-    if (key) (node as any)[key].onChange({ currentTarget: node });
+    if (key) (node as any)[key].onChange(({ currentTarget: node, target: node }) as never);
     else node.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
   }
   async function fill() {
@@ -47,7 +48,7 @@ describe.each(variants)("%s create form navigation", variant => {
       }
     });
   }
-  function submitButton() { return [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => !b.hasAttribute('data-cancel-action') && !b.hasAttribute('data-confirm-action'))!; }
+  function submitButton() { return [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => !b.hasAttribute('data-cancel-action') && !b.hasAttribute('data-confirm-action') && !b.hasAttribute('aria-haspopup') && !b.hasAttribute('role'))!; }
   async function nav(expected: string) { await act(async () => expect(writeWorkspaceHistory("push", "/target")).toBe(expected)); }
   it("protects same-event input and cancels without changing URL or draft", async () => {
     await mount();
@@ -114,8 +115,8 @@ describe.each(variants)("%s create form navigation", variant => {
   it("protects every editable field, and reverting to defaults leaves no dirty state", async () => {
     await mount();
     if (variant === "inbox") {
-      const select = container.querySelector('select')!;
-      await act(async () => change(select as any, "link"));
+      const kind = container.querySelector<HTMLElement>('button[aria-haspopup="listbox"]')!;
+      await chooseValue(kind, "link");
       await nav("deferred");
       await act(async () => document.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
       const link = container.querySelector<HTMLInputElement>('input')!;
@@ -123,14 +124,16 @@ describe.each(variants)("%s create form navigation", variant => {
       await nav("deferred");
       await act(async () => document.querySelector<HTMLButtonElement>('[data-confirm-action]')!.click());
     }
-    const controls = [...container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select')];
+    const controls = [...container.querySelectorAll<HTMLElement>('input, textarea, button[aria-haspopup="listbox"]')];
     for (const node of controls) {
-      const baseline = node.value;
-      const value = node.tagName === "SELECT" ? [...(node as HTMLSelectElement).options].find(option => option.value !== baseline)!.value
-        : node.type === "datetime-local" ? "2026-10-03T09:00" : "Field-only draft";
-      await act(async () => change(node as any, value)); await nav("deferred");
+      const picker = node.getAttribute("aria-haspopup") === "listbox";
+      const baseline = picker ? fieldValue(node) : (node as HTMLInputElement).value;
+      const value = picker ? [...node.parentElement!.querySelectorAll<HTMLElement>('[role="option"]')].map(option => option.getAttribute("data-value")!).find(option => option !== baseline)!
+        : (node as HTMLInputElement).type === "datetime-local" ? "2026-10-03T09:00" : "Field-only draft";
+      if (picker) await chooseValue(node, value); else await act(async () => change(node as HTMLInputElement | HTMLTextAreaElement, value));
+      await nav("deferred");
       await act(async () => document.querySelector<HTMLButtonElement>('[data-cancel-action]')!.click());
-      await act(async () => change(node as any, baseline));
+      if (picker) await chooseValue(node, baseline); else await act(async () => change(node as HTMLInputElement | HTMLTextAreaElement, baseline));
       const clean = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(clean);
       expect(clean.defaultPrevented).toBe(false);
     }

@@ -14,6 +14,7 @@ import {
 import { BoardsPage } from "../../frontend/pages/boards/boards-page";
 import { taskStatusKey } from "../../frontend/pages/tasks/tasks-model";
 import type { TaskItem } from "../../frontend/lib/tasks-data";
+import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -120,10 +121,11 @@ describe("task-backed boards page", () => {
     const html = renderToStaticMarkup(<BoardsPage locale={locale} columns={columns} actionPendingId="task-alpha" onLoadMore={vi.fn()} onStatusChange={vi.fn()} onRetry={vi.fn()} />);
 
     expect(html).toContain('aria-label="Move Alpha from Doing"');
-    expect(html).toContain('<option value="todo">To do</option>');
-    expect(html).toContain('<option value="blocked">Blocked</option>');
-    expect(html).toContain('<option value="done">Done</option>');
-    expect(html).toContain('<option value="canceled">Canceled</option>');
+    // Each legal target is a beUI listbox option carrying both its value hook and its label.
+    expect(html).toMatch(/data-value="todo"[^>]*>To do<\/button>/);
+    expect(html).toMatch(/data-value="blocked"[^>]*>Blocked<\/button>/);
+    expect(html).toMatch(/data-value="done"[^>]*>Done<\/button>/);
+    expect(html).toMatch(/data-value="canceled"[^>]*>Canceled<\/button>/);
     expect(html).toContain("disabled");
     expect(html).not.toContain("draggable=");
   });
@@ -177,8 +179,8 @@ describe("boards paging surface", () => {
     expect(todo.textContent).toContain("1–20");
     await act(async () => (todo.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
     expect(onPageChange).toHaveBeenCalledWith("todo", 2);
-    const select = todo.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
-    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLSelectElement.prototype, "value")!.set!.call(select, "50"); select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    const sizeTrigger = todo.querySelector('button[aria-haspopup="listbox"][aria-label="Rows per page"]');
+    await chooseValue(sizeTrigger, "50");
     expect(onPageSizeChange).toHaveBeenCalledWith("todo", 50);
     expect(container.querySelectorAll("[data-pagination-desktop]")).toHaveLength(4);
   });

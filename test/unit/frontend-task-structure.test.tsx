@@ -69,7 +69,7 @@ describe("task subtasks and dependencies", () => {
     const node = container.querySelector(`[aria-label="${label}"]`) as HTMLInputElement;
     expect(node, label).toBeTruthy();
     const key = Object.keys(node).find((item) => item.startsWith("__reactProps$"))!;
-    await act(async () => { node.value = value; (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange({ currentTarget: node }); });
+    await act(async () => { node.value = value; (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange(({ currentTarget: node, target: node }) as never); });
   }
 
   it("adds a subtask with one id and removes it with the subtask version", async () => {

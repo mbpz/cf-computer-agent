@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { shareKnowledgeItem } from "../../lib/system-share";
+import { Button } from "../ui/button";
 
 export interface KnowledgeCardItem { id: string; title?: string; summary?: string; publishedAt?: string; tags?: string[]; }
 
@@ -28,5 +29,5 @@ export function KnowledgeShareButton({ item, locale }: { item: KnowledgeCardItem
       if (shareOwner.current === owner) shareOwner.current = null;
     }
   };
-  return <span className="flex flex-wrap items-center gap-2"><button type="button" className="inline-flex min-h-6 items-center px-1 text-xs font-medium text-primary hover:underline" disabled={shareState === "pending"} aria-busy={shareState === "pending"} onClick={() => void share()}>{frontendText(locale, shareState === "pending" ? "KNOWLEDGE_SHARE_PENDING" : "KNOWLEDGE_SHARE_ACTION")}</button>{shareState === "shared" && <span role="status" className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_SHARE_DONE")}</span>}{shareState === "unavailable" && <span role="status" className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_SHARE_UNAVAILABLE")}</span>}</span>;
+  return <span className="flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" size="sm" className="inline-flex min-h-6 items-center px-1 text-xs font-medium text-primary hover:text-primary hover:underline max-lg:min-h-11" disabled={shareState === "pending"} aria-busy={shareState === "pending"} onClick={() => void share()}>{frontendText(locale, shareState === "pending" ? "KNOWLEDGE_SHARE_PENDING" : "KNOWLEDGE_SHARE_ACTION")}</Button>{shareState === "shared" && <span role="status" className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_SHARE_DONE")}</span>}{shareState === "unavailable" && <span role="status" className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_SHARE_UNAVAILABLE")}</span>}</span>;
 }

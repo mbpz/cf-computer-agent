@@ -16,6 +16,18 @@ const featureCopy: Record<FeatureId, { title: LandingCopyKey; description: Landi
   updates: { title: "UPDATES_TITLE", description: "UPDATES_DESCRIPTION" },
 };
 
+// The panel body owns the prose rhythm: the copy inside a feature is untagged
+// data, so headings and paragraphs are styled from their parent, not per node.
+const panelBody = "workbench-feature-panel-body [&_h2]:mt-0 [&_h2]:mb-4 [&_h3]:my-3 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:leading-6 [&_p]:my-3 [&_button:not([data-demo-action=close])]:h-auto [&_button:not([data-demo-action=close])]:whitespace-normal [&_button:not([data-demo-action=close])]:text-pretty";
+const mutedText = "text-[.9375rem] text-muted-foreground";
+const demoBadge = "text-[.8125rem] font-[550] text-primary";
+const panelContent = "mt-6";
+const sampleCard = "my-4 p-[1.125rem] shadow-none";
+// The citation rail keeps its accent border in the stylesheet: `globals.css`
+// applies `* { border-color: var(--border) }` unlayered, which outranks every
+// `border-*` utility, so only a plain rule (or `!`) can paint another colour.
+const sourceArticle = "workbench-source text-[.9375rem] [overflow-wrap:anywhere] [&_mark]:bg-accent [&_mark]:text-accent-foreground [&_mark]:box-decoration-clone [&_mark]:[-webkit-box-decoration-break:clone]";
+
 export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
   locale: LocaleRuntime; state: DemoState; dispatch: Dispatch<DemoEvent>;
 }) {
@@ -79,21 +91,21 @@ export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
   return <Sheet open={active} onOpenChange={open => { if (!open) close(); }}>
     <SheetContent side="right" ariaLabel={text("GUIDE_LABEL")} className="workbench-feature-panel"
       backdropClassName="workbench-landing-overlay">
-    <div ref={focusRef} className="workbench-feature-panel-body" tabIndex={-1}
+    <div ref={focusRef} className={panelBody} tabIndex={-1}
       aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}>
-      <header className="workbench-panel-header">
-        <p className="workbench-demo-badge">{text("DEMO_BADGE")}</p>
+      <header className="mb-6 flex items-start justify-between gap-4 [&>p]:mt-2 [&>button]:shrink-0">
+        <p className={demoBadge}>{text("DEMO_BADGE")}</p>
         <Button variant="ghost" size="icon" data-demo-action="close" aria-label={text("CLOSE_PANEL")} onClick={close}>
           <X size={20} aria-hidden="true" />
         </Button>
       </header>
       {showingCitation && source && citation ? <>
-        <Button variant="ghost" className="workbench-back" data-demo-action="citation-back" onClick={() => dispatch({ type: "citation-back" })}>
+        <Button variant="ghost" className="mb-4 px-0" data-demo-action="citation-back" onClick={() => dispatch({ type: "citation-back" })}>
           <ArrowLeft size={16} aria-hidden="true" />{text("BACK_TO_ANSWER")}
         </Button>
         <h2 id={`${id}-title`} ref={citationHeading} data-citation-heading tabIndex={-1}>{source.title}</h2>
-        <p id={`${id}-description`} className="workbench-muted">{text("PARAGRAPH_LABEL")}: {citation.paragraphId}</p>
-        <article className="workbench-source" data-source-id={source.id}>
+        <p id={`${id}-description`} className={mutedText}>{text("PARAGRAPH_LABEL")}: {citation.paragraphId}</p>
+        <article className={sourceArticle} data-source-id={source.id}>
           {source.paragraphs.map(paragraph => <p key={paragraph.id} data-paragraph-id={paragraph.id}
             data-cited={paragraph.id === citation.paragraphId || undefined}>
             {paragraph.id === citation.paragraphId ? <mark>{paragraph.text}</mark> : paragraph.text}
@@ -101,43 +113,43 @@ export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
         </article>
       </> : <>
         <h2 id={`${id}-title`}>{text(labels.title)}</h2>
-        <p id={`${id}-description`} className="workbench-muted">{text(labels.description)}</p>
+        <p id={`${id}-description`} className={mutedText}>{text(labels.description)}</p>
 
-        {feature === "capture" && <div className="workbench-panel-content">
-          <Card className="workbench-sample-card">
+        {feature === "capture" && <div className={panelContent}>
+          <Card className={sampleCard}>
             <h3>{content.sources[0].title}</h3>
             <p>{content.sources[0].paragraphs[0].text}</p>
             <Button data-demo-action="capture" disabled={state.captured} onClick={() => dispatch({ type: "capture" })}>
               {state.captured && <Check size={18} aria-hidden="true" />}{text(state.captured ? "CAPTURE_DONE" : "CAPTURE_SELECT")}
             </Button>
           </Card>
-          <p role="status" className="workbench-muted">{text(state.captured ? "CAPTURE_DONE" : "CAPTURE_PENDING")}</p>
+          <p role="status" className={mutedText}>{text(state.captured ? "CAPTURE_DONE" : "CAPTURE_PENDING")}</p>
         </div>}
 
-        {feature === "library" && <div className="workbench-panel-content">
+        {feature === "library" && <div className={panelContent}>
           <p>{text("LIBRARY_SUMMARY")}</p>
-          <p className="workbench-muted">{text("LIBRARY_REVIEW")}</p>
-          {content.sources.map(item => <Card key={item.id} className="workbench-sample-card">
-            <p className="workbench-muted">{text("LIBRARY_PUBLISHED")}</p><h3>{item.title}</h3>
+          <p className={mutedText}>{text("LIBRARY_REVIEW")}</p>
+          {content.sources.map(item => <Card key={item.id} className={sampleCard}>
+            <p className={mutedText}>{text("LIBRARY_PUBLISHED")}</p><h3>{item.title}</h3>
             <Button variant="outline" data-demo-action="open-source" data-source-id={item.id}
               aria-expanded={sourceOpen === item.id} aria-controls={`${id}-${item.id}`}
               onClick={() => setSourceOpen(sourceOpen === item.id ? null : item.id)}>{text("OPEN_SOURCE")}</Button>
-            {sourceOpen === item.id && <article id={`${id}-${item.id}`} className="workbench-source" data-source-id={item.id}>
+            {sourceOpen === item.id && <article id={`${id}-${item.id}`} className={sourceArticle} data-source-id={item.id}>
               {item.paragraphs.map(paragraph => <p key={paragraph.id} data-paragraph-id={paragraph.id}>{paragraph.text}</p>)}
             </article>}
           </Card>)}
         </div>}
 
-        {feature === "answer" && <div className="workbench-panel-content">
-          <Card className="workbench-sample-card">
-            <p className="workbench-muted">{text("QUESTION_LABEL")}</p><h3>{content.question}</h3>
+        {feature === "answer" && <div className={panelContent}>
+          <Card className={sampleCard}>
+            <p className={mutedText}>{text("QUESTION_LABEL")}</p><h3>{content.question}</h3>
             <Button variant="outline" data-demo-action="show-answer" aria-expanded={answerVisible}
               aria-controls={`${id}-answer`} onClick={() => setAnswerVisible(true)}>{text("ANSWER_SHOW")}</Button>
           </Card>
           {answerVisible && <div id={`${id}-answer`}>
             <h3>{text("ANSWER_LABEL")}</h3><p>{content.answer}</p>
-            <h3>{text("CITATIONS_LABEL")}</h3><p className="workbench-muted">{text("ANSWER_CITATION_HINT")}</p>
-            <div className="workbench-citations">{content.citations.map(item => <Button key={item.id} variant="outline"
+            <h3>{text("CITATIONS_LABEL")}</h3><p className={mutedText}>{text("ANSWER_CITATION_HINT")}</p>
+            <div className="grid gap-2.5 [&_button]:justify-between [&_button]:text-left">{content.citations.map(item => <Button key={item.id} variant="outline"
               data-citation-id={item.id} onClick={() => dispatch({ type: "citation", id: item.id })}>
               {text("SOURCE_LABEL")}: {content.sources.find(document => document.id === item.sourceId)?.title}
               <ArrowRight size={16} aria-hidden="true" />
@@ -145,23 +157,23 @@ export function WorkbenchFeaturePanel({ locale, state, dispatch }: {
           </div>}
         </div>}
 
-        {feature === "action" && <div className="workbench-panel-content">
-          <Card className="workbench-sample-card" data-task-done={state.taskDone}>
-            <p className="workbench-muted">{text("TASK_LABEL")}</p><h3>{content.taskTitle}</h3>
-            <p role="status" className="workbench-task-status">{text(state.taskDone ? "ACTION_DONE" : "ACTION_TODO")}</p>
+        {feature === "action" && <div className={panelContent}>
+          <Card className={sampleCard} data-task-done={state.taskDone}>
+            <p className={mutedText}>{text("TASK_LABEL")}</p><h3>{content.taskTitle}</h3>
+            <p role="status" className="font-semibold text-primary">{text(state.taskDone ? "ACTION_DONE" : "ACTION_TODO")}</p>
             <Button data-demo-action="complete-task" disabled={state.taskDone} onClick={() => dispatch({ type: "complete-task" })}>
               <Check size={18} aria-hidden="true" />{text("ACTION_COMPLETE")}
             </Button>
           </Card>
         </div>}
 
-        {feature === "updates" && <div className="workbench-panel-content">
+        {feature === "updates" && <div className={panelContent}>
           <h3>{text("UPDATES_NOTIFICATION")}</h3><p>{content.notification}</p>
           <h3>{text("UPDATES_DISCUSSION")}</h3><p>{content.discussion}</p>
         </div>}
 
-        {state.step === feature && <footer className="workbench-panel-footer">
-          {gated && <p id={`${id}-gate`} className="workbench-muted">{text(gateText)}</p>}
+        {state.step === feature && <footer className="mt-6 border-t border-border pt-4">
+          {gated && <p id={`${id}-gate`} className={mutedText}>{text(gateText)}</p>}
           <Button data-demo-action="next" disabled={gated} aria-describedby={gated ? `${id}-gate` : undefined}
             onClick={() => dispatch({ type: "next" })}>{text("NEXT")}<ArrowRight size={18} aria-hidden="true" /></Button>
         </footer>}

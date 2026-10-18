@@ -59,11 +59,11 @@ export function CalendarRangeFilter({ locale, range, pending, onChange }: { loca
         <div className="grid gap-3 sm:grid-cols-2">
           <Label className="space-y-1 font-normal">
             <span>{fromLabel}</span>
-            <Input ref={fromRef} aria-label={fromLabel} aria-invalid={!valid || undefined} type="datetime-local" value={from} disabled={pending} onChange={event => setFrom(event.currentTarget.value)} />
+            <Input ref={fromRef} aria-label={fromLabel} aria-invalid={!valid || undefined} type="datetime-local" value={from} disabled={pending} onChange={value => setFrom(value)} />
           </Label>
           <Label className="space-y-1 font-normal">
             <span>{toLabel}</span>
-            <Input aria-label={toLabel} aria-invalid={!valid || undefined} type="datetime-local" value={to} disabled={pending} onChange={event => setTo(event.currentTarget.value)} />
+            <Input aria-label={toLabel} aria-invalid={!valid || undefined} type="datetime-local" value={to} disabled={pending} onChange={value => setTo(value)} />
           </Label>
         </div>
         <div className="mt-3 flex flex-wrap justify-end gap-2">

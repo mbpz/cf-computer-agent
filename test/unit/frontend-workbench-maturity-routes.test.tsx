@@ -384,7 +384,9 @@ async function changeReactInput(journey: MountedApp, selector: string, value: st
     control.value = value;
     const reactPropsKey = Object.keys(control).find((key) => key.startsWith("__reactProps$"));
     const reactProps = reactPropsKey ? (control as unknown as Record<string, { onChange?: (event: { currentTarget: typeof control }) => void }>)[reactPropsKey] : undefined;
-    reactProps?.onChange?.({ currentTarget: control });
+    // beUI's field payload reads `e.target.value`, so the synthetic event carries
+    // both shapes; native textarea callers still read `currentTarget`.
+    reactProps?.onChange?.({ currentTarget: control, target: control });
   });
 }
 

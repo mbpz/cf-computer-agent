@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { saveInboxIntent } from "../../frontend/lib/inbox-create-intent";
 import { InboxPage } from "../../frontend/pages/inbox-page";
+import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -90,7 +91,7 @@ describe("inbox quick capture", () => {
   async function type(value: string) {
     const node = composer();
     const prop = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
-    await act(async () => { (node as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[prop]!.onChange({ currentTarget: { value } }); });
+    await act(async () => { (node as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[prop]!.onChange(({ currentTarget: { value }, target: { value } }) as never); });
   }
 
   it("opens the composer from the header action and dismisses it after one confirmed creation", async () => {
@@ -139,8 +140,9 @@ describe("inbox quick capture", () => {
     expect(filter).toHaveBeenCalledExactlyOnceWith("archived");
     await click(container.querySelector<HTMLButtonElement>('[data-pagination-desktop] button[aria-label="Next page"]')!);
     expect(pageChange).toHaveBeenCalledExactlyOnceWith(2);
-    const size = container.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
-    await act(async () => { size.value = "50"; size.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    const size = container.querySelector<HTMLButtonElement>('button[aria-label="Rows per page"][aria-haspopup="listbox"]')!;
+    expect(size).toBeTruthy();
+    await chooseValue(size, "50");
     expect(sizeChange).toHaveBeenCalledExactlyOnceWith(50);
   });
 

@@ -7,6 +7,7 @@ import {
   type ForwardedRef,
 } from "react";
 import type { GraphSnapshot } from "../../lib/graph-data";
+import { Button } from "../ui/button";
 import "./graph-canvas.css";
 
 export const GRAPH_CANVAS_LAYOUTS = ["breadthfirst", "concentric", "cose", "grid"] as const;
@@ -327,12 +328,14 @@ function GraphCanvasView(
           const isSelected = selectedId === node.id;
           return (
             <li key={node.id}>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 data-graph-node-id={node.id}
                 data-graph-node-kind={node.kind}
                 aria-pressed={isSelected}
-                className="graph-canvas__node"
+                className="graph-canvas__node max-lg:min-h-11"
                 ref={(element) => {
                   if (element) nodeButtonRefs.current.set(node.id, element);
                   else nodeButtonRefs.current.delete(node.id);
@@ -341,7 +344,7 @@ function GraphCanvasView(
               >
                 <span>{label}</span>
                 {typeof node.status === "string" && node.status.trim() && <span className="graph-canvas__status">{node.status}</span>}
-              </button>
+              </Button>
             </li>
           );
         })}

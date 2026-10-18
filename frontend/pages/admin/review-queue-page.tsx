@@ -43,11 +43,11 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
       width: "64px",
       header: <span className="flex items-center gap-2">
         <Checkbox data-batch-select-all-header checked={allSelected} disabled={batch.freeze || batchRows.length === 0}
-          aria-label={frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT_ALL")} onChange={() => allSelected ? batch.clear() : batch.selectAllPage()} />
+          aria-label={frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT_ALL")} onCheckedChange={() => allSelected ? batch.clear() : batch.selectAllPage()} />
         <span>{frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT")}</span>
       </span>,
       cell: (item: ReviewQueueItem) => <Checkbox data-batch-select={item.id} checked={batch.selected.has(item.id)} disabled={batch.freeze}
-        aria-label={`${frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT")}: ${item.title?.trim() || item.id}`} onChange={() => batch.toggle(item.id)} />,
+        aria-label={`${frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT")}: ${item.title?.trim() || item.id}`} onCheckedChange={() => batch.toggle(item.id)} />,
     }] : []),
     { key: "item", header: frontendText(locale, "ADMIN_REVIEW_COLUMN_ITEM"), cellClassName: "whitespace-normal", cell: (item) => <div className="py-1">
       <p className="font-medium">

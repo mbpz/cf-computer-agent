@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { AdminSpacesRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { chooseValue, fieldValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -27,8 +28,8 @@ describe("space write recovery", () => {
   function reads(url:unknown){return String(url).includes("/collections")?json({items:[]}):json({items:[space()]});}
 
   async function select(id: string, value: string) {
-    const el = document.querySelector(`#${id}`) as HTMLSelectElement;
-    await act(async () => { el.value = value; el.dispatchEvent(new browser.Event("change", { bubbles: true })); });
+    await chooseValue(document.querySelector(`#${id}`), value);
+    await flush();
   }
   function managementFetch(writes: { url: string; body: Record<string, unknown> }[], failure?: string) {
     vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
@@ -140,7 +141,7 @@ describe("space write recovery", () => {
   });
   it("excludes a collection and its descendants from its parent options", async () => {
     vi.stubGlobal("fetch", async (url: unknown) => String(url).includes("/collections") ? json({ items: [collection(), collection({ id: "child", parentId: "collection-1", name: "Child" }), collection({ id: "root", name: "Other root" }), collection({ id: "disabled", name: "Disabled", status: "disabled" })] }) : json({ items: [space()] }));
-    await render(); await click("Edit collection: Private collection"); expect([...document.querySelectorAll("#admin-record-parent option")].map(item => (item as HTMLOptionElement).value)).toEqual(["", "root"]);
+    await render(); await click("Edit collection: Private collection"); const parentTrigger = document.querySelector("#admin-record-parent")!; expect([...parentTrigger.parentElement!.querySelectorAll<HTMLElement>('[role="option"]')].map(item => item.getAttribute("data-value"))).toEqual(["", "root"]);
   });
   it("retains an unloaded existing parent without silently moving the collection", async () => {
     const bodies: unknown[] = [];
@@ -148,7 +149,7 @@ describe("space write recovery", () => {
       if (init?.method) { const body = JSON.parse(String(init.body)); bodies.push(body); return json({ collection: collection({ ...body, updatedAt: "2026-09-29T00:00:00.000Z" }) }); }
       return String(url).includes("/collections") ? json({ items: [collection({ parentId: "unloaded-parent" })], nextCursor: "more" }) : json({ items: [space()] });
     });
-    await render(); await click("Edit collection: Private collection"); expect((document.querySelector("#admin-record-parent") as HTMLSelectElement).value).toBe("unloaded-parent"); await submit(); expect(bodies[0]).toMatchObject({ parentId: "unloaded-parent" });
+    await render(); await click("Edit collection: Private collection"); expect(fieldValue(document.querySelector("#admin-record-parent"))).toBe("unloaded-parent"); await submit(); expect(bodies[0]).toMatchObject({ parentId: "unloaded-parent" });
   });
   it("ignores an old collection write denial after changing scope", async () => {
     const old = deferred<Response>(); let gets = 0;

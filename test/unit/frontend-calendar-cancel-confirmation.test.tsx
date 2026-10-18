@@ -36,7 +36,7 @@ describe("calendar cancellation confirmation", () => {
   async function input(label: string, value: string) {
     const node = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
     const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
-    await act(async () => { (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange({ currentTarget: { value } }); });
+    await act(async () => { (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange(({ currentTarget: { value }, target: { value } }) as never); });
   }
   it("shows exact identity, zoned times and impact, focuses keep, and confirms once with original version", async () => {
     await mount(); trigger().focus(); await click(trigger()); expect(write).not.toHaveBeenCalled();

@@ -88,7 +88,9 @@ describe("review batch surface", () => {
     const bodies = recordFetch((actions) => summary(actions, new Set(["review-2"])));
     await mountQueue();
     await selectAll();
-    expect(node<HTMLInputElement>('[data-batch-select="review-1"]').checked).toBe(true);
+    const rowCheckbox = node('[data-batch-select="review-1"]').querySelector('[role="checkbox"]');
+    expect(rowCheckbox).not.toBeNull();
+    expect(rowCheckbox!.getAttribute("aria-checked")).toBe("true");
     await clickOn(node("[data-batch-send]"));
     expect(node('[data-batch-outcome="review-1"]').getAttribute("data-batch-outcome-status")).toBe("succeeded");
     expect(node('[data-batch-outcome="review-2"]').getAttribute("data-batch-outcome-status")).toBe("failed");

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Button } from "../../frontend/components/ui/button";
 import { DataPagination, type DataPaginationProps } from "../../frontend/components/data-pagination";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, type PaginationLabels, visiblePageTokens } from "../../frontend/components/ui/pagination";
-import { Select } from "../../frontend/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../frontend/components/ui/select";
 import { createLocaleRuntime, frontendPaginationLabels } from "../../frontend/lib/i18n";
 
 const englishLocale = createLocaleRuntime({ navigatorLanguage: "en" });
@@ -81,12 +81,14 @@ describe("frontend pagination", () => {
     const onPageChange = vi.fn();
     const onPageSizeChange = vi.fn();
     const html = renderToStaticMarkup(<DataPagination {...localizedDataPaginationProps({ page: 4, pageSize: 20, total: 238, totalPages: 12, onPageChange, onPageSizeChange })} />);
-    expect(html).toContain('<option value="20" selected="">20</option>');
-    expect(html).toContain('<option value="50">50</option>');
-    expect(html).toContain('<option value="100">100</option>');
+    // The page-size picker is a listbox: the current size is the selected option,
+    // and every size stays addressable by its value.
+    expect(html).toContain('role="option" data-value="20" aria-selected="true"');
+    expect(html).toContain('role="option" data-value="50" aria-selected="false"');
+    expect(html).toContain('role="option" data-value="100" aria-selected="false"');
     const tree = DataPagination(localizedDataPaginationProps({ page: 4, pageSize: 20, total: 238, totalPages: 12, onPageChange, onPageSizeChange }));
     const select = findElementByType(tree, Select)!;
-    select.props.onChange({ currentTarget: { value: "50" } });
+    select.props.onValueChange("50");
     expect(onPageSizeChange).toHaveBeenCalledWith(50);
     expect(onPageChange).not.toHaveBeenCalled();
   });
@@ -142,8 +144,15 @@ describe("frontend pagination", () => {
   });
 
   it("provides a native accessible shadcn-style Select primitive", () => {
-    const html = renderToStaticMarkup(<Select aria-label="Size" defaultValue="20"><option value="20">20</option></Select>);
+    const html = renderToStaticMarkup(
+      <Select defaultValue="20">
+        <SelectTrigger aria-label="Size" className="focus-visible:ring-2"><SelectValue /></SelectTrigger>
+        <SelectContent><SelectItem value="20">20</SelectItem></SelectContent>
+      </Select>,
+    );
     expect(html).toContain('aria-label="Size"');
+    expect(html).toContain('aria-haspopup="listbox"');
+    expect(html).toContain('role="listbox"');
     expect(html).toContain("focus-visible:ring-2");
   });
 

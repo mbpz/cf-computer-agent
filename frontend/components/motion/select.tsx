@@ -14,6 +14,7 @@ import {
 } from "motion/react";
 import {
   createContext,
+  type ButtonHTMLAttributes,
   type ReactNode,
   useCallback,
   useContext,
@@ -65,6 +66,10 @@ interface SelectContextValue {
   reduce: boolean;
   progress: MotionValue<number>;
   triggerId: string;
+  /** The rendered trigger, so the panel can measure and name it even when the
+   *  caller supplies its own `id`. */
+  triggerEl: HTMLButtonElement | null;
+  setTriggerEl: (node: HTMLButtonElement | null) => void;
   listId: string;
   disabled: boolean;
   placement: Placement;
@@ -120,6 +125,7 @@ export function Select({
   const [internal, setInternal] = useState(defaultValue);
   const [labels, setLabels] = useState<Map<string, string>>(new Map());
   const [placement, setPlacement] = useState<Placement>("bottom");
+  const [triggerEl, setTriggerEl] = useState<HTMLButtonElement | null>(null);
 
   const controlled = value !== undefined;
   const current = controlled ? value : internal;
@@ -194,6 +200,8 @@ export function Select({
       reduce,
       progress,
       triggerId: `${baseId}-trigger`,
+      triggerEl,
+      setTriggerEl,
       listId: `${baseId}-list`,
       disabled,
       placement,
@@ -212,6 +220,7 @@ export function Select({
       baseId,
       disabled,
       placement,
+      triggerEl,
     ],
   );
 
@@ -224,12 +233,35 @@ export function Select({
   );
 }
 
-export interface SelectTriggerProps {
+export interface SelectTriggerProps
+  extends Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    | "type"
+    | "id"
+    | "children"
+    | "className"
+    | "style"
+    | "onAnimationStart"
+    | "onDragStart"
+    | "onDragEnd"
+    | "onDrag"
+  > {
+  /**
+   * Caller id for the trigger button. A form field draws its caption with an
+   * external `<Label htmlFor>`, so the field owns the id the visible caption
+   * points at; the panel then names itself from the rendered trigger.
+   */
+  id?: string;
   className?: string;
   children: ReactNode;
 }
 
-export function SelectTrigger({ className, children }: SelectTriggerProps) {
+export function SelectTrigger({
+  className,
+  children,
+  id,
+  ...rest
+}: SelectTriggerProps) {
   const ctx = useSelectContext("SelectTrigger");
   const isTop = ctx.placement === "top";
   // The edge facing the panel flattens while the panel is attached to it and
@@ -245,8 +277,10 @@ export function SelectTrigger({ className, children }: SelectTriggerProps) {
   );
   return (
     <motion.button
+      {...rest}
+      ref={ctx.setTriggerEl}
       type="button"
-      id={ctx.triggerId}
+      id={id ?? ctx.triggerId}
       disabled={ctx.disabled}
       aria-haspopup="listbox"
       aria-expanded={ctx.open}
@@ -339,7 +373,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
   // On open, flip upward when there isn't room below and there's more above.
   useLayoutEffect(() => {
     if (!open) return;
-    const trigger = document.getElementById(ctx.triggerId);
+    const trigger = ctx.triggerEl;
     const node = panelRef.current;
     if (!trigger || !node) return;
     const rect = trigger.getBoundingClientRect();
@@ -347,7 +381,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
     const below = window.innerHeight - rect.bottom;
     const above = rect.top;
     setPlacement(below < h + 16 && above > below ? "top" : "bottom");
-  }, [open, ctx.triggerId, setPlacement]);
+  }, [open, ctx.triggerEl, setPlacement]);
 
   const isTop = ctx.placement === "top";
 
@@ -387,7 +421,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
       ref={panelRef}
       id={ctx.listId}
       role="listbox"
-      aria-labelledby={ctx.triggerId}
+      aria-labelledby={ctx.triggerEl?.id || ctx.triggerId}
       aria-hidden={!open}
       inert={!open}
       style={{
@@ -421,7 +455,11 @@ export function SelectContent({ className, children }: SelectContentProps) {
   );
 }
 
-export interface SelectItemProps {
+export interface SelectItemProps
+  extends Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    "type" | "value" | "children" | "className" | "disabled"
+  > {
   value: string;
   disabled?: boolean;
   className?: string;
@@ -433,6 +471,7 @@ export function SelectItem({
   disabled = false,
   className,
   children,
+  ...rest
 }: SelectItemProps) {
   const ctx = useSelectContext("SelectItem");
   const selected = ctx.value === value;
@@ -446,8 +485,12 @@ export function SelectItem({
   return (
     <motion.div variants={ctx.reduce ? undefined : ITEM_VARIANTS}>
       <button
+        {...rest}
         type="button"
         role="option"
+        // §17 patch: the option's value as a stable hook, so a suite or a script
+        // can pick an option by value the way a native `select.value` let it.
+        data-value={value}
         aria-selected={selected}
         disabled={disabled}
         onClick={() => ctx.select(value)}

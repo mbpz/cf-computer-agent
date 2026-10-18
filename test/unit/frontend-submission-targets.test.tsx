@@ -6,6 +6,7 @@ import type { Fetcher } from "../../frontend/lib/api";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { isSubmittableSpace, loadSpaceCollections, loadSubmissionSpaces, useSubmissionTargets, type MemberSpace, type SubmissionTargetsView } from "../../frontend/lib/submission-targets-data";
 import { SubmissionTargetPicker } from "../../frontend/components/submissions/submission-target-picker";
+import { chooseValue, fieldValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -91,21 +92,20 @@ describe("member submission targets", () => {
       return capture;
     }
     function optionValues(selector: string) {
-      return [...container.querySelectorAll<HTMLOptionElement>(`${selector} option`)].map((option) => option.value);
+      const trigger = container.querySelector(selector);
+      if (!trigger) throw new Error(`missing ${selector}`);
+      return [...trigger.parentElement!.querySelectorAll<HTMLElement>('[role="option"]')].map((option) => option.getAttribute("data-value") ?? "");
     }
     async function click(selector: string) {
       const element = container.querySelector<HTMLElement>(selector);
       if (!element) throw new Error(`missing ${selector}`);
       await act(async () => { element.click(); await sleep(0); });
     }
-    async function changeSelect(selector: string, value: string) {
-      const element = container.querySelector<HTMLSelectElement>(selector);
+    async function choose(selector: string, value: string) {
+      const element = container.querySelector(selector);
       if (!element) throw new Error(`missing ${selector}`);
-      await act(async () => {
-        element.value = value;
-        element.dispatchEvent(new browser.Event("change", { bubbles: true }));
-        await sleep(0);
-      });
+      await chooseValue(element, value);
+      await act(async () => { await sleep(0); });
     }
 
     it("offers exactly the loaded submittable spaces and never selects a legacy/read-only/disabled one", async () => {
@@ -113,7 +113,7 @@ describe("member submission targets", () => {
       const capture = await mount(requester);
       await waitFor(() => container.querySelector("[data-submission-target]")?.getAttribute("data-submission-target") === "ready");
       expect(optionValues("[data-submission-target-space]")).toEqual(["alpha", "beta"]);
-      expect(container.querySelector("[data-submission-target-space]")?.getAttribute("value")).toBeNull();
+      expect(fieldValue(container.querySelector("[data-submission-target-space]"))).toBe("alpha");
       expect(capture.current?.spaceId).toBe("alpha");
       expect(capture.current?.target).toEqual({ requestedSpaceId: "alpha", requestedCollectionId: null, requestedVisibility: "shared" });
       for (const hidden of ["legacy", "frozen", "off"]) expect(optionValues("[data-submission-target-space]")).not.toContain(hidden);
@@ -148,7 +148,7 @@ describe("member submission targets", () => {
       const capture = await mount(requester);
       await waitFor(() => container.querySelector("[data-submission-target-collection-error]") !== null);
       expect(capture.current?.spaceId).toBe("alpha");
-      expect(container.querySelector<HTMLSelectElement>("[data-submission-target-collection]")?.value).toBe("");
+      expect(fieldValue(container.querySelector("[data-submission-target-collection]"))).toBe("");
       expect(optionValues("[data-submission-target-collection]")).toEqual([""]);
       collectionsFail = false;
       await click("[data-submission-target-collection-retry]");
@@ -183,9 +183,9 @@ describe("member submission targets", () => {
       expect(container.querySelector("[data-submission-target]")?.getAttribute("data-submission-target")).toBe("loading");
       await waitFor(() => container.querySelector("[data-submission-target-collection]") !== null && optionValues("[data-submission-target-collection]").includes("guide"));
       expect(capture.current?.target).toEqual({ requestedSpaceId: "alpha", requestedCollectionId: null, requestedVisibility: "shared" });
-      await changeSelect("[data-submission-target-collection]", "guide");
+      await choose("[data-submission-target-collection]", "guide");
       expect(capture.current?.target).toEqual({ requestedSpaceId: "alpha", requestedCollectionId: "guide", requestedVisibility: "shared" });
-      await changeSelect("[data-submission-target-visibility]", "admin_only");
+      await choose("[data-submission-target-visibility]", "admin_only");
       expect(capture.current?.target).toEqual({ requestedSpaceId: "alpha", requestedCollectionId: "guide", requestedVisibility: "admin_only" });
     });
 

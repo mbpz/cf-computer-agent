@@ -117,7 +117,7 @@ describe("member submission loop through App", () => {
     await act(async () => {
       node.value = value;
       const key = Object.keys(node).find((candidate) => candidate.startsWith("__reactProps$"))!;
-      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement | HTMLTextAreaElement }) => void }>)[key]!.onChange({ currentTarget: node });
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement | HTMLTextAreaElement }) => void }>)[key]!.onChange(({ currentTarget: node, target: node }) as never);
     });
   }
 

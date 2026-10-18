@@ -8,6 +8,7 @@ import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { AdminAnalyticsRoute } from "../../frontend/app";
 import { ApiRequestError } from "../../frontend/lib/api";
 import { stubListViewport } from "../helpers/list-viewport";
+import { chooseValue, fieldValue } from "./helpers/listbox";
 
 type Loader = (input: LoadAdminAnalyticsInput) => Promise<AdminAnalyticsOverview>;
 
@@ -99,7 +100,7 @@ describe("AdminAnalyticsRoute", () => {
 
     await changeSelect("#admin-analytics-range", "30");
     expect(Object.fromEntries(new URLSearchParams(browser.location.search))).toEqual({ days: "30" });
-    expect((container.querySelector("#admin-analytics-range") as HTMLSelectElement).value).toBe("30");
+    expect(fieldValue(container.querySelector("#admin-analytics-range"))).toBe("30");
     expect(inputShape(inputs.at(-1)!)).toEqual({ days: 30, page: 1, pageSize: 20 });
     expect(container.textContent).toContain("/day30-p1-0");
     expect(container.textContent).not.toContain("/day14-p1-0");
@@ -265,7 +266,7 @@ describe("AdminAnalyticsRoute", () => {
     const inputs: LoadAdminAnalyticsInput[] = [];
     const load: Loader = async (input) => { inputs.push(input); return { ...overview(1, 20, 0, []), range: { from: "2026-08-26", to: "2026-08-26", days: input.days } }; };
     await renderRoute(load);
-    expect((container.querySelector('#admin-analytics-range') as HTMLSelectElement).value).toBe("1");
+    expect(fieldValue(container.querySelector('#admin-analytics-range'))).toBe("1");
     await act(async () => {
       browser.history.pushState({}, "", "/admin/analytics?days=14&days=30");
       browser.dispatchEvent(new browser.PopStateEvent("popstate"));
@@ -299,11 +300,7 @@ describe("AdminAnalyticsRoute", () => {
   }
 
   async function changeSelect(selector: string, value: string): Promise<void> {
-    const select = container.querySelector(selector) as HTMLSelectElement;
-    await act(async () => {
-      select.value = value;
-      select.dispatchEvent(new browser.Event("change", { bubbles: true }));
-    });
+    await chooseValue(container.querySelector(selector), value);
     await flush();
   }
 

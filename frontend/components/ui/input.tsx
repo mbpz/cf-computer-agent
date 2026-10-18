@@ -1,38 +1,39 @@
 import * as React from "react";
-import { cn } from "../../lib/utils";
+import { Input as BeuiInput, type InputClassNames, type InputProps as BeuiInputProps } from "../motion/input";
+
+export type { InputClassNames };
 
 /**
- * The one field source for native fields.
+ * The app's one single-line field: beUI's `motion/input`, re-exported under the
+ * name the call sites already import. The value is a `string` and the change is
+ * `onChange(value)`, so a field no longer carries a native `change` event; the
+ * label, optional icons, the error line and the shake all come from the payload.
  *
- * `motion/input.tsx` is beUI's input: it owns the label/error/icon chrome and a
- * value-style `onChange`. Native call sites need the native control instead —
- * `onChange` as an event, `defaultValue`, form association — so this file keeps
- * that control and draws it with beUI's field tokens (44px tall, pill outline,
- * 16px text, ring focus, destructive ring on error). `Textarea` shares these
- * tokens, which is what keeps the single-line and multi-line fields one field
- * instead of two lookalikes that drift.
- *
- * Geometry stays per control: a multi-line field takes the panel corner radius
- * (`--radius`) rather than the pill, which reads as a stadium on a tall box.
+ * The payload draws the 44px field shell, so `className` lands on the field's
+ * column (the label/field/error stack) — the place a call site sets width or
+ * spacing. `Textarea` keeps the same tokens for the multi-line case beUI does
+ * not ship.
  */
-export const fieldShellClass =
-  "border border-border bg-transparent text-foreground transition-colors placeholder:text-muted-foreground/60 focus-visible:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/25";
+export interface InputProps
+  extends Omit<
+    React.InputHTMLAttributes<HTMLInputElement>,
+    "value" | "defaultValue" | "onChange"
+  > {
+  label?: string;
+  value?: string;
+  defaultValue?: string;
+  onChange?: (value: string) => void;
+  /** Truthy error triggers a shake, red border and (if a string) a message. */
+  error?: string | boolean;
+  /** Reserve one message line so validation does not shift nearby content. */
+  reserveErrorLine?: boolean;
+  success?: boolean;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+  classNames?: InputClassNames;
+}
 
-/** Single-line geometry, matching `motion/input`: 44px box, pill, 16px on a 24px line. */
-export const inputFieldClass = cn(
-  "flex h-11 w-full rounded-full px-3.5 text-base leading-6",
-  fieldShellClass,
-);
-
-/** Multi-line geometry on the same shell: the panel radius, text starting at the first line. */
-export const textareaFieldClass = cn(
-  "flex min-h-24 w-full rounded-lg px-3.5 py-3 text-base leading-6",
-  fieldShellClass,
-);
-
-export const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type = "text", ...props }, ref) => (
-    <input ref={ref} type={type} className={cn(inputFieldClass, className)} {...props} />
-  ),
-);
+export const Input = React.forwardRef<HTMLInputElement, InputProps>((props, ref) => (
+  <BeuiInput ref={ref} {...(props as BeuiInputProps)} />
+));
 Input.displayName = "Input";

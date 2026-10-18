@@ -30,7 +30,7 @@ export function AppliedFilters({ filters, onClear, clearLabel, ariaLabel, classN
       {filters.map((filter) => (
         <span key={filter.id} className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1 text-xs text-foreground max-lg:min-h-11">
           {filter.label}
-          <button type="button" aria-label={`${clearLabel}: ${filter.label}`} onClick={filter.onRemove} className="inline-flex items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full max-lg:min-h-11 max-lg:min-w-11"><X size={12} weight="bold" aria-hidden="true" /></button>
+          <Button variant="ghost" size="icon" type="button" aria-label={`${clearLabel}: ${filter.label}`} onClick={filter.onRemove} className="h-5 w-5 rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-lg:min-h-11 max-lg:min-w-11"><X size={12} weight="bold" aria-hidden="true" /></Button>
         </span>
       ))}
       <Button variant="ghost" size="sm" data-filters-clear className="max-lg:h-11" onClick={onClear}>{clearLabel}</Button>

@@ -10,6 +10,7 @@ import {
   useDateRangePicker,
   type DateRange,
 } from "../motion/date-range-picker";
+import { Button } from "./button";
 import { cn } from "../../lib/utils";
 
 /**
@@ -115,10 +116,12 @@ function RangeControl({ value, texts, disabled, onChange, triggerProps }: { valu
     ? [value.from && `${texts.start}: ${value.from}`, value.to && `${texts.end}: ${value.to}`].filter(Boolean).join(" · ")
     : texts.placeholder;
   return <>
-    <button
+    <Button
       {...triggerProps}
       ref={trigger}
       type="button"
+      variant="outline"
+      size="sm"
       aria-expanded={open}
       aria-controls={open ? panelId : undefined}
       aria-label={stated ? `${texts.label}: ${summary}` : texts.label}
@@ -129,7 +132,7 @@ function RangeControl({ value, texts, disabled, onChange, triggerProps }: { valu
       <CalendarDots size={16} aria-hidden="true" className="shrink-0 text-muted-foreground" />
       <span className="min-w-0 truncate">{summary}</span>
       <CaretDown size={14} aria-hidden="true" className={cn("shrink-0 text-muted-foreground motion-safe:transition-transform", open && "rotate-180")} />
-    </button>
+    </Button>
     {open && <div
       ref={panel}
       id={panelId}
@@ -146,15 +149,17 @@ function RangeControl({ value, texts, disabled, onChange, triggerProps }: { valu
         <DateRangePickerFooter>
           <div className="flex items-center justify-between gap-2">
             <DateRangePickerSelection>{summary}</DateRangePickerSelection>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               aria-label={texts.clear}
               disabled={disabled || !stated}
               onClick={() => onChange({ from: "", to: "" })}
-              className="rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 max-lg:min-h-11"
+              className="h-auto rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 max-lg:min-h-11"
             >
               {texts.clear}
-            </button>
+            </Button>
           </div>
         </DateRangePickerFooter>
       </DateRangePickerCalendar>

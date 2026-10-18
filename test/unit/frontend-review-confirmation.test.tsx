@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReviewDetailPage } from "../../frontend/pages/admin/review-detail-page";
 import { ReviewQueuePage } from "../../frontend/pages/admin/review-queue-page";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { chooseValue, fieldValue } from "./helpers/listbox";
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
 vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
@@ -50,8 +51,10 @@ describe("review decision confirmation and draft protection", () => {
     await click("Cancel");await confirm();expect(note()).toBeNull();expect(onDecision).not.toHaveBeenCalled();
   });
   it("protects reason-only edits from silent cancellation",async () => {
-    await mount();await click("Reject");const reason=container.querySelector("select[data-review-reason]") as HTMLSelectElement;
-    await act(async () => {reason.value="unsafe";reason.dispatchEvent(new browser.Event("change",{bubbles:true}));});await click("Cancel");expect(dialog()).not.toBeNull();await cancel();expect(reason.value).toBe("unsafe");expect(onDecision).not.toHaveBeenCalled();
+    await mount();await click("Reject");const reason=container.querySelector('button[data-review-reason]');
+    expect(reason).not.toBeNull();
+    await chooseValue(reason, "unsafe");
+    expect(fieldValue(reason)).toBe("unsafe");await click("Cancel");expect(dialog()).not.toBeNull();await cancel();expect(fieldValue(container.querySelector('button[data-review-reason]'))).toBe("unsafe");expect(onDecision).not.toHaveBeenCalled();
   });
   it("does not ask to discard an untouched note form",async () => {await mount();await click("Reject");await click("Cancel");expect(dialog()).toBeNull();expect(note()).toBeNull();});
   it("changing decision protects dirty notes, but explicit discard does not itself publish",async () => {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { KnowledgePage } from "../../frontend/pages/knowledge-page";
 import { SearchPage } from "../../frontend/pages/search-page";
+import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -129,8 +130,9 @@ describe("search page paging surface", () => {
     expect(container.textContent).toContain("1–20");
     await act(async () => (container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
     expect(onPageChange).toHaveBeenCalledWith(2);
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
-    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLSelectElement.prototype, "value")!.set!.call(select, "100"); select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    const picker = container.querySelector('button[aria-haspopup="listbox"][aria-label="Rows per page"]');
+    expect(picker).not.toBeNull();
+    await chooseValue(picker, "100");
     expect(onPageSizeChange).toHaveBeenCalledWith(100);
     expect(onLoadMore).not.toHaveBeenCalled();
   });
@@ -162,8 +164,9 @@ describe("knowledge page paging surface", () => {
     expect(container.querySelector("[data-pagination-desktop]")).not.toBeNull();
     await act(async () => (container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
     expect(onPageChange).toHaveBeenCalledWith(2);
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
-    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLSelectElement.prototype, "value")!.set!.call(select, "50"); select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    const picker = container.querySelector('button[aria-haspopup="listbox"][aria-label="Rows per page"]');
+    expect(picker).not.toBeNull();
+    await chooseValue(picker, "50");
     expect(onPageSizeChange).toHaveBeenCalledWith(50);
     expect(onLoadMore).not.toHaveBeenCalled();
   });

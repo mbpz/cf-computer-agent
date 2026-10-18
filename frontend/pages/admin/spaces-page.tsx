@@ -9,7 +9,7 @@ import { Input } from "../../components/motion/input";
 import { Label } from "../../components/ui/label";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
-import { Select } from "../../components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { discardBlockedAdminSpaceDraft, loadAdminSpaceDraft, persistAdminSpaceDraft, type SpaceEditorFields } from "../../lib/admin-space-draft";
 import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
@@ -183,7 +183,7 @@ function RecordEditor({ target, records, locale, locked, navigationBlocked, onCa
     if (confirmation.kind === "discard") onCancel();
     else void save(confirmation.command);
   };
-  const collections = (target.space.collections ?? []).filter((item): item is CollectionSummary => typeof item !== "string" && Boolean(item.id));
+  const collections = (target.space.collections ?? []).filter((item): item is CollectionSummary & { id: string } => typeof item !== "string" && Boolean(item.id));
   const selectable = collections.filter(item => {
     if (item.status !== "active") return false;
     const seen = new Set<string>(); let current: CollectionSummary | undefined = item;
@@ -217,8 +217,8 @@ function RecordEditor({ target, records, locale, locked, navigationBlocked, onCa
       {target.kind === "space" && <Input id="admin-record-slug" label={frontendText(locale, "ADMIN_SPACE_SLUG")} value={draft.slug} onChange={value => set("slug", value)} required maxLength={80} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" disabled={busy} />}
       <Input className="sm:col-span-2" id="admin-record-description" label={frontendText(locale, "ADMIN_RECORD_DESCRIPTION")} value={draft.description} onChange={value => set("description", value)} maxLength={1000} disabled={busy} />
       <Input id="admin-record-position" label={frontendText(locale, "ADMIN_RECORD_POSITION")} type="number" min={0} max={1000000} step={1} value={draft.position} onChange={value => set("position", value)} required disabled={busy} />
-      <div><Label htmlFor="admin-record-status">{frontendText(locale, "ADMIN_RECORD_STATUS")}</Label><Select id="admin-record-status" value={draft.status} onChange={event => set("status", event.currentTarget.value)} disabled={busy}><option value="active">{frontendText(locale, "ADMIN_MENUS_ACTIVE")}</option><option value="disabled">{frontendText(locale, "ADMIN_MENUS_DISABLED")}</option></Select></div>
-      {target.kind !== "space" && <div className="sm:col-span-2"><Label htmlFor="admin-record-parent">{frontendText(locale, "ADMIN_COLLECTION_PARENT")}</Label><Select id="admin-record-parent" value={draft.parentId} onChange={event => set("parentId", event.currentTarget.value)} disabled={busy}><option value="">{frontendText(locale, "ADMIN_COLLECTION_ROOT")}</option>{draft.parentId && !selectable.some(item => item.id === draft.parentId) && <option value={draft.parentId}>{frontendText(locale, "ADMIN_COLLECTION_CURRENT_PARENT")}: {draft.parentId}</option>}{selectable.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>{target.space.collectionsCursor && <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_COLLECTION_MORE_PARENTS")}</p>}</div>}
+      <div><Label htmlFor="admin-record-status">{frontendText(locale, "ADMIN_RECORD_STATUS")}</Label><Select value={draft.status} onValueChange={value => set("status", value)} disabled={busy}><SelectTrigger id="admin-record-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">{frontendText(locale, "ADMIN_MENUS_ACTIVE")}</SelectItem><SelectItem value="disabled">{frontendText(locale, "ADMIN_MENUS_DISABLED")}</SelectItem></SelectContent></Select></div>
+      {target.kind !== "space" && <div className="sm:col-span-2"><Label htmlFor="admin-record-parent">{frontendText(locale, "ADMIN_COLLECTION_PARENT")}</Label><Select value={draft.parentId} onValueChange={value => set("parentId", value)} disabled={busy}><SelectTrigger id="admin-record-parent"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="">{frontendText(locale, "ADMIN_COLLECTION_ROOT")}</SelectItem>{draft.parentId && !selectable.some(item => item.id === draft.parentId) && <SelectItem value={String(draft.parentId)}>{frontendText(locale, "ADMIN_COLLECTION_CURRENT_PARENT")}: {draft.parentId}</SelectItem>}{selectable.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>{target.space.collectionsCursor && <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_COLLECTION_MORE_PARENTS")}</p>}</div>}
       <div className="sm:col-span-2 flex flex-wrap items-center gap-3"><Button type="submit" disabled={busy}>{frontendText(locale, "ADMIN_RECORD_SAVE")}</Button><Button type="button" data-space-edit-cancel variant="outline" disabled={busy} onClick={requestCancel}>{frontendText(locale, "ADMIN_SPACE_CANCEL")}</Button>{error && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "ADMIN_RECORD_SAVE_ERROR")}</p>}</div>
     </form>
   </DialogContent></Dialog><ConfirmAction open={validConfirmation}

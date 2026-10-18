@@ -102,7 +102,7 @@ describe("agent request cancellation route", () => {
     await act(async () => {
       ids.value = "k-1, k-2";
       const key = Object.keys(ids).find((name) => name.startsWith("__reactProps$"))!;
-      (ids as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange({ currentTarget: ids });
+      (ids as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange(({ currentTarget: ids, target: ids }) as never);
     });
     await click("Start with these sources");
     expect(browser.location.search).toBe("?scope=items&knowledgeItemId=k-1&knowledgeItemId=k-2");
@@ -390,7 +390,7 @@ describe("agent request cancellation route", () => {
   function changeQuestion(value: string) {
     const input = questionInput(); input.value = value;
     const key = Object.keys(input).find(name => name.startsWith("__reactProps$"))!;
-    (input as unknown as Record<string, {onChange: (event: {currentTarget: HTMLInputElement}) => void}>)[key]!.onChange({currentTarget: input});
+    (input as unknown as Record<string, {onChange: (event: {currentTarget: HTMLInputElement}) => void}>)[key]!.onChange(({ currentTarget: input, target: input }) as never);
   }
   function sendForm() { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", {bubbles: true, cancelable: true}) as unknown as Event); }
   /** The confirmation surface renders through the app's modal, which may live
@@ -492,7 +492,7 @@ describe("agent request cancellation route", () => {
     const input = container.querySelector<HTMLInputElement>(selector)!;
     input.value = value;
     const key = Object.keys(input).find(name => name.startsWith("__reactProps$"))!;
-    (input as unknown as Record<string, {onChange: (event: {currentTarget: typeof input}) => void}>)[key]!.onChange({currentTarget: input});
+    (input as unknown as Record<string, {onChange: (event: {currentTarget: typeof input}) => void}>)[key]!.onChange(({ currentTarget: input, target: input }) as never);
   }
   /** The scope type is a beUI listbox: open its trigger and pick the option by its visible label. */
   async function chooseSourceKind(label: string) {
@@ -621,12 +621,12 @@ describe("agent request cancellation route", () => {
     await act(async () => root.render(<AgentRoute locale={language} memberId="source-old" />)); await sourceDraft();
     const input = container.querySelector<HTMLInputElement>("#agent-scope-ids")!;
     const key = Object.keys(input).find(name => name.startsWith("__reactProps$"))!;
-    const oldEdit = (input as unknown as Record<string, {onChange: (event: {currentTarget: HTMLInputElement}) => void}>)[key]!.onChange;
+    const oldEdit = (input as unknown as Record<string, {onChange: (event: {currentTarget: HTMLInputElement; target: HTMLInputElement}) => void}>)[key]!.onChange;
     const applyButton = button("Start with these sources");
     const buttonKey = Object.keys(applyButton).find(name => name.startsWith("__reactProps$"))!;
     const oldApply = (applyButton as unknown as Record<string, {onClick: () => void}>)[buttonKey]!.onClick;
     await act(async () => root.render(<AgentRoute locale={language} memberId="source-new" />));
-    await act(async () => {input.value = "late"; oldEdit({currentTarget: input}); oldApply();});
+    await act(async () => {input.value = "late"; oldEdit({currentTarget: input, target: input}); oldApply();});
     expect(browser.location.search).toBe(""); expect(container.querySelector("#agent-scope-ids")).toBeNull(); expect(unloadBlocked()).toBe(false);
   });
 

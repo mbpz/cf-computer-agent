@@ -11,6 +11,7 @@ import {
   writeNotificationSearch,
 } from "../../frontend/pages/notifications/notification-model";
 import { NotificationsPage, type NotificationsPageState } from "../../frontend/pages/notifications/notifications-page";
+import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -91,7 +92,10 @@ describe("notification inbox page", () => {
         onMarkVisibleRead={vi.fn()}
         onOpen={vi.fn()}
       />);
-      expect(html).toContain(`${frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} 17`);
+      // The count is a beUI NumberTicker: its digits are split across animated spans,
+      // so the whole total only exists as the accessible `sr-only` copy.
+      expect(html).toContain(frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT"));
+      expect(html).toContain('class="sr-only">17</span>');
       expect(html).toContain(frontendText(locale, "NOTIFICATIONS_UNREAD"));
       expect(html).toContain(frontendText(locale, "NOTIFICATIONS_READ"));
       expect(html).not.toContain('href="/knowledge/knowledge-1"');
@@ -109,7 +113,8 @@ describe("notification inbox page", () => {
       expect(html).toContain(frontendText(locale, "NOTIFICATIONS_RECOVERY_DESCRIPTION"));
       expect(html).toContain(frontendText(locale, "NOTIFICATIONS_RETRY"));
       expect(html).not.toContain(frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ"));
-      expect(html).not.toContain(`${frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} 9`);
+      expect(html).not.toContain(`aria-live="polite">${frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")}`);
+      expect(html).not.toContain('class="sr-only">9</span>');
     }
   });
 
@@ -196,8 +201,8 @@ describe("notification inbox paging surface", () => {
     expect(container.textContent).toContain("21–40");
     await act(async () => (container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
     expect(onPageChange).toHaveBeenCalledWith(3);
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
-    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLSelectElement.prototype, "value")!.set!.call(select, "100"); select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    const sizeTrigger = container.querySelector('button[aria-haspopup="listbox"][aria-label="Rows per page"]')!;
+    await chooseValue(sizeTrigger, "100");
     expect(onPageSizeChange).toHaveBeenCalledWith(100);
     expect(onLoadMore).not.toHaveBeenCalled();
   });

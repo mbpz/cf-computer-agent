@@ -75,7 +75,7 @@ describe("role write refresh recovery", () => {
   });
 
   const draftKey = "memory-garden:admin-role-draft:v1:member-a";
-  const tasks = () => container.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement;
+  const tasks = () => container.querySelector('[role="checkbox"][aria-label="Use workspace tasks"]') as HTMLButtonElement;
   const named = (label: string) => container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement;
   async function type(label: string, value: string) {
     const el = named(label);
@@ -101,7 +101,7 @@ describe("role write refresh recovery", () => {
     expect(browser.sessionStorage.getItem(draftKey)).toContain("member-new");
     expect(unloadBlocked()).toBe(true); expect(patches).toBe(0);
     await remount(); await renderDetail();
-    expect(tasks().checked).toBe(true);
+    expect(tasks().getAttribute("aria-checked")).toBe("true");
     expect(named("Assigned members").value).toBe("member-new");
     expect(patches).toBe(0); expect(unloadBlocked()).toBe(true);
   });
@@ -129,7 +129,7 @@ describe("role write refresh recovery", () => {
     const original = storage.setItem;
     Object.defineProperty(storage, "setItem", { configurable: true, writable: true, value(key: string, value: string) { if (String(key).includes("admin-role-draft")) throw new Error("full"); return original.call(storage, key, value); } });
     await act(async () => tasks().click()); await flush();
-    expect(tasks().checked).toBe(true);
+    expect(tasks().getAttribute("aria-checked")).toBe("true");
     expect(container.textContent).toContain("could not record");
   });
 

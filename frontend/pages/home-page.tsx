@@ -1,3 +1,4 @@
+import { Button } from "../components/ui/button";
 import { ListChecks, MagnifyingGlass, Sparkle } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -72,13 +73,13 @@ function toDateLabel(value: string, locale: LocaleRuntime | undefined): string {
 
 export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: HomeState; locale?: LocaleRuntime; onRetry?: () => void; onLoadMoreRecent?: () => void }) {
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{state.retryable !== false && <button type="button" onClick={onRetry} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button>}</PageState>;
+  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{state.retryable !== false && <Button type="button" variant="outline" className="mt-3" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
 
   if (!("summary" in state)) return <LegacyHomePage locale={locale} state={state} />;
   const summary = state.summary;
 
   const unavailable = new Set(state.unavailable);
-  const failed = <div role="status"><p>{frontendText(locale, "COMMON_UNABLE_TO_LOAD")}</p><button type="button" onClick={onRetry} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button></div>;
+  const failed = <div role="status"><p>{frontendText(locale, "COMMON_UNABLE_TO_LOAD")}</p><Button type="button" variant="outline" className="mt-3" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></div>;
 
   return (
     <section className="space-y-6" aria-labelledby="workbench-title">
@@ -143,12 +144,12 @@ export function HomePage({ state, locale, onRetry, onLoadMoreRecent }: { state: 
                 {state.recentMoreError ? (
                   <div role="alert" data-home-more-error="knowledge" className="mt-3 flex flex-wrap items-center gap-2 text-sm text-destructive">
                     <span>{frontendText(locale, "COMMON_UNABLE_TO_LOAD")}</span>
-                    {onLoadMoreRecent && <button type="button" onClick={onLoadMoreRecent} className="rounded-md border px-3 py-1.5 font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button>}
+                    {onLoadMoreRecent && <Button type="button" variant="outline" size="sm" onClick={onLoadMoreRecent}>{frontendText(locale, "COMMON_RETRY")}</Button>}
                   </div>
                 ) : state.recentCursor && onLoadMoreRecent ? (
-                  <button type="button" data-home-more="knowledge" disabled={state.recentPending} onClick={onLoadMoreRecent} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-60">
+                  <Button type="button" variant="outline" className="mt-3" data-home-more="knowledge" disabled={state.recentPending} onClick={onLoadMoreRecent}>
                     {frontendText(locale, "KNOWLEDGE_LOAD_MORE")}
-                  </button>
+                  </Button>
                 ) : null}
               </>
             )}

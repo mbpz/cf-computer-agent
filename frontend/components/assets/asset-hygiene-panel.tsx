@@ -231,12 +231,10 @@ export function AssetHygienePanel({ locale, memberId, requester = fetch }: { loc
           </p>
           {scan.page.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "ADMIN_ASSET_ORPHAN_EMPTY")} /> : <ul className="divide-y rounded-md border">
             {scan.page.items.map((item) => <li key={item.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm" data-orphan-row={item.key}>
-              <label className="flex min-w-0 items-center gap-2 max-lg:min-h-11">
-                <Checkbox checked={selected.includes(item.key)} disabled={pending}
-                  aria-label={`${frontendText(locale, "ADMIN_ASSET_ORPHAN_SELECT")} ${item.key}`}
-                  onChange={() => toggle(item.key)} />
-                <span className="truncate">{item.key}</span>
-              </label>
+              <Checkbox className="min-w-0 max-lg:min-h-11" checked={selected.includes(item.key)} disabled={pending}
+                aria-label={`${frontendText(locale, "ADMIN_ASSET_ORPHAN_SELECT")} ${item.key}`}
+                label={item.key}
+                onCheckedChange={() => toggle(item.key)} />
               <span className="flex items-center gap-3 text-muted-foreground">
                 <span data-orphan-size={item.size}>{bytesLabel(item.size)}</span>
                 <span>{item.uploadedAt}</span>

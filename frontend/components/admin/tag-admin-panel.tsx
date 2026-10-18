@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { PageState } from "../ui/page-state";
+import { Input } from "../ui/input";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { ApiRequestError, type Fetcher } from "../../lib/api";
 import { createAdminTag, loadAdminTags, type AdminTag } from "../../lib/admin-tags-data";
@@ -116,11 +117,11 @@ export function TagAdminPanel({ spaceId, locale, requester = fetch }: { spaceId:
         <p className="text-sm font-medium">{frontendText(locale, "ADMIN_TAG_CREATE_TITLE")}</p>
         <div className="flex flex-wrap gap-3">
           <label className="flex flex-col gap-1 text-sm" htmlFor="tag-slug">{frontendText(locale, "ADMIN_TAG_SLUG")}
-            <input id="tag-slug" data-admin-tag-slug value={slug} disabled={pending} autoComplete="off" spellCheck={false} maxLength={80}
-              onChange={(event) => setSlug(event.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm" /></label>
+            <Input id="tag-slug" data-admin-tag-slug value={slug} disabled={pending} autoComplete="off" spellCheck={false} maxLength={80}
+              onChange={setSlug} /></label>
           <label className="flex flex-col gap-1 text-sm" htmlFor="tag-name">{frontendText(locale, "ADMIN_TAG_NAME")}
-            <input id="tag-name" data-admin-tag-name value={name} disabled={pending} autoComplete="off" spellCheck={false} maxLength={120}
-              onChange={(event) => setName(event.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm" /></label>
+            <Input id="tag-name" data-admin-tag-name value={name} disabled={pending} autoComplete="off" spellCheck={false} maxLength={120}
+              onChange={setName} /></label>
         </div>
         <Button type="button" data-admin-tag-create
           disabled={pending || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(slug) || name.trim().length === 0}

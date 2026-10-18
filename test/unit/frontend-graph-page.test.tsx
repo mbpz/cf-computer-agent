@@ -623,7 +623,7 @@ describe("graph view refresh", () => {
   async function typeQuery(value: string) {
     const el = query();
     const key = Object.keys(el).find((name) => name.startsWith("__reactProps$"));
-    await act(async () => { (el as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[key!].onChange({ currentTarget: { value } }); });
+    await act(async () => { (el as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[key!].onChange(({ currentTarget: { value }, target: { value } }) as never); });
   }
   async function render(load = vi.fn(async (_input: GraphQueryInput) => snapshot)) {
     await act(async () => { root.render(<GraphRoute memberId="member-a" locale={createLocaleRuntime()} load={load} />); });

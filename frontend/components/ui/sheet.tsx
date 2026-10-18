@@ -1,6 +1,7 @@
 import * as React from "react";
 import { BottomSheet } from "../motion/bottom-sheet";
 import { Drawer } from "../motion/drawer";
+import { Button } from "./button";
 import { cn } from "../../lib/utils";
 import { useFocusScope } from "./focus-scope";
 
@@ -73,7 +74,7 @@ export const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDi
 export const SheetTitle = ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => <h2 className={cn("text-lg font-semibold", className)} {...props} />;
 export const SheetClose = ({ className, onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => {
   const { onOpenChange } = React.useContext(SheetContext);
-  return <button type="button" className={cn("rounded-md p-2 text-sm hover:bg-accent", className)} onClick={(event) => {
+  return <Button variant="ghost" size="icon" type="button" className={cn("h-auto w-auto rounded-md p-2 text-sm hover:bg-accent", className)} onClick={(event) => {
     onClick?.(event);
     if (!event.defaultPrevented) onOpenChange?.(false);
   }} {...props} />;

@@ -41,9 +41,14 @@ describe("role permission and membership confirmation", () => {
   async function press(selector: string) { const el = document.querySelector(selector) as HTMLButtonElement; expect(el, selector).not.toBeNull(); await act(async () => el.click()); }
   async function input(label: string, value: string) { const el = document.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement; expect(el, label).not.toBeNull(); await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value); el.dispatchEvent(new browser.Event("input", { bubbles: true })); }); }
   const dialog = () => document.querySelector('[role="alertdialog"]');
+  const checkbox = (label: string) => {
+    const el = document.querySelector(`button[role="checkbox"][aria-label="${label}"]`) as HTMLButtonElement;
+    expect(el, label).not.toBeNull();
+    return el;
+  };
   const operationLabel = { save: "Save permissions", assign: "Assign member", unassign: "Remove" };
   async function prepare(operation: keyof typeof operationLabel) {
-    await mountDetail(); if (operation === "save") await press('input[aria-label="Use workspace tasks"]');
+    await mountDetail(); if (operation === "save") await press('button[role="checkbox"][aria-label="Use workspace tasks"]');
     if (operation === "assign") await input("Assigned members", "member-new");
     await click(operationLabel[operation]);
   }
@@ -63,7 +68,7 @@ describe("role permission and membership confirmation", () => {
   it.each(["Assigned members", "permissions"])("protects the detail input %s from navigation and unload until committed discard", async label => {
     await mountDetail(); expect(unloadWarns()).toBe(false);
     await act(async () => {
-      if (label === "permissions") (document.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).click();
+      if (label === "permissions") checkbox("Use workspace tasks").click();
       else await input(label, "draft");
       writeWorkspaceHistory("push", "/tasks");
     });
@@ -131,12 +136,12 @@ describe("role permission and membership confirmation", () => {
   });
 
   it("preserves independent unsaved permissions when the authoritative list refreshes", async () => {
-    await mountDetail(); await press('input[aria-label="Use workspace tasks"]');
+    await mountDetail(); await press('button[role="checkbox"][aria-label="Use workspace tasks"]');
     await mountDetail({ state: { kind: "ready", roles: roles.map(role => ({ ...role })) } });
-    expect((document.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).checked).toBe(true);
+    expect(checkbox("Use workspace tasks").getAttribute("aria-checked")).toBe("true");
     expect(unloadWarns()).toBe(true);
     await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await press('[data-confirm-action]');
-    expect((document.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).checked).toBe(false); expect(unloadWarns()).toBe(false);
+    expect(checkbox("Use workspace tasks").getAttribute("aria-checked")).toBe("false"); expect(unloadWarns()).toBe(false);
   });
 
   it("does not restore an old creation result into a newly mounted form", async () => {
@@ -175,18 +180,18 @@ describe("role permission and membership confirmation", () => {
   it.each(["save", "assign", "unassign"] as const)("canceling %s keeps the draft without writing", async operation => {
     await prepare(operation); expect(dialog()).not.toBeNull(); await press('[data-cancel-action]');
     for (const callback of Object.values(callbacks)) expect(callback).not.toHaveBeenCalled();
-    if (operation === "save") expect((document.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).checked).toBe(true);
+    if (operation === "save") expect(checkbox("Use workspace tasks").getAttribute("aria-checked")).toBe("true");
     if (operation === "assign") expect((document.querySelector('input[aria-label="Assigned members"]') as HTMLInputElement).value).toBe("member-new");
   });
 
   it.each(["permissions", "member draft"])("requires explicit discard when leaving with %s", async draft => {
-    await mountDetail(); if (draft === "permissions") await press('input[aria-label="Use workspace tasks"]'); else await input("Assigned members", "member-new");
+    await mountDetail(); if (draft === "permissions") await press('button[role="checkbox"][aria-label="Use workspace tasks"]'); else await input("Assigned members", "member-new");
     await act(async () => { writeWorkspaceHistory("push", "/admin/roles/reviewer"); });
     expect(browser.location.pathname).toBe("/admin/roles/editor"); expect(dialog()).not.toBeNull();
     await press('[data-cancel-action]'); expect(browser.location.pathname).toBe("/admin/roles/editor");
     await act(async () => { writeWorkspaceHistory("push", "/admin/roles/reviewer"); }); await press('[data-confirm-action]');
     expect(browser.location.pathname).toBe("/admin/roles/reviewer");
-    expect((document.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).checked).toBe(false);
+    expect(checkbox("Use workspace tasks").getAttribute("aria-checked")).toBe("false");
     expect((document.querySelector('input[aria-label="Assigned members"]') as HTMLInputElement).value).toBe("");
     expect(callbacks.onSave).not.toHaveBeenCalled();
   });
@@ -200,7 +205,7 @@ describe("role permission and membership confirmation", () => {
   });
 
   it("blocks membership changes while permission edits are unsaved", async () => {
-    await mountDetail(); await input("Assigned members", "member-new"); await press('input[aria-label="Use workspace tasks"]');
+    await mountDetail(); await input("Assigned members", "member-new"); await press('button[role="checkbox"][aria-label="Use workspace tasks"]');
     expect(button("Assign member").disabled).toBe(true); expect(button("Remove").disabled).toBe(true);
     expect(container.textContent).toContain("Save or revert permission changes");
   });
@@ -208,11 +213,11 @@ describe("role permission and membership confirmation", () => {
   it("lets the default administrator add a missing workbench permission without dropping menu permissions", async () => {
     const adminRole: AdminRole = { id: "role-admin", key: "admin", name: "Administrator", description: "Full workspace governance", allowBits: "0x17ffff", memberCount: 1, assignedMemberIds: ["me"], status: "active", isSystem: true };
     await mountDetail({ state: { kind: "ready", roles: [adminRole] }, roleId: "role-admin" });
-    const vm = document.querySelector('input[aria-label="Use workspace VM"]') as HTMLInputElement;
-    const read = document.querySelector('input[aria-label="Read knowledge"]') as HTMLInputElement;
-    const tasks = document.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement;
-    expect(vm.disabled).toBe(false); expect(vm.checked).toBe(false);
-    expect(tasks.disabled).toBe(true); expect(tasks.checked).toBe(true);
+    const vm = checkbox("Use workspace VM");
+    const read = checkbox("Read knowledge");
+    const tasks = checkbox("Use workspace tasks");
+    expect(vm.disabled).toBe(false); expect(vm.getAttribute("aria-checked")).toBe("false");
+    expect(tasks.disabled).toBe(true); expect(tasks.getAttribute("aria-checked")).toBe("true");
     expect(read.disabled).toBe(true);
     expect(button("Save permissions").disabled).toBe(true);
     await act(async () => vm.click());

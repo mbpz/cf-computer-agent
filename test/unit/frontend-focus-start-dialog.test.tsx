@@ -26,7 +26,7 @@ describe("Focus start dialog", () => {
     const field = dialog()!.querySelector<HTMLInputElement>("input[placeholder]")!;
     const propsKey = Object.keys(field).find(key => key.startsWith("__reactProps$"))!;
     const props = (field as unknown as Record<string, {onChange: (event: {currentTarget: {value: string}}) => void}>)[propsKey];
-    await act(async () => props.onChange({currentTarget: {value}}));
+    await act(async () => props.onChange(({ currentTarget: {value}, target: {value} }) as never));
   };
 
   async function mount() {

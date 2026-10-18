@@ -587,8 +587,8 @@ function errorResponse(): Response { return Response.json({ error: { code: "TEST
 async function change(input: HTMLInputElement, value: string) { await act(async () => {
   input.value = value;
   const reactPropsKey = Object.keys(input).find((key) => key.startsWith("__reactProps$"));
-  const reactProps = reactPropsKey ? (input as unknown as Record<string, { onChange?: (event: { currentTarget: HTMLInputElement }) => void }>)[reactPropsKey] : undefined;
-  reactProps?.onChange?.({ currentTarget: input });
+  const reactProps = reactPropsKey ? (input as unknown as Record<string, { onChange?: (event: { currentTarget: HTMLInputElement; target: HTMLInputElement }) => void }>)[reactPropsKey] : undefined;
+  reactProps?.onChange?.({ currentTarget: input, target: input });
 }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
 async function settle() { await act(async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }

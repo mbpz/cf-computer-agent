@@ -4,7 +4,7 @@ import { cn } from "../lib/utils";
 import type { SupportedPageSize } from "../lib/numbered-page";
 import { Button } from "./ui/button";
 import { Pagination } from "./ui/pagination";
-import { Select, SelectOption } from "./ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 interface DataPaginationBaseProps extends React.HTMLAttributes<HTMLDivElement> {
   page?: number;
@@ -40,7 +40,7 @@ export function DataPagination({ className, page: rawPage, pageSize: rawPageSize
   return <div className={cn("flex flex-wrap items-center justify-between gap-3 border-t pt-3", className)} {...props}>
     <p className="text-sm text-muted-foreground">{labels.totalLabel} <span className="font-medium text-foreground">{total}</span><span aria-hidden="true"> · </span>{labels.rangeLabel} <span className="font-medium text-foreground">{rangeStart}–{rangeEnd}</span></p>
     <div className="flex items-center gap-3">
-      <label className="flex items-center gap-2 text-sm text-muted-foreground"><span className="hidden lg:inline">{labels.pageSizeLabel}</span><Select aria-label={labels.pageSizeLabel} className="w-[4.75rem]" disabled={pending} value={String(pageSize)} onChange={(event) => onPageSizeChange(Number(event.currentTarget.value) as SupportedPageSize)}>{pageSizes.map((size) => <SelectOption key={size} value={size}>{size}</SelectOption>)}</Select></label>
+      <label className="flex items-center gap-2 text-sm text-muted-foreground"><span className="hidden lg:inline">{labels.pageSizeLabel}</span><Select disabled={pending} value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value) as SupportedPageSize)}><SelectTrigger aria-label={labels.pageSizeLabel} className="w-[4.75rem]"><SelectValue /></SelectTrigger><SelectContent>{pageSizes.map((size) => <SelectItem key={size} value={String(size)}>{size}</SelectItem>)}</SelectContent></Select></label>
       <div data-pagination-desktop="true" className="hidden sm:flex"><Pagination currentPage={page} pageCount={totalPages} maxPage={maxPage} disabled={pending} onPageChange={onPageChange} labels={labels} /></div>
       <div data-pagination-mobile="true" className="flex items-center gap-2 sm:hidden">
         <Button type="button" variant="outline" size="icon" aria-label={labels.previousLabel} disabled={pending || page <= 1} onClick={() => onPageChange(previousPage)} className="size-11 shrink-0 rounded-lg px-0"><span aria-hidden="true">‹</span></Button>

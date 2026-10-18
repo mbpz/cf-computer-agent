@@ -71,7 +71,7 @@ describe.each(["goals", "projects"] as const)("%s status confirmation", kind => 
     const input = container.querySelector<HTMLInputElement>('input[name="title"]') ?? container.querySelector<HTMLInputElement>('input'); expect(input).not.toBeNull();
     // This node environment does not install React's browser input event plugin.
     const prop = Object.keys(input!).find(key => key.startsWith("__reactProps$"))!;
-    await act(async () => { (input as unknown as Record<string, { onChange: (event: unknown) => void }>)[prop].onChange({ currentTarget: { value: "Unsubmitted draft" } }); });
+    await act(async () => { (input as unknown as Record<string, { onChange: (event: unknown) => void }>)[prop].onChange(({ currentTarget: { value: "Unsubmitted draft" }, target: { value: "Unsubmitted draft" } }) as never); });
     expect(input!.value).toBe("Unsubmitted draft");
     await click(action("Archive")); await mount({ actionError: "Earlier error" }); expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
     await click(document.querySelector<HTMLButtonElement>("[data-cancel-action]")!); expect(input!.value).toBe("Unsubmitted draft");

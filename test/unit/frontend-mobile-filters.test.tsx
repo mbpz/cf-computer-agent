@@ -44,7 +44,7 @@ describe("mobile filter surfaces", () => {
   const listboxTriggers = (scope: ParentNode) => [...scope.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')];
   const clickNode = async (node: HTMLElement) => { await act(async () => { node.click(); await settle(); }); };
   const changeInput = async (node: HTMLInputElement, value: string) => {
-    await act(async () => { reactProps<{ onChange: (event: unknown) => void }>(node).onChange({ currentTarget: { value } }); await settle(); });
+    await act(async () => { reactProps<{ onChange: (event: unknown) => void }>(node).onChange(({ currentTarget: { value }, target: { value } }) as never); await settle(); });
   };
   const pressEscape = async () => {
     const target = browser.document.activeElement ?? panel()!;

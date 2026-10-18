@@ -6,6 +6,7 @@ import { ReviewDetailRoute } from "../../frontend/pages/admin/review-detail-rout
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import type { Fetcher } from "../../frontend/lib/api";
+import { chooseValue, fieldValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -275,8 +276,10 @@ describe("review detail read recovery", () => {
     await act(async () => button("Reject").click()); await typeNote("中".repeat(1334));
     expect(button("Confirm rejection").disabled).toBe(true); expect(sent).toHaveLength(0);
     await typeNote("Duplicate source");
-    const select = container.querySelector('select[data-review-reason]') as HTMLSelectElement;
-    await act(async () => { select.value = "duplicate"; select.dispatchEvent(new browser.Event("change", { bubbles: true })); });
+    const reason = container.querySelector('button[data-review-reason]');
+    expect(reason).not.toBeNull();
+    await chooseValue(reason, "duplicate");
+    expect(fieldValue(reason)).toBe("duplicate");
     await submitDecision("Confirm rejection"); await flush();
     expect(sent).toEqual([{ reasonCode: "duplicate", note: "Duplicate source" }]);
   });

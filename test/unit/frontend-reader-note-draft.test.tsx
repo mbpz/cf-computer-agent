@@ -30,7 +30,7 @@ describe("private reader note draft ownership", () => {
   }
   function title() { return document.querySelector("#reader-note-title") as HTMLInputElement; }
   function body() { return document.querySelector("#reader-note-body") as HTMLTextAreaElement; }
-  function edit(name: "title" | "body", value: string) { props<{onChange: (event: unknown) => void}>(name === "title" ? title() : body()).onChange({ currentTarget: { value } }); }
+  function edit(name: "title" | "body", value: string) { props<{onChange: (event: unknown) => void}>(name === "title" ? title() : body()).onChange(({ currentTarget: { value }, target: { value } }) as never); }
   function save() { return Array.from(document.querySelectorAll<HTMLButtonElement>("[data-reader-note] button")).find(button => /^(Save note|Saving)/.test(button.textContent ?? ""))!; }
   function unloadWarns() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
   async function click(selector: string) { await act(async () => { (document.querySelector(selector) as HTMLButtonElement).click(); }); await settle(); }

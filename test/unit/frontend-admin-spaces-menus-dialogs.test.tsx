@@ -87,7 +87,7 @@ describe("spaces and menus overlays", () => {
     expect(document.querySelectorAll("[data-menu-create-dialog]")).toHaveLength(1);
     expect(document.querySelector('[name="key"]')).toBeTruthy();
     expect(document.querySelector('[name="path"]')).toBeTruthy();
-    expect(document.querySelector('[name="parentId"]')).toBeTruthy();
+    expect(document.querySelector('[data-menu-create-dialog] button[aria-label="Parent menu"][aria-haspopup="listbox"]')).toBeTruthy();
     await click(document.querySelector("[data-menu-create-cancel]") as HTMLButtonElement);
     expect(document.querySelector("[data-menu-create-dialog]")).toBeNull();
   });

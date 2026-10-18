@@ -21,7 +21,7 @@ describe("timeline persistent recovery through App", () => {
   const stored = (key = createKey) => app!.browser.sessionStorage.getItem(key);
   const recovery = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   async function click(n: HTMLButtonElement) { expect(n).toBeTruthy(); await act(async () => { n.click(); }); }
-  async function fill(value: string) { const n = title(); const k = Object.keys(n).find(k => k.startsWith("__reactProps$"))!; await act(async () => (n as any)[k].onChange({ currentTarget: { value } })); }
+  async function fill(value: string) { const n = title(); const k = Object.keys(n).find(k => k.startsWith("__reactProps$"))!; await act(async () => (n as any)[k].onChange(({ currentTarget: { value }, target: { value } }) as never)); }
   async function forcedRemount(p: string) { await forceRemountAppAt(app!, `/projects/${p}/timeline`); await waitForApp(() => !!title()); }
   async function mount(raw: string | null = null, member = "alice", key = createKey) {
     app = await mountApp({ url: "https://app.test/projects/p/timeline", configureBrowser(w) { if (raw) w.sessionStorage.setItem(key, raw); }, fetch: async (input, init) => {

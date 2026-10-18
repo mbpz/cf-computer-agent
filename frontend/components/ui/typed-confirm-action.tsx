@@ -58,7 +58,7 @@ export function TypedConfirmAction({ open, title, description, expectLabel, expe
       {/* The shared field primitive, so the typed confirmation cannot drift into a
           second input surface: same beUI field language as every other text field. */}
       <Input id={inputId} data-typed-confirm-input value={typed} disabled={pending} autoComplete="off" spellCheck={false}
-        onChange={(event) => setTyped(event.target.value)} className="mt-2" />
+        onChange={(value) => setTyped(value)} className="mt-2" />
       <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
         <Button data-cancel-action variant="outline" disabled={pending} onClick={onCancel}>{cancelLabel}</Button>
         <SlideActionButton

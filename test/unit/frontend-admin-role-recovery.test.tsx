@@ -133,7 +133,7 @@ describe("role write recovery", () => {
   });
   it("edits task and VM permission bits without discarding other bits",async()=>{
     let sent="";vi.stubGlobal("fetch",async(_: unknown,init?:RequestInit)=>{if(init?.method==="PATCH"){sent=String(init.body);return json({role:role({allowBits:"0x300001"})});}return json({items:[role()]});});
-    await renderDetail();for(const name of ["Use workspace tasks","Use workspace VM"]){const checkbox=container.querySelector(`input[aria-label="${name}"]`) as HTMLInputElement;expect(checkbox).toBeTruthy();await act(async()=>checkbox.click());}
+    await renderDetail();for(const name of ["Use workspace tasks","Use workspace VM"]){const checkbox=container.querySelector(`[role="checkbox"][aria-label="${name}"]`) as HTMLButtonElement|null;expect(checkbox).toBeTruthy();await act(async()=>checkbox!.click());}
     await confirmChange("Save permissions");expect(JSON.parse(sent)).toEqual({allowBits:"0x300001",expectedAllowBits:"0x1"});
   });
 

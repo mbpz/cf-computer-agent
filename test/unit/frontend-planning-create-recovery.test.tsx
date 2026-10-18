@@ -31,7 +31,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await act(async () => {
       const node = title(); node.value = value;
       const key = Object.keys(node).find((key) => key.startsWith("__reactProps$"))!;
-      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange({ currentTarget: node });
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange(({ currentTarget: node, target: node }) as never);
     });
   }
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise((done) => setTimeout(done, 0)); }); }
@@ -222,7 +222,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     const node = main().querySelector("textarea")!; const key = Object.keys(node).find((key) => key.startsWith("__reactProps$"))!;
     await act(async () => {
       node.value = "a".repeat(10_001);
-      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLTextAreaElement }) => void }>)[key]!.onChange({ currentTarget: node });
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLTextAreaElement }) => void }>)[key]!.onChange(({ currentTarget: node, target: node }) as never);
     });
     await click(create()); expect(bodies).toHaveLength(1); expect([...String(bodies[0]!.title)]).toHaveLength(200);
   });
@@ -249,7 +249,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await act(async () => {
       node.value = value;
       const prop = Object.keys(node).find((name) => name.startsWith("__reactProps$"))!;
-      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLTextAreaElement }) => void }>)[prop]!.onChange({ currentTarget: node });
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLTextAreaElement }) => void }>)[prop]!.onChange(({ currentTarget: node, target: node }) as never);
     });
   }
   it("keeps an unsent title and description after refresh without creating", async () => {

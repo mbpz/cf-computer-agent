@@ -102,9 +102,9 @@ describe("role routes registered like sibling admin routes", () => {
     await act(async () => root.render(<AdminRoleDetailRoute locale={locale()} roleId="role-editor" />)); await flush();
     expect(container.textContent).toContain("Editor");
     expect(container.textContent).toContain("knowledge:read");
-    const read = container.querySelector('input[aria-label="Read knowledge"]') as HTMLInputElement;
-    expect(read.checked).toBe(true);
-    expect((container.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).checked).toBe(false);
+    const read = container.querySelector('[role="checkbox"][aria-label="Read knowledge"]');
+    expect(read?.getAttribute("aria-checked")).toBe("true");
+    expect(container.querySelector('[role="checkbox"][aria-label="Use workspace tasks"]')?.getAttribute("aria-checked")).toBe("false");
   });
 
   async function input(label: string, value: string) { const el = container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement; await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value); el.dispatchEvent(new browser.Event("input", { bubbles: true })); }); }

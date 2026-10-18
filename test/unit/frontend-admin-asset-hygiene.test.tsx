@@ -130,10 +130,13 @@ describe("admin asset hygiene panel", () => {
 
   async function scanAndSelectBoth() {
     await click("Scan for orphaned objects");
-    const boxes = [...container.querySelectorAll('[data-orphan-row] input[type="checkbox"]')] as HTMLInputElement[];
+    // The selection control is beUI's `button[role="checkbox"]`; its state is
+    // `aria-checked`, and activation goes through the button itself.
+    const boxes = [...container.querySelectorAll('[data-orphan-row] [role="checkbox"]')] as HTMLButtonElement[];
     expect(boxes).toHaveLength(2);
     await act(async () => { boxes[0]!.click(); boxes[1]!.click(); });
     await flush();
+    expect(boxes.map((box) => box.getAttribute("aria-checked"))).toEqual(["true", "true"]);
   }
 
   it("shows the capacity and thresholds the server sent, and never estimates a missing one", async () => {

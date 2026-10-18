@@ -48,7 +48,7 @@ export function FocusTaskPicker({locale, onSelect, onDenied, onClose}: {
   const changePageSize = (pageSize: SupportedPageSize) => { if (state.kind !== "ready" || loadingMore) return; setRequest({ page: 1, pageSize }); };
   return <section aria-label={frontendText(locale, "FOCUS_CHOOSE_TASK")} className="space-y-3 rounded-md border p-3">
     <form className="flex gap-2" onSubmit={event => {event.preventDefault(); setState({kind: "loading"}); setQuery({ q: draft.trim() });}}>
-      <Input aria-label={frontendText(locale, "FOCUS_SEARCH_TASKS")} value={draft} maxLength={200} onChange={event => setDraft(event.currentTarget.value)} />
+      <Input aria-label={frontendText(locale, "FOCUS_SEARCH_TASKS")} value={draft} maxLength={200} onChange={value => setDraft(value)} />
       <Button type="submit" variant="secondary">{frontendText(locale, "FOCUS_SEARCH_TASKS")}</Button>
     </form>
     {state.kind === "loading" && <p role="status">{frontendText(locale, "FOCUS_TASKS_LOADING")}</p>}

@@ -2,7 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Button } from '../../../components/ui/button';
 import { Checkbox } from '../../../components/ui/checkbox';
 import { Input } from '../../../components/ui/input';
-import { Select } from '../../../components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
 import type { VmAssetImport } from './asset-import';
 
 export function VmAssetImportPanel({model,locale='en'}:{model:VmAssetImport;locale?:'en'|'zh-CN'}) {
@@ -22,7 +22,7 @@ export function VmAssetImportPanel({model,locale='en'}:{model:VmAssetImport;loca
     <p>{t('Only this frozen file is uploaded. No automatic upload or parsing. Closing stops local work, not server processing; pending metadata is retained for this member.','仅上传所选文件快照，不会自动上传或解析。关闭只停止本地操作，不撤销服务端处理；未决元数据按当前成员保留。')}</p>
     {state.selected&&<p className="break-all">{state.selected.path} · {state.selected.file.size} bytes · {state.selected.file.type}<br/>SHA-256: {state.selected.file.sha256}</p>}
     {canUpload&&<>
-      <label className="flex gap-2"><Checkbox data-vm-asset-upload-ack checked={uploadAck} disabled={busy} onChange={e=>setUploadAck(e.target.checked)}/>{t('I checked this original file and authorize uploading it; it contains no credentials or secrets. Binary originals are not rendered here.','我已检查原文件，确认不含凭证或密钥，并同意上传。此处不渲染二进制原件。')}</label>
+      <Checkbox data-vm-asset-upload-ack className="items-start" checked={uploadAck} disabled={busy} label={t('I checked this original file and authorize uploading it; it contains no credentials or secrets. Binary originals are not rendered here.','我已检查原文件，确认不含凭证或密钥，并同意上传。此处不渲染二进制原件。')} onCheckedChange={setUploadAck} />
       <Button data-vm-asset-upload disabled={busy||!uploadAck||flow?.error==='storage'} onClick={()=>void model.upload(uploadAck)}>{t('Upload / retry identical file','上传 / 重试同一文件')}</Button>
     </>}
     {flow?.intent&&<div className="space-y-2">
@@ -42,10 +42,10 @@ export function VmAssetImportPanel({model,locale='en'}:{model:VmAssetImport;loca
     </div>}
     {state.parsed&&<pre data-vm-asset-markdown className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2" tabIndex={0}>{state.parsed.markdown}</pre>}
     {editable&&<>
-      <label className="block">{t('Review title','审核标题')}<Input value={title} maxLength={200} disabled={busy} onChange={e=>setTitle(e.target.value)}/></label>
-      <label className="block">{t('Requested space ID (server checks access)','目标空间 ID（服务端校验权限）')}<Input data-vm-asset-space value={space} maxLength={200} disabled={busy} onChange={e=>setSpace(e.target.value)}/></label>
-      <label className="block">{t('Requested visibility','申请可见范围')}<Select value={visibility} disabled={busy} onChange={e=>setVisibility(e.target.value as 'shared'|'admin_only')}><option value="shared">{t('Shared','共享')}</option><option value="admin_only">{t('Administrators only','仅管理员')}</option></Select></label>
-      <label className="flex gap-2"><Checkbox data-vm-asset-review-ack checked={reviewAck} disabled={busy} onChange={e=>setReviewAck(e.target.checked)}/>{t('I reviewed the parsed content and destination; it contains no secrets and may be submitted for review.','我已核对解析内容与目标空间，确认无敏感凭证，同意提交审核。')}</label>
+      <label className="block">{t('Review title','审核标题')}<Input value={title} maxLength={200} disabled={busy} onChange={value =>setTitle(value)}/></label>
+      <label className="block">{t('Requested space ID (server checks access)','目标空间 ID（服务端校验权限）')}<Input data-vm-asset-space value={space} maxLength={200} disabled={busy} onChange={value =>setSpace(value)}/></label>
+      <label className="block">{t('Requested visibility','申请可见范围')}<Select value={visibility} disabled={busy} onValueChange={value=>setVisibility(value as 'shared'|'admin_only')}><SelectTrigger aria-label={t('Requested visibility','申请可见范围')}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="shared">{t('Shared','共享')}</SelectItem><SelectItem value="admin_only">{t('Administrators only','仅管理员')}</SelectItem></SelectContent></Select></label>
+      <Checkbox data-vm-asset-review-ack className="items-start" checked={reviewAck} disabled={busy} label={t('I reviewed the parsed content and destination; it contains no secrets and may be submitted for review.','我已核对解析内容与目标空间，确认无敏感凭证，同意提交审核。')} onCheckedChange={setReviewAck} />
       <Button data-vm-asset-submit disabled={busy||!reviewAck||!title.trim()||!space.trim()} onClick={()=>void model.submit({title,target:{requestedSpaceId:space,requestedCollectionId:null,requestedVisibility:visibility},acknowledged:reviewAck})}>{t('Submit parsed content for review','提交解析内容审核')}</Button>
     </>}
     {(state.error||flow?.error)&&<p role="alert">{state.error==='ASSET_STORAGE_NOT_CONFIGURED'?t('Object storage is disabled. No asset will be uploaded; this cannot fall back to direct publication.','对象存储未启用，不会上传资产，也不会退化为直接发布。'):t('Action not confirmed. Check file limits, permissions and receipt; use readback or explicit retry, never assume a failed request was rolled back.','操作未确认。请检查文件限制、权限和回执，使用回读或明确重试；请求失败不代表服务端已回滚。')} ({state.error??flow?.error})</p>}

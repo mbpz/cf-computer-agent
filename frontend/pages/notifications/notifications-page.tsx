@@ -6,6 +6,7 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { DataPagination } from "../../components/data-pagination";
 import { NotificationStack } from "../../components/motion/notification-stack";
+import { NumberTicker } from "../../components/motion/number-ticker";
 import { OverflowActions, type OverflowActionItem } from "../../components/motion/overflow-actions";
 import { FilterSelect } from "../../components/ui/filter-select";
 import { FilterDisclosure } from "../../components/ui/filter-disclosure";
@@ -92,7 +93,7 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
       description={frontendText(locale, "NOTIFICATIONS_DESCRIPTION")}
       /* The server unread total only describes a loaded window; it stays hidden while
          loading, in read-only recovery, on a read failure or a revoked read. */
-      actions={ready && <p className="text-sm font-medium" aria-live="polite">{frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} {summary?.unread ?? 0}</p>}
+      actions={ready && <p className="text-sm font-medium" aria-live="polite">{frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} <NumberTicker value={summary?.unread ?? 0} startOnView={false} /></p>}
     />
     <FilterDisclosure label={frontendText(locale, "COMMON_FILTERS")} appliedCount={appliedFilters.length} rowClassName="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
       <FilterSelect label={frontendText(locale, "NOTIFICATIONS_READ_FILTER")} ariaLabel={frontendText(locale, "NOTIFICATIONS_READ_FILTER")} value={filters.read ?? ""} disabled={pending} onChange={(value) => onFilterChange({ ...filters, read: readFilter(value) })} options={readOptions} />

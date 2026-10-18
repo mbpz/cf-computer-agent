@@ -269,25 +269,27 @@ function ArtifactBody(props: {
         <Statements locale={locale} knowledgeItemId={knowledgeItemId} heading={frontendText(locale, "KNOWLEDGE_DERIVATIVES_BRIEF_OPEN_QUESTIONS")} statements={artifact.openQuestions} />
       </>;
     case "comparison":
+      // beUI's `bouncy-accordion` (slug: bouncy-accordion) carries the matrix:
+      // one row per topic, the topic as the trigger and the compared passages as
+      // the row description. `data-comparison-topic` and the cell hook move to
+      // the row wrapper through the payload's `attributes` slot, so the same
+      // content stays addressable without a `<table>`.
       return <>
-        <table className="w-full text-sm">
-          <thead><tr>
-            <th scope="col" className="text-left text-xs uppercase tracking-wide text-muted-foreground">{frontendText(locale, "KNOWLEDGE_DERIVATIVES_COMPARISON_TOPIC")}</th>
-            <th scope="col" className="text-left text-xs uppercase tracking-wide text-muted-foreground">{frontendText(locale, "KNOWLEDGE_DERIVATIVES_COMPARISON_CELLS")}</th>
-          </tr></thead>
-          <tbody>
-            {artifact.rows.map((row) => <tr key={row.topic} className="border-t align-top">
-              <th scope="row" className="py-2 pr-3 text-left font-medium">{row.topic}</th>
-              <td className="py-2">
-                {row.cells.map((cell) => <div key={cell.sourceId} className="mb-2">
-                  <p className="whitespace-pre-wrap">{cell.text}</p>
-                  <p className="text-xs text-muted-foreground">{cell.sourceId}</p>
-                  {citationsOf(cell.citations)}
-                </div>)}
-              </td>
-            </tr>)}
-          </tbody>
-        </table>
+        <BouncyAccordion
+          className="space-y-3"
+          items={artifact.rows.map((row) => ({
+            id: row.topic,
+            title: row.topic,
+            attributes: { "data-comparison-topic": row.topic },
+            description: <>
+              {row.cells.map((cell) => <div key={cell.sourceId} className="mb-2" data-comparison-cell={cell.sourceId}>
+                <p className="whitespace-pre-wrap">{cell.text}</p>
+                <p className="text-xs text-muted-foreground">{cell.sourceId}</p>
+                {citationsOf(cell.citations)}
+              </div>)}
+            </>,
+          }))}
+        />
         <Statements locale={locale} knowledgeItemId={knowledgeItemId} heading={frontendText(locale, "KNOWLEDGE_DERIVATIVES_CONSENSUS")} statements={artifact.consensus} />
         <Statements locale={locale} knowledgeItemId={knowledgeItemId} heading={frontendText(locale, "KNOWLEDGE_DERIVATIVES_CONFLICTS")} statements={artifact.conflicts} />
       </>;

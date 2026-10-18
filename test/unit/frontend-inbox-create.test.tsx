@@ -4,6 +4,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountApp, waitForApp, forceRemountAppAt, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
+import { chooseValue } from "./helpers/listbox";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 describe("inbox stable capture through App", () => {
   let app: MountedApp | undefined;
@@ -22,7 +23,7 @@ describe("inbox stable capture through App", () => {
     await act(async () => {
       const node = content(); node.value = value;
       const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
-      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLTextAreaElement }) => void }>)[key]!.onChange({ currentTarget: node });
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLTextAreaElement }) => void }>)[key]!.onChange(({ currentTarget: node, target: node }) as never);
     });
   }
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
@@ -168,15 +169,12 @@ describe("inbox stable capture through App", () => {
     await act(async () => {
       node.value = value;
       const prop = Object.keys(node).find(name => name.startsWith("__reactProps$"))!;
-      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[prop]!.onChange({ currentTarget: node });
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[prop]!.onChange(({ currentTarget: node, target: node }) as never);
     });
   }
   async function chooseLink() {
-    const node = document.querySelector("[data-inbox-capture-dialog] select")!;
-    await act(async () => {
-      node.value = "link";
-      node.dispatchEvent(new app!.browser.Event("change", { bubbles: true }));
-    });
+    const node = document.querySelector<HTMLButtonElement>('[data-inbox-capture-dialog] button[aria-haspopup="listbox"]')!;
+    await chooseValue(node, "link");
   }
   it("keeps an unsent capture after refresh without sending", async () => {
     await mount(); await chooseLink(); await source("https://example.com/note"); await change("Keep this capture");

@@ -67,7 +67,7 @@ describe("inbox action confirmation", () => {
   it("retains drafts and prevents same-tick capture before persisting an intent", async () => {
     const create = vi.fn(); await mount({ onCreate: create }); await openCapture(); const input = document.querySelector('textarea')!;
     const prop = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
-    await act(async () => { (input as any)[prop].onChange({ currentTarget: { value: "Unsaved draft" } }); });
+    await act(async () => { (input as any)[prop].onChange(({ currentTarget: { value: "Unsaved draft" }, target: { value: "Unsaved draft" } }) as never); });
     const expectedDraft = { kind: "ready", draft: { kind: "text", content: "Unsaved draft", sourceUrl: "" } };
     expect(loadInboxDraft("alice")).toEqual(expectedDraft); expect(loadInboxIntent("alice")).toEqual({ kind: "empty" });
     const capture = action("Add to inbox"); const archive = action("Archive");

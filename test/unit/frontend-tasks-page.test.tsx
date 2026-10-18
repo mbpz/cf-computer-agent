@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import type { TaskItem } from "../../frontend/lib/tasks-data";
 import { TasksPage } from "../../frontend/pages/tasks/tasks-page";
+import { chooseValue, fieldValue, settle } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -106,8 +107,11 @@ describe("tasks page paging surface", () => {
     expect(container.textContent).toContain("21–40");
     await act(async () => (container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click());
     expect(onPageChange).toHaveBeenCalledWith(3);
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Rows per page"]')!;
-    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLSelectElement.prototype, "value")!.set!.call(select, "50"); select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    const pageSize = container.querySelector('button[aria-haspopup="listbox"][aria-label="Rows per page"]');
+    expect(pageSize).not.toBeNull();
+    expect(fieldValue(pageSize)).toBe("20");
+    await chooseValue(pageSize, "50");
+    await settle();
     expect(onPageSizeChange).toHaveBeenCalledWith(50);
     expect(onLoadMore).not.toHaveBeenCalled();
   });

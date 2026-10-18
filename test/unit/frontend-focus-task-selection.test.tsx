@@ -36,7 +36,7 @@ describe("Focus owned task selection through App", () => {
   const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
   const click = async (node: HTMLElement) => act(async () => node.click());
   async function finish(label: string) { await click(button(label)); const confirm=document.querySelector<HTMLButtonElement>("[data-confirm-action]")!; expect(confirm).not.toBeNull(); await act(async()=>{confirm.click();confirm.click();}); }
-  async function input(value: string) { await act(async () => { const node = document.querySelector('input[aria-label="Search tasks"]')!; const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!; (node as any)[key].onChange({currentTarget: {value}}); }); }
+  async function input(value: string) { await act(async () => { const node = document.querySelector('input[aria-label="Search tasks"]')!; const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!; (node as any)[key].onChange(({ currentTarget: {value}, target: {value} }) as never); }); }
   async function mount(wait = true, desktop = false) {
     app = await mountAuthenticatedApp({url: "https://app.test/focus", role: "contributor", permissionMask: "0x100000", configureBrowser: browser => {stubViewport(browser, desktop);for (const [key, value] of seedStorage) browser.sessionStorage.setItem(key, value);}, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"), method = init?.method ?? "GET";
@@ -134,7 +134,7 @@ describe("Focus owned task selection through App", () => {
   function changeTitle(value: string) {
     const node = document.querySelector<HTMLInputElement>('input[placeholder]')!;
     const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!;
-    (node as any)[key].onChange({currentTarget: {value}});
+    (node as any)[key].onChange(({ currentTarget: {value}, target: {value} }) as never);
   }
   it("protects a same-event focus title edit and keeps it on cancel", async () => {
     await mount(); await openComposer();

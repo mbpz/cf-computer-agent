@@ -12,7 +12,7 @@ describe("calendar creation and cancellation through App", () => {
   const main=()=>app!.container.querySelector("main")!;
   const button=(text:string)=>[...document.querySelectorAll<HTMLButtonElement>("button")].find(n=>n.textContent===text)!;
   const click=async(node:HTMLElement)=>act(async()=>node.click());
-  async function input(label:string,value:string) { await act(async()=>{const node=document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; const props=Object.keys(node).find(k=>k.startsWith("__reactProps$"))!; (node as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[props]!.onChange({currentTarget:{value}});}); }
+  async function input(label:string,value:string) { await act(async()=>{const node=document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; const props=Object.keys(node).find(k=>k.startsWith("__reactProps$"))!; (node as unknown as Record<string, { onChange: (event: { currentTarget: { value: string } }) => void }>)[props]!.onChange(({ currentTarget: {value}, target: {value} }) as never);}); }
   const composer = () => document.querySelector("[data-calendar-create-dialog]");
   const composerTrigger = () => main().querySelector<HTMLButtonElement>("[data-calendar-create-open]")!;
   /** The composer only mounts while its dialog is open, so every create step opens it first. */

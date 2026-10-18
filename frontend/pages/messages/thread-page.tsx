@@ -10,7 +10,7 @@ import { MessageBubble, MessageBubbleContent } from "../../components/agents/mes
 import { MessageScroller } from "../../components/agents/message-scroller";
 import { PageHeader } from "../../components/ui/page-header";
 import { PageState } from "../../components/ui/page-state";
-import { Select, SelectOption } from "../../components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import type { DiscussionMessage, DiscussionSendInput, DiscussionThread } from "../../lib/discussions-data";
 import { frontendPaginationLabels, frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -175,7 +175,7 @@ function DiscussionComposer({ locale, body, status, locked, replyTo, onBodyChang
   onSubmit: (event: FormEvent) => Promise<void>;
 }) {
   return <form className="space-y-2 rounded-lg border bg-card p-3" onSubmit={(event) => void onSubmit(event)}>
-    {replyTo && <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>{frontendText(locale, "MESSAGES_REPLYING_TO")} {replyTo.authorMemberId || replyTo.id}</span><button type="button" className="text-primary hover:underline" disabled={locked} onClick={onCancelReply}>{frontendText(locale, "MESSAGES_CANCEL_REPLY")}</button></div>}
+    {replyTo && <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>{frontendText(locale, "MESSAGES_REPLYING_TO")} {replyTo.authorMemberId || replyTo.id}</span><Button type="button" variant="ghost" size="sm" className="h-auto px-0 text-primary hover:underline" disabled={locked} onClick={onCancelReply}>{frontendText(locale, "MESSAGES_CANCEL_REPLY")}</Button></div>}
     {status === "error" && <Alert variant="destructive"><AlertTitle>{frontendText(locale, "MESSAGES_SEND_ERROR")}</AlertTitle></Alert>}
     {operationKey && <div className="space-y-2 text-xs text-muted-foreground"><p>{frontendText(locale, "MESSAGES_OPERATION_KEY")} <code className="break-all">{operationKey}</code></p>{onLookup && <Button type="button" variant="outline" disabled={status === "pending" || status === "checking"} onClick={() => void onLookup()}>{frontendText(locale, status === "checking" ? "MESSAGES_CHECKING_RESULT" : "MESSAGES_CHECK_RESULT")}</Button>}</div>}
     <label className="block text-sm font-medium" htmlFor="discussion-composer">{frontendText(locale, "MESSAGES_COMPOSER_LABEL")}</label>
@@ -201,5 +201,5 @@ function discussionComposerInput(
 
 export function DiscussionCursorPagination({ locale, page, limit, pending, hasNext, onPrevious, onNext, onLimitChange }: { locale: LocaleRuntime; page: number; limit: 20 | 50; pending: boolean; hasNext: boolean; onPrevious: () => void; onNext: () => void; onLimitChange: (limit: 20 | 50) => void }) {
   const labels = frontendPaginationLabels(locale);
-  return <nav aria-label={labels.navigationLabel} className="flex flex-wrap items-center justify-between gap-3 border-t pt-3"><p className="text-sm text-muted-foreground">{labels.pageLabel(page)}</p><div className="flex items-center gap-2"><label className="flex items-center gap-2 text-sm text-muted-foreground"><span>{labels.pageSizeLabel}</span><Select aria-label={labels.pageSizeLabel} value={String(limit)} disabled={pending} onChange={(event) => onLimitChange(Number(event.currentTarget.value) as 20 | 50)}><SelectOption value="20">20</SelectOption><SelectOption value="50">50</SelectOption></Select></label><Button type="button" variant="outline" aria-label={labels.previousLabel} disabled={pending || page <= 1} onClick={onPrevious}>{labels.previousLabel}</Button><Button type="button" variant="outline" aria-label={labels.nextLabel} disabled={pending || !hasNext} onClick={onNext}>{labels.nextLabel}</Button></div></nav>;
+  return <nav aria-label={labels.navigationLabel} className="flex flex-wrap items-center justify-between gap-3 border-t pt-3"><p className="text-sm text-muted-foreground">{labels.pageLabel(page)}</p><div className="flex items-center gap-2"><label className="flex items-center gap-2 text-sm text-muted-foreground"><span>{labels.pageSizeLabel}</span><Select value={String(limit)} disabled={pending} onValueChange={(value) => onLimitChange(Number(value) as 20 | 50)}><SelectTrigger aria-label={labels.pageSizeLabel} className="w-auto"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem></SelectContent></Select></label><Button type="button" variant="outline" aria-label={labels.previousLabel} disabled={pending || page <= 1} onClick={onPrevious}>{labels.previousLabel}</Button><Button type="button" variant="outline" aria-label={labels.nextLabel} disabled={pending || !hasNext} onClick={onNext}>{labels.nextLabel}</Button></div></nav>;
 }

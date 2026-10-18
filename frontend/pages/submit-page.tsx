@@ -6,7 +6,7 @@ import { ConfirmAction } from "../components/ui/confirm-action";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import type { SubmissionDraft } from "../components/submissions/submission-form-model";
 import { SubmissionTargetPicker, type SubmissionTargetsActions, type SubmissionTargetsView } from "../components/submissions/submission-target-picker";
 import { SubmissionCommentsPanel, type SubmissionCommentsState } from "../components/submissions/submission-comments-panel";
@@ -122,9 +122,10 @@ export function SubmitPage({ draft, state, locale, onSubmit, onDraftChange, reco
       <Card><CardHeader><CardTitle>{frontendText(locale, resubmitting ? "SUBMIT_RESUBMIT_EDIT" : "SUBMIT_NEW")}</CardTitle></CardHeader><CardContent className="space-y-5">
         {targets && <SubmissionTargetPicker locale={locale} view={targets.view} actions={targets.actions} />}
         {resubmitting && resubmit?.title && target && target.requestedVisibility === "admin_only" && <p data-submission-resubmit-visibility-locked className="text-xs text-muted-foreground">{frontendText(locale, "SUBMIT_RESUBMIT_VISIBILITY_LOCKED")}</p>}
-        <div><Label htmlFor="submission-title">{frontendText(locale, "SUBMIT_TITLE_LABEL")}</Label><Input id="submission-title" value={draft.title} onChange={(event) => onDraftChange?.({ title: event.currentTarget.value })} /></div>
-        <div><Label htmlFor="submission-mode">{frontendText(locale, "SUBMIT_MODE_LABEL")}</Label><Select id="submission-mode" value={draft.mode} onChange={(event) => onDraftChange?.({ mode: event.currentTarget.value as SubmissionDraft["mode"] })} className="mt-2">
-          <option value="text">{frontendText(locale, "SUBMIT_CONTENT_LABEL")}</option><option value="markdown">{frontendText(locale, "SUBMIT_MARKDOWN_LABEL")}</option><option value="code">{frontendText(locale, "SUBMIT_CODE_LABEL")}</option>
+        <div><Label htmlFor="submission-title">{frontendText(locale, "SUBMIT_TITLE_LABEL")}</Label><Input id="submission-title" value={draft.title} onChange={(value) => onDraftChange?.({ title: value })} /></div>
+        <div><Label htmlFor="submission-mode">{frontendText(locale, "SUBMIT_MODE_LABEL")}</Label><Select value={draft.mode} onValueChange={(value) => onDraftChange?.({ mode: value as SubmissionDraft["mode"] })} className="mt-2">
+          <SelectTrigger id="submission-mode"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="text">{frontendText(locale, "SUBMIT_CONTENT_LABEL")}</SelectItem><SelectItem value="markdown">{frontendText(locale, "SUBMIT_MARKDOWN_LABEL")}</SelectItem><SelectItem value="code">{frontendText(locale, "SUBMIT_CODE_LABEL")}</SelectItem></SelectContent>
         </Select></div>
         <div><Label htmlFor="submission-content">{frontendText(locale, draft.mode === "code" ? "SUBMIT_CODE_LABEL" : draft.mode === "markdown" ? "SUBMIT_MARKDOWN_LABEL" : "SUBMIT_CONTENT_LABEL")}</Label><Textarea id="submission-content" value={draft.content} onChange={(event) => onDraftChange?.({ content: event.currentTarget.value })} className="min-h-64 font-mono" /></div>
         {draftSave && <div className="flex flex-wrap items-center gap-3" aria-live="polite">

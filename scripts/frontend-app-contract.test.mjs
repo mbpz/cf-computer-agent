@@ -217,7 +217,7 @@ test("graph suggestions stay member-scoped, read-only, and manually promoted", a
 test("graph canvas keeps a semantic mobile fallback when the visual viewport is hidden", async () => {
   const [graphCanvas, css] = await Promise.all([graphCanvasSource(), graphCanvasCss()]);
   assert.match(graphCanvas, /data-graph-fallback/u);
-  assert.match(graphCanvas, /<button[\s\S]*data-graph-node-id=/u);
+  assert.match(graphCanvas, /<(?:Button|button)[\s\S]*data-graph-node-id=/u);
   assert.match(css, /@media \(max-width: 48rem\)/u);
   assert.match(css, /\.graph-canvas__viewport\s*\{\s*display: none;/u);
   assert.doesNotMatch(css, /@media \(max-width: 48rem\)[\s\S]*?\.graph-canvas__fallback[\s\S]*?display:\s*none/u);

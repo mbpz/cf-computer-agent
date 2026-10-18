@@ -3,6 +3,7 @@ import { useCreateDraft } from "../../lib/use-create-draft";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { discardBlockedReviewNoteDraft, loadReviewNoteDraft, persistReviewNoteDraft } from "../../lib/review-note-draft";
 import type { ReviewNoteInput } from "./review-detail-data";
+import { Button } from "../ui/button";
 
 export type ReviewNoteAction = "reject" | "request_changes";
 type Entry = ReviewNoteInput & { action: ReviewNoteAction };
@@ -62,7 +63,7 @@ export function ReviewDraftProvider({ children, locale, preserveUnsent = false, 
   return <Context.Provider value={{ ...api, revision: draft.fields.notes, confirming: draft.confirming, preserveUnsent }}>
     {recordBlocked ? <div data-review-note-draft-blocked role="alert">
       <p>{frontendText(locale, "REVIEW_NOTE_DRAFT_RECORD_BLOCKED")}</p>
-      <button type="button" onClick={discardRecord}>{frontendText(locale, "REVIEW_NOTE_DRAFT_RECORD_DISCARD")}</button>
+      <Button type="button" variant="outline" size="sm" className="max-lg:min-h-11" onClick={discardRecord}>{frontendText(locale, "REVIEW_NOTE_DRAFT_RECORD_DISCARD")}</Button>
     </div> : null}
     {recordNotice ? <p role="alert">{recordNotice}</p> : null}
     {children}{draft.confirmation}

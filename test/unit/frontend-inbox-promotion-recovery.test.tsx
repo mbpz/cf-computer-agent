@@ -185,7 +185,7 @@ describe("inbox promotion recovery through App", () => {
     await waitForApp(() => !!app!.browser.document.querySelector('[aria-label="Subtask title"]'));
     const input = app!.browser.document.querySelector('[aria-label="Subtask title"]') as unknown as HTMLInputElement;
     const propsKey = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
-    await act(async () => { input.value = "Pending child"; (input as any)[propsKey].onChange({ currentTarget: input }); });
+    await act(async () => { input.value = "Pending child"; (input as any)[propsKey].onChange(({ currentTarget: input, target: input }) as never); });
     await click(taskButton("Add subtask")); await waitForApp(() => !!unknownTask());
     const original = app!.browser.sessionStorage.getItem(taskKey);
     expect(original).toContain("Pending child"); expect(taskBodies).toHaveLength(1);

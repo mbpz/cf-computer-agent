@@ -333,7 +333,7 @@ describe("shadcn workspace shell", () => {
   it("keeps the mobile Sheet focus viewport padded inside its scroll boundary", async () => {
     const onNavigate = vi.fn();
     await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Home</p></AppShell>));
-    const trigger = container.querySelector("[data-sheet-open] summary") as HTMLElement;
+    const trigger = container.querySelector("[data-mobile-nav-trigger]") as HTMLElement;
     await act(async () => trigger.click());
 
     const dialog = container.querySelector('[role="dialog"]');
@@ -365,7 +365,7 @@ describe("shadcn workspace shell", () => {
   it("closes the mobile drawer on Escape and on its backdrop, handing focus back to the trigger", async () => {
     const onNavigate = vi.fn();
     await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Home</p></AppShell>));
-    const trigger = container.querySelector("[data-sheet-open] summary") as HTMLElement;
+    const trigger = container.querySelector("[data-mobile-nav-trigger]") as HTMLElement;
 
     // Focus transfer into the panel: the drawer shows, the focus scope lands on
     // the panel's first control instead of leaving the caret behind the scrim.
@@ -392,7 +392,7 @@ describe("shadcn workspace shell", () => {
   it("keeps the mobile drawer hierarchy so the knowledge family indents under its one top-level entry", async () => {
     const onNavigate = vi.fn();
     await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Home</p></AppShell>));
-    await act(async () => (container.querySelector("[data-sheet-open] summary") as HTMLElement).click());
+    await act(async () => (container.querySelector("[data-mobile-nav-trigger]") as HTMLElement).click());
     const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
     const rows = Array.from(dialog.querySelectorAll("nav [data-nav-node]")) as HTMLElement[];
     const depthOf = (href: string) => rows.find((row) => row.getAttribute("href") === href)?.getAttribute("data-nav-depth");
@@ -482,7 +482,7 @@ describe("shadcn workspace shell", () => {
     const collapsed = container.querySelector('[data-account-trigger-variant="collapsed"]') as HTMLButtonElement;
     expect(collapsed.getAttribute("aria-label")).toBe(expectedLabel);
 
-    await act(async () => (container.querySelector("[data-sheet-open] summary") as HTMLElement).click());
+    await act(async () => (container.querySelector("[data-mobile-nav-trigger]") as HTMLElement).click());
     const mobile = container.querySelector('[data-account-trigger-variant="mobile"]') as HTMLButtonElement;
     expect(mobile.getAttribute("aria-label")).toBe(expectedLabel);
 

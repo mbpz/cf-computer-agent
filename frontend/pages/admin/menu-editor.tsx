@@ -5,7 +5,7 @@ import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
 import { Input } from "../../components/motion/input";
 import { Switch } from "../../components/motion/switch";
-import { Select } from "../../components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import type { AdminMenu, AdminMenuCreate, AdminMenuUpdate } from "../../lib/admin-menus-data";
 import { useCreateDraft } from "../../lib/use-create-draft";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -58,7 +58,7 @@ export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave, initia
   const visit = (nodes: readonly AdminMenu[], depth: number) => nodes.forEach(node => { if (!excluded.has(node.id) && depth + (menu ? height(menu) : 1) <= 4) parents.push(node); visit(node.children, depth + 1); });
   visit(menus, 1);
   const text = (key: string) => frontendText(locale, key);
-  const selectField = (name: keyof typeof draft, label: string, choices: readonly { value: string; label: string }[]) => <label className="grid gap-1 text-sm" key={name}><span>{text(label)}</span><Select name={name} value={draft[name]} onChange={event => formDraft.edit(name, event.target.value)}>{choices.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</Select></label>;
+  const selectField = (name: keyof typeof draft, label: string, choices: readonly { value: string; label: string }[]) => <div className="grid gap-1 text-sm" key={name}><span>{text(label)}</span><Select value={draft[name]} onValueChange={value => formDraft.edit(name, value)}><SelectTrigger aria-label={text(label)}><SelectValue /></SelectTrigger><SelectContent>{choices.map(choice => <SelectItem key={choice.value} value={choice.value}>{choice.label}</SelectItem>)}</SelectContent></Select></div>;
   const textField = (name: keyof typeof draft, label: string) => <Input key={name} name={name} label={text(label)} autoFocus={name === (menu ? "path" : "key")} type={name === "position" ? "number" : "text"} min={name === "position" ? 0 : undefined} max={name === "position" ? 10000 : undefined} maxLength={name === "path" ? 200 : 128} value={draft[name]} onChange={value => formDraft.edit(name, value)} />;
   const requestCancel = () => { if (pending || submitting.current || confirmationRef.current || formDraft.isConfirming()) return; const draft = formDraft.current.current; if (JSON.stringify(draft) !== JSON.stringify(initialDraft.current)) requestConfirmation({ kind: "discard", draft }); else onCancel(); };
   return <><Dialog open onOpenChange={(next) => { if (!next) requestCancel(); }}><DialogContent role="dialog" dismissLabel={frontendText(locale, "COMMON_DISMISS")} {...(menu ? { "data-menu-edit-dialog": "" } : { "data-menu-create-dialog": "" })} aria-labelledby={titleId} className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto">

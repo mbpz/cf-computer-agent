@@ -7,6 +7,7 @@ import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createDiscussionOperationJournal } from "../../frontend/lib/discussion-intent";
 import { createDiscussionSubmitController } from "../../frontend/pages/messages/discussion-model";
+import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -697,8 +698,8 @@ describe("discussion routes", () => {
       await act(async () => { writeWorkspaceHistory("replace", `${path}${search}`); });
       await waitFor(() => (container.textContent?.includes(expected) ?? false) && container.querySelector("[aria-busy='true']") === null);
     }
-    const select = container.querySelector("select") as HTMLSelectElement;
-    await act(async () => { select.value = "50"; select.dispatchEvent(new browser.Event("change", { bubbles: true })); });
+    const sizeTrigger = container.querySelector('button[aria-haspopup="listbox"]');
+    await chooseValue(sizeTrigger, "50");
     await waitFor(() => browser.location.search === "?unknown=kept&limit=50" && container.querySelector("[aria-busy='true']") === null);
     expect(container.textContent).toContain("Page 1");
     expect(calls.at(-1)).toMatch(/limit=50$/u);

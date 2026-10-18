@@ -1,20 +1,26 @@
-import * as React from "react";
-import { cn } from "../../lib/utils";
-import { fieldShellClass } from "./input";
-
 /**
- * The native select for form fields: it keeps the platform picker (form
- * association, `<optgroup>`, the operating system's own wheel on touch) and is
- * drawn on the shared field shell (`ui/input.tsx`), so a form field, a text field
- * and a page-size control are the same field.
+ * The app's one picker: beUI's `motion/select` listbox, re-exported under the
+ * names form fields already import. A form field, a toolbar filter and a
+ * page-size control now share the same surface, the same keyboard behaviour and
+ * the same panel animation, and no surface reaches for the platform picker.
  *
- * A toolbar filter row is not this control: it is `ui/filter-select.tsx`, built on
- * beUI's `motion/select` listbox and carrying the filter landmarks. Keeping both
- * means every surface has exactly one picker; a filter row never reaches for a
- * native select, and a form field never grows a second listbox implementation.
+ * The value is a `string` and the change is `onValueChange(value)`: a picker no
+ * longer carries a native `change` event, `name` or `required`. A form that has
+ * to send the value keeps it in the same state the handler writes and puts it in
+ * the request payload, which is what the call sites did in practice.
+ *
+ * The caption of a form field is an external `<Label htmlFor>`; the trigger
+ * takes that `id`, so the visible caption names the real button.
  */
-export const Select = React.forwardRef<HTMLSelectElement, React.ComponentProps<"select">>(({ className, children, ...props }, ref) => <select ref={ref} className={cn("flex h-11 w-full rounded-full px-3.5 text-base leading-6", fieldShellClass, "bg-background", className)} {...props}>{children}</select>);
-Select.displayName = "Select";
-
-export const SelectOption = React.forwardRef<HTMLOptionElement, React.ComponentProps<"option">>((props, ref) => <option ref={ref} {...props} />);
-SelectOption.displayName = "SelectOption";
+export {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  type SelectContentProps,
+  type SelectItemProps,
+  type SelectProps,
+  type SelectTriggerProps,
+  type SelectValueProps,
+} from "../motion/select";

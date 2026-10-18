@@ -8,6 +8,7 @@ import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../fronte
 import { loadSubmissionIntent } from "../../frontend/lib/submission-intent";
 import { mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { createMaturityRouteFetch } from "../helpers/workbench-maturity-route-fixtures";
+import { chooseValue } from "./helpers/listbox";
 
 describe("submission owner lifecycle", () => {
   let journey: MountedApp | undefined;
@@ -88,6 +89,17 @@ describe("submission owner lifecycle", () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
   }
 
+  /**
+   * Picks a composer mode option inside an event turn that must stay synchronous
+   * (a captured change followed by a submit or a rejected response). The option
+   * list is always mounted inside the trigger's field wrapper, so this is the
+   * same click `chooseValue` makes, without its nested `act` batches.
+   */
+  function chooseModeNow(container: HTMLElement, value: string) {
+    const trigger = container.querySelector("#submission-mode")!;
+    (trigger.parentElement!.querySelector(`[role="option"][data-value="${value}"]`) as HTMLButtonElement).click();
+  }
+
   function content() { return (journey!.container.querySelector("#submission-content") as HTMLTextAreaElement).value; }
 
   it("requires an explicit discard for a restored draft and persists it only after committed navigation", async () => {
@@ -115,8 +127,7 @@ describe("submission owner lifecycle", () => {
     await renderOwner("member-a");
     await act(async () => {
       expect(writeWorkspaceHistory("push", "/tasks")).toBe("deferred");
-      const mode = mounted.container.querySelector("#submission-mode") as HTMLSelectElement;
-      mode.value = "code"; mode.dispatchEvent(new mounted.browser.Event("change", { bubbles: true }));
+      chooseModeNow(mounted.container, "code");
       mounted.container.querySelector("form")!.dispatchEvent(new mounted.browser.Event("submit", { bubbles: true, cancelable: true }));
     });
     expect(posts).toBe(0);
@@ -132,8 +143,7 @@ describe("submission owner lifecycle", () => {
     await renderOwner("member-a");
     await waitForDestination();
     await act(async () => {
-      const mode = mounted.container.querySelector("#submission-mode") as HTMLSelectElement;
-      mode.value = "code"; mode.dispatchEvent(new mounted.browser.Event("change", { bubbles: true }));
+      chooseModeNow(mounted.container, "code");
       mounted.container.querySelector("form")!.dispatchEvent(new mounted.browser.Event("submit", { bubbles: true, cancelable: true }));
     });
     await flush();
@@ -152,11 +162,11 @@ describe("submission owner lifecycle", () => {
     const title = mounted.container.querySelector("#submission-title") as HTMLInputElement;
     const body = mounted.container.querySelector("#submission-content") as HTMLTextAreaElement;
     const form = mounted.container.querySelector("form")!;
-    const titleChange = props<{ onChange: (event: { currentTarget: HTMLInputElement }) => void }>(title).onChange;
+    const titleChange = props<{ onChange: (event: { currentTarget: HTMLInputElement; target: HTMLInputElement }) => void }>(title).onChange;
     const bodyChange = props<{ onChange: (event: { currentTarget: HTMLTextAreaElement }) => void }>(body).onChange;
     await waitForDestination();
     await act(async () => {
-      title.value = "Latest title"; titleChange({ currentTarget: title });
+      title.value = "Latest title"; titleChange({ currentTarget: title, target: title });
       body.value = "Latest body"; bodyChange({ currentTarget: body });
       form.dispatchEvent(new mounted.browser.Event("submit", { bubbles: true, cancelable: true }));
     });
@@ -171,9 +181,9 @@ describe("submission owner lifecycle", () => {
     await renderOwner("member-a"); await submit();
     const retry = props<{ onClick: () => void }>(mounted.container.querySelector("[data-submission-retry]")!).onClick;
     const input = mounted.container.querySelector("#submission-title") as HTMLInputElement;
-    const edit = props<{ onChange: (event: { currentTarget: HTMLInputElement }) => void }>(input).onChange;
+    const edit = props<{ onChange: (event: { currentTarget: HTMLInputElement; target: HTMLInputElement }) => void }>(input).onChange;
     await renderOwner("member-b");
-    await act(async () => { input.value = "stale owner"; edit({ currentTarget: input }); retry(); });
+    await act(async () => { input.value = "stale owner"; edit({ currentTarget: input, target: input }); retry(); });
     await flush();
     expect(posts).toBe(1);
     expect(content()).toBe("private B");
@@ -230,8 +240,7 @@ describe("submission owner lifecycle", () => {
       expect(unloadBlocked()).toBe(true);
     });
     await act(async () => {
-      const mode = mounted.container.querySelector("#submission-mode") as HTMLSelectElement;
-      mode.value = "code"; mode.dispatchEvent(new mounted.browser.Event("change", { bubbles: true }));
+      chooseModeNow(mounted.container, "code");
       reject(new Error("unknown outcome"));
     });
     await flush();
@@ -292,7 +301,7 @@ describe("submission owner lifecycle", () => {
     const mounted = await openOwner(async () => { posts++; return Response.json({}); });
     await renderOwner("member-a");
     const input = mounted.container.querySelector("#submission-title") as HTMLInputElement;
-    await act(async () => { input.value = ""; props<{ onChange: (event: { currentTarget: HTMLInputElement }) => void }>(input).onChange({ currentTarget: input }); });
+    await act(async () => { input.value = ""; props<{ onChange: (event: { currentTarget: HTMLInputElement }) => void }>(input).onChange(({ currentTarget: input, target: input }) as never); });
     await submit();
     expect(posts).toBe(0); expect(loadSubmissionIntent("member-a", mounted.browser.localStorage).kind).toBe("empty");
     await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("deferred"); });
@@ -384,10 +393,7 @@ describe("submission owner lifecycle", () => {
       return Response.json({ submission: { id: `submission-${attempts.length}` } });
     });
     await submit();
-    await act(async () => {
-      const mode = mounted.container.querySelector("#submission-mode") as HTMLSelectElement;
-      mode.value = "code"; mode.dispatchEvent(new mounted.browser.Event("change", { bubbles: true }));
-    });
+    await chooseValue(mounted.container.querySelector("#submission-mode"), "code");
     expect((mounted.container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
     await act(async () => { (mounted.container.querySelector('[data-submission-retry]') as HTMLButtonElement).click(); });
     await flush();
@@ -487,11 +493,7 @@ describe("submission owner lifecycle", () => {
   it("continues editing and submitting when storage becomes unavailable", async () => {
     const mounted = await openOwner();
     Object.defineProperty(mounted.browser, "localStorage", { configurable: true, get() { throw new Error("storage blocked"); } });
-    await act(async () => {
-      const mode = mounted.container.querySelector("#submission-mode") as HTMLSelectElement;
-      mode.value = "code";
-      mode.dispatchEvent(new mounted.browser.Event("change", { bubbles: true }));
-    });
+    await chooseValue(mounted.container.querySelector("#submission-mode"), "code");
     expect(content()).toBe("private A");
     await submit();
     await waitForApp(() => content() === "");
@@ -517,11 +519,7 @@ describe("submission owner lifecycle", () => {
     const pending = new Promise<Response>((done) => { resolve = done; });
     const mounted = await openOwner(async () => pending);
     await submit();
-    await act(async () => {
-      const mode = mounted.container.querySelector("#submission-mode") as HTMLSelectElement;
-      mode.value = "code";
-      mode.dispatchEvent(new mounted.browser.Event("change", { bubbles: true }));
-    });
+    await chooseValue(mounted.container.querySelector("#submission-mode"), "code");
     expect(loadOfflineSubmissionDraft("member-a", mounted.browser.localStorage)).toEqual({ ...a, mode: "code" });
     await act(async () => { resolve(Response.json({ submission: { id: "submission-a" } })); });
     await flush();
