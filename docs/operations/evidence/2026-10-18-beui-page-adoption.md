@@ -24,7 +24,7 @@
 - 生产扫站：管理员 33 入口 + contributor 22 入口，各 375/768/1280 × zh/en × 浅/深，共 **660 次 `scrollWidth - clientWidth = 0`**；焦点探针 33 路线均可 Tab 进入 skip link → 侧栏 → 内容。
 - contributor 由一次性邀请创建，扫站后禁用并删除隔离 profile；管理员与 contributor 均在真实 signed-browser 中执行。
 - 修复：768 宽下筛选下拉面板（audit/assets/members）溢出 80px；`filter-select` 关闭态去掉 `min-w-56`，靠近右缘时改为右对齐。
-- 空/错态由 focused tests 覆盖，生产未做故障注入；真实屏幕阅读器语音仍未作为本记录范围。
+- 空/错态由 focused tests 覆盖，生产未做故障注入。
 
 ## 边界
 
