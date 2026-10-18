@@ -52,4 +52,7 @@ rtk npm run test:frontend-operations
 - 远程迁移 `0076` 已应用，远程表 `studio_artifacts` 存在。
 - 部署 `75ec5046-8fc8-418d-954e-69b0f5287483`（100%）后前端资源与本地构建一致；阅读器 `/knowledge/39fd7d01…` 正常渲染"已保存内容"空态；`GET /api/knowledge/:id/artifacts` 返回 200 `{"artifacts":[]}`。
 - 写入验收被上游阻断：两次生成闪卡均返回 `AI_UNAVAILABLE`，远程 `studio_artifacts` 与产物审计均为 0 行，未产生副作用。
-- 根因：`APP_CONFIG.model` 使用 `@cf/meta/llama-3.1-8b-instruct-fp8-fast`，该 ID 不在 `wrangler ai models list` 目录中；已改为存在的 `@cf/meta/llama-3.1-8b-instruct-fp8`。写入验收待重新部署后重试；`KB-013` 发布/验收保持 pending。
+- 根因一：`APP_CONFIG.model` 使用 `@cf/meta/llama-3.1-8b-instruct-fp8-fast`，该 ID 不在 `wrangler ai models list` 目录中。
+- 根因二：目录内的 `@cf/meta/llama-3.1-8b-instruct-fp8` 不支持 JSON Schema，直接返回 `AiError 5025: This model doesn't support JSON Schema`；所有结构化生成都发送 `response_format=json_schema`。
+- 修复：模型改为 `@cf/mistralai/mistral-small-3.1-24b-instruct`（目录内、支持 JSON Schema、中文输出可用）；新增 `src/ai/client.ts` 适配器把新版 chat-completion 的 `choices[0].message.content` 归一化为旧的 `{response}`；AI 超时从 5s 提升到 20s（实测调用约 5s）。
+- REST 验证：同一 schema 的闪卡请求返回合法中文 JSON；写入验收待重新部署后重试；`KB-013` 发布/验收保持 pending。

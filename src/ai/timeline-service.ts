@@ -31,7 +31,7 @@ interface ProviderEvent { date: string; title: string; description: string; cita
 interface PreparedSource { citation: SourceSummaryCitation; body: string }
 
 export class TimelineService {
-  constructor(private readonly ai: TimelineAi, private readonly timeoutMs = 5_000) {}
+  constructor(private readonly ai: TimelineAi, private readonly timeoutMs: number = APP_CONFIG.aiTimeoutMs) {}
 
   async generate(scope: LibraryScope, knowledgeItemId: string, sources: CitationSource[]): Promise<TimelineResult> {
     assertScope(scope);

@@ -7,7 +7,7 @@ import type { SourceSummaryCitation } from "./source-summary-service";
 const MAX_SOURCES = 8;
 export const MAX_RESEARCH_STEPS = 8;
 export const MAX_RESEARCH_AI_CALLS = 1;
-export const MAX_RESEARCH_WALL_MS = 5_000;
+export const MAX_RESEARCH_WALL_MS: number = APP_CONFIG.aiTimeoutMs;
 const MAX_SECTIONS = 12;
 const MAX_TEXT = 4_000;
 const MAX_ID = 512;
@@ -51,7 +51,7 @@ interface ProviderReport { title: string; sections: ProviderSection[]; insuffici
 interface PreparedSource { citation: ResearchReportCitation; body: string }
 
 export class ResearchReportService {
-  constructor(private readonly repository: ResearchReportRepository, private readonly ai: ResearchReportAi, private readonly timeoutMs = MAX_RESEARCH_WALL_MS, private readonly now: () => Date = () => new Date()) {}
+  constructor(private readonly repository: ResearchReportRepository, private readonly ai: ResearchReportAi, private readonly timeoutMs: number = MAX_RESEARCH_WALL_MS, private readonly now: () => Date = () => new Date()) {}
 
   async start(scope: LibraryScope, knowledgeItemId: string, goal: string, planInput: unknown): Promise<ResearchRun> {
     assertScope(scope);

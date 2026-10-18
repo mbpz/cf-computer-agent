@@ -120,6 +120,7 @@ import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
 import { StudioArtifactRepository, StudioArtifactService } from "./studio/artifacts";
+import { createAiAdapter, type AiBindingLike } from "./ai/client";
 import { FlashcardService } from "./ai/flashcard-service";
 import { QuizService } from "./ai/quiz-service";
 import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSaveResearchDraftTool, createSearchKnowledgeTool } from "./agent/tools";
@@ -281,7 +282,7 @@ function createRequestServices(
   context: RequestContext,
   dependencies: AppDependencies,
 ) {
-  const ai = dependencies.ai || env.AI;
+  const ai = createAiAdapter((dependencies.ai || env.AI) as unknown as AiBindingLike) as unknown as typeof env.AI;
   const audit = new AuditRepository(env.DB);
   const maintenance = new MaintenanceControlService(env.MAINTENANCE?.getByName("production"), env.MAINTENANCE_CONTROL_TOKEN);
   const roles = new RolesRepository(env.DB);

@@ -22,7 +22,7 @@ const SYSTEM_PROMPT = [
 ].join(" ");
 
 const NO_EVIDENCE_ANSWER = "知识库中没有足够依据回答这个问题。";
-const DEFAULT_TIMEOUT_MS = 5_000;
+const DEFAULT_TIMEOUT_MS = APP_CONFIG.aiTimeoutMs;
 const MAX_TIMEOUT_MS = 30_000;
 const MAX_SOURCES = 8;
 const MAX_CITATION_ID_CODE_POINTS = 512;

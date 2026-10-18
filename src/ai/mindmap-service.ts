@@ -17,7 +17,7 @@ export interface MindmapResult { nodes: MindmapNode[]; edges: MindmapEdge[]; mes
 interface ProviderNode { id: string; label: string; citationIds: string[] } interface ProviderEdge { from: string; to: string; relation: string; citationIds: string[] } interface ProviderMindmap { nodes: ProviderNode[]; edges: ProviderEdge[]; insufficientEvidence: boolean } interface PreparedSource { citation: SourceSummaryCitation; body: string }
 
 export class MindmapService {
-  constructor(private readonly ai: MindmapAi, private readonly timeoutMs = 5_000) {}
+  constructor(private readonly ai: MindmapAi, private readonly timeoutMs: number = APP_CONFIG.aiTimeoutMs) {}
   async generate(scope: LibraryScope, knowledgeItemId: string, sources: CitationSource[]): Promise<MindmapResult> {
     assertScope(scope); const prepared = prepareSources(knowledgeItemId, sources); let raw: unknown;
     try { raw = await withTimeout(this.ai.run(APP_CONFIG.model, { messages: [

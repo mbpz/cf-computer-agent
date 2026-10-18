@@ -12,7 +12,7 @@ export interface FlashcardResult { cards: Flashcard[]; messageKey?: "KNOWLEDGE_E
 interface ProviderCard { question: string; answer: string; citationIds: string[] } interface ProviderCards { cards: ProviderCard[]; insufficientEvidence: boolean } interface PreparedSource { citation: SourceSummaryCitation; body: string }
 
 export class FlashcardService {
-  constructor(private readonly ai: FlashcardAi, private readonly timeoutMs = 5_000) {}
+  constructor(private readonly ai: FlashcardAi, private readonly timeoutMs: number = APP_CONFIG.aiTimeoutMs) {}
   async generate(scope: LibraryScope, knowledgeItemId: string, sources: CitationSource[]): Promise<FlashcardResult> {
     assertScope(scope); const prepared = prepareSources(knowledgeItemId, sources); let raw: unknown;
     try { raw = await withTimeout(this.ai.run(APP_CONFIG.model, { messages: [

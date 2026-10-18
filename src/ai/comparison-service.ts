@@ -60,7 +60,7 @@ interface ProviderComparison { rows: ProviderRow[]; consensus: ProviderStatement
 interface PreparedSource { citation: SourceSummaryCitation; body: string }
 
 export class ComparisonService {
-  constructor(private readonly ai: ComparisonAi, private readonly timeoutMs = 5_000) {}
+  constructor(private readonly ai: ComparisonAi, private readonly timeoutMs: number = APP_CONFIG.aiTimeoutMs) {}
 
   async compare(scope: LibraryScope, knowledgeItemId: string, sources: CitationSource[]): Promise<ComparisonResult> {
     assertScope(scope);

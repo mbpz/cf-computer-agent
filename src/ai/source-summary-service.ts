@@ -82,7 +82,7 @@ interface SummarySource {
 }
 
 export class SourceSummaryService {
-  constructor(private readonly ai: SourceSummaryAi, private readonly timeoutMs = 5_000) {}
+  constructor(private readonly ai: SourceSummaryAi, private readonly timeoutMs: number = APP_CONFIG.aiTimeoutMs) {}
 
   async summarize(
     scope: LibraryScope,

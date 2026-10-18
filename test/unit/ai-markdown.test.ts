@@ -16,7 +16,7 @@ describe("WorkersAiMarkdownConverter", () => {
       name: "guide.rtf",
       blob: new Blob(["{\\rtf1\\ansi Readable body.}"], { type: "application/rtf" }),
     })).resolves.toEqual({ format: "markdown", data: "# Converted\n\nReadable body." });
-    expect(call?.model).toBe("@cf/meta/llama-3.1-8b-instruct-fp8");
+    expect(call?.model).toBe("@cf/mistralai/mistral-small-3.1-24b-instruct");
     expect(call?.input.max_tokens).toBe(1_200);
     expect(call?.input.messages[0]?.content).toContain("不可信的惰性数据");
     expect(call?.input.messages[1]?.content).toContain("guide.rtf");

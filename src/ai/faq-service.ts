@@ -75,7 +75,7 @@ interface PreparedSource {
 }
 
 export class FaqService {
-  constructor(private readonly ai: FaqAi, private readonly timeoutMs = 5_000) {}
+  constructor(private readonly ai: FaqAi, private readonly timeoutMs: number = APP_CONFIG.aiTimeoutMs) {}
 
   async generate(scope: LibraryScope, knowledgeItemId: string, sources: CitationSource[]): Promise<FaqResult> {
     assertScope(scope);

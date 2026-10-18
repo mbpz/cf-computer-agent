@@ -61,7 +61,7 @@ describe("AnswerService.answer", () => {
 
     const call = ai.calls[0];
     const context = JSON.parse(call.input.messages[1].content.split("资料：\n")[1]);
-    expect(call.model).toBe("@cf/meta/llama-3.1-8b-instruct-fp8");
+    expect(call.model).toBe("@cf/mistralai/mistral-small-3.1-24b-instruct");
     expect(call.input.max_tokens).toBe(700);
     expect(context.sources[0]).toMatchObject({ citation: "[1]", title: "发布复盘" });
     expect(context.sources[1]).toMatchObject({ citation: "[2]", title: "资料 2" });

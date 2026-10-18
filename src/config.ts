@@ -96,7 +96,10 @@ export const APP_CONFIG = {
   maxPptxOutputBytes: 128 * 1024,
   maxPptxEntries: 512,
   maxPptxSlides: 200,
-  // Must exist in `wrangler ai models list`: the previous `-fp8-fast` id is not
-  // in the catalog, so every production AI call failed with AI_UNAVAILABLE.
-  model: "@cf/meta/llama-3.1-8b-instruct-fp8",
+  // Must exist in `wrangler ai models list` and support `json_schema`; the
+  // previous `-fp8-fast` id was absent, and `-fp8` rejects JSON Schema.
+  model: "@cf/mistralai/mistral-small-3.1-24b-instruct",
+  // Workers AI chat completions routinely take 5–10s; a 5s ceiling turned
+  // successful generations into AI_UNAVAILABLE.
+  aiTimeoutMs: 20_000,
 } as const;

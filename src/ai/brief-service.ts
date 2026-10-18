@@ -30,7 +30,7 @@ interface ProviderBrief { goal: ProviderSection | null; keyPoints: ProviderSecti
 interface PreparedSource { citation: SourceSummaryCitation; body: string }
 
 export class BriefService {
-  constructor(private readonly ai: BriefAi, private readonly timeoutMs = 5_000) {}
+  constructor(private readonly ai: BriefAi, private readonly timeoutMs: number = APP_CONFIG.aiTimeoutMs) {}
 
   async generate(scope: LibraryScope, knowledgeItemId: string, sources: CitationSource[]): Promise<BriefResult> {
     assertScope(scope);

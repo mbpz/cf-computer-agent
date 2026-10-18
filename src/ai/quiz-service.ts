@@ -12,7 +12,7 @@ export interface QuizResult { questions: QuizQuestion[]; messageKey?: "KNOWLEDGE
 interface ProviderQuestion { id: string; prompt: string; options: string[]; answerIndex: number | null; explanation: string; citationIds: string[] } interface ProviderQuiz { questions: ProviderQuestion[]; insufficientEvidence: boolean } interface PreparedSource { citation: SourceSummaryCitation; body: string }
 
 export class QuizService {
-  constructor(private readonly ai: QuizAi, private readonly timeoutMs = 5_000) {}
+  constructor(private readonly ai: QuizAi, private readonly timeoutMs: number = APP_CONFIG.aiTimeoutMs) {}
   async generate(scope: LibraryScope, knowledgeItemId: string, sources: CitationSource[]): Promise<QuizResult> {
     assertScope(scope); const prepared = prepareSources(knowledgeItemId, sources); let raw: unknown;
     try { raw = await withTimeout(this.ai.run(APP_CONFIG.model, { messages: [
