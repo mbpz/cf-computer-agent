@@ -21,8 +21,8 @@
 
 | 检查 | 实测 |
 | --- | --- |
-| 成员分享码读取 | `GET /api/invitations/mine` 200：未创建时 `{invitation:null}`，已创建时返回同一条（设置页加载不产生写） |
-| 成员分享码首次创建 | 设置页点击“生成我的邀请码”后 `POST /api/invitations/mine` 201；再次调用 200 且同一条 |
+| 成员邀请码读取 | `GET /api/invitations/mine` 200：返回 `{boundInvitation, invitation}`。`boundInvitation` 是创建本账号的码（注册码或 0080 回填码），`invitation` 是本人分享码；分享码未创建时为 null，已用时带 `boundEmail`（消费该码的新成员邮箱） |
+| 成员分享码首次创建 | 设置页点击“生成我的邀请码”后 `POST /api/invitations/mine` 201，同样返回 `{boundInvitation, invitation}`；再次调用 200 且同一条 |
 | 成员码唯一 | owner 唯一索引兜底；同一成员不能创建第二个 |
 | 管理员生成 | `POST /api/admin/invitations` 201；1–20 校验；可重复生成 |
 | 管理员列表 | 数字分页；status/kind 筛选；返回 code/owner/bound/时间 |
@@ -35,6 +35,7 @@
 | 重置（错码/无码/无绑定/禁用成员） | 统一 401 `PASSWORD_RESET_INVALID` |
 | 登录 | 不变：错误 5 次锁定 15 分钟；禁用成员密码正确后 403 |
 | 邀请码存储 | 明文（管理员/成员需要读取与复制）；日志/审计不写码 |
+| 成员可见性 | 本人可见账号绑定码（重置凭据）与本人分享码；分享码被使用后显示新成员邮箱；不返回其它成员的信息 |
 | 前端 | 登录注册/重置邀请码必填与错误文案；设置页复制与已用只读；菜单页生成/筛选/分页/forbidden |
 
 ## 验证命令
@@ -47,7 +48,7 @@
 | `node scripts/verify-m1-migrations.mjs --files` | `[pass] migration-files count=79` |
 | `npm run test:smoke` | 88 + 14 + 30 通过 |
 | `npm run typecheck` | Worker + 前端通过 |
-| `npm run check`（HEAD 工作树） | 退出码 0（unit 411 文件/5610、worker 80 文件/1325、smoke 88+14+30、landing 100） |
+| `npm run check`（HEAD 工作树） | 退出码 0（unit 411 文件/5612、worker 80 文件/1325、smoke 88+14+30、landing 100） |
 
 ## 历史账户兼容（2026-10-19 补充）
 

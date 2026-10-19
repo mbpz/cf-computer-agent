@@ -28,8 +28,24 @@ export interface MyInvitation {
   readonly status: InvitationStatus;
   readonly createdAt: string;
   readonly usedAt: string | null;
-  /** Whether a new member is bound. The bound member's identity is never exposed. */
+  /** Whether a new member consumed this sharing code. */
   readonly bound: boolean;
+  /** Email of the member who consumed this sharing code (null while unused). */
+  readonly boundEmail: string | null;
+}
+
+/** The invitation that created the signed-in member's own account. */
+export interface BoundInvitation {
+  readonly code: string;
+  readonly formattedCode: string;
+  readonly kind: InvitationKind;
+  readonly createdAt: string;
+  readonly usedAt: string | null;
+}
+
+export interface MyInvitations {
+  readonly boundInvitation: BoundInvitation | null;
+  readonly invitation: MyInvitation | null;
 }
 
 export interface AdminInvitation {
@@ -115,7 +131,8 @@ function time(value: unknown, code: string): string | null {
   return required(value, code);
 }
 
-const MY_INVITATION_KEYS = ["code", "formattedCode", "status", "createdAt", "usedAt", "bound"] as const;
+const MY_INVITATION_KEYS = ["code", "formattedCode", "status", "createdAt", "usedAt", "bound", "boundEmail"] as const;
+const BOUND_INVITATION_KEYS = ["code", "formattedCode", "kind", "createdAt", "usedAt"] as const;
 const ADMIN_INVITATION_KEYS = ["id", "code", "formattedCode", "kind", "status", "ownerMemberId", "ownerEmail", "boundMemberId", "boundEmail", "createdAt", "usedAt"] as const;
 
 /** Rejects unknown fields; the required ones are read by name so absence still fails. */
@@ -132,10 +149,34 @@ export function normalizeMyInvitation(value: unknown): MyInvitation {
   const usedAt = time(body.usedAt, "INVITATION_RESPONSE_INVALID");
   const bound = body.bound;
   if (typeof bound !== "boolean") throw invalid("INVITATION_RESPONSE_INVALID");
-  // The server keeps status, usedAt and bound in lockstep (a used code is bound);
-  // a response that disagrees is not a code this member can act on.
+  const boundEmail = optional(body.boundEmail, "INVITATION_RESPONSE_INVALID");
+  // The server keeps status, usedAt, bound and the bound member's email in
+  // lockstep; a response that disagrees is not a code this member can act on.
   if ((status === "used") !== (usedAt !== null) || (status === "used") !== bound) throw invalid("INVITATION_RESPONSE_INVALID");
-  return Object.freeze({ code, formattedCode, status, createdAt, usedAt, bound });
+  if ((status === "used") !== (boundEmail !== null)) throw invalid("INVITATION_RESPONSE_INVALID");
+  return Object.freeze({ code, formattedCode, status, createdAt, usedAt, bound, boundEmail });
+}
+
+export function normalizeBoundInvitation(value: unknown): BoundInvitation {
+  const body = record(value, "INVITATION_RESPONSE_INVALID");
+  assertKnownKeys(body, BOUND_INVITATION_KEYS, "INVITATION_RESPONSE_INVALID");
+  const { code, formattedCode } = canonicalCode(body, "INVITATION_RESPONSE_INVALID");
+  const kind = invitationKind(body.kind, "INVITATION_RESPONSE_INVALID");
+  const createdAt = required(body.createdAt, "INVITATION_RESPONSE_INVALID");
+  const usedAt = time(body.usedAt, "INVITATION_RESPONSE_INVALID");
+  if (usedAt === null) throw invalid("INVITATION_RESPONSE_INVALID");
+  return Object.freeze({ code, formattedCode, kind, createdAt, usedAt });
+}
+
+/** Both codes a signed-in member may see, in one strict envelope. */
+export function normalizeMyInvitations(value: unknown): MyInvitations {
+  const body = record(value, "INVITATION_RESPONSE_INVALID");
+  assertKnownKeys(body, ["boundInvitation", "invitation"], "INVITATION_RESPONSE_INVALID");
+  const boundInvitation = body.boundInvitation === null ? null : normalizeBoundInvitation(body.boundInvitation);
+  const invitation = body.invitation === null ? null : normalizeMyInvitation(body.invitation);
+  if (invitation !== null && boundInvitation !== null
+    && invitation.code === boundInvitation.code) throw invalid("INVITATION_RESPONSE_INVALID");
+  return Object.freeze({ boundInvitation, invitation });
 }
 
 export function normalizeAdminInvitation(value: unknown): AdminInvitation {
@@ -169,25 +210,18 @@ export function normalizeAdminInvitation(value: unknown): AdminInvitation {
   return Object.freeze(invitation);
 }
 
-/** Reads the signed-in member's code without creating one; null means none yet. */
-export async function loadMyInvitation(requester: Fetcher = fetch, signal?: AbortSignal): Promise<MyInvitation | null> {
-  const data = await apiFetch<unknown>("/api/invitations/mine", { requester, signal });
-  const body = record(data, "INVITATION_RESPONSE_INVALID");
-  if (Object.keys(body).length !== 1 || !("invitation" in body)) throw invalid("INVITATION_RESPONSE_INVALID");
-  if (body.invitation === null) return null;
-  return normalizeMyInvitation(body.invitation);
+/** Reads both of the signed-in member's codes without creating one. */
+export async function loadMyInvitations(requester: Fetcher = fetch, signal?: AbortSignal): Promise<MyInvitations> {
+  return normalizeMyInvitations(await apiFetch<unknown>("/api/invitations/mine", { requester, signal }));
 }
 
-/** Creates the signed-in member's one lifetime code, or returns the existing one. */
-export async function createMyInvitation(requester: Fetcher = fetch): Promise<MyInvitation> {
-  const data = await apiFetch<unknown>("/api/invitations/mine", {
+/** Creates the signed-in member's one lifetime sharing code (idempotent). */
+export async function createMyInvitation(requester: Fetcher = fetch): Promise<MyInvitations> {
+  return normalizeMyInvitations(await apiFetch<unknown>("/api/invitations/mine", {
     requester,
     method: "POST",
     headers: { "content-type": "application/json" },
-  });
-  const body = record(data, "INVITATION_RESPONSE_INVALID");
-  if (Object.keys(body).length !== 1 || !("invitation" in body)) throw invalid("INVITATION_RESPONSE_INVALID");
-  return normalizeMyInvitation(body.invitation);
+  }));
 }
 
 export async function loadAdminInvitations({ page, pageSize, status, kind, requester = fetch, signal }: LoadAdminInvitationsInput): Promise<AdminInvitationsPage> {

@@ -3211,14 +3211,14 @@
         "frontend/components/settings/change-password-card.tsx:78:70",
         "frontend/components/settings/change-password-card.tsx:79:20",
         "frontend/components/settings/change-password-card.tsx:80:9",
-        "frontend/components/settings/my-invitation-card.tsx:81:34",
-        "frontend/components/settings/my-invitation-card.tsx:83:9",
-        "frontend/components/settings/my-invitation-card.tsx:87:9",
-        "frontend/components/settings/my-invitation-card.tsx:88:25",
-        "frontend/components/settings/my-invitation-card.tsx:90:63",
-        "frontend/components/settings/my-invitation-card.tsx:101:17",
-        "frontend/components/settings/my-invitation-card.tsx:107:27",
-        "frontend/components/settings/my-invitation-card.tsx:108:27",
+        "frontend/components/settings/my-invitation-card.tsx:86:18",
+        "frontend/components/settings/my-invitation-card.tsx:88:7",
+        "frontend/components/settings/my-invitation-card.tsx:116:13",
+        "frontend/components/settings/my-invitation-card.tsx:117:29",
+        "frontend/components/settings/my-invitation-card.tsx:119:13",
+        "frontend/components/settings/my-invitation-card.tsx:131:17",
+        "frontend/components/settings/my-invitation-card.tsx:140:27",
+        "frontend/components/settings/my-invitation-card.tsx:141:27",
         "frontend/components/ui/alert.tsx:57:5",
         "frontend/components/ui/alert.tsx:66:3",
         "frontend/components/ui/alert.tsx:73:3",
@@ -3233,9 +3233,9 @@
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
         "frontend/pages/settings-page.tsx:61:1240",
         "frontend/pages/settings-page.tsx:61:1937",
-        "frontend/pages/settings-page.tsx:61:2694",
-        "frontend/pages/settings-page.tsx:61:2825",
-        "frontend/pages/settings-page.tsx:61:3063"
+        "frontend/pages/settings-page.tsx:61:2696",
+        "frontend/pages/settings-page.tsx:61:2827",
+        "frontend/pages/settings-page.tsx:61:3065"
       ],
       "unresolvedSymbols": [
         "frontend/components/ui/button.tsx#StatefulButton",
@@ -29597,11 +29597,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/settings/my-invitation-card.tsx:81:34",
+      "id": "frontend/components/settings/my-invitation-card.tsx:86:18",
       "path": "frontend/components/settings/my-invitation-card.tsx",
       "owner": "MyInvitationCard",
-      "line": 81,
-      "column": 34,
+      "line": 86,
+      "column": 18,
       "kind": "jsx",
       "tag": "div",
       "attributes": {
@@ -29614,19 +29614,24 @@
       "labels": [],
       "context": [
         {
-          "kind": "logical",
+          "kind": "branch",
           "expression": "state.kind === \"error\"",
-          "operator": "&&"
+          "branch": "true"
         }
       ],
-      "earlyReturns": []
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <Card data-settings-invitation=\"loading\">\n    <CardHeader><CardTitle>{frontendText(locale, \"SETTINGS_INVITATION\")}</CardTitle><CardDescription>{frontendText(locale, \"SETTINGS_INVITATION_DESCRIPTION\")}</CardDescription></CardHeader>\n    <CardContent><PageState kind=\"loading\" title={frontendText(locale, \"SETTINGS_INVITATION_LOADING\")} /></CardContent>\n  </Card>;"
+        }
+      ]
     },
     {
-      "id": "frontend/components/settings/my-invitation-card.tsx:83:9",
+      "id": "frontend/components/settings/my-invitation-card.tsx:88:7",
       "path": "frontend/components/settings/my-invitation-card.tsx",
       "owner": "MyInvitationCard",
-      "line": 83,
-      "column": 9,
+      "line": 88,
+      "column": 7,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -29644,19 +29649,24 @@
       ],
       "context": [
         {
-          "kind": "logical",
+          "kind": "branch",
           "expression": "state.kind === \"error\"",
-          "operator": "&&"
+          "branch": "true"
         }
       ],
-      "earlyReturns": []
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <Card data-settings-invitation=\"loading\">\n    <CardHeader><CardTitle>{frontendText(locale, \"SETTINGS_INVITATION\")}</CardTitle><CardDescription>{frontendText(locale, \"SETTINGS_INVITATION_DESCRIPTION\")}</CardDescription></CardHeader>\n    <CardContent><PageState kind=\"loading\" title={frontendText(locale, \"SETTINGS_INVITATION_LOADING\")} /></CardContent>\n  </Card>;"
+        }
+      ]
     },
     {
-      "id": "frontend/components/settings/my-invitation-card.tsx:87:9",
+      "id": "frontend/components/settings/my-invitation-card.tsx:116:13",
       "path": "frontend/components/settings/my-invitation-card.tsx",
       "owner": "MyInvitationCard",
-      "line": 87,
-      "column": 9,
+      "line": 116,
+      "column": 13,
       "kind": "jsx",
       "tag": "StatefulButton",
       "attributes": {
@@ -29675,19 +29685,28 @@
       ],
       "context": [
         {
-          "kind": "logical",
-          "expression": "state.kind === \"ready\" && state.invitation === null",
-          "operator": "&&"
+          "kind": "branch",
+          "expression": "invitation === null",
+          "branch": "true"
         }
       ],
-      "earlyReturns": []
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <Card data-settings-invitation=\"loading\">\n    <CardHeader><CardTitle>{frontendText(locale, \"SETTINGS_INVITATION\")}</CardTitle><CardDescription>{frontendText(locale, \"SETTINGS_INVITATION_DESCRIPTION\")}</CardDescription></CardHeader>\n    <CardContent><PageState kind=\"loading\" title={frontendText(locale, \"SETTINGS_INVITATION_LOADING\")} /></CardContent>\n  </Card>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <Card data-settings-invitation=\"error\">\n    <CardHeader><CardTitle>{frontendText(locale, \"SETTINGS_INVITATION\")}</CardTitle><CardDescription>{frontendText(locale, \"SETTINGS_INVITATION_DESCRIPTION\")}</CardDescription></CardHeader>\n    <CardContent><div role=\"alert\" data-settings-invitation-error className=\"space-y-2 text-sm text-destructive\">\n      <p>{frontendText(locale, \"SETTINGS_INVITATION_ERROR\")}</p>\n      <Button type=\"button\" variant=\"outline\" data-settings-invitation-retry onClick={load}>{frontendText(locale, \"SETTINGS_INVITATION_RETRY\")}</Button>\n    </div></CardContent>\n  </Card>;"
+        }
+      ]
     },
     {
-      "id": "frontend/components/settings/my-invitation-card.tsx:88:25",
+      "id": "frontend/components/settings/my-invitation-card.tsx:117:29",
       "path": "frontend/components/settings/my-invitation-card.tsx",
       "owner": "MyInvitationCard",
-      "line": 88,
-      "column": 25,
+      "line": 117,
+      "column": 29,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -29702,9 +29721,9 @@
       ],
       "context": [
         {
-          "kind": "logical",
-          "expression": "state.kind === \"ready\" && state.invitation === null",
-          "operator": "&&"
+          "kind": "branch",
+          "expression": "invitation === null",
+          "branch": "true"
         },
         {
           "kind": "logical",
@@ -29712,41 +29731,59 @@
           "operator": "&&"
         }
       ],
-      "earlyReturns": []
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <Card data-settings-invitation=\"loading\">\n    <CardHeader><CardTitle>{frontendText(locale, \"SETTINGS_INVITATION\")}</CardTitle><CardDescription>{frontendText(locale, \"SETTINGS_INVITATION_DESCRIPTION\")}</CardDescription></CardHeader>\n    <CardContent><PageState kind=\"loading\" title={frontendText(locale, \"SETTINGS_INVITATION_LOADING\")} /></CardContent>\n  </Card>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <Card data-settings-invitation=\"error\">\n    <CardHeader><CardTitle>{frontendText(locale, \"SETTINGS_INVITATION\")}</CardTitle><CardDescription>{frontendText(locale, \"SETTINGS_INVITATION_DESCRIPTION\")}</CardDescription></CardHeader>\n    <CardContent><div role=\"alert\" data-settings-invitation-error className=\"space-y-2 text-sm text-destructive\">\n      <p>{frontendText(locale, \"SETTINGS_INVITATION_ERROR\")}</p>\n      <Button type=\"button\" variant=\"outline\" data-settings-invitation-retry onClick={load}>{frontendText(locale, \"SETTINGS_INVITATION_RETRY\")}</Button>\n    </div></CardContent>\n  </Card>;"
+        }
+      ]
     },
     {
-      "id": "frontend/components/settings/my-invitation-card.tsx:90:63",
+      "id": "frontend/components/settings/my-invitation-card.tsx:119:13",
       "path": "frontend/components/settings/my-invitation-card.tsx",
       "owner": "MyInvitationCard",
-      "line": 90,
-      "column": 63,
+      "line": 119,
+      "column": 13,
       "kind": "jsx",
       "tag": "InvitationDetails",
       "attributes": {
         "locale": "locale",
-        "invitation": "state.invitation",
+        "invitation": "invitation",
         "copy": "copy",
-        "onCopy": "() => void copyCode(state.invitation!)"
+        "onCopy": "() => void copyCode(invitation.formattedCode)"
       },
       "handlers": {
-        "onCopy": "() => void copyCode(state.invitation!)"
+        "onCopy": "() => void copyCode(invitation.formattedCode)"
       },
       "spreads": [],
       "labels": [],
       "context": [
         {
-          "kind": "logical",
-          "expression": "state.kind === \"ready\" && state.invitation !== null",
-          "operator": "&&"
+          "kind": "branch",
+          "expression": "invitation === null",
+          "branch": "false"
         }
       ],
-      "earlyReturns": []
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <Card data-settings-invitation=\"loading\">\n    <CardHeader><CardTitle>{frontendText(locale, \"SETTINGS_INVITATION\")}</CardTitle><CardDescription>{frontendText(locale, \"SETTINGS_INVITATION_DESCRIPTION\")}</CardDescription></CardHeader>\n    <CardContent><PageState kind=\"loading\" title={frontendText(locale, \"SETTINGS_INVITATION_LOADING\")} /></CardContent>\n  </Card>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <Card data-settings-invitation=\"error\">\n    <CardHeader><CardTitle>{frontendText(locale, \"SETTINGS_INVITATION\")}</CardTitle><CardDescription>{frontendText(locale, \"SETTINGS_INVITATION_DESCRIPTION\")}</CardDescription></CardHeader>\n    <CardContent><div role=\"alert\" data-settings-invitation-error className=\"space-y-2 text-sm text-destructive\">\n      <p>{frontendText(locale, \"SETTINGS_INVITATION_ERROR\")}</p>\n      <Button type=\"button\" variant=\"outline\" data-settings-invitation-retry onClick={load}>{frontendText(locale, \"SETTINGS_INVITATION_RETRY\")}</Button>\n    </div></CardContent>\n  </Card>;"
+        }
+      ]
     },
     {
-      "id": "frontend/components/settings/my-invitation-card.tsx:101:17",
+      "id": "frontend/components/settings/my-invitation-card.tsx:131:17",
       "path": "frontend/components/settings/my-invitation-card.tsx",
       "owner": "InvitationDetails",
-      "line": 101,
+      "line": 131,
       "column": 17,
       "kind": "jsx",
       "tag": "Button",
@@ -29774,10 +29811,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/settings/my-invitation-card.tsx:107:27",
+      "id": "frontend/components/settings/my-invitation-card.tsx:140:27",
       "path": "frontend/components/settings/my-invitation-card.tsx",
       "owner": "InvitationDetails",
-      "line": 107,
+      "line": 140,
       "column": 27,
       "kind": "jsx",
       "tag": "p",
@@ -29801,10 +29838,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/settings/my-invitation-card.tsx:108:27",
+      "id": "frontend/components/settings/my-invitation-card.tsx:141:27",
       "path": "frontend/components/settings/my-invitation-card.tsx",
       "owner": "InvitationDetails",
-      "line": 108,
+      "line": 141,
       "column": 27,
       "kind": "jsx",
       "tag": "p",
@@ -59920,11 +59957,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/settings-page.tsx:61:2694",
+      "id": "frontend/pages/settings-page.tsx:61:2696",
       "path": "frontend/pages/settings-page.tsx",
       "owner": "SettingsPage",
       "line": 61,
-      "column": 2694,
+      "column": 2696,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -59946,11 +59983,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/settings-page.tsx:61:2825",
+      "id": "frontend/pages/settings-page.tsx:61:2827",
       "path": "frontend/pages/settings-page.tsx",
       "owner": "SettingsPage",
       "line": 61,
-      "column": 2825,
+      "column": 2827,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -59972,11 +60009,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/settings-page.tsx:61:3063",
+      "id": "frontend/pages/settings-page.tsx:61:3065",
       "path": "frontend/pages/settings-page.tsx",
       "owner": "SettingsPage",
       "line": 61,
-      "column": 3063,
+      "column": 3065,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {

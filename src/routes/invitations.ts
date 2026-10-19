@@ -4,7 +4,7 @@ import type { Principal } from "../identity/principal";
 import type { InvitationsService } from "../invitations/service";
 
 export interface InvitationRouteServices {
-  invitations: Pick<InvitationsService, "ensureMemberInvitation" | "findMemberInvitation">;
+  invitations: Pick<InvitationsService, "ensureMemberInvitation" | "findMemberInvitations">;
 }
 
 /**
@@ -24,13 +24,13 @@ export async function routeInvitationsApi(
   const member = requireMember(principal);
   if (request.method === "GET") {
     requireNoQuery(url);
-    return jsonResponse({ invitation: await services.invitations.findMemberInvitation(member.memberId) }, 200, context.requestId);
+    return jsonResponse(await services.invitations.findMemberInvitations(member.memberId), 200, context.requestId);
   }
   if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
   requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
   requireNoQuery(url);
   const result = await services.invitations.ensureMemberInvitation(member.memberId);
-  return jsonResponse({ invitation: result.invitation }, result.created ? 201 : 200, context.requestId);
+  return jsonResponse(await services.invitations.findMemberInvitations(member.memberId), result.created ? 201 : 200, context.requestId);
 }
 
 function requireMember(principal: Principal): Extract<Principal, { kind: "member" }> {

@@ -89,11 +89,13 @@ describe("invitation registration, binding and administration", () => {
 
     const before = await api("/api/invitations/mine", { token: owner.token });
     expect(before.status).toBe(200);
-    await expect(before.json()).resolves.toEqual({ invitation: null });
+    const beforeBody = await before.json() as { boundInvitation: { code: string; kind: string } | null; invitation: unknown };
+    expect(beforeBody.invitation).toBeNull();
+    expect(beforeBody.boundInvitation).toMatchObject({ code: adminCode!.code, kind: "admin" });
     const first = await api("/api/invitations/mine", { method: "POST", token: owner.token });
     expect(first.status).toBe(201);
-    const created = await first.json() as { invitation: { code: string; formattedCode: string; status: string; createdAt: string; usedAt: string | null; bound: boolean } };
-    expect(created.invitation).toMatchObject({ status: "unused", bound: false, usedAt: null });
+    const created = await first.json() as { invitation: { code: string; formattedCode: string; status: string; createdAt: string; usedAt: string | null; bound: boolean; boundEmail: string | null } };
+    expect(created.invitation).toMatchObject({ status: "unused", bound: false, boundEmail: null, usedAt: null });
     expect(created.invitation.code).toMatch(CODE_PATTERN);
     expect(created.invitation.formattedCode).toBe(grouped(created.invitation.code));
     const stored = await env.DB.prepare("SELECT kind, owner_member_id, created_by_member_id, status FROM invitations WHERE code = ?")
@@ -102,7 +104,7 @@ describe("invitation registration, binding and administration", () => {
 
     const read = await api("/api/invitations/mine", { token: owner.token });
     expect(read.status).toBe(200);
-    await expect(read.json()).resolves.toMatchObject({ invitation: { code: created.invitation.code, status: "unused", bound: false } });
+    await expect(read.json()).resolves.toMatchObject({ boundInvitation: { code: adminCode!.code }, invitation: { code: created.invitation.code, status: "unused", bound: false, boundEmail: null } });
     const second = await api("/api/invitations/mine", { method: "POST", token: owner.token });
     expect(second.status).toBe(200);
     await expect(second.json()).resolves.toMatchObject({ invitation: { code: created.invitation.code, status: "unused", bound: false } });
@@ -114,7 +116,8 @@ describe("invitation registration, binding and administration", () => {
     const afterUse = await api("/api/invitations/mine", { method: "POST", token: owner.token });
     expect(afterUse.status).toBe(200);
     await expect(afterUse.json()).resolves.toMatchObject({
-      invitation: { code: created.invitation.code, status: "used", bound: true, usedAt: expect.any(String) },
+      boundInvitation: { code: adminCode!.code, kind: "admin" },
+      invitation: { code: created.invitation.code, status: "used", bound: true, usedAt: expect.any(String), boundEmail: "shared@example.test" },
     });
     expect(await count("SELECT COUNT(*) AS total FROM invitations WHERE owner_member_id = ?", owner.memberId)).toBe(1);
     expect((await api("/auth/register", {
@@ -215,7 +218,7 @@ describe("invitation registration, binding and administration", () => {
     // Reading is a GET and creates nothing; creation stays POST.
     const read = await api("/api/invitations/mine", { token: member.token });
     expect(read.status).toBe(200);
-    await expect(read.json()).resolves.toEqual({ invitation: null });
+    await expect(read.json()).resolves.toMatchObject({ boundInvitation: { code: invitation!.code }, invitation: null });
     const methodNotAllowed = await api("/api/invitations/mine", { method: "PUT", token: member.token });
     expect(methodNotAllowed.status).toBe(405);
     expect(methodNotAllowed.headers.get("allow")).toBe("GET, POST");

@@ -21,6 +21,8 @@ export class InvitationConflictError extends Error {
 
 export interface InvitationsRepositoryPort {
   findByOwnerMemberId(memberId: string): Promise<Invitation | null>;
+  /** My sharable code plus the email of the member who consumed it. */
+  findOwnedWithBoundEmail(memberId: string): Promise<{ invitation: Invitation; boundEmail: string | null } | null>;
   insert(invitation: Invitation): Promise<Invitation>;
   /** The code that created `memberId`, used to prove identity before a password reset. */
   findBoundByMemberId(memberId: string): Promise<Invitation | null>;
@@ -55,6 +57,19 @@ export class InvitationsRepository implements InvitationsRepositoryPort {
       `SELECT ${invitationColumns} FROM invitations WHERE owner_member_id = ? LIMIT 1`,
     ).bind(memberId).first<InvitationRow>();
     return row === null ? null : mapInvitation(row);
+  }
+
+  async findOwnedWithBoundEmail(memberId: string): Promise<{ invitation: Invitation; boundEmail: string | null } | null> {
+    const row = await this.db.prepare(
+      `SELECT i.id, i.code, i.kind, i.owner_member_id, i.bound_member_id, i.status,
+              i.created_by_member_id, i.created_at, i.used_at, b.email AS bound_email
+       FROM invitations i
+       LEFT JOIN members b ON b.id = i.bound_member_id
+       WHERE i.owner_member_id = ?
+       LIMIT 1`,
+    ).bind(memberId).first<InvitationListRow>();
+    if (!row) return null;
+    return { invitation: mapInvitation(row), boundEmail: row.bound_email };
   }
 
   async findBoundByMemberId(memberId: string): Promise<Invitation | null> {

@@ -175,12 +175,19 @@ describe("invitations service", () => {
 
 class MemoryRepository implements InvitationsRepositoryPort {
   records: Invitation[] = [];
+  memberEmails = new Map<string, string>();
   inserts = 0;
   lastRequest: NumberedPageRequest | undefined;
   lastFilter: InvitationFilter | undefined;
 
   async findByOwnerMemberId(memberId: string): Promise<Invitation | null> {
     return this.records.find((invitation) => invitation.ownerMemberId === memberId) ?? null;
+  }
+
+  async findOwnedWithBoundEmail(memberId: string): Promise<{ invitation: Invitation; boundEmail: string | null } | null> {
+    const invitation = await this.findByOwnerMemberId(memberId);
+    if (!invitation) return null;
+    return { invitation, boundEmail: invitation.boundMemberId === null ? null : this.memberEmails.get(invitation.boundMemberId) ?? null };
   }
 
   async findBoundByMemberId(memberId: string): Promise<Invitation | null> {

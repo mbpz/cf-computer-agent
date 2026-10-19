@@ -11,9 +11,12 @@ import {
   isInvitationCode,
   isInvitationForbidden,
   loadAdminInvitations,
+  loadMyInvitations,
   normalizeInvitationCode,
   type AdminInvitation,
+  type BoundInvitation,
   type MyInvitation,
+  type MyInvitations,
 } from "../../frontend/lib/invitations-data";
 import { SettingsPage } from "../../frontend/pages/settings-page";
 import { InvitationAdminPanel } from "../../frontend/components/admin/invitation-admin-panel";
@@ -32,7 +35,26 @@ const MY_INVITATION: MyInvitation = {
   createdAt: "2026-10-18T10:00:00.000Z",
   usedAt: null,
   bound: false,
+  boundEmail: null,
 };
+
+const USED_INVITATION: MyInvitation = {
+  ...MY_INVITATION,
+  status: "used",
+  usedAt: "2026-10-18T12:00:00.000Z",
+  bound: true,
+  boundEmail: "invitee@example.test",
+};
+
+const BOUND_INVITATION: BoundInvitation = {
+  code: "JKMNPQRSTUVWXY23",
+  formattedCode: "JKMN-PQRS-TUVW-XY23",
+  kind: "admin",
+  createdAt: "2026-10-01T09:00:00.000Z",
+  usedAt: "2026-10-01T09:05:00.000Z",
+};
+
+const MY_INVITATIONS: MyInvitations = { boundInvitation: BOUND_INVITATION, invitation: MY_INVITATION };
 
 const ADMIN_INVITATION: AdminInvitation = {
   id: "inv-1",
@@ -95,16 +117,27 @@ describe("invitation code helpers", () => {
 });
 
 describe("invitation data", () => {
-  it("creates the member code through POST /api/invitations/mine and strictly parses it", async () => {
-    const { calls, requester } = requesterFor({ invitation: MY_INVITATION }, 201);
-    await expect(createMyInvitation(requester)).resolves.toEqual(MY_INVITATION);
+  it("creates the member code through POST /api/invitations/mine and strictly parses both codes", async () => {
+    const { calls, requester } = requesterFor(MY_INVITATIONS, 201);
+    await expect(createMyInvitation(requester)).resolves.toEqual(MY_INVITATIONS);
     expect(calls[0]!.path).toBe("/api/invitations/mine");
     expect(calls[0]!.method).toBe("POST");
 
-    await expect(createMyInvitation(requesterFor({ invitation: { ...MY_INVITATION, extra: 1 } }).requester)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
-    await expect(createMyInvitation(requesterFor({ invitation: { ...MY_INVITATION, formattedCode: "WRONG" } }).requester)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
-    await expect(createMyInvitation(requesterFor({ invitation: { ...MY_INVITATION, status: "used", usedAt: null, bound: false } }).requester)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
-    await expect(createMyInvitation(requesterFor({ invitation: MY_INVITATION, second: true }).requester)).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+    const invalid = (payload: unknown) => requesterFor(payload).requester;
+    await expect(createMyInvitation(invalid({ ...MY_INVITATIONS, extra: 1 }))).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+    await expect(createMyInvitation(invalid({ boundInvitation: BOUND_INVITATION, invitation: { ...MY_INVITATION, extra: 1 } }))).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+    await expect(createMyInvitation(invalid({ boundInvitation: BOUND_INVITATION, invitation: { ...MY_INVITATION, formattedCode: "WRONG" } }))).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+    await expect(createMyInvitation(invalid({ boundInvitation: BOUND_INVITATION, invitation: { ...MY_INVITATION, status: "used", usedAt: null, bound: false } }))).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+    await expect(createMyInvitation(invalid({ boundInvitation: BOUND_INVITATION, invitation: { ...MY_INVITATION, boundEmail: "leak@example.test" } }))).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+    await expect(createMyInvitation(invalid({ boundInvitation: { ...BOUND_INVITATION, usedAt: null }, invitation: null }))).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+    await expect(createMyInvitation(invalid({ boundInvitation: { ...BOUND_INVITATION, code: MY_INVITATION.code }, invitation: MY_INVITATION }))).rejects.toThrow("INVITATION_RESPONSE_INVALID");
+  });
+
+  it("reads both codes with GET without creating a code", async () => {
+    const { calls, requester } = requesterFor(MY_INVITATIONS);
+    await expect(loadMyInvitations(requester)).resolves.toEqual(MY_INVITATIONS);
+    expect(calls[0]!.path).toBe("/api/invitations/mine");
+    expect(calls[0]!.method).toBe("GET");
   });
 
   it("loads a numbered admin page with status and kind filters", async () => {
@@ -150,7 +183,7 @@ describe("invitation data", () => {
   });
 });
 
-describe("settings invitation card", () => {
+describe("settings invitation cards", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   const locale = createLocaleRuntime({ navigatorLanguage: "en" });
 
@@ -174,12 +207,12 @@ describe("settings invitation card", () => {
     });
   }
 
-  async function mount(options: { loadInvitation?: () => Promise<MyInvitation | null>; createInvitation?: () => Promise<MyInvitation> } = {}) {
-    const loadInvitation = options.loadInvitation ?? vi.fn().mockResolvedValue(MY_INVITATION);
-    const createInvitation = options.createInvitation ?? vi.fn().mockResolvedValue(MY_INVITATION);
-    await act(async () => root.render(<SettingsPage locale={locale} email="member@example.test" role="contributor" loadInvitation={loadInvitation} createInvitation={createInvitation} />));
+  async function mount(options: { loadInvitations?: () => Promise<MyInvitations>; createInvitation?: () => Promise<MyInvitations> } = {}) {
+    const loadInvitations = options.loadInvitations ?? vi.fn().mockResolvedValue(MY_INVITATIONS);
+    const createInvitation = options.createInvitation ?? vi.fn().mockResolvedValue(MY_INVITATIONS);
+    await act(async () => root.render(<SettingsPage locale={locale} email="member@example.test" role="contributor" loadInvitations={loadInvitations} createInvitation={createInvitation} />));
     await settle();
-    return { loadInvitation, createInvitation };
+    return { loadInvitations, createInvitation };
   }
 
   function button(selector: string): HTMLButtonElement {
@@ -188,27 +221,29 @@ describe("settings invitation card", () => {
     return element as HTMLButtonElement;
   }
 
-  it("loads the member code with GET on mount (no write), shows it and copies it", async () => {
+  it("shows the code bound to this account and the member's own share code with GET", async () => {
     const written: string[] = [];
     Object.defineProperty(browser.navigator, "clipboard", { configurable: true, value: { writeText: vi.fn(async (value: string) => { written.push(value); }) } });
-    const { loadInvitation, createInvitation } = await mount();
+    const { loadInvitations, createInvitation } = await mount();
 
-    expect(loadInvitation).toHaveBeenCalledTimes(1);
+    expect(loadInvitations).toHaveBeenCalledTimes(1);
     expect(createInvitation).not.toHaveBeenCalled();
+    // The code that created this account is visible (also the reset proof).
+    expect(container.querySelector("[data-settings-bound-invitation]")?.getAttribute("data-settings-bound-invitation")).toBe("ready");
+    expect(container.querySelector("[data-settings-bound-invitation-code]")?.textContent).toBe(BOUND_INVITATION.formattedCode);
+    // The member's own sharing code stays separate and copyable while unused.
     expect(container.querySelector("[data-settings-invitation]")?.getAttribute("data-settings-invitation")).toBe("ready");
     expect(container.querySelector("[data-settings-invitation-code]")?.textContent).toBe(MY_INVITATION.formattedCode);
     expect(container.querySelector("[data-settings-invitation-status]")?.textContent).toBe("Available");
-    expect(container.textContent).toContain("2026-10-18T10:00:00.000Z");
 
     await act(async () => button("[data-settings-invitation-copy]").click());
     await settle();
     expect(written).toEqual([MY_INVITATION.formattedCode]);
-    expect(container.querySelector('[data-settings-invitation-copy-status="copied"]')?.textContent).toContain("Invitation code copied.");
   });
 
-  it("offers explicit creation only when no code exists, and POSTs on click", async () => {
-    const createInvitation = vi.fn().mockResolvedValue(MY_INVITATION);
-    await mount({ loadInvitation: vi.fn().mockResolvedValue(null), createInvitation });
+  it("offers explicit creation only when no sharing code exists, and POSTs on click", async () => {
+    const createInvitation = vi.fn().mockResolvedValue(MY_INVITATIONS);
+    await mount({ loadInvitations: vi.fn().mockResolvedValue({ boundInvitation: BOUND_INVITATION, invitation: null }), createInvitation });
     expect(container.querySelector("[data-settings-invitation-empty]")).not.toBeNull();
     expect(container.querySelector("[data-settings-invitation-code]")).toBeNull();
     await act(async () => button("[data-settings-invitation-create]").click());
@@ -225,26 +260,30 @@ describe("settings invitation card", () => {
     expect(container.querySelector('[data-settings-invitation-copy-status="failed"]')?.textContent).toContain("could not be copied");
   });
 
-  it("keeps a used code read-only and never exposes the bound member", async () => {
-    const used: MyInvitation = { ...MY_INVITATION, status: "used", usedAt: "2026-10-18T11:00:00.000Z", bound: true };
-    await mount({ loadInvitation: vi.fn().mockResolvedValue(used) });
+  it("shows the new member's email once the sharing code is used, read-only", async () => {
+    await mount({ loadInvitations: vi.fn().mockResolvedValue({ boundInvitation: BOUND_INVITATION, invitation: USED_INVITATION }) });
     expect(container.querySelector("[data-settings-invitation-status]")?.textContent).toBe("Used");
     expect(container.querySelector("[data-settings-invitation-used-note]")?.textContent).toContain("one invitation code for life");
+    expect(container.querySelector("[data-settings-invitation-bound-email]")?.textContent).toContain("invitee@example.test");
     expect(container.querySelector("[data-settings-invitation-copy]")).toBeNull();
-    expect(container.textContent).not.toContain("bound@example.test");
+  });
+
+  it("says so when the account has no bound invitation code", async () => {
+    await mount({ loadInvitations: vi.fn().mockResolvedValue({ boundInvitation: null, invitation: MY_INVITATION }) });
+    expect(container.querySelector("[data-settings-bound-invitation]")?.getAttribute("data-settings-bound-invitation")).toBe("empty");
+    expect(container.querySelector("[data-settings-bound-invitation-empty]")?.textContent).toContain("no bound invitation code");
   });
 
   it("shows a recoverable failure and re-reads on retry", async () => {
-    const loadInvitation = vi.fn().mockRejectedValueOnce(new Error("network")).mockResolvedValue(MY_INVITATION);
-    await mount({ loadInvitation });
-    // A rejected read settles one microtask after the mount commit.
+    const loadInvitations = vi.fn().mockRejectedValueOnce(new Error("network")).mockResolvedValue(MY_INVITATIONS);
+    await mount({ loadInvitations });
     await settle();
     expect(container.querySelector("[data-settings-invitation]")?.getAttribute("data-settings-invitation")).toBe("error");
     expect(container.querySelector("[data-settings-invitation-error]")?.getAttribute("role")).toBe("alert");
     await act(async () => button("[data-settings-invitation-retry]").click());
     await settle();
-    expect(container.querySelector("[data-settings-invitation]")?.getAttribute("data-settings-invitation")).toBe("ready");
     expect(container.querySelector("[data-settings-invitation-code]")?.textContent).toBe(MY_INVITATION.formattedCode);
+    expect(container.querySelector("[data-settings-bound-invitation-code]")?.textContent).toBe(BOUND_INVITATION.formattedCode);
   });
 });
 

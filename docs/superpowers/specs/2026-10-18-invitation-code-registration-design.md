@@ -71,10 +71,12 @@ CREATE INDEX invitations_created_at ON invitations(created_at DESC);
 
 ### 成员“我的邀请码”（已认证成员）
 
-`POST /api/invitations/mine` → `200/201 { invitation: { code, formattedCode, status, createdAt, usedAt, bound } }`
+`GET /api/invitations/mine` → `200 { boundInvitation: { code, formattedCode, kind, createdAt, usedAt } | null, invitation: { code, formattedCode, status, createdAt, usedAt, bound, boundEmail } | null }`
+
+`POST /api/invitations/mine` → `200/201` 同结构（创建本人分享码后返回两条）
 
 - 幂等：首次创建 `kind='member'` 码；之后返回同一条。已使用仍返回原码与 `status:'used'`（不能再次生成）。
-- `bound` 只返回布尔值（是否已绑定新用户），不向分享者暴露新用户身份。
+- `invitation.boundEmail` 是消费该分享码的新成员邮箱（未使用时为 null），按用户要求向分享者展示；`boundInvitation` 是创建本账号的码，也是无会话重置所需凭据。
 - 不要求额外 capability；active member 即可。需要同源写校验（POST）。
 
 ### 管理员邀请码（仅 admin）

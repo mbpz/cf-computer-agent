@@ -1945,14 +1945,14 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 81:34 MyInvitationCard | div  |  | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
-| 83:9 MyInvitationCard | Button frontendText(locale, "SETTINGS_INVITATION_RETRY") | onClick=load; type="button" | {"kind":"logical","expression":"state.kind === \"error\"","operator":"&&"} |
-| 87:9 MyInvitationCard | StatefulButton frontendText(locale, "SETTINGS_INVITATION_CREATE") | onClick=() =&gt; void create(); type="button" | {"kind":"logical","expression":"state.kind === \"ready\" && state.invitation === null","operator":"&&"} |
-| 88:25 MyInvitationCard | p frontendText(locale, "SETTINGS_INVITATION_CREATE_FAILED") |  | {"kind":"logical","expression":"state.kind === \"ready\" && state.invitation === null","operator":"&&"}; {"kind":"logical","expression":"createError","operat… |
-| 90:63 MyInvitationCard | InvitationDetails  | onCopy=() =&gt; void copyCode(state.invitation!) | {"kind":"logical","expression":"state.kind === \"ready\" && state.invitation !== null","operator":"&&"} |
-| 101:17 InvitationDetails | Button frontendText(locale, copy === "copied" ? "SETTINGS_INVITATION_COPIED" : "SETTINGS_INVITATION_COPY") | onClick=onCopy; type="button" | {"kind":"logical","expression":"!used","operator":"&&"} |
-| 107:27 InvitationDetails | p frontendText(locale, "SETTINGS_INVITATION_COPIED") |  | {"kind":"logical","expression":"copy === \"copied\"","operator":"&&"} |
-| 108:27 InvitationDetails | p frontendText(locale, "SETTINGS_INVITATION_COPY_FAILED") |  | {"kind":"logical","expression":"copy === \"failed\"","operator":"&&"} |
+| 86:18 MyInvitationCard | div  |  | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 88:7 MyInvitationCard | Button frontendText(locale, "SETTINGS_INVITATION_RETRY") | onClick=load; type="button" | {"kind":"branch","expression":"state.kind === \"error\"","branch":"true"}; earlier return: state.kind === "loading" |
+| 116:13 MyInvitationCard | StatefulButton frontendText(locale, "SETTINGS_INVITATION_CREATE") | onClick=() =&gt; void create(); type="button" | {"kind":"branch","expression":"invitation === null","branch":"true"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 117:29 MyInvitationCard | p frontendText(locale, "SETTINGS_INVITATION_CREATE_FAILED") |  | {"kind":"branch","expression":"invitation === null","branch":"true"}; {"kind":"logical","expression":"createError","operator":"&&"}; earlier return: state.ki… |
+| 119:13 MyInvitationCard | InvitationDetails  | onCopy=() =&gt; void copyCode(invitation.formattedCode) | {"kind":"branch","expression":"invitation === null","branch":"false"}; earlier return: state.kind === "loading"; earlier return: state.kind === "error" |
+| 131:17 InvitationDetails | Button frontendText(locale, copy === "copied" ? "SETTINGS_INVITATION_COPIED" : "SETTINGS_INVITATION_COPY") | onClick=onCopy; type="button" | {"kind":"logical","expression":"!used","operator":"&&"} |
+| 140:27 InvitationDetails | p frontendText(locale, "SETTINGS_INVITATION_COPIED") |  | {"kind":"logical","expression":"copy === \"copied\"","operator":"&&"} |
+| 141:27 InvitationDetails | p frontendText(locale, "SETTINGS_INVITATION_COPY_FAILED") |  | {"kind":"logical","expression":"copy === \"failed\"","operator":"&&"} |
 
 ## frontend/components/shell/app-shell.tsx
 
@@ -3346,9 +3346,9 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | --- | --- | --- | --- |
 | 61:1240 SettingsPage | Button frontendText(locale, mode === "light" ? "SHELL_THEME_LIGHT" : mode === "dark" ? "SHELL_THEME_DARK" : "SHELL_THEME_SYSTEM") | onClick=() =&gt; chooseTheme(mode); type="button" | disabled=save.kind === "saving"; {"kind":"repeat","expression":"([\"light\", \"dark\", \"system\"] as ThemeMode[])"} |
 | 61:1937 SettingsPage | Select  | onValueChange=(value) =&gt; chooseLanguage(value) | disabled=save.kind === "saving" |
-| 61:2694 SettingsPage | p frontendText(locale, "SETTINGS_SAVING") |  | {"kind":"logical","expression":"save.kind === \"saving\"","operator":"&&"} |
-| 61:2825 SettingsPage | p frontendText(locale, "SETTINGS_SAVED") |  | {"kind":"logical","expression":"save.kind === \"saved\"","operator":"&&"} |
-| 61:3063 SettingsPage | Button frontendText(locale, "COMMON_RETRY") | onClick=retrySave; type="button" | {"kind":"logical","expression":"save.kind === \"failed\"","operator":"&&"} |
+| 61:2696 SettingsPage | p frontendText(locale, "SETTINGS_SAVING") |  | {"kind":"logical","expression":"save.kind === \"saving\"","operator":"&&"} |
+| 61:2827 SettingsPage | p frontendText(locale, "SETTINGS_SAVED") |  | {"kind":"logical","expression":"save.kind === \"saved\"","operator":"&&"} |
+| 61:3065 SettingsPage | Button frontendText(locale, "COMMON_RETRY") | onClick=retrySave; type="button" | {"kind":"logical","expression":"save.kind === \"failed\"","operator":"&&"} |
 
 ## frontend/pages/submit-page.tsx
 

@@ -49,6 +49,24 @@ export interface MemberInvitation {
   createdAt: string;
   usedAt: string | null;
   bound: boolean;
+  /** Email of the member who consumed this sharing code; null while unused. */
+  boundEmail: string | null;
+}
+
+/** The invitation that created the signed-in member (registration or backfill). */
+export interface BoundMemberInvitation {
+  code: string;
+  formattedCode: string;
+  kind: InvitationKind;
+  createdAt: string;
+  usedAt: string | null;
+}
+
+export interface MemberInvitationsView {
+  /** Code bound to my own account; null for GitHub/WeChat-only members. */
+  boundInvitation: BoundMemberInvitation | null;
+  /** My single sharable code, with the bound new member's email when used. */
+  invitation: MemberInvitation | null;
 }
 
 export interface InvitationFilter {

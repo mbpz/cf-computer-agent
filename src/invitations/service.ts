@@ -15,7 +15,9 @@ import {
   type InvitationKind,
   type InvitationListItem,
   type InvitationPage,
+  type BoundMemberInvitation,
   type MemberInvitation,
+  type MemberInvitationsView,
 } from "./types";
 
 export interface InvitationsServiceOptions {
@@ -56,18 +58,26 @@ export class InvitationsService {
     }
   }
 
-  /** Read-only lookup used by the settings page before an explicit creation. */
-  async findMemberInvitation(memberId: string): Promise<MemberInvitation | null> {
-    const existing = await this.repository.findByOwnerMemberId(memberId);
-    return existing ? memberInvitationDto(existing) : null;
+  /** Both codes the signed-in member may see: the one bound to their account
+   * (used when they registered, or backfilled) and their own sharable code with
+   * the email of the member who consumed it. */
+  async findMemberInvitations(memberId: string): Promise<MemberInvitationsView> {
+    const [owned, bound] = await Promise.all([
+      this.repository.findOwnedWithBoundEmail(memberId),
+      this.repository.findBoundByMemberId(memberId),
+    ]);
+    return {
+      boundInvitation: bound ? boundMemberInvitationDto(bound) : null,
+      invitation: owned ? memberInvitationDto(owned.invitation, owned.boundEmail) : null,
+    };
   }
 
   async ensureMemberInvitation(
     memberId: string,
     now: Date = this.now(),
   ): Promise<{ invitation: MemberInvitation; created: boolean }> {
-    const existing = await this.repository.findByOwnerMemberId(memberId);
-    if (existing) return { invitation: memberInvitationDto(existing), created: false };
+    const existing = await this.repository.findOwnedWithBoundEmail(memberId);
+    if (existing) return { invitation: memberInvitationDto(existing.invitation, existing.boundEmail), created: false };
     const createdAt = timestamp(now);
 
     for (let attempt = 0; attempt < this.codeAttempts; attempt += 1) {
@@ -79,13 +89,13 @@ export class InvitationsService {
       });
       try {
         await this.repository.insert(invitation);
-        return { invitation: memberInvitationDto(invitation), created: true };
+        return { invitation: memberInvitationDto(invitation, null), created: true };
       } catch (error) {
         if (!(error instanceof InvitationConflictError)) throw error;
         if (error.kind === "owner") {
           // A concurrent first request won the owner slot; return its code.
-          const winner = await this.repository.findByOwnerMemberId(memberId);
-          if (winner) return { invitation: memberInvitationDto(winner), created: false };
+          const winner = await this.repository.findOwnedWithBoundEmail(memberId);
+          if (winner) return { invitation: memberInvitationDto(winner.invitation, winner.boundEmail), created: false };
         }
         // A code collision is retried with a freshly generated code.
       }
@@ -160,7 +170,7 @@ function timestamp(now: Date): string {
   return now.toISOString();
 }
 
-function memberInvitationDto(invitation: Invitation): MemberInvitation {
+function memberInvitationDto(invitation: Invitation, boundEmail: string | null): MemberInvitation {
   return {
     code: invitation.code,
     formattedCode: formatInvitationCode(invitation.code),
@@ -168,6 +178,17 @@ function memberInvitationDto(invitation: Invitation): MemberInvitation {
     createdAt: invitation.createdAt,
     usedAt: invitation.usedAt,
     bound: invitation.boundMemberId !== null,
+    boundEmail: invitation.boundMemberId === null ? null : boundEmail,
+  };
+}
+
+function boundMemberInvitationDto(invitation: Invitation): BoundMemberInvitation {
+  return {
+    code: invitation.code,
+    formattedCode: formatInvitationCode(invitation.code),
+    kind: invitation.kind,
+    createdAt: invitation.createdAt,
+    usedAt: invitation.usedAt,
   };
 }
 

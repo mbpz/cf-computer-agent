@@ -36,6 +36,14 @@
 
 验证：`test/worker/account-password.test.ts` 4/4、`test/unit/frontend-account-password.test.tsx` 4/4；迁移台账更新为 80。
 
+### 1.2 成员可见的邀请码（2026-10-19 补充）
+
+- `GET/POST /api/invitations/mine` 统一返回 `{ boundInvitation, invitation }`：
+  - `boundInvitation`：创建本账号的邀请码（注册时使用的码，或 0080 回填码），即无会话重置所需的凭据；
+  - `invitation`：本人唯一的分享码；未创建时为 null，已使用时带 `boundEmail`（消费该码的新成员邮箱）。
+- 设置页拆成两张卡：“账号绑定的邀请码”和“我的邀请码”；分享码被使用后显示新成员邮箱且只读。
+- 安全边界：绑定码对本人可见（重置需要它），但只返回本人数据；接口仍只允许 active member 读取自己的记录。
+
 ## 2. `/agent` 接入 AgentSession
 
 - `POST /api/agent/sessions/:id/stream` 改为：`startTurn` → 读取历史 → `searchInternal(scope)` → `CitedAnswerService.answer` → 生成后再次授权 citation → `completeTurn`；错误/断流 `terminateTurn`。
@@ -71,10 +79,10 @@
 | `test:smoke` | 88/88 |
 | `test:i18n` | 14/14 |
 | `verify:delivery-status` | 30/30 |
-| `test:unit` | **411 文件 / 5610 用例通过** |
+| `test:unit` | **411 文件 / 5612 用例通过** |
 | `test:worker` | **80 文件 / 1325 用例通过** |
 | `verify:landing` | 100/100 |
-| `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1732.87 KiB / gzip 328.35 KiB） |
+| `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1734.18 KiB / gzip 328.60 KiB） |
 | `audit:workbench-domain` / 其 31 项测试 | 通过（证据已重新生成） |
 | `verify:workbench-maturity` | 15/15 |
 
