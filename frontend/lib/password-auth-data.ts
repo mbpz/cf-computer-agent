@@ -79,6 +79,20 @@ export type PasswordAuthFailure =
   | "invitation_invalid"
   | "unknown";
 
+/** Changes the signed-in member's password. Existing password accounts must
+ * send the current password; accounts without one may set their first. */
+export async function changePassword(currentPassword: string, newPassword: string, requester: Fetcher = fetch): Promise<void> {
+  await apiFetch<unknown>("/api/account/password", {
+    requester,
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      newPassword,
+      ...(currentPassword.length > 0 ? { currentPassword } : {}),
+    }),
+  });
+}
+
 export function passwordAuthFailure(error: unknown): PasswordAuthFailure {
   if (!(error instanceof ApiRequestError)) return "unknown";
   switch (error.code) {

@@ -47,7 +47,13 @@
 | `node scripts/verify-m1-migrations.mjs --files` | `[pass] migration-files count=79` |
 | `npm run test:smoke` | 88 + 14 + 30 通过 |
 | `npm run typecheck` | Worker + 前端通过 |
-| `npm run check`（HEAD 工作树） | 退出码 0（unit 410 文件/5606、worker 79 文件/1321、smoke 88+14+30、landing 100） |
+| `npm run check`（HEAD 工作树） | 退出码 0（unit 411 文件/5610、worker 80 文件/1325、smoke 88+14+30、landing 100） |
+
+## 历史账户兼容（2026-10-19 补充）
+
+- 已登录成员可调用 `POST /api/account/password` 设置或修改密码：已有密码必须校验当前密码，无密码账户（如仅 GitHub）可从会话设置首个密码；成功后清除锁定并撤销该成员的其它会话，保留当前会话。前端入口在“设置 → 密码”。
+- `migrations/0080_backfill_password_invitations.sql` 为 0079 之前已存在的 `password_hash IS NOT NULL` 成员回填一条 `kind=admin`、`status=used`、`bound_member_id=成员` 的邀请码；管理员在菜单管理邀请码面板可查看并转交。没有密码的 GitHub/微信专属成员不回填（仍不能无会话重置）。
+- 验证：`test/worker/account-password.test.ts` 4/4（含改密、撤销其它会话、错误/同源/方法、首个密码、0080 回填）；前端 `test/unit/frontend-account-password.test.tsx` 4/4。
 
 ## 未覆盖 / 非声明
 

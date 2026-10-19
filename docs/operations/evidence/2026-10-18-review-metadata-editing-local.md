@@ -36,7 +36,7 @@
 | 审核相关定向 vitest（12 文件） | 210 通过 |
 | `npm run typecheck:frontend` | 通过 |
 | `node scripts/frontend-legacy-audit.mjs` | 通过 |
-| `npm run check`（HEAD 工作树） | 退出码 0（unit 410 文件/5606、worker 79 文件/1321、smoke 88+14+30、landing 100） |
+| `npm run check`（HEAD 工作树） | 退出码 0（unit 411 文件/5610、worker 80 文件/1325、smoke 88+14+30、landing 100） |
 
 ## 未覆盖 / 非声明
 

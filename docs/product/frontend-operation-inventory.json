@@ -182,6 +182,7 @@
     "frontend/components/review/review-drafts.tsx",
     "frontend/components/review/review-publish-metadata-form.tsx",
     "frontend/components/review/review-source-panel.tsx",
+    "frontend/components/settings/change-password-card.tsx",
     "frontend/components/settings/my-invitation-card.tsx",
     "frontend/components/shell/app-shell.tsx",
     "frontend/components/shell/command-palette.tsx",
@@ -3198,9 +3199,18 @@
         "frontend/components/motion/animated-badge.tsx:147:5",
         "frontend/components/motion/button/base.tsx:105:7",
         "frontend/components/motion/button/base.tsx:127:17",
+        "frontend/components/motion/input.tsx:153:9",
+        "frontend/components/motion/input.tsx:218:13",
         "frontend/components/motion/loader.tsx:65:5",
         "frontend/components/motion/loader.tsx:239:5",
         "frontend/components/motion/loader.tsx:354:5",
+        "frontend/components/settings/change-password-card.tsx:64:7",
+        "frontend/components/settings/change-password-card.tsx:67:11",
+        "frontend/components/settings/change-password-card.tsx:72:11",
+        "frontend/components/settings/change-password-card.tsx:76:11",
+        "frontend/components/settings/change-password-card.tsx:78:70",
+        "frontend/components/settings/change-password-card.tsx:79:20",
+        "frontend/components/settings/change-password-card.tsx:80:9",
         "frontend/components/settings/my-invitation-card.tsx:81:34",
         "frontend/components/settings/my-invitation-card.tsx:83:9",
         "frontend/components/settings/my-invitation-card.tsx:87:9",
@@ -3215,15 +3225,17 @@
         "frontend/components/ui/alert.tsx:85:3",
         "frontend/components/ui/badge.tsx:38:3",
         "frontend/components/ui/button.tsx:40:5",
+        "frontend/components/ui/input.tsx:37:3",
+        "frontend/components/ui/label.tsx:11:37",
         "frontend/components/ui/page-state.tsx:23:35",
         "frontend/components/ui/page-state.tsx:24:10",
         "frontend/components/ui/skeleton.tsx:18:3",
         "frontend/lib/hooks/use-hover-capable.ts:18:5",
-        "frontend/pages/settings-page.tsx:60:1240",
-        "frontend/pages/settings-page.tsx:60:1937",
-        "frontend/pages/settings-page.tsx:60:2656",
-        "frontend/pages/settings-page.tsx:60:2787",
-        "frontend/pages/settings-page.tsx:60:3025"
+        "frontend/pages/settings-page.tsx:61:1240",
+        "frontend/pages/settings-page.tsx:61:1937",
+        "frontend/pages/settings-page.tsx:61:2694",
+        "frontend/pages/settings-page.tsx:61:2825",
+        "frontend/pages/settings-page.tsx:61:3063"
       ],
       "unresolvedSymbols": [
         "frontend/components/ui/button.tsx#StatefulButton",
@@ -29365,6 +29377,221 @@
           "kind": "logical",
           "expression": "notice",
           "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/settings/change-password-card.tsx:64:7",
+      "path": "frontend/components/settings/change-password-card.tsx",
+      "owner": "ChangePasswordCard",
+      "line": 64,
+      "column": 7,
+      "kind": "jsx",
+      "tag": "form",
+      "attributes": {
+        "className": "\"space-y-3\"",
+        "aria-busy": "pending || undefined",
+        "onSubmit": "(event) => { event.preventDefault(); void submit(); }"
+      },
+      "handlers": {
+        "onSubmit": "(event) => { event.preventDefault(); void submit(); }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/settings/change-password-card.tsx:67:11",
+      "path": "frontend/components/settings/change-password-card.tsx",
+      "owner": "ChangePasswordCard",
+      "line": 67,
+      "column": 11,
+      "kind": "jsx",
+      "tag": "Input",
+      "attributes": {
+        "id": "\"settings-current-password\"",
+        "type": "\"password\"",
+        "autoComplete": "\"current-password\"",
+        "value": "current",
+        "disabled": "pending",
+        "onChange": "(value) => { setCurrent(value); if (formError) setFormError(undefined); }"
+      },
+      "handlers": {
+        "onChange": "(value) => { setCurrent(value); if (formError) setFormError(undefined); }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "form",
+          "attributes": {
+            "aria-busy": "pending || undefined"
+          }
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/settings/change-password-card.tsx:72:11",
+      "path": "frontend/components/settings/change-password-card.tsx",
+      "owner": "ChangePasswordCard",
+      "line": 72,
+      "column": 11,
+      "kind": "jsx",
+      "tag": "Input",
+      "attributes": {
+        "id": "\"settings-new-password\"",
+        "type": "\"password\"",
+        "autoComplete": "\"new-password\"",
+        "value": "next",
+        "disabled": "pending",
+        "onChange": "(value) => { setNext(value); if (formError) setFormError(undefined); }"
+      },
+      "handlers": {
+        "onChange": "(value) => { setNext(value); if (formError) setFormError(undefined); }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "form",
+          "attributes": {
+            "aria-busy": "pending || undefined"
+          }
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/settings/change-password-card.tsx:76:11",
+      "path": "frontend/components/settings/change-password-card.tsx",
+      "owner": "ChangePasswordCard",
+      "line": 76,
+      "column": 11,
+      "kind": "jsx",
+      "tag": "Input",
+      "attributes": {
+        "id": "\"settings-confirm-password\"",
+        "type": "\"password\"",
+        "autoComplete": "\"new-password\"",
+        "value": "confirm",
+        "disabled": "pending",
+        "onChange": "(value) => { setConfirm(value); if (formError) setFormError(undefined); }"
+      },
+      "handlers": {
+        "onChange": "(value) => { setConfirm(value); if (formError) setFormError(undefined); }"
+      },
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "form",
+          "attributes": {
+            "aria-busy": "pending || undefined"
+          }
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/settings/change-password-card.tsx:78:70",
+      "path": "frontend/components/settings/change-password-card.tsx",
+      "owner": "ChangePasswordCard",
+      "line": 78,
+      "column": 70,
+      "kind": "jsx",
+      "tag": "span",
+      "attributes": {
+        "role": "\"alert\"",
+        "data-settings-password-error": "true"
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "formError"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "form",
+          "attributes": {
+            "aria-busy": "pending || undefined"
+          }
+        },
+        {
+          "kind": "logical",
+          "expression": "formError",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/settings/change-password-card.tsx:79:20",
+      "path": "frontend/components/settings/change-password-card.tsx",
+      "owner": "ChangePasswordCard",
+      "line": 79,
+      "column": 20,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"status\"",
+        "data-settings-password-status": "\"changed\"",
+        "className": "\"text-sm text-muted-foreground\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "notice"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "form",
+          "attributes": {
+            "aria-busy": "pending || undefined"
+          }
+        },
+        {
+          "kind": "logical",
+          "expression": "notice",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/settings/change-password-card.tsx:80:9",
+      "path": "frontend/components/settings/change-password-card.tsx",
+      "owner": "ChangePasswordCard",
+      "line": 80,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "StatefulButton",
+      "attributes": {
+        "type": "\"submit\"",
+        "data-settings-password-submit": "true",
+        "state": "pending ? \"loading\" : \"idle\"",
+        "loadingText": "frontendText(locale, \"SETTINGS_PASSWORD_SAVING\")",
+        "disabled": "pending || next.length === 0"
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"SETTINGS_PASSWORD_SAVE\")"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "form",
+          "attributes": {
+            "aria-busy": "pending || undefined"
+          }
         }
       ],
       "earlyReturns": []
@@ -59640,10 +59867,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/settings-page.tsx:60:1240",
+      "id": "frontend/pages/settings-page.tsx:61:1240",
       "path": "frontend/pages/settings-page.tsx",
       "owner": "SettingsPage",
-      "line": 60,
+      "line": 61,
       "column": 1240,
       "kind": "jsx",
       "tag": "Button",
@@ -59672,10 +59899,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/settings-page.tsx:60:1937",
+      "id": "frontend/pages/settings-page.tsx:61:1937",
       "path": "frontend/pages/settings-page.tsx",
       "owner": "SettingsPage",
-      "line": 60,
+      "line": 61,
       "column": 1937,
       "kind": "jsx",
       "tag": "Select",
@@ -59693,11 +59920,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/settings-page.tsx:60:2656",
+      "id": "frontend/pages/settings-page.tsx:61:2694",
       "path": "frontend/pages/settings-page.tsx",
       "owner": "SettingsPage",
-      "line": 60,
-      "column": 2656,
+      "line": 61,
+      "column": 2694,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -59719,11 +59946,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/settings-page.tsx:60:2787",
+      "id": "frontend/pages/settings-page.tsx:61:2825",
       "path": "frontend/pages/settings-page.tsx",
       "owner": "SettingsPage",
-      "line": 60,
-      "column": 2787,
+      "line": 61,
+      "column": 2825,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -59745,11 +59972,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/settings-page.tsx:60:3025",
+      "id": "frontend/pages/settings-page.tsx:61:3063",
       "path": "frontend/pages/settings-page.tsx",
       "owner": "SettingsPage",
-      "line": 60,
-      "column": 3025,
+      "line": 61,
+      "column": 3063,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {

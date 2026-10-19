@@ -35,6 +35,7 @@ export class RegistrationInvitationConflictError extends Error {
 
 export interface PasswordRepositoryPort {
   findByCanonicalEmail(email: string): Promise<PasswordMemberRecord | null>;
+  findById(id: string): Promise<PasswordMemberRecord | null>;
   countRegistrationAttempts(ipHash: string, since: string): Promise<number>;
   /**
    * Inserts the member and claims the invitation code in one D1 batch.
@@ -43,6 +44,14 @@ export interface PasswordRepositoryPort {
   insertMember(member: InsertPasswordMember, invitationCode: string, audit: CreateAuditEvent): Promise<PasswordMemberRecord>;
   recordLoginFailure(id: string, threshold: number, lockedUntil: string): Promise<{ locked: boolean }>;
   resetLoginFailures(id: string): Promise<void>;
+  /** Replaces the password for an authenticated member and clears login locks. */
+  updatePassword(
+    id: string,
+    expectedPasswordHash: string | null,
+    passwordHash: string,
+    now: string,
+    audit: CreateAuditEvent,
+  ): Promise<boolean>;
   /** Replaces the password, clears login locks and revokes sessions. */
   resetPassword(
     id: string,
@@ -74,6 +83,13 @@ export class PasswordRepository implements PasswordRepositoryPort {
     const row = await this.db.prepare(
       `${passwordMemberSelect} WHERE LOWER(TRIM(email)) = ? LIMIT 1`,
     ).bind(email).first<PasswordMemberRow>();
+    return row === null ? null : mapRecord(row);
+  }
+
+  async findById(id: string): Promise<PasswordMemberRecord | null> {
+    const row = await this.db.prepare(
+      `${passwordMemberSelect} WHERE id = ? LIMIT 1`,
+    ).bind(id).first<PasswordMemberRow>();
     return row === null ? null : mapRecord(row);
   }
 
@@ -149,6 +165,27 @@ export class PasswordRepository implements PasswordRepositoryPort {
     await this.db.prepare(
       "UPDATE members SET failed_login_count = 0, locked_until = NULL WHERE id = ?",
     ).bind(id).run();
+  }
+
+  async updatePassword(
+    id: string,
+    expectedPasswordHash: string | null,
+    passwordHash: string,
+    now: string,
+    audit: CreateAuditEvent,
+  ): Promise<boolean> {
+    if (audit.action !== "member.password_reset" || audit.resourceId !== id || audit.resourceType !== "member") {
+      throw new TypeError("Password change audit binding is invalid");
+    }
+    const results = await this.db.batch([
+      this.db.prepare(
+        `UPDATE members
+         SET password_hash = ?, failed_login_count = 0, locked_until = NULL, updated_at = ?
+         WHERE id = ? AND password_hash IS ?`,
+      ).bind(passwordHash, now, id, expectedPasswordHash),
+      this.audit.prepareChangedRowAudit(audit),
+    ]);
+    return results[0]?.meta.changes === 1;
   }
 
   async resetPassword(

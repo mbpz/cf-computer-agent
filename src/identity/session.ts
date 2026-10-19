@@ -93,6 +93,17 @@ export class SessionService {
     await this.db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").bind(tokenHash).run();
   }
 
+  /** Revokes every other session for this member while keeping the caller's
+   * current session, so a password change does not sign the actor out. */
+  async revokeOtherSessions(request: Request, memberId: string): Promise<void> {
+    const token = readSessionToken(request);
+    if (!token) return;
+    const tokenHash = await sha256Hex(token);
+    await this.db.prepare("DELETE FROM auth_sessions WHERE member_id = ? AND token_hash <> ?")
+      .bind(memberId, tokenHash)
+      .run();
+  }
+
   async resolvePrincipal(request: Request): Promise<SessionPrincipalRecord> {
     const token = readSessionToken(request);
     if (!token) throw authenticationRequired();

@@ -50,6 +50,7 @@ import { MembersService } from "./members/service";
 import { PrivateNotesRepository } from "./private-notes/repository";
 import { PrivateNotesService } from "./private-notes/service";
 import { routeAdminApi } from "./routes/admin";
+import { routeAccountApi } from "./routes/account";
 import { routeAdminReviewApi } from "./routes/admin-review";
 import { routeAdminSummaryApi } from "./routes/admin-summary";
 import { routeAdminRolesApi } from "./routes/admin-roles";
@@ -502,6 +503,8 @@ async function dispatchApiRequest(
 
   const session = routeSession(request, url, context, principal);
   if (session) return session;
+  const account = await routeAccountApi(request, url, context, principal, { passwords: services.passwords, sessions: services.sessions });
+  if (account) return account;
   const navigation = await routeNavigationApi(request, url, context, principal, { menus: services.menus });
   if (navigation) return navigation;
   const invitations = await routeInvitationsApi(request, url, context, principal, { invitations: services.invitations });

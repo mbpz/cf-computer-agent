@@ -27,6 +27,15 @@
 
 **验证**：`test/worker/password-auth.test.ts` + `test/worker/invitation-auth.test.ts` 22/22；`test/unit/invitations.test.ts` 11/11；前端邀请码定向 28 通过；`verify-m1-migrations --files` = 79。
 
+### 1.1 历史账户兼容（2026-10-19 补充）
+
+已有密码账户若没有绑定邀请码，重置会统一失败。补充两条路径：
+
+- `POST /api/account/password`：已登录成员设置或修改密码；已有密码必须校验当前密码，无密码账户（如仅 GitHub）可从会话设置首个密码；成功后清除锁定并撤销其它会话，保留当前会话。设置页新增“密码”卡片。
+- `migrations/0080_backfill_password_invitations.sql`：为 0079 之前 `password_hash IS NOT NULL` 的成员回填 `kind=admin`、`status=used`、绑定到该成员的邀请码；管理员在菜单管理邀请码面板可见并转交，用于无会话找回。没有密码的 GitHub/微信专属成员不回填。
+
+验证：`test/worker/account-password.test.ts` 4/4、`test/unit/frontend-account-password.test.tsx` 4/4；迁移台账更新为 80。
+
 ## 2. `/agent` 接入 AgentSession
 
 - `POST /api/agent/sessions/:id/stream` 改为：`startTurn` → 读取历史 → `searchInternal(scope)` → `CitedAnswerService.answer` → 生成后再次授权 citation → `completeTurn`；错误/断流 `terminateTurn`。
@@ -62,10 +71,10 @@
 | `test:smoke` | 88/88 |
 | `test:i18n` | 14/14 |
 | `verify:delivery-status` | 30/30 |
-| `test:unit` | **410 文件 / 5606 用例通过** |
-| `test:worker` | **79 文件 / 1321 用例通过** |
+| `test:unit` | **411 文件 / 5610 用例通过** |
+| `test:worker` | **80 文件 / 1325 用例通过** |
 | `verify:landing` | 100/100 |
-| `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1728.12 KiB / gzip 327.58 KiB） |
+| `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1732.87 KiB / gzip 328.35 KiB） |
 | `audit:workbench-domain` / 其 31 项测试 | 通过（证据已重新生成） |
 | `verify:workbench-maturity` | 15/15 |
 

@@ -97,6 +97,13 @@ CREATE INDEX invitations_created_at ON invitations(created_at DESC);
 - `/settings`：新增“我的邀请码”卡片。首次进入自动创建并显示；可复制；状态为可用/已使用；已使用后只读并提示不可再生成。
 - `/admin/menus`：新增“邀请码”区块（PageHeader 下、菜单树之后）：生成按钮（每次 1 个，可重复点击 = 无限生成）、状态/类型筛选、分页表格（code、类型、分享者、绑定成员、状态、创建/使用时间）。使用共享 `DataTable`/`FilterSelect`/`AppliedFilters`/`PageState`/`Button`，不得用原生控件。
 
+## 历史账户兼容
+
+- 0079 之前已有的密码账户没有绑定邀请码。为避免其永久无法重置：
+  1. 已登录成员可通过 `POST /api/account/password` 设置/修改密码（已有密码需当前密码，无密码账户可设首个），成功后撤销其它会话。
+  2. `migrations/0080_backfill_password_invitations.sql` 为这类账户回填一条已绑定、used 状态的邀请码；管理员在菜单管理邀请码面板可见并转交账户所有者。
+- 回填只针对 `password_hash IS NOT NULL` 的成员；仅 GitHub/微信身份的成员不回填，仍按“无密码则不能无会话重置”处理。
+
 ## 不变量
 
 1. 注册必须由邀请码创建；不存在无邀请码的密码账户。

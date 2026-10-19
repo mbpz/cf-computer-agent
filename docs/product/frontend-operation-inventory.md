@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：477；操作/转发候选：1785。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：478；操作/转发候选：1792。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -191,6 +191,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/review/review-drafts.tsx | 3 |
 | frontend/components/review/review-publish-metadata-form.tsx | 20 |
 | frontend/components/review/review-source-panel.tsx | 9 |
+| frontend/components/settings/change-password-card.tsx | 7 |
 | frontend/components/settings/my-invitation-card.tsx | 8 |
 | frontend/components/shell/app-shell.tsx | 67 |
 | frontend/components/shell/command-palette.tsx | 3 |
@@ -513,7 +514,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /tasks | frontend/app.tsx#TasksRoute; frontend/lib/tasks-data.ts#*; frontend/pages/tasks/task-editor.tsx#TaskEditor | 165 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /boards | frontend/app.tsx#BoardsRoute | 90 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /environments | frontend/features/environments/environments-page.tsx#EnvironmentsPage; frontend/features/environments/environment-manager.ts#getEnvironmentManager | 143 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
-| /settings | frontend/pages/settings-page.tsx#SettingsPage | 35 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
+| /settings | frontend/pages/settings-page.tsx#SettingsPage | 46 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin | frontend/pages/admin/admin-dashboard-route.tsx#AdminDashboardRoute | 48 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/submissions | frontend/app.tsx#ReviewQueueRoute | 138 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/duplicates | frontend/app.tsx#AdminDuplicateRoute; frontend/lib/admin-duplicates-data.ts#* | 106 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
@@ -1928,6 +1929,18 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 214:15 ReviewSourcePanel | Button frontendText(locale, "ADMIN_REPARSE_PUBLISH") | onClick=() =&gt; void publish(); type="button" | disabled=pending !== null &#124;&#124; job.status !== "indexed" &#124;&#124; promotion === null; {"kind":"branch","expression":"source.kind === \"idle\"","br… |
 | 238:22 ReviewSourcePanel | p notice |  | {"kind":"branch","expression":"source.kind === \"idle\"","branch":"false"}; {"kind":"branch","expression":"source.kind === \"loading\"","branch":"false"}; {"… |
 
+## frontend/components/settings/change-password-card.tsx
+
+| 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
+| --- | --- | --- | --- |
+| 64:7 ChangePasswordCard | form  | onSubmit=(event) =&gt; { event.preventDefault(); void submit(); } | aria-busy=pending &#124;&#124; undefined |
+| 67:11 ChangePasswordCard | Input  | onChange=(value) =&gt; { setCurrent(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+| 72:11 ChangePasswordCard | Input  | onChange=(value) =&gt; { setNext(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+| 76:11 ChangePasswordCard | Input  | onChange=(value) =&gt; { setConfirm(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+| 78:70 ChangePasswordCard | span formError |  | {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"logical","expression":"formError","operator":"&&"} |
+| 79:20 ChangePasswordCard | p notice |  | {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"logical","expression":"notice","operator":"&&"} |
+| 80:9 ChangePasswordCard | StatefulButton frontendText(locale, "SETTINGS_PASSWORD_SAVE") | type="submit" | disabled=pending &#124;&#124; next.length === 0; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+
 ## frontend/components/settings/my-invitation-card.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
@@ -3331,11 +3344,11 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 60:1240 SettingsPage | Button frontendText(locale, mode === "light" ? "SHELL_THEME_LIGHT" : mode === "dark" ? "SHELL_THEME_DARK" : "SHELL_THEME_SYSTEM") | onClick=() =&gt; chooseTheme(mode); type="button" | disabled=save.kind === "saving"; {"kind":"repeat","expression":"([\"light\", \"dark\", \"system\"] as ThemeMode[])"} |
-| 60:1937 SettingsPage | Select  | onValueChange=(value) =&gt; chooseLanguage(value) | disabled=save.kind === "saving" |
-| 60:2656 SettingsPage | p frontendText(locale, "SETTINGS_SAVING") |  | {"kind":"logical","expression":"save.kind === \"saving\"","operator":"&&"} |
-| 60:2787 SettingsPage | p frontendText(locale, "SETTINGS_SAVED") |  | {"kind":"logical","expression":"save.kind === \"saved\"","operator":"&&"} |
-| 60:3025 SettingsPage | Button frontendText(locale, "COMMON_RETRY") | onClick=retrySave; type="button" | {"kind":"logical","expression":"save.kind === \"failed\"","operator":"&&"} |
+| 61:1240 SettingsPage | Button frontendText(locale, mode === "light" ? "SHELL_THEME_LIGHT" : mode === "dark" ? "SHELL_THEME_DARK" : "SHELL_THEME_SYSTEM") | onClick=() =&gt; chooseTheme(mode); type="button" | disabled=save.kind === "saving"; {"kind":"repeat","expression":"([\"light\", \"dark\", \"system\"] as ThemeMode[])"} |
+| 61:1937 SettingsPage | Select  | onValueChange=(value) =&gt; chooseLanguage(value) | disabled=save.kind === "saving" |
+| 61:2694 SettingsPage | p frontendText(locale, "SETTINGS_SAVING") |  | {"kind":"logical","expression":"save.kind === \"saving\"","operator":"&&"} |
+| 61:2825 SettingsPage | p frontendText(locale, "SETTINGS_SAVED") |  | {"kind":"logical","expression":"save.kind === \"saved\"","operator":"&&"} |
+| 61:3063 SettingsPage | Button frontendText(locale, "COMMON_RETRY") | onClick=retrySave; type="button" | {"kind":"logical","expression":"save.kind === \"failed\"","operator":"&&"} |
 
 ## frontend/pages/submit-page.tsx
 

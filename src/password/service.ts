@@ -191,6 +191,44 @@ export class PasswordAuthService {
     if (!reset) throw new AppError("PASSWORD_RESET_INVALID", "Password reset could not be completed", 401);
   }
 
+  /** Changes or sets the password for the authenticated member. Existing
+   * password accounts must prove the current password; accounts without a
+   * password (e.g. GitHub-only members) set their first one from a live session.
+   * Lock counters are cleared and the caller revokes other sessions. */
+  async changePassword(input: { memberId: string; currentPassword?: string | null; newPassword: string }): Promise<void> {
+    if (!this.passwordAllowed(input.newPassword)) {
+      throw new AppError("PASSWORD_POLICY_INVALID", "Enter a valid password of 12-128 characters", 400);
+    }
+    const record = await this.repository.findById(input.memberId);
+    if (!record || record.member.status !== "active") {
+      throw new AppError("PASSWORD_CHANGE_INVALID", "Password change could not be completed", 401);
+    }
+    if (record.passwordHash !== null) {
+      if (typeof input.currentPassword !== "string" || input.currentPassword.length === 0
+        || !(await verifyPassword(input.currentPassword, record.passwordHash))) {
+        throw new AppError("PASSWORD_CHANGE_INVALID", "Current password is invalid", 401);
+      }
+    }
+    const now = this.currentTime();
+    const updated = await this.repository.updatePassword(
+      record.member.id,
+      record.passwordHash,
+      await hashPassword(input.newPassword),
+      now.toISOString(),
+      {
+        id: this.auditId(),
+        actorKind: "member",
+        actorId: record.member.id,
+        action: "member.password_reset",
+        resourceType: "member",
+        resourceId: record.member.id,
+        metadata: {},
+        createdAt: now.toISOString(),
+      },
+    );
+    if (!updated) throw new AppError("PASSWORD_CHANGE_INVALID", "Password change could not be completed", 409, true);
+  }
+
   private requireRegistrationInvitation(value: unknown): string {
     if (value === undefined || value === null) {
       throw new AppError("REGISTRATION_INVITATION_REQUIRED", "An invitation code is required", 400);

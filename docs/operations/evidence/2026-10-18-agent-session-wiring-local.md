@@ -40,7 +40,7 @@
 | `npx vitest run test/worker/agent-session.test.ts` | 13/13 通过 |
 | 前端 agent 测试（8 文件） | 67 通过 |
 | `npm run typecheck` | 通过 |
-| `npm run check`（HEAD 工作树） | 退出码 0（unit 410 文件/5606、worker 79 文件/1321、smoke 88+14+30、landing 100） |
+| `npm run check`（HEAD 工作树） | 退出码 0（unit 411 文件/5610、worker 80 文件/1325、smoke 88+14+30、landing 100） |
 
 ## 未覆盖 / 非声明
 
