@@ -87,7 +87,7 @@
 | `test:smoke` | 88/88 |
 | `test:i18n` | 14/14 |
 | `verify:delivery-status` | 30/30 |
-| `test:unit` | **413 文件 / 5616 用例通过** |
+| `test:unit` | **414 文件 / 5617 用例通过** |
 | `test:worker` | **80 文件 / 1326 用例通过** |
 | `verify:landing` | 100/100 |
 | `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1737.14 KiB / gzip 329.27 KiB） |

@@ -9,6 +9,7 @@ import { AssetPreviewPanel } from "../../components/assets/asset-preview-panel";
 import { AssetHygienePanel } from "../../components/assets/asset-hygiene-panel";
 import { DataTable } from "../../components/data-table";
 import { PageState } from "../../components/ui/page-state";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import type { AssetPreviewModel } from "../../components/assets/asset-preview-model";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminAssetsPage, AdminAssetStatus } from "../../lib/admin-assets-data";
@@ -33,10 +34,18 @@ export function AssetQueuePage({ onLoadRetry, data, loading = false, forbidden =
     if (!valid || !confirmation || confirmationRef.current !== confirmation) return;
     cancel(); onRetry?.(confirmation.asset.id);
   };
-  // The header and filter row are constant (research §4.3); loading and read failure
-  // only replace the queue area below them.
-  return <><section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={valid} aria-hidden={valid || undefined}><PageHeader title={frontendText(locale, "ADMIN_ASSET_QUEUE_TITLE")} description={frontendText(locale, "ADMIN_ASSET_QUEUE_DESCRIPTION")}
-      actions={<FilterSelect label="Status" ariaLabel="Asset status" value={status} disabled={pending} onChange={(value) => onStatusChange?.(value as "" | AdminAssetStatus)} options={[{ value: "", label: "All" }, { value: "queued", label: "queued" }, { value: "processing", label: "processing" }, { value: "succeeded", label: "succeeded" }, { value: "failed_retryable", label: "failed_retryable" }, { value: "failed_terminal", label: "failed_terminal" }]} />} /><AppliedFilters
+  // The page shell is constant: the header, tabs and queue filter render for every
+  // state; loading and read failure only replace the active tab's content.
+  const [tab, setTab] = useState<"queue" | "hygiene">("queue");
+  return <><section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={valid} aria-hidden={valid || undefined}><PageHeader title={frontendText(locale, "NAV_ASSET_QUEUE")} description={frontendText(locale, "ADMIN_ASSET_QUEUE_DESCRIPTION")}
+      actions={tab === "queue" ? <FilterSelect label="Status" ariaLabel="Asset status" value={status} disabled={pending} onChange={(value) => onStatusChange?.(value as "" | AdminAssetStatus)} options={[{ value: "", label: "All" }, { value: "queued", label: "queued" }, { value: "processing", label: "processing" }, { value: "succeeded", label: "succeeded" }, { value: "failed_retryable", label: "failed_retryable" }, { value: "failed_terminal", label: "failed_terminal" }]} /> : undefined} />
+    <Tabs value={tab} onValueChange={(value) => setTab(value as "queue" | "hygiene")} className="flex min-h-0 flex-1 flex-col gap-4">
+      <TabsList>
+        <TabsTrigger value="queue">{frontendText(locale, "ADMIN_ASSET_QUEUE_TITLE")}</TabsTrigger>
+        <TabsTrigger value="hygiene">{frontendText(locale, "ADMIN_ASSET_HYGIENE_TITLE")}</TabsTrigger>
+      </TabsList>
+      <TabsContent value="queue" className="flex min-h-0 flex-1 flex-col gap-5">
+    <AppliedFilters
       ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")}
       clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")}
       filters={status ? [{ id: "status", label: `Status: ${status}`, onRemove: () => onStatusChange?.("") }] : []}
@@ -63,7 +72,13 @@ export function AssetQueuePage({ onLoadRetry, data, loading = false, forbidden =
       { key: "status", header: frontendText(locale, "ADMIN_ASSET_COLUMN_STATUS"), width: "220px", cell: (asset) => <div className="flex flex-col gap-1"><Badge variant={asset.status === "failed_retryable" ? "warning" : "outline"}>{asset.status || frontendText(locale, "ADMIN_ASSET_STATUS_UNAVAILABLE")}</Badge>{asset.attempts !== undefined && <span data-asset-attempts={asset.attempts} className="text-xs text-muted-foreground">{frontendText(locale, "ADMIN_ASSET_ATTEMPTS")}: {asset.attempts}</span>}{asset.lastErrorCode && <span data-asset-last-error={asset.lastErrorCode} className="text-xs text-destructive">{frontendText(locale, "ADMIN_ASSET_LAST_ERROR")}: {asset.lastErrorCode}</span>}</div> },
       { key: "actions", header: frontendText(locale, "ADMIN_ASSET_COLUMN_ACTIONS"), width: "260px", cell: (asset) => { const label = asset.name || asset.id; return <div className="flex items-center gap-2"><Button aria-label={`${frontendText(locale, "ADMIN_ASSET_PREVIEW")} ${label}`} size="sm" variant="outline" disabled={pending || previewLoading} onClick={() => onPreview?.(asset.id)}>{previewLoading ? frontendText(locale, "ADMIN_ASSET_PREVIEW_LOADING") : frontendText(locale, "ADMIN_ASSET_PREVIEW")}</Button>{asset.status === "failed_retryable" && <Button aria-label={`${frontendText(locale, "ADMIN_ASSET_RETRY")} ${label}`} size="sm" disabled={!onRetry || pending || forbidden || pendingIds.includes(asset.id)} onClick={() => request(asset)}>{frontendText(locale, "ADMIN_ASSET_RETRY")}</Button>}</div>; } },
     ]}
-  />}<AssetHygienePanel locale={locale} memberId={memberId} />{preview && <AssetPreviewPanel locale={locale} preview={preview} />}</>}</section><ConfirmAction open={valid} title={frontendText(locale,"ADMIN_ASSET_CONFIRM_TITLE")}
+  />}{preview && <AssetPreviewPanel locale={locale} preview={preview} />}</>}
+      </TabsContent>
+      <TabsContent value="hygiene" className="flex min-h-0 flex-1 flex-col">
+        <AssetHygienePanel locale={locale} memberId={memberId} />
+      </TabsContent>
+    </Tabs>
+  </section><ConfirmAction open={valid} title={frontendText(locale,"ADMIN_ASSET_CONFIRM_TITLE")}
     description={confirmation ? `${confirmation.asset.name || frontendText(locale,"ADMIN_ASSET_UNNAMED")} (${confirmation.asset.id}). ${frontendText(locale,"ADMIN_ASSET_RETRY_IMPACT")}` : ""}
     cancelLabel={frontendText(locale,"COMMON_CANCEL")} confirmLabel={frontendText(locale,"ADMIN_ASSET_CONFIRM_RETRY")}
     onCancel={cancel} onConfirm={confirm} /></>;

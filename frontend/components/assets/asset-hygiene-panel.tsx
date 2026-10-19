@@ -160,9 +160,9 @@ export function AssetHygienePanel({ locale, memberId, requester = fetch }: { loc
       : current.length >= ADMIN_ORPHAN_MAX_LIMIT ? current : [...current, key]);
   };
 
-  return <Card data-asset-hygiene={capacity.kind}>
+  return <Card data-asset-hygiene={capacity.kind} className="flex h-full min-h-0 flex-col">
     <CardHeader><CardTitle>{frontendText(locale, "ADMIN_ASSET_HYGIENE_TITLE")}</CardTitle></CardHeader>
-    <CardContent className="space-y-4">
+    <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
       <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ASSET_HYGIENE_DESCRIPTION")}</p>
       {capacity.kind === "idle" ? <div className="space-y-2">
         <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ASSET_CAPACITY_NOT_READ")}</p>
