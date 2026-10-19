@@ -27,6 +27,7 @@ import { AdminRoleCreatePage } from "./pages/admin/create-role-page";
 import { useAdminRolesController } from "./lib/admin-roles-controller";
 import { AdminMenusPage } from "./pages/admin/menus-page";
 import { ReviewQueuePage } from "./pages/admin/review-queue-page";
+import { ReviewBatchPage } from "./pages/admin/review-batch-page";
 import { ReviewDetailRoute } from "./pages/admin/review-detail-route";
 import { RecycleBinRoute } from "./pages/admin/recycle-bin-route";
 import { AdminKnowledgeItemRoute } from "./pages/admin/knowledge-item-route";
@@ -268,6 +269,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-knowledge-trash": return <RecycleBinRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
     case "admin-knowledge-item": return <AdminKnowledgeItemRoute key={JSON.stringify([session?.member.id, pathname, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} knowledgeItemId={decodeRouteId(pathname)} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
     case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
+    case "admin-review-batch": return <ReviewBatchRoute locale={locale} memberId={session?.member.id} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} memberId={session?.member.id} />;
@@ -3740,6 +3742,11 @@ function needsBoardReplacement(
     || column.kind !== "ready" || column.pending || Boolean(column.loadError);
 }
 
+function ReviewBatchRoute({ locale, memberId, canReview }: { locale: LocaleRuntime; memberId?: string; canReview: boolean }) {
+  const back = () => writeWorkspaceHistory("push", "/admin/submissions");
+  return <ReviewBatchPage locale={locale} memberId={memberId} canReview={canReview} onBack={back} onComplete={back} />;
+}
+
 export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string; memberId?: string; canReview: boolean }) {
   return <ReviewDraftProvider locale={props.locale} memberId={props.memberId} preserveUnsent><ReviewQueueSession {...props} /></ReviewDraftProvider>;
 }
@@ -3899,8 +3906,8 @@ function ReviewQueueSession({ locale, memberId, canReview }: { locale: LocaleRun
     blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
   }
   return <ReviewQueuePage onOpenDetail={(id) => writeWorkspaceHistory("push", `/admin/submissions/${encodeURIComponent(id)}`)} locale={locale} state={state}
-    batchEnabled={canReview}
-    memberId={memberId}
+    canBatch={canReview}
+    onOpenBatch={() => writeWorkspaceHistory("push", "/admin/submissions/batch")}
     pendingId={pendingId} completedId={completedId} decisionState={decisionState} localError={recordNotice ?? localError} pending={pending || recordBlocked}
     decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord}
     onRetry={() => retryRead()} onReloadDecision={() => retryRead()}

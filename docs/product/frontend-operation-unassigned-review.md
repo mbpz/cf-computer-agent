@@ -55,14 +55,15 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 181 项，但 A01 
 
 下表“条件”与组内共同守卫叠加。状态提示、role、option、props 转发和监听器均保留；不是每一行都对应一次用户操作。未挂载项的条件均是假设调用者接线之后的源码条件，不能误读为当前正式页面已可用。
 
-## `frontend/app.tsx`（2）
+## `frontend/app.tsx`（3）
 
 入口为 [source:frontend/main.tsx] 的 App。App 先处理 sessionError、匿名首页/登录、会话加载，再挂载 AccountNetworkBoundary、AppShell、HistoryNavigationNotice。属于全局外层，不在以业务 root symbol 为起点的图中。SettingsPage 行是 props/spread 边界，不是新的保存动作。原属本文件的两条 AdminRoleCreatePage/AdminRoleDetailPage JSX 边界（429:10、438:10）：两个包装器在 renderPage 的 admin-role-new/admin-role-detail 分支渲染；admin-role-new / admin-role-detail 现已在 `shared/workbench-maturity-capabilities.ts` 登记为能力根 `workbench-admin-role-new` / `workbench-admin-role-detail`，这两条候选随 root symbol `AdminRoleNewRoute` / `AdminRoleDetailRoute` 归入对应路由，2026-10-16 起从本记录移除。
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:233:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:260:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:234:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:261:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:3747:10` | app-boundary | 批量处理路由渲染；返回或全部成功提交 | 定义回跳 `/admin/submissions` 的回调，传给 ReviewBatchPage 的 onBack/onComplete；写入 workspace history，不直接调用 API。 |
 | `frontend/components/motion/feedback-widget.tsx:195:5` | unmounted-ui | beUI feedback-widget 挂载后注册 window keydown/pointerdown 监听 | 键盘/指针事件触发面板关闭判定；当前组件未挂载，不产生实际交互。 |
 | `frontend/components/motion/feedback-widget.tsx:196:5` | unmounted-ui | beUI feedback-widget 挂载后注册 window keydown/pointerdown 监听 | 键盘/指针事件触发面板关闭判定；当前组件未挂载。 |
 | `frontend/components/motion/feedback-widget.tsx:429:23` | unmounted-ui | 反馈面板处于错误/空态 | 渲染 role="alert" 的提示块；组件未挂载。 |
@@ -592,7 +593,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `c23d167711b69e7c5f5f61afa8bc8dcb196d76bdb0fced203ed24a869d36bec8`
+- `frontend/app.tsx`: `05a951f167d43d9f3aac47b37c50c9f4e19122ce0cb33e35f6ddb381c3f90b96`
 - `frontend/components/motion/tabs.tsx`: `f5510f664873212342f07a95f072d22922eb427940f4a485c6ca3123f0f6b86c`
 - `frontend/components/ui/tabs.tsx`: `a3ec44982431b22612da1bd8af511e98eb170d6c3f8380254e213acdc38adb9b`
 - `frontend/components/agent/answer-panel.tsx`: `d604801b674d21ef059a70f79cc367326ceccf60ba5e400c4d3480eca1e63586`

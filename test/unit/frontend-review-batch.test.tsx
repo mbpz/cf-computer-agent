@@ -3,6 +3,7 @@ import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReviewQueuePage } from "../../frontend/pages/admin/review-queue-page";
+import { ReviewBatchPage } from "../../frontend/pages/admin/review-batch-page";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import type { ReviewQueuePageResult } from "../../frontend/lib/admin-review-data";
 
@@ -77,16 +78,23 @@ describe("review batch surface", () => {
   function node<T extends Element>(selector: string): T { const found = container.querySelector(selector); expect(found, selector).toBeTruthy(); return found as unknown as T; }
   async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); }); }
   async function clickOn(target: HTMLElement) { await act(async () => { target.click(); }); await flush(); }
-  async function mountQueue(batchEnabled = true) {
-    const locale = createLocaleRuntime({ storage: { getItem: () => "en", setItem: () => {} } });
-    await act(async () => { root.render(<ReviewQueuePage locale={locale} state={{ kind: "ready", data: page() }} batchEnabled={batchEnabled} memberId="member-admin" />); });
+  const locale = createLocaleRuntime({ storage: { getItem: () => "en", setItem: () => {} } });
+  async function mountBatch(canReview = true, onComplete = vi.fn()) {
+    await act(async () => { root.render(<ReviewBatchPage locale={locale} memberId="member-admin" canReview={canReview} load={async () => page()} onComplete={onComplete} />); });
     await flush();
+    return onComplete;
+  }
+  async function mountQueue(canBatch = true) {
+    const open = vi.fn();
+    await act(async () => { root.render(<ReviewQueuePage locale={locale} state={{ kind: "ready", data: page() }} canBatch={canBatch} onOpenBatch={open} />); });
+    await flush();
+    return open;
   }
   async function selectAll() { await clickOn(node<HTMLButtonElement>("[data-batch-select-all]")); }
 
   it("renders one row per item and the real partial counts when some items fail", async () => {
     const bodies = recordFetch((actions) => summary(actions, new Set(["review-2"])));
-    await mountQueue();
+    await mountBatch();
     await selectAll();
     const rowCheckbox = node('[data-batch-select="review-1"]').querySelector('[role="checkbox"]');
     expect(rowCheckbox).not.toBeNull();
@@ -105,7 +113,7 @@ describe("review batch surface", () => {
 
   it("retries only the failures under their original operation numbers", async () => {
     const bodies = recordFetch((actions) => summary(actions, new Set(["review-2"])));
-    await mountQueue();
+    await mountBatch();
     await selectAll();
     await clickOn(node("[data-batch-send]"));
     const original = bodies[0]!.find((action) => action.submissionId === "review-2")!;
@@ -125,7 +133,7 @@ describe("review batch surface", () => {
       bodies.push(actions); await gate.promise;
       return json(summary(actions, new Set()));
     });
-    await mountQueue();
+    await mountBatch();
     await selectAll();
     const send = node<HTMLButtonElement>("[data-batch-send]");
     await act(async () => { send.click(); });
@@ -141,25 +149,48 @@ describe("review batch surface", () => {
 
   it("disables send until something on the page is selected", async () => {
     recordFetch(() => summary([], new Set()));
-    await mountQueue();
+    await mountBatch();
     expect(node<HTMLButtonElement>("[data-batch-send]").disabled).toBe(true);
     expect(node("[data-batch-none-selected]")).toBeTruthy();
     await selectAll();
     expect(node<HTMLButtonElement>("[data-batch-send]").disabled).toBe(false);
   });
 
-  it("renders no batch affordance when the capability is absent", async () => {
+  it("offers the batch page from the queue and hides the entry without the capability", async () => {
+    const open = await mountQueue(true);
+    const entry = node<HTMLButtonElement>("[data-review-batch-open]");
+    await clickOn(entry);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("[data-batch-toolbar]")).toBeNull();
+
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client"); root = createRoot(container);
     await mountQueue(false);
+    expect(container.querySelector("[data-review-batch-open]")).toBeNull();
+    expect(container.textContent).toContain("First");
+  });
+
+  it("renders no batch affordance on the batch page when the capability is absent", async () => {
+    await mountBatch(false);
     expect(container.querySelector("[data-batch-toolbar]")).toBeNull();
     expect(container.querySelector("[data-batch-select]")).toBeNull();
     expect(container.querySelector("[data-batch-results]")).toBeNull();
     expect(container.querySelector("[data-batch-send]")).toBeNull();
-    expect(container.textContent).toContain("First");
+    expect(container.textContent).toContain("no longer have permission");
+  });
+
+  it("returns to the queue after a fully successful submit", async () => {
+    recordFetch((actions) => summary(actions, new Set()));
+    const onComplete = await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(node('[data-batch-outcome="review-1"]').getAttribute("data-batch-outcome-status")).toBe("succeeded");
   });
 
   it("never presents a fully successful summary when the counts disagree with the items", async () => {
     vi.stubGlobal("fetch", async () => json({ requested: 2, succeeded: 2, failed: 0, items: [{ submissionId: "review-1", action: "reject", status: "succeeded", result: {} }] }));
-    await mountQueue();
+    await mountBatch();
     await selectAll();
     await clickOn(node("[data-batch-send]"));
     expect(container.querySelector("[data-batch-results]")).toBeNull();

@@ -8,7 +8,7 @@ describe("React app route dispatch", () => {
     ["/", "home"], ["/knowledge", "knowledge"], ["/search", "search"], ["/agent", "agent"],
     ["/submit", "submit"], ["/my-submissions", "my-submissions"], ["/tasks", "tasks"], ["/boards", "boards"], ["/notifications", "notifications"],
     ["/environments", "environments"], ["/messages", "messages"], ["/messages/thread-1", "message-thread"], ["/admin", "admin"],
-    ["/admin/submissions", "admin-submissions"], ["/admin/duplicates", "admin-duplicates"], ["/admin/assets", "admin-assets"],
+    ["/admin/submissions", "admin-submissions"], ["/admin/submissions/batch", "admin-review-batch"], ["/admin/submissions/submission-1", "admin-submission-detail"], ["/admin/duplicates", "admin-duplicates"], ["/admin/assets", "admin-assets"],
     ["/admin/members", "admin-members"], ["/admin/spaces", "admin-spaces"], ["/admin/audit", "admin-audit"],
     ["/admin/roles", "admin-roles"], ["/admin/roles/new", "admin-role-new"], ["/admin/roles/editor", "admin-role-detail"],
     ["/admin/knowledge/trash", "admin-knowledge-trash"], ["/admin/knowledge/knowledge-1", "admin-knowledge-item"],

@@ -52,6 +52,7 @@ export const READY_MARKER_BY_ROUTE = {
   "knowledge-reader": "READY::knowledge-reader",
   "message-thread": "[data-message-id=\"private-message-route-audit\"]",
   "admin-submission-detail": "READY::admin-submission-detail",
+  "admin-review-batch": "READY::admin-review-batch",
   // Create role renders its form from local state, so its ready observable is the
   // page's own heading rather than anything the role read returns.
   "admin-role-new": "Create role",
@@ -296,6 +297,11 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (pathname(path) === "/api/admin/submissions") return probeResponse(state, numbered([]), numbered([{ id: "dashboard-pending", title: "Pending", submitterId: "member-route-audit", status: "review_pending" }]));
       if (pathname(path) === "/api/admin/assets") return probeResponse(state, numbered([]), numbered([{ asset: { id: "dashboard-asset", originalName: "asset.txt" }, job: { status: "succeeded" } }]));
       if (pathname(path) === "/api/admin/members") return probeResponse(state, numbered([]), numbered([{ id: "dashboard-member", email: "member@app.test", role: "contributor", status: "active" }]));
+      return null;
+    case "admin-review-batch":
+      if (pathname(path) === "/api/admin/submissions") return probeResponse(state,
+        { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } },
+        { items: [{ id: "submission-route-audit", title: "READY::admin-review-batch", submitterId: "member-route-audit", status: "review_pending", updatedAt: NOW }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
       return null;
     case "admin-submissions":
       if (pathname(path) === "/api/admin/submissions") return probeResponse(state, numbered([]), numbered([{ id: "ready-admin-submissions", title: "READY::admin-submissions", submitterId: "member-route-audit", status: "review_pending" }]));

@@ -761,6 +761,7 @@ export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
   { capabilityId: "workbench-settings", path: "frontend/pages/settings-page.tsx", symbol: "SettingsPage" },
   { capabilityId: "workbench-admin", path: "frontend/pages/admin/admin-dashboard-route.tsx", symbol: "AdminDashboardRoute" },
   { capabilityId: "workbench-admin-submissions", path: "frontend/app.tsx", symbol: "ReviewQueueRoute" },
+  { capabilityId: "workbench-admin-review-batch", path: "frontend/pages/admin/review-batch-page.tsx", symbol: "ReviewBatchPage" },
   { capabilityId: "workbench-admin-duplicates", path: "frontend/app.tsx", symbol: "AdminDuplicateRoute" },
   { capabilityId: "workbench-admin-duplicates", path: "frontend/lib/admin-duplicates-data.ts", symbol: "*" },
   { capabilityId: "workbench-admin-assets", path: "frontend/app.tsx", symbol: "AdminAssetsRoute" },
@@ -913,6 +914,12 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
     id: "workbench-admin-submissions", routeId: "admin-submissions", pathname: "/admin/submissions", requiredRole: "admin",
     journey: "Review submitted knowledge and make a publication decision.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
     frontendEvidence: ["frontend/pages/admin/review-queue-page.tsx", "frontend/components/review/review-batch-owner.tsx", "frontend/lib/admin-batch-review-data.ts", "frontend/app.tsx"], backendEvidence: ["src/routes/admin-review.ts", "src/review/service.ts"], testEvidence: ["test/unit/frontend-moderation-pagination-routes.test.tsx", "test/unit/frontend-admin-review-data.test.ts", "test/unit/frontend-review-batch.test.tsx", "test/worker/m1-publication.test.ts", "test/worker/admin-knowledge-lifecycle.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-002"], gaps: ["Current admin server-navigation and queue-to-detail navigation, exact-query read retry without POST replay, 401/403 content clearing, synchronous in-flight locks and stale-navigation protection are locally tested. End-to-end decision completion across publication, indexing and notifications, server idempotency, release and signed-browser acceptance remain gaps."],
+  },
+  {
+    id: "workbench-admin-review-batch", routeId: "admin-review-batch", pathname: "/admin/submissions/batch", parentRouteId: "admin-submissions", routePattern: "/^\\/admin\\/submissions\\/batch$/u", requiredRole: "admin",
+    journey: "Open the batch surface from the review queue, apply one decision to the selected current-page submissions, and return to the queue after a fully successful submit.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/pages/admin/review-batch-page.tsx", "frontend/components/review/review-batch-owner.tsx", "frontend/app.tsx", "frontend/app-routes.ts"], backendEvidence: ["src/routes/admin-review.ts", "src/publication/service.ts"], testEvidence: ["test/unit/frontend-review-batch.test.tsx", "test/unit/frontend-app-routes.test.ts", "test/worker/m1-publication.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-002"],
+    gaps: ["The queue entry, fixed batch path, current-page selection, per-item outcomes, retained partial failures and retry of only failures under original operation numbers are locally tested; a fully successful submit returns to the queue. Cross-page selection, publishing in batch, release and signed-browser acceptance remain gaps."],
   },
   {
     id: "workbench-admin-duplicates", routeId: "admin-duplicates", pathname: "/admin/duplicates", requiredRole: "admin",
@@ -1169,11 +1176,20 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-admin-submissions",
-    apiPaths: ["/api/admin/submissions", "/api/admin/submissions/batch-review", "/api/admin/submissions/:id/publish", "/api/admin/submissions/:id/request-revision", "/api/admin/submissions/:id/reject"],
+    apiPaths: ["/api/admin/submissions", "/api/admin/submissions/:id/publish", "/api/admin/submissions/:id/request-revision", "/api/admin/submissions/:id/reject"],
     persistencePaths: ["src/submissions/repository.ts", "src/publication/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0033_numbered_pagination_indexes.sql"],
     ownerPredicate: null,
     pagination: "numbered",
-    mutations: ["POST /api/admin/submissions/batch-review — gap: the batch envelope carries no identity of its own and items are applied independently, so an item sent without both operationId and expectedUpdatedAt is deliberately unprotected and a retried batch re-applies it", "POST /api/admin/submissions/:id/publish — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/request-revision — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/reject — gap: no client replay key or expected version is supplied"],
+    mutations: ["POST /api/admin/submissions/:id/publish — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/request-revision — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/reject — gap: no client replay key or expected version is supplied"],
+    mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-admin-review-batch",
+    apiPaths: ["/api/admin/submissions", "/api/admin/submissions/batch-review"],
+    persistencePaths: ["src/submissions/repository.ts", "src/publication/repository.ts", "migrations/0069_review_decision_receipts.sql"],
+    ownerPredicate: null,
+    pagination: "not_applicable",
+    mutations: ["POST /api/admin/submissions/batch-review — gap: the batch envelope carries no identity of its own and items are applied independently, so an item sent without both operationId and expectedUpdatedAt is deliberately unprotected and a retried batch re-applies it"],
     mutationSafety: "mixed",
   },
   {
@@ -1196,11 +1212,11 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-admin-members",
-    apiPaths: ["/api/admin/members", "/api/admin/members/:id/status"],
-    persistencePaths: ["src/members/repository.ts", "migrations/0001_phase1_control_plane.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    apiPaths: ["/api/admin/members", "/api/admin/members/:id/status", "/api/admin/invitations"],
+    persistencePaths: ["src/members/repository.ts", "src/invitations/repository.ts", "migrations/0001_phase1_control_plane.sql", "migrations/0033_numbered_pagination_indexes.sql", "migrations/0079_invitations.sql"],
     ownerPredicate: null,
     pagination: "numbered",
-    mutations: ["PATCH /api/admin/members/:id/status — proven: caller expectedStatus compare-and-set in the UPDATE predicate; stale or racing writes conflict"],
+    mutations: ["PATCH /api/admin/members/:id/status — proven: caller expectedStatus compare-and-set in the UPDATE predicate; stale or racing writes conflict", "POST /api/admin/invitations — gap: administrator code generation is intentionally non-idempotent (each click creates new codes) and has no replay key"],
     mutationSafety: "mixed",
   },
   {
@@ -1214,11 +1230,11 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-admin-menus",
-    apiPaths: ["/api/admin/menus", "/api/admin/menus/:id", "/api/admin/invitations"],
-    persistencePaths: ["src/authorization/menus-repository.ts", "src/invitations/repository.ts", "migrations/0029_workspace_rbac.sql", "migrations/0031_workspace_menu_hierarchy.sql", "migrations/0067_menu_operation_receipts.sql", "migrations/0079_invitations.sql"],
+    apiPaths: ["/api/admin/menus", "/api/admin/menus/:id"],
+    persistencePaths: ["src/authorization/menus-repository.ts", "migrations/0029_workspace_rbac.sql", "migrations/0031_workspace_menu_hierarchy.sql", "migrations/0067_menu_operation_receipts.sql"],
     ownerPredicate: null,
     pagination: "not_applicable",
-    mutations: ["POST /api/admin/menus — proven: natural menu key claims one recorded creation receipt under a whole-tree compare-and-set", "PATCH /api/admin/menus/:id — proven: whole-tree snapshot compare-and-set with an optional browser baseline admits one writer", "DELETE /api/admin/menus/:id — proven: the removed row id keys a delete receipt that replays after the row is gone", "POST /api/admin/invitations — gap: administrator code generation is intentionally non-idempotent (each click creates new codes) and has no replay key"],
+    mutations: ["POST /api/admin/menus — proven: natural menu key claims one recorded creation receipt under a whole-tree compare-and-set", "PATCH /api/admin/menus/:id — proven: whole-tree snapshot compare-and-set with an optional browser baseline admits one writer", "DELETE /api/admin/menus/:id — proven: the removed row id keys a delete receipt that replays after the row is gone"],
     mutationSafety: "mixed",
   },
   {

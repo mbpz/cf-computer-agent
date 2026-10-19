@@ -125,7 +125,7 @@ test("real repository includes exact-result controls and both secondary confirma
   assert.ok(confirmation.some(op => op.handlers.onClick === "onConfirm"));
   assert.ok(result.operations.some(op => op.path === "frontend/pages/messages/thread-page.tsx" && op.handlers.onClick === "() => void onLookup()"));
   assert.ok(result.files.includes("frontend/features/environments/environments-page.tsx"));
-  assert.equal(result.routes.length,39);
+  assert.equal(result.routes.length,40);
   assert.ok(result.routes.every(route=>route.candidateOperationIds.length > 0));
   assert.ok(result.routes.some(route=>route.pathname === "/environments"));
   // The ⌘/Ctrl-K shortcut listener moved into the vendored beUI palette when the

@@ -50,6 +50,8 @@ export interface UseReviewBatchInput {
   /** False unless the reviewer holds `knowledge:review`: then no batch affordance exists. */
   enabled: boolean;
   requester?: Fetcher;
+  /** Called after a completed batch (including retries) with the per-item outcomes. */
+  onSettled?: (outcomes: readonly BatchReviewItemOutcome[]) => void;
 }
 
 const encoder = new TextEncoder();
@@ -102,7 +104,7 @@ function mergeOutcomes(previous: readonly BatchReviewItemOutcome[], next: readon
  * exact same writes — the server replays its recorded result instead of acting
  * twice. The selection freezes while a batch is in flight.
  */
-export function useReviewBatch({ items, memberId, locale, enabled, requester = fetch }: UseReviewBatchInput): ReviewBatchController {
+export function useReviewBatch({ items, memberId, locale, enabled, requester = fetch, onSettled }: UseReviewBatchInput): ReviewBatchController {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [decision, setDecisionState] = useState<BatchActionKind>("reject");
   const [reasonCode, setReasonCodeState] = useState<string>(defaultReason("reject"));
@@ -161,12 +163,13 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
     try {
       const result = await sendBatchReview(plan.actions, requester);
       setState({ kind: "done", outcomes: result.items, attempts: plan.actions, retried: false });
+      onSettled?.(result.items);
     } catch (error) {
       setState({ kind: "rejected", message: batchFailureMessage(error, locale) });
     } finally {
       pendingRef.current = false;
     }
-  }, [decision, enabled, items, locale, note, reasonCode, requester, selected]);
+  }, [decision, enabled, items, locale, note, onSettled, reasonCode, requester, selected]);
 
   const retryFailed = useCallback(async () => {
     if (!enabled) return;
@@ -179,7 +182,9 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
     setState({ kind: "pending", count: retryActions.length });
     try {
       const result = await sendBatchReview(retryActions, requester);
-      setState({ kind: "done", outcomes: mergeOutcomes(state.outcomes, result.items), attempts: state.attempts, retried: true });
+      const outcomes = mergeOutcomes(state.outcomes, result.items);
+      setState({ kind: "done", outcomes, attempts: state.attempts, retried: true });
+      onSettled?.(outcomes);
     } catch (error) {
       // The earlier outcomes remain true; only this attempt's transport failed.
       setNotice(batchFailureMessage(error, locale));
@@ -187,7 +192,7 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
     } finally {
       pendingRef.current = false;
     }
-  }, [enabled, locale, requester, state]);
+  }, [enabled, locale, onSettled, requester, state]);
 
   return { selected, toggle, selectAllPage, clear, decision, setDecision, reasonCode, setReasonCode, note, setNote, state, notice, freeze: frozen, send, retryFailed };
 }

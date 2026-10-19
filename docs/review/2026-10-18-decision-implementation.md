@@ -52,6 +52,13 @@
 
 验证：worker 关系网与 403 用例、前端 3 个渲染/重试/空态用例通过；全量门禁见 §6。
 
+### 1.4 审核批量处理独立页面（2026-10-19 补充）
+
+- `/admin/submissions` 表格改为占满页面高度；右上角新增“批量处理”入口，跳转 `/admin/submissions/batch`。
+- 新页面复用 `useReviewBatch` 与逐项结果组件：仅选择本页待审项，逐项携带 operationId/expectedUpdatedAt；全部成功提交后自动返回审核队列，部分失败留在批量页只重试失败项。
+- 该子页面在 `frontend/app-routes.ts` 固定路径分支先于 `/admin/submissions/:id` 匹配；队列页不再展示内联批量工具栏。
+- 测试：`frontend-review-batch.test.tsx` 覆盖入口、禁止态、全部成功回跳与部分失败重试；`frontend-workbench-maturity-routes.test.tsx` 增加该子页四态与角色矩阵；能力账本/缺口矩阵/域审计与操作清单同步。
+
 ## 2. `/agent` 接入 AgentSession
 
 - `POST /api/agent/sessions/:id/stream` 改为：`startTurn` → 读取历史 → `searchInternal(scope)` → `CitedAnswerService.answer` → 生成后再次授权 citation → `completeTurn`；错误/断流 `terminateTurn`。
@@ -87,7 +94,7 @@
 | `test:smoke` | 88/88 |
 | `test:i18n` | 14/14 |
 | `verify:delivery-status` | 30/30 |
-| `test:unit` | **414 文件 / 5617 用例通过** |
+| `test:unit` | **414 文件 / 5625 用例通过** |
 | `test:worker` | **80 文件 / 1326 用例通过** |
 | `verify:landing` | 100/100 |
 | `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1737.14 KiB / gzip 329.27 KiB） |

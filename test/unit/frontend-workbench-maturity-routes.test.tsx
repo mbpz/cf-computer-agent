@@ -46,6 +46,7 @@ const ROUTE_STATE_MATRIX = Object.freeze({
   settings: staticReady("Settings"),
   admin: listWithRetry,
   "admin-submissions": listWithRetry,
+  "admin-review-batch": listWithRetry,
   "admin-duplicates": listWithRetry,
   "admin-assets": listWithRetry,
   "admin-members": listWithRetry,
@@ -93,6 +94,7 @@ const PERMISSION_MASK_BY_ROUTE = Object.freeze({
   environments: "0x200000",
   tasks: "0x100000", boards: "0x100000", settings: "0x0", admin: "0x0", "admin-submissions": "0x0",
   "admin-duplicates": "0x0", "admin-assets": "0x0", "admin-members": "0x0", "admin-roles": "0x0",
+  "admin-review-batch": "0x0",
   "admin-role-new": "0x0", "admin-role-detail": "0x0",
   "admin-menus": "0x0", "admin-spaces": "0x0", "admin-audit": "0x0", "admin-analytics": "0x0",
   // The three knowledge-lifecycle routes authorize on the session capability

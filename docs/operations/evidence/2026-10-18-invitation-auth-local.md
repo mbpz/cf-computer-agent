@@ -48,7 +48,7 @@
 | `node scripts/verify-m1-migrations.mjs --files` | `[pass] migration-files count=79` |
 | `npm run test:smoke` | 88 + 14 + 30 通过 |
 | `npm run typecheck` | Worker + 前端通过 |
-| `npm run check`（HEAD 工作树） | 退出码 0（unit 414 文件/5617、worker 80 文件/1326、smoke 88+14+30、landing 100） |
+| `npm run check`（HEAD 工作树） | 退出码 0（unit 414 文件/5625、worker 80 文件/1326、smoke 88+14+30、landing 100） |
 
 ## 管理员邀请码关系网（2026-10-19 补充）
 
