@@ -37,7 +37,16 @@ function validBody(action: ReviewDecision, body: string): boolean {
   if (!validDecisionIdentity(record)) return false;
   const keys = decisionPayloadKeys(record);
   if (action === "publish") {
-    return keys.length === 5
+    const expansion = record.visibilityReasonCode !== undefined;
+    // The confirmed visibility expansion is the only publish body that carries a
+    // sixth field; every other publish must stay at the five-field shape, so a
+    // replayed intent never adds or drops the reason code.
+    const shapeOk = expansion
+      ? keys.length === 6
+        && record.visibilityReasonCode === "admin_visibility_expansion"
+        && record.visibility === "shared"
+      : keys.length === 5;
+    return shapeOk
       && typeof record.title === "string" && record.title.length <= 500 && !record.title.includes("\u0000")
       && (record.visibility === "shared" || record.visibility === "admin_only")
       && isId(record.spaceId)

@@ -1,5 +1,6 @@
 import type { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
+import { INVITATION_CODE_PATTERN } from "../invitations/types";
 import type { Member, MemberRole, MemberStatus } from "../members/types";
 
 export interface PasswordMemberRecord {
@@ -21,10 +22,25 @@ export interface InsertPasswordMember {
   registrationIpHash: string;
 }
 
+/**
+ * The invitation was already used (or otherwise unavailable) when the guarded
+ * registration batch ran. D1 reported no member insert and no code claim, so
+ * the caller maps this to the single registration-invitation error code.
+ */
+export class RegistrationInvitationConflictError extends Error {
+  constructor() {
+    super("Registration invitation is not available");
+  }
+}
+
 export interface PasswordRepositoryPort {
   findByCanonicalEmail(email: string): Promise<PasswordMemberRecord | null>;
   countRegistrationAttempts(ipHash: string, since: string): Promise<number>;
-  insertMember(member: InsertPasswordMember, audit: CreateAuditEvent): Promise<PasswordMemberRecord>;
+  /**
+   * Inserts the member and claims the invitation code in one D1 batch.
+   * Consuming the code and creating the member are both required.
+   */
+  insertMember(member: InsertPasswordMember, invitationCode: string, audit: CreateAuditEvent): Promise<PasswordMemberRecord>;
   recordLoginFailure(id: string, threshold: number, lockedUntil: string): Promise<{ locked: boolean }>;
   resetLoginFailures(id: string): Promise<void>;
   /** Replaces the password, clears login locks and revokes sessions. */
@@ -68,16 +84,39 @@ export class PasswordRepository implements PasswordRepositoryPort {
     return row?.total ?? 0;
   }
 
-  async insertMember(member: InsertPasswordMember, audit: CreateAuditEvent): Promise<PasswordMemberRecord> {
+  async insertMember(member: InsertPasswordMember, invitationCode: string, audit: CreateAuditEvent): Promise<PasswordMemberRecord> {
     if (audit.action !== "member.login" || audit.resourceId !== member.id || audit.actorId !== member.id) {
       throw new TypeError("Password member audit binding is invalid");
     }
+    if (!INVITATION_CODE_PATTERN.test(invitationCode)) {
+      throw new TypeError("Password member invitation binding is invalid");
+    }
+    // The guarded INSERT and the conditional UPDATE both run in one batch:
+    // either the member is created and the code is claimed, or neither happens.
+    // D1 serializes batches, so the EXISTS guard and the UPDATE see one
+    // consistent invitation state even when two registrations race for a code.
     const results = await this.db.batch([
       this.db.prepare(
         `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at, password_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(member.id, member.accessSub, member.email, member.role, member.status, member.createdAt, member.updatedAt, member.passwordHash),
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?
+         WHERE EXISTS (SELECT 1 FROM invitations WHERE code = ? AND status = 'unused')`,
+      ).bind(
+        member.id,
+        member.accessSub,
+        member.email,
+        member.role,
+        member.status,
+        member.createdAt,
+        member.updatedAt,
+        member.passwordHash,
+        invitationCode,
+      ),
       this.audit.prepareResourceWriteAudit(audit, { table: "members", id: member.id }),
+      this.db.prepare(
+        `UPDATE invitations
+         SET status = 'used', bound_member_id = ?, used_at = ?
+         WHERE code = ? AND status = 'unused'`,
+      ).bind(member.id, member.createdAt, invitationCode),
       this.db.prepare(
         "DELETE FROM password_registration_attempts WHERE created_at < ?",
       ).bind(new Date(Date.parse(member.createdAt) - 24 * 60 * 60 * 1_000).toISOString()),
@@ -85,8 +124,10 @@ export class PasswordRepository implements PasswordRepositoryPort {
         "INSERT INTO password_registration_attempts (ip_hash, created_at) VALUES (?, ?)",
       ).bind(member.registrationIpHash, member.createdAt),
     ]);
-    if (results[0]?.meta.changes !== 1 || results[1]?.meta.changes !== 1) {
-      throw new Error("Password member registration did not persist");
+    if (results[0]?.meta.changes !== 1 || results[2]?.meta.changes !== 1) {
+      // No member row and no audit row were written: the guarded INSERT saw a
+      // consumed/missing code, so the invitation was not spent by this attempt.
+      throw new RegistrationInvitationConflictError();
     }
     const created = await this.findByCanonicalEmail(member.email);
     if (!created) throw new Error("Password member registration did not persist");

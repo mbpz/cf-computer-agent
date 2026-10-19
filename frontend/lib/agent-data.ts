@@ -28,6 +28,13 @@ export interface AgentAnswer {
   conflicts?: Array<{ text: string; citationIds: string[] }>;
 }
 
+/** A grounded answer that also names the exact turn it was persisted as, so the
+ * page can terminate that turn when the reader stops waiting. */
+export interface AgentSessionAnswer extends AgentAnswer {
+  sessionId: string;
+  turnId: string;
+}
+
 /**
  * A quota deferral and a temporarily unavailable AI backend are server answers
  * about the request, not client-side transport failures. The reader's AI
@@ -38,7 +45,6 @@ export type AgentUnavailableReason = "quota" | "degraded";
 
 const AGENT_QUOTA_CODES: Record<string, true> = { RESEARCH_QUOTA_DEFERRED: true, AI_QUOTA_EXHAUSTED: true, QUOTA_EXHAUSTED: true };
 
-/** Null means the failure is neither a quota deferral nor a degraded backend. */
 export function agentUnavailableReason(error: unknown): AgentUnavailableReason | null {
   if (!(error instanceof ApiRequestError)) return null;
   if (Object.hasOwn(AGENT_QUOTA_CODES, error.code)) return "quota";
@@ -58,58 +64,15 @@ export type AgentTurnState =
   | { kind: "unavailable"; reason: AgentUnavailableReason; code: string }
   | { kind: "error"; message: string };
 
-type ChatPayload = { answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; conflicts?: unknown[]; messageKey?: unknown; suggestedActionKeys?: unknown; idempotencyKey?: unknown };
+type ChatPayload = { answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; sessionId?: unknown; turnId?: unknown; conflicts?: unknown[]; messageKey?: unknown; suggestedActionKeys?: unknown; idempotencyKey?: unknown };
 
-/**
- * Receipt validation and normalization shared by both transports: the JSON
- * response and the terminal frame of the stream carry the same payload, so a
- * streamed answer is accepted under exactly the same rules.
- */
-function normalizeChatPayload(data: ChatPayload, receipt: { idempotencyKey?: string; conversationId?: string }): AgentAnswer {
-  const { idempotencyKey, conversationId } = receipt;
-  if (idempotencyKey && (data.idempotencyKey !== idempotencyKey || (conversationId !== undefined && data.conversationId !== conversationId) || typeof data.answer !== "string" || typeof data.conversationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(data.conversationId) || typeof data.evidenceConfidence !== "number" || !Number.isFinite(data.evidenceConfidence) || data.evidenceConfidence < 0 || data.evidenceConfidence > 1 || !Array.isArray(data.citations) || !data.citations.every(isKeyedCitation) || !Array.isArray(data.sources) || !data.sources.every(isKeyedSource))) throw new Error("CHAT_RECEIPT_UNKNOWN");
-  const confidence = typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.8
-    ? "high"
-    : typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.5 ? "medium" : "low";
-  const citationObjects = Array.isArray(data.citations)
-    ? data.citations.map(normalizeCitation).filter((citation): citation is AgentCitation => citation !== null)
-    : [];
-  const citationIds = new Set(Array.isArray(data.citations) ? data.citations.filter((value): value is string => typeof value === "string") : []);
-  const citations = citationObjects.length > 0
-    ? citationObjects
-    : (Array.isArray(data.sources) ? data.sources.map(normalizeCitation).filter((citation): citation is AgentCitation => citation !== null && citationIds.has(citation.id)) : []);
-  const conflicts = Array.isArray(data.conflicts) ? data.conflicts.flatMap((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-    const record = value as Record<string, unknown>;
-    if (typeof record.text !== "string" || !Array.isArray(record.citationIds) || !record.citationIds.every((id) => typeof id === "string")) return [];
-    return [{ text: record.text, citationIds: record.citationIds as string[] }];
-  }) : [];
-  const insufficient = data.messageKey === "KNOWLEDGE_EVIDENCE_INSUFFICIENT";
-  const suggestions: Array<"rewrite" | "sources"> = [];
-  if (insufficient && Array.isArray(data.suggestedActionKeys)) {
-    if (data.suggestedActionKeys.includes("KNOWLEDGE_CHAT_REWRITE_QUESTION")) suggestions.push("rewrite");
-    if (data.suggestedActionKeys.includes("KNOWLEDGE_CHAT_EXPAND_SCOPE")) suggestions.push("sources");
-  }
-  return { ...(insufficient ? { insufficientEvidence: true as const, suggestions } : {}), answer: typeof data.answer === "string" ? data.answer : "", confidence, citations, ...(conflicts.length > 0 ? { conflicts } : {}), ...(typeof data.conversationId === "string" ? { conversationId: data.conversationId } : {}) };
-}
+const SESSION_ID = /^[A-Za-z0-9_-]{21,128}$/u;
+const TURN_ID = /^[A-Za-z0-9-]{16,128}$/u;
+const MESSAGE_LIMIT_MAX = 50;
 
-export async function updateAgentConversationScope(conversationId: string, scope: AgentScope, requester: Fetcher = fetch): Promise<void> {
-  await apiFetch(`/api/knowledge/chat/conversations/${encodeURIComponent(conversationId)}/scope`, {
-    requester,
-    method: "PATCH",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ scope }),
-  });
-}
-
-export async function cancelAgentConversation(conversationId: string, requester: Fetcher = fetch): Promise<boolean> {
-  const data = await apiFetch<{ cancelled?: unknown }>(`/api/knowledge/chat/conversations/${encodeURIComponent(conversationId)}/cancel`, {
-    requester,
-    method: "POST",
-    headers: { "content-type": "application/json" },
-  });
-  return data.cancelled === true;
-}
+/** `conversationId` in an agent URL is the durable agent session id. It is kept
+ * under the old parameter name so existing recovery links keep working. */
+const resourceId = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 
 function isKeyedSource(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -142,34 +105,136 @@ function normalizeCitation(value: unknown): AgentCitation | null {
   return citation;
 }
 
+/**
+ * Presentation mapping shared by both grounded transports. It never decides
+ * whether a payload is acceptable; the session transport validates the whole
+ * terminal frame before calling this.
+ */
+function normalizeChatPayload(data: ChatPayload): AgentAnswer {
+  const confidence = typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.8
+    ? "high"
+    : typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.5 ? "medium" : "low";
+  const citationObjects = Array.isArray(data.citations)
+    ? data.citations.map(normalizeCitation).filter((citation): citation is AgentCitation => citation !== null)
+    : [];
+  const citationIds = new Set(Array.isArray(data.citations) ? data.citations.filter((value): value is string => typeof value === "string") : []);
+  const citations = citationObjects.length > 0
+    ? citationObjects
+    : (Array.isArray(data.sources) ? data.sources.map(normalizeCitation).filter((citation): citation is AgentCitation => citation !== null && citationIds.has(citation.id)) : []);
+  const conflicts = Array.isArray(data.conflicts) ? data.conflicts.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const record = value as Record<string, unknown>;
+    if (typeof record.text !== "string" || !Array.isArray(record.citationIds) || !record.citationIds.every((id) => typeof id === "string")) return [];
+    return [{ text: record.text, citationIds: record.citationIds as string[] }];
+  }) : [];
+  const insufficient = data.messageKey === "KNOWLEDGE_EVIDENCE_INSUFFICIENT";
+  const suggestions: Array<"rewrite" | "sources"> = [];
+  if (insufficient && Array.isArray(data.suggestedActionKeys)) {
+    if (data.suggestedActionKeys.includes("KNOWLEDGE_CHAT_REWRITE_QUESTION")) suggestions.push("rewrite");
+    if (data.suggestedActionKeys.includes("KNOWLEDGE_CHAT_EXPAND_SCOPE")) suggestions.push("sources");
+  }
+  return { ...(insufficient ? { insufficientEvidence: true as const, suggestions } : {}), answer: typeof data.answer === "string" ? data.answer : "", confidence, citations, ...(conflicts.length > 0 ? { conflicts } : {}), ...(typeof data.conversationId === "string" ? { conversationId: data.conversationId } : {}) };
+}
+
 /** Real milestones the server reports while a grounded answer is produced. */
 export type ChatStage = "retrieving" | "evidence" | "generating" | "validating";
 
 const CHAT_STAGES: readonly string[] = ["retrieving", "evidence", "generating", "validating"];
 
+// --- AgentSession transport ------------------------------------------------
+
+interface AgentSessionPayload {
+  session?: { id?: unknown; memberId?: unknown; createdAt?: unknown; lastSeenAt?: unknown };
+}
+
+/** Create a fresh member-bound session. The server chooses the id; the client
+ * validates it strictly before using it in any path. */
+export async function createAgentSession(requester: Fetcher = fetch): Promise<string> {
+  const data = await apiFetch<AgentSessionPayload>("/api/agent/sessions", { requester, method: "POST" });
+  const id = data?.session?.id;
+  if (typeof id !== "string" || !SESSION_ID.test(id)) throw new Error("AGENT_SESSION_INVALID");
+  return id;
+}
+
+/** Read-only existence/ownership probe used when restoring a stored session. */
+export async function loadAgentSession(sessionId: string, { requester = fetch, signal }: { requester?: Fetcher; signal?: AbortSignal } = {}): Promise<{ id: string }> {
+  if (!SESSION_ID.test(sessionId)) throw new Error("AGENT_SESSION_INVALID");
+  const data = await apiFetch<AgentSessionPayload>(`/api/agent/sessions/${encodeURIComponent(sessionId)}`, { method: "GET", requester, signal });
+  const id = data?.session?.id;
+  if (typeof id !== "string" || id !== sessionId) throw new Error("AGENT_SESSION_INVALID");
+  return { id };
+}
+
+export interface AgentMessage {
+  role: "user" | "assistant";
+  content: string;
+  citations: AgentCitation[];
+}
+
+interface AgentMessagePagePayload {
+  messages?: { items?: unknown; truncated?: unknown };
+}
+
+/** The server returns newest-first pages; the transcript renders oldest-first.
+ * Stored assistant prose has no persisted citation ids, so it carries none. */
+export async function loadAgentMessages(sessionId: string, limit = 20, { requester = fetch, signal }: { requester?: Fetcher; signal?: AbortSignal } = {}): Promise<{ messages: AgentMessage[]; truncated: boolean }> {
+  if (!SESSION_ID.test(sessionId) || !Number.isSafeInteger(limit) || limit < 1 || limit > MESSAGE_LIMIT_MAX) throw new Error("AGENT_SESSION_INVALID");
+  const data = await apiFetch<AgentMessagePagePayload>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}`, { method: "GET", requester, signal });
+  const page = data?.messages;
+  if (!page || !Array.isArray(page.items) || page.items.length > limit || typeof page.truncated !== "boolean") throw new Error("AGENT_SESSION_INVALID");
+  const seen = new Set<string>();
+  const messages = page.items.map((value): AgentMessage => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("AGENT_SESSION_INVALID");
+    const record = value as Record<string, unknown>;
+    if (typeof record.id !== "string" || !record.id || seen.has(record.id)
+      || (record.role !== "user" && record.role !== "assistant")
+      || typeof record.content !== "string" || !record.content.trim()) throw new Error("AGENT_SESSION_INVALID");
+    seen.add(record.id);
+    return { role: record.role, content: record.content, citations: [] };
+  });
+  return { messages: messages.reverse(), truncated: page.truncated };
+}
+
+/** Owner-only termination of one turn. Accepts an already-finished turn as a
+ * verified no-op; anything else is an unconfirmed receipt. */
+export async function terminateAgentTurn(sessionId: string, turnId: string, requester: Fetcher = fetch): Promise<void> {
+  if (!SESSION_ID.test(sessionId) || !TURN_ID.test(turnId)) throw new Error("AGENT_SESSION_INVALID");
+  const data = await apiFetch<{ turn?: { turnId?: unknown; status?: unknown } }>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/terminate`, {
+    requester,
+    method: "POST",
+  });
+  const turn = data?.turn;
+  if (!turn || turn.turnId !== turnId || (turn.status !== "terminated" && turn.status !== "completed")) throw new Error("AGENT_TURN_RECEIPT_UNKNOWN");
+}
+
 /**
- * Streaming transport for the same grounded turn. Stage frames are progress
- * only; the answer arrives in one terminal frame and goes through the shared
- * receipt validation, so no unvalidated prose is ever rendered. A stream that
- * ends without a terminal frame is an unconfirmed write, not a plain failure.
+ * Streaming transport for one grounded session turn. The stream frames are the
+ * same as the knowledge chat's; the terminal frame is validated more strictly
+ * because the session identity and turn id are part of the receipt. A stream
+ * that ends without a terminal frame is an unconfirmed write, never a plain
+ * failure, so the caller keeps its recovery intent.
  */
-export async function askAgentStream({ question, scope, conversationId, idempotencyKey, requester = fetch, signal, onStage }: {
+export async function askAgentSessionStream({ sessionId, question, scope, requester = fetch, signal, onStage, onTurn }: {
+  sessionId: string;
   question: string;
   scope: AgentScope;
-  conversationId?: string;
-  idempotencyKey?: string;
   requester?: Fetcher;
   signal?: AbortSignal;
   onStage?: (stage: ChatStage) => void;
-}): Promise<AgentAnswer> {
-  const response = await requester("/api/knowledge/chat/stream", {
+  onTurn?: (turnId: string) => void;
+}): Promise<AgentSessionAnswer> {
+  if (!SESSION_ID.test(sessionId)) throw new Error("AGENT_SESSION_INVALID");
+  const response = await requester(`/api/agent/sessions/${encodeURIComponent(sessionId)}/stream`, {
     method: "POST",
     signal,
-    headers: { "content-type": "application/json", ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}) },
-    body: JSON.stringify({ question: question.trim(), scope, ...(conversationId ? { conversationId } : {}) }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ question: question.trim(), scope }),
   });
   if (!response.ok) throw await parseApiError(response);
-  if (!response.body) throw new ApiRequestError("CHAT_STREAM_UNAVAILABLE", "The answer stream is unavailable", 503, true);
+  const turnId = response.headers.get("x-agent-turn-id");
+  if (typeof turnId !== "string" || !TURN_ID.test(turnId)) throw new ApiRequestError("AGENT_STREAM_UNAVAILABLE", "The answer stream is unavailable", 503, true);
+  onTurn?.(turnId);
+  if (!response.body) throw new ApiRequestError("AGENT_STREAM_UNAVAILABLE", "The answer stream is unavailable", 503, true);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -193,36 +258,59 @@ export async function askAgentStream({ question, scope, conversationId, idempote
     }
   }
   if (failure) throw new ApiRequestError(failure.code, failure.message, failure.status, failure.retryable);
-  if (!payload) throw new ApiRequestError("CHAT_STREAM_INTERRUPTED", "The answer stream ended before a result was confirmed", 503, true);
-  return normalizeChatPayload(payload, { idempotencyKey, conversationId });
+  if (!payload) throw new ApiRequestError("AGENT_STREAM_INTERRUPTED", "The answer stream ended before a result was confirmed", 503, true);
+  validateSessionAnswer(payload, sessionId, turnId);
+  return { ...normalizeChatPayload(payload), sessionId, turnId };
+}
+
+/** Equivalent to the knowledge chat's keyed-receipt rules, minus the idempotency
+ * key the agent transport does not use: every terminal frame must name this
+ * exact session and turn and carry a complete, well-formed grounded answer. */
+function validateSessionAnswer(data: ChatPayload, sessionId: string, turnId: string): void {
+  if (data.sessionId !== sessionId || data.conversationId !== sessionId || data.turnId !== turnId
+    || typeof data.answer !== "string"
+    || typeof data.evidenceConfidence !== "number" || !Number.isFinite(data.evidenceConfidence) || data.evidenceConfidence < 0 || data.evidenceConfidence > 1
+    || !Array.isArray(data.citations) || !data.citations.every(isKeyedCitation)
+    || !Array.isArray(data.sources) || !data.sources.every(isKeyedSource)) throw new Error("AGENT_RECEIPT_UNKNOWN");
 }
 
 export function createAgentRequestController(requester: Fetcher = fetch) {
   let active: AbortController | null = null;
+  let activeTurn: { sessionId: string; turnId: string } | null = null;
   const owner = createAsyncOwner();
   return {
-    request(question: string, scope: AgentScope, conversationId?: string, idempotencyKey?: string, onStage?: (stage: ChatStage) => void) {
+    request(sessionId: string, question: string, scope: AgentScope, onStage?: (stage: ChatStage) => void) {
       active?.abort();
       active = new AbortController();
+      activeTurn = null;
       const generation = owner.claim();
-      const promise = askAgentStream({ question, scope, conversationId, idempotencyKey, requester, signal: active.signal, onStage: onStage && ((stage) => { if (owner.isCurrent(generation)) onStage(stage); }) }).then((answer) => ({ generation, answer })).finally(() => { if (owner.isCurrent(generation)) active = null; });
+      const promise = askAgentSessionStream({
+        sessionId,
+        question,
+        scope,
+        requester,
+        signal: active.signal,
+        onStage: onStage && ((stage) => { if (owner.isCurrent(generation)) onStage(stage); }),
+        onTurn: (turnId) => { if (owner.isCurrent(generation)) activeTurn = { sessionId, turnId }; },
+      }).then((answer) => ({ generation, answer })).finally(() => { if (owner.isCurrent(generation)) { active = null; activeTurn = null; } });
       return { generation, promise };
     },
     isCurrent(generation: number) { return owner.isCurrent(generation); },
-    cancel(conversationId?: string) {
-      if (active && conversationId) void cancelAgentConversation(conversationId, requester).catch(() => undefined);
-      owner.invalidate(); active?.abort(); active = null;
+    /** Abort this tab's stream and ask the server to terminate exactly the turn
+     * it had observed. A completed turn is accepted as a verified no-op. */
+    cancel() {
+      const turn = activeTurn;
+      activeTurn = null;
+      owner.invalidate();
+      active?.abort();
+      active = null;
+      if (turn) void terminateAgentTurn(turn.sessionId, turn.turnId, requester).catch(() => undefined);
     },
   };
 }
 
-export interface AgentConversation {
-  id: string;
-  scope: AgentScope;
-  messages: Array<{ role: "user" | "assistant"; content: string; citations: AgentCitation[] }>;
-}
+// --- URL scope -------------------------------------------------------------
 
-const resourceId = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 function invalidConversation(): never { throw new Error("Invalid agent conversation or scope"); }
 
 export function agentLocationFromSearch(search: string): { scope?: AgentScope; conversationId?: string } {
@@ -254,68 +342,4 @@ export function agentScopeSearch(scope: AgentScope): string {
   if (scope.kind === "collection") params.set("collectionId", scope.collectionId);
   if (scope.kind === "items") for (const id of scope.knowledgeItemIds) params.append("knowledgeItemId", id);
   return `?${params}`;
-}
-
-export async function loadAgentConversation(id: string, { requester = fetch, signal }: { requester?: Fetcher; signal?: AbortSignal } = {}): Promise<AgentConversation> {
-  if (!resourceId.test(id)) return invalidConversation();
-  const data = await apiFetch<unknown>(`/api/knowledge/chat/conversations/${encodeURIComponent(id)}`, { method: "GET", requester, signal });
-  if (!data || typeof data !== "object") return invalidConversation();
-  const record = data as Record<string, unknown>;
-  const conversation = record.conversation as { id?: unknown; scope?: AgentScope } | undefined;
-  if (!conversation || conversation.id !== id || !conversation.scope || typeof conversation.scope !== "object") return invalidConversation();
-  const scope = conversation.scope;
-  if (!["all", "space", "collection", "items"].includes(scope.kind) || (scope.kind === "items" && !Array.isArray(scope.knowledgeItemIds))) return invalidConversation();
-  // Reuse URL scope validation so malformed recovery cannot expand the source set.
-  const parsedScope = agentLocationFromSearch(agentScopeSearch(scope)).scope;
-  if (!parsedScope || Object.keys(parsedScope).length !== Object.keys(scope).length
-    || Object.entries(parsedScope).some(([key, value]) => JSON.stringify(value) !== JSON.stringify((scope as unknown as Record<string, unknown>)[key]))) return invalidConversation();
-  if (!Array.isArray(record.messages) || record.messages.length > 8 || !Array.isArray(record.sources)) return invalidConversation();
-  const citations = record.sources.map(normalizeCitation);
-  if (citations.some((citation) => citation === null)) return invalidConversation();
-  const byId = new Map(citations.map((citation) => [citation!.id, citation!]));
-  const messages = record.messages.map((value): AgentConversation["messages"][number] => {
-    if (!value || typeof value !== "object") return invalidConversation();
-    const message = value as Record<string, unknown>;
-    if ((message.role !== "user" && message.role !== "assistant") || typeof message.content !== "string" || !Array.isArray(message.citationIds)) return invalidConversation();
-    const sources = message.citationIds.map((citationId) => typeof citationId === "string" ? byId.get(citationId) : undefined);
-    if (sources.some((source) => !source)) return invalidConversation();
-    return { role: message.role, content: message.content, citations: sources as AgentCitation[] };
-  });
-  return { id, scope: parsedScope, messages };
-}
-
-export type AgentFeedbackRating = "useful" | "not_useful" | "citation_error";
-
-export async function submitAgentFeedback(conversationId: string, rating: AgentFeedbackRating, citationIds: readonly string[], requester: Fetcher = fetch): Promise<void> {
-  if (!resourceId.test(conversationId) || !["useful", "not_useful", "citation_error"].includes(rating) || citationIds.length > 8 || citationIds.some((id) => !/^[A-Za-z0-9:_-]{1,256}$/u.test(id))) return invalidConversation();
-  const data = await apiFetch<{ feedback?: { conversationId?: unknown; rating?: unknown; citationIds?: unknown } }>(`/api/knowledge/chat/conversations/${encodeURIComponent(conversationId)}/feedback`, {
-    requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ rating, citationIds }),
-  });
-  const receipt = data?.feedback;
-  if (!receipt || receipt.conversationId !== conversationId || receipt.rating !== rating || !Array.isArray(receipt.citationIds) || receipt.citationIds.length !== citationIds.length || receipt.citationIds.some((id, index) => id !== citationIds[index])) return invalidConversation();
-}
-
-
-export interface AgentConversationList {
-  items: Array<{ id: string; createdAt: string }>;
-  nextCursor?: string;
-}
-
-export async function loadAgentConversations({ cursor, requester = fetch, signal }: { cursor?: string; requester?: Fetcher; signal?: AbortSignal } = {}): Promise<AgentConversationList> {
-  const validCursor = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{1,512}$/u.test(value);
-  if (cursor !== undefined && !validCursor(cursor)) return invalidConversation();
-  const params = new URLSearchParams({ limit: "20" });
-  if (cursor !== undefined) params.set("cursor", cursor);
-  const data = await apiFetch<unknown>(`/api/knowledge/chat/conversations?${params}`, { method: "GET", requester, signal });
-  if (!data || typeof data !== "object") return invalidConversation();
-  const record = data as Record<string, unknown>;
-  if (!Array.isArray(record.items) || record.items.length > 20 || (record.nextCursor !== undefined && (!validCursor(record.nextCursor) || record.nextCursor === cursor || !record.items.length))) return invalidConversation();
-  const seen = new Set<string>();
-  const items = record.items.map((value) => {
-    if (!value || typeof value !== "object" || typeof value.id !== "string" || !resourceId.test(value.id) || seen.has(value.id)
-      || typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt)) || new Date(value.createdAt).toISOString() !== value.createdAt) return invalidConversation();
-    seen.add(value.id);
-    return { id: value.id, createdAt: value.createdAt };
-  });
-  return { items, ...(record.nextCursor === undefined ? {} : { nextCursor: record.nextCursor as string }) };
 }

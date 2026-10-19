@@ -27,7 +27,7 @@ describe("menu write refresh recovery", () => {
 
   it("keeps an unknown menu change after refresh and reconciles without resending", async () => {
     const second = deferred<Response>(); let gets = 0; let patches = 0;
-    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+    stubFetch(async (_: unknown, init?: RequestInit) => {
       if (init?.method === "PATCH") { patches += 1; return new Response(null, { status: 503 }); }
       gets += 1;
       return gets === 1 ? json({ tree: [menu()] }) : second.promise;
@@ -46,7 +46,7 @@ describe("menu write refresh recovery", () => {
 
   it("does not send a menu change when the tab cannot record it", async () => {
     let patches = 0;
-    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+    stubFetch(async (_: unknown, init?: RequestInit) => {
       if (init?.method === "PATCH") { patches += 1; return json({ menu: menu({ status: "disabled" }) }); }
       return json({ tree: [menu()] });
     });
@@ -58,7 +58,7 @@ describe("menu write refresh recovery", () => {
 
   it("blocks a menu change when its record cannot be read and allows leave until it is discarded", async () => {
     let patches = 0;
-    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+    stubFetch(async (_: unknown, init?: RequestInit) => {
       if (init?.method === "PATCH") { patches += 1; return json({ menu: menu({ status: "disabled" }) }); }
       return json({ tree: [menu()] });
     });
@@ -88,7 +88,7 @@ describe("menu write refresh recovery", () => {
   }
   it("keeps an unsent menu edit after refresh without saving", async () => {
     let patches = 0;
-    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+    stubFetch(async (_: unknown, init?: RequestInit) => {
       if (init?.method === "PATCH") { patches += 1; return json({ menu: menu() }); }
       return json({ tree: [menu()] });
     });
@@ -100,7 +100,7 @@ describe("menu write refresh recovery", () => {
     expect(patches).toBe(0); expect(unloadBlocked()).toBe(true);
   });
   it("keeps the menu draft on screen when the tab cannot record it", async () => {
-    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    stubFetch(async () => json({ tree: [menu()] }));
     await render(); await click("Edit menu");
     const storage = browser.sessionStorage;
     const original = storage.setItem;
@@ -110,7 +110,7 @@ describe("menu write refresh recovery", () => {
     expect(container.textContent).toContain("could not record");
   });
   it("allows leave when the menu draft cannot be read and records only after discard", async () => {
-    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    stubFetch(async () => json({ tree: [menu()] }));
     browser.sessionStorage.setItem(draftKey, "{");
     await render();
     expect(container.textContent).toContain("can't be read"); expect(unloadBlocked()).toBe(false);
@@ -122,7 +122,7 @@ describe("menu write refresh recovery", () => {
     expect(browser.sessionStorage.getItem(draftKey)).toContain("/after-discard");
   });
   it("drops the stored menu draft after a confirmed leave", async () => {
-    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    stubFetch(async () => json({ tree: [menu()] }));
     await render(); await click("Edit menu"); await typePath("/keep-this");
     expect(browser.sessionStorage.getItem(draftKey)).toContain("/keep-this");
     await act(async () => expect(writeWorkspaceHistory("push", "/home")).toBe("deferred"));
@@ -141,7 +141,7 @@ describe("menu write refresh recovery", () => {
   }
   it("keeps an unsent menu position after refresh without saving", async () => {
     let patches = 0;
-    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+    stubFetch(async (_: unknown, init?: RequestInit) => {
       if (init?.method === "PATCH") { patches += 1; return json({ menu: menu() }); }
       return json({ tree: [menu()] });
     });
@@ -153,7 +153,7 @@ describe("menu write refresh recovery", () => {
     expect(patches).toBe(0); expect(unloadBlocked()).toBe(true);
   });
   it("keeps the menu position on screen when the tab cannot record it", async () => {
-    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    stubFetch(async () => json({ tree: [menu()] }));
     await render();
     const storage = browser.sessionStorage;
     const original = storage.setItem;
@@ -163,7 +163,7 @@ describe("menu write refresh recovery", () => {
     expect(container.textContent).toContain("could not record");
   });
   it("allows leave when the menu position cannot be read and records only after discard", async () => {
-    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    stubFetch(async () => json({ tree: [menu()] }));
     browser.sessionStorage.setItem(positionKey, "{");
     await render();
     expect(container.textContent).toContain("can't be read"); expect(unloadBlocked()).toBe(false);
@@ -175,7 +175,7 @@ describe("menu write refresh recovery", () => {
     expect(browser.sessionStorage.getItem(positionKey)).toContain("\"8\"");
   });
   it("drops the stored menu position after a confirmed leave", async () => {
-    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    stubFetch(async () => json({ tree: [menu()] }));
     await render(); await typePosition("9");
     expect(browser.sessionStorage.getItem(positionKey)).toContain("\"9\"");
     await act(async () => expect(writeWorkspaceHistory("push", "/home")).toBe("deferred"));
@@ -190,3 +190,17 @@ function json(value: unknown) { return new Response(JSON.stringify(value), { sta
 function locale() { return createLocaleRuntime({ navigatorLanguage: "en" }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); for (let index = 0; index < 12; index += 1) await Promise.resolve(); }); }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((yes) => { resolve = yes; }); return { promise, resolve }; }
+
+/**
+ * The menus page now renders the invitation panel, which performs its own read.
+ * These suites assert exact menu traffic, so route the invitation endpoint to an
+ * empty page instead of handing it to the suite's menu-only fetch handler.
+ */
+function stubFetch(handler: (input: unknown, init?: RequestInit) => Promise<Response>): void {
+  vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+    if (typeof input === "string" && input.startsWith("/api/admin/invitations")) {
+      return json({ items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+    }
+    return handler(input, init);
+  });
+}

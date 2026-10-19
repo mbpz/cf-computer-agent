@@ -24,6 +24,17 @@ describe("member-scoped agent intent storage", () => {
     expect(loadAgentIntent("member-a").kind).toBe("ready");
   });
 
+  it("upgrades the pending journal with the session it was sent to exactly once", () => {
+    const intent = createAgentIntent("member-a", "First", { kind: "all" });
+    expect(saveAgentIntent(intent)).toBe(true);
+    const withSession = { ...intent, conversationId: "abcdefghijklmnopqrstuvwx" };
+    expect(saveAgentIntent(withSession)).toBe(true);
+    expect(loadAgentIntent("member-a")).toEqual({ kind: "ready", intent: withSession });
+    // A later journal for the same question cannot silently change session.
+    expect(saveAgentIntent({ ...withSession, conversationId: "zyxwvutsrqponmlkjihgfedc" })).toBe(false);
+    expect(loadAgentIntent("member-a")).toEqual({ kind: "ready", intent: withSession });
+  });
+
   it("cannot overwrite another pending intent or clear it with another key", () => {
     const first = createAgentIntent("member-a", "First", { kind: "all" });
     const second = createAgentIntent("member-a", "Second", { kind: "all" });

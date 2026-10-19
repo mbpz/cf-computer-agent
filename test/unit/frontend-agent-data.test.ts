@@ -1,163 +1,173 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { loadAgentConversations, submitAgentFeedback, agentLocationFromSearch, loadAgentConversation, askAgentStream, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
+import { askAgentSessionStream, agentLocationFromSearch, createAgentRequestController, createAgentSession, loadAgentMessages, loadAgentSession, terminateAgentTurn } from "../../frontend/lib/agent-data";
 
-/** The streaming transport carries the same payload in one terminal frame. */
-function streamed(payload: unknown, init: ResponseInit = { status: 200 }): Response {
-  return new Response(`data: ${JSON.stringify({ stage: "answer", body: payload })}\n\n`, { headers: { "content-type": "text/event-stream" }, ...init });
+const SESSION = "abcdefghijklmnopqrstuvwx";
+const TURN = "8f14e45f-ceea-4670-a1c6-8c1b2d3e4f50";
+
+/** The grounded session stream: a terminal frame names the session and turn. */
+function streamed(body: Record<string, unknown>, init: ResponseInit = { status: 200, headers: { "x-agent-turn-id": TURN } }): Response {
+  const headers = new Headers(init.headers);
+  headers.set("content-type", "text/event-stream");
+  return new Response(`data: ${JSON.stringify({ stage: "answer", body: { answer: "", sessionId: SESSION, conversationId: SESSION, turnId: TURN, evidenceConfidence: 0.9, citations: [], sources: [], ...body } })}\n\n`, { ...init, headers });
 }
 
-describe("frontend agent data", () => {
-  it("loads bounded history pages and rejects malformed or duplicate identifiers", async () => {
-    const item = { id: "conv-1", createdAt: "2026-09-26T00:00:00.000Z" };
-    const requester = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json({ items: [item], nextCursor: "opaque_123" }));
-    await expect(loadAgentConversations({ cursor: "prior_123", requester })).resolves.toEqual({ items: [item], nextCursor: "opaque_123" });
-    expect(requester.mock.calls[0]?.[0]).toBe("/api/knowledge/chat/conversations?limit=20&cursor=prior_123");
-    for (const value of [{ items: [item, item] }, { items: [{ ...item, id: "../bad" }] }, { items: [{ ...item, createdAt: "yesterday" }] }, { items: [], nextCursor: "bad?" }, { items: [] , nextCursor: "opaque" }, { items: Array(21).fill(item) }]) {
-      await expect(loadAgentConversations({ requester: async () => Response.json(value) })).rejects.toThrow();
-    }
-  });
-
+describe("frontend agent session data", () => {
   it("parses explicit source scopes without silently widening malformed links", () => {
     expect(agentLocationFromSearch("")).toEqual({ scope: { kind: "all" } });
     expect(agentLocationFromSearch("?scope=space&spaceId=s-1")).toEqual({ scope: { kind: "space", spaceId: "s-1" } });
     expect(agentLocationFromSearch("?scope=collection&collectionId=c-1")).toEqual({ scope: { kind: "collection", collectionId: "c-1" } });
     expect(agentLocationFromSearch("?scope=items&knowledgeItemId=k-1&knowledgeItemId=k-2")).toEqual({ scope: { kind: "items", knowledgeItemIds: ["k-1", "k-2"] } });
+    // `conversationId` is the legacy URL name for the durable session id.
     expect(agentLocationFromSearch("?conversationId=conv-1")).toEqual({ conversationId: "conv-1" });
     for (const search of ["?scope=items", "?scope=wat", "?scope=all&spaceId=s", "?spaceId=s", "?scope=all&scope=items", "?scope=items&knowledgeItemId=x&knowledgeItemId=x", "?scope=space&spaceId=a.b", "?conversationId=", "?conversationId=x&scope=all", "?conversationId=x&conversationId=y"]) {
       expect(() => agentLocationFromSearch(search), search).toThrow();
     }
   });
 
-  it("loads a validated conversation without a mutation and rejects mismatched recovery data", async () => {
-    const valid = { conversation: { id: "conv-1", scope: { kind: "all" } }, messages: [{ role: "user", content: "Earlier question", citationIds: [] }], sources: [] };
-    const requester = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify(valid)));
-    await expect(loadAgentConversation("conv-1", { requester })).resolves.toMatchObject({ id: "conv-1", scope: { kind: "all" }, messages: [{ role: "user", content: "Earlier question" }] });
-    expect(String(requester.mock.calls[0]?.[0])).toBe("/api/knowledge/chat/conversations/conv-1");
-    expect(requester.mock.calls[0]?.[1]?.method).toBe("GET");
-    for (const data of [null, { ...valid, conversation: { ...valid.conversation, id: "other" } }, { ...valid, messages: [{ role: "assistant", content: "private answer", citationIds: ["missing"] }] }, { ...valid, messages: Array(9).fill(valid.messages[0]) }]) {
-      await expect(loadAgentConversation("conv-1", { requester: async () => new Response(JSON.stringify(data)) })).rejects.toThrow();
-    }
-  });
-
-  it("accepts valid recovery scope regardless of JSON key order while rejecting unknown scope fields", async () => {
-    const payload = { conversation: { id: "conv-1", scope: { spaceId: "s-1", kind: "space" } }, messages: [], sources: [] };
-    await expect(loadAgentConversation("conv-1", { requester: async () => new Response(JSON.stringify(payload)) })).resolves.toMatchObject({ scope: { kind: "space", spaceId: "s-1" } });
-    await expect(loadAgentConversation("conv-1", { requester: async () => new Response(JSON.stringify({ ...payload, conversation: { ...payload.conversation, scope: { kind: "all", spaceId: "private" } } })) })).rejects.toThrow();
-  });
-
-  it("preserves the server's insufficient-evidence marker and allowlists suggestions", async () => {
-    await expect(askAgentStream({ question: "unknown", scope: { kind: "all" }, requester: async () => streamed({ answer: "No evidence", messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT", suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "run-untrusted-action", "KNOWLEDGE_CHAT_EXPAND_SCOPE", "KNOWLEDGE_CHAT_EXPAND_SCOPE"] }) })).resolves.toMatchObject({ insufficientEvidence: true, suggestions: ["rewrite", "sources"] });
-    await expect(askAgentStream({ question: "unknown", scope: { kind: "all" }, requester: async () => streamed({ messageKey: "something-else", suggestedActionKeys: ["KNOWLEDGE_CHAT_EXPAND_SCOPE"] }) })).resolves.not.toHaveProperty("insufficientEvidence");
-  });
-
-  it("requires a matching feedback receipt before confirming a write", async () => {
-    const feedback = { conversationId: "conv-1", rating: "not_useful", citationIds: ["c-1"] };
-    const requester = vi.fn(async () => new Response(JSON.stringify({ feedback })));
-    await expect(submitAgentFeedback("conv-1", "not_useful", ["c-1"], requester)).resolves.toBeUndefined();
-    for (const receipt of [null, { ...feedback, conversationId: "other" }, { ...feedback, rating: "useful" }, { ...feedback, citationIds: [] }]) {
-      await expect(submitAgentFeedback("conv-1", "not_useful", ["c-1"], async () => new Response(JSON.stringify({ feedback: receipt })))).rejects.toThrow();
-    }
-  });
-
-  it("requires the original key and conversation in a keyed answer receipt", async () => {
-    const key = "original-chat-key01";
-    const request = { question: "Follow up", scope: { kind: "all" as const }, conversationId: "conv-1", idempotencyKey: key };
-    const valid = { answer: "Done", conversationId: "conv-1", idempotencyKey: key, evidenceConfidence: 0.3, citations: [], sources: [] };
-    for (const receipt of [{ ...valid, conversationId: "conv-other" }, { ...valid, idempotencyKey: "different-chat-key" }, { ...valid, answer: null }]) {
-      await expect(askAgentStream({ ...request, requester: async () => streamed(receipt) })).rejects.toThrow();
-    }
-    await expect(askAgentStream({ ...request, requester: async () => streamed(valid) })).resolves.toMatchObject({ answer: "Done", conversationId: "conv-1" });
-  });
-
-  it("posts an explicit scope and normalizes grounded citations/confidence", async () => {
+  it("creates and reads only strictly valid member sessions", async () => {
     const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      expect(String(input)).toBe("/api/knowledge/chat/stream");
+      expect(String(input)).toBe("/api/agent/sessions");
       expect(init?.method).toBe("POST");
-      expect(JSON.parse(String(init?.body))).toEqual({ question: "Where is the guide?", scope: { kind: "all" } });
-      return streamed({ answer: "Use [1]", evidenceConfidence: 0.9, citations: [{ citationId: "c-1", knowledgeItemId: "k-1", title: "Guide" }, null, { citationId: "", knowledgeItemId: "k-2" }] });
+      return Response.json({ session: { id: SESSION, memberId: "member-a" } });
     });
-    await expect(askAgentStream({ question: "  Where is the guide?  ", scope: { kind: "all" }, requester })).resolves.toEqual({
+    await expect(createAgentSession(requester)).resolves.toBe(SESSION);
+    for (const data of [null, { session: null }, { session: { id: "short" } }, { session: { id: "../escape" } }]) {
+      await expect(createAgentSession(async () => Response.json(data))).rejects.toThrow();
+    }
+
+    const read = vi.fn(async (_input: string | URL | Request) => Response.json({ session: { id: SESSION } }));
+    await expect(loadAgentSession(SESSION, { requester: read })).resolves.toEqual({ id: SESSION });
+    expect(String(read.mock.calls[0]?.[0])).toBe(`/api/agent/sessions/${SESSION}`);
+    await expect(loadAgentSession(SESSION, { requester: async () => Response.json({ session: { id: "other-session-identifier" } }) })).rejects.toThrow();
+  });
+
+  it("loads bounded history oldest-first and rejects malformed pages", async () => {
+    const items = [
+      { id: "m-2", role: "assistant", content: "Earlier answer", createdAt: "2026-10-18T00:00:02.000Z" },
+      { id: "m-1", role: "user", content: "Earlier question", createdAt: "2026-10-18T00:00:01.000Z" },
+    ];
+    const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe(`/api/agent/sessions/${SESSION}/messages?limit=20`);
+      expect(init?.method).toBe("GET");
+      return Response.json({ messages: { items, truncated: false } });
+    });
+    await expect(loadAgentMessages(SESSION, 20, { requester })).resolves.toEqual({
+      messages: [
+        { role: "user", content: "Earlier question", citations: [] },
+        { role: "assistant", content: "Earlier answer", citations: [] },
+      ],
+      truncated: false,
+    });
+    for (const data of [null, { messages: null }, { messages: { items: "no" } }, { messages: { items: [{ id: "x", role: "tool", content: "t" }], truncated: false } }, { messages: { items: [items[0], items[0]], truncated: false } }]) {
+      await expect(loadAgentMessages(SESSION, 20, { requester: async () => Response.json(data) })).rejects.toThrow();
+    }
+  });
+
+  it("requires the owner turn receipt before confirming a termination", async () => {
+    const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe(`/api/agent/sessions/${SESSION}/turns/${TURN}/terminate`);
+      expect(init?.method).toBe("POST");
+      return Response.json({ turn: { turnId: TURN, status: "terminated" } });
+    });
+    await expect(terminateAgentTurn(SESSION, TURN, requester)).resolves.toBeUndefined();
+    for (const data of [null, { turn: { turnId: TURN, status: "active" } }, { turn: { turnId: "different-turn-id-0001", status: "terminated" } }]) {
+      await expect(terminateAgentTurn(SESSION, TURN, async () => Response.json(data))).rejects.toThrow();
+    }
+  });
+
+  it("posts the question and scope, reports stages and validates the terminal receipt", async () => {
+    const stages: string[] = [];
+    const turns: string[] = [];
+    const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe(`/api/agent/sessions/${SESSION}/stream`);
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({ question: "Where is the guide?", scope: { kind: "space", spaceId: "s-1" } });
+      return new Response([
+        `data: ${JSON.stringify({ stage: "retrieving" })}\n\n`,
+        `data: ${JSON.stringify({ stage: "evidence" })}\n\n`,
+        `data: ${JSON.stringify({ stage: "answer", body: { sessionId: SESSION, conversationId: SESSION, turnId: TURN, answer: "Use [1]", evidenceConfidence: 0.9, citations: [{ citationId: "c-1", knowledgeItemId: "k-1", title: "Guide", spaceId: "s-1" }], sources: [] } })}\n\n`,
+      ].join(""), { headers: { "content-type": "text/event-stream", "x-agent-turn-id": TURN } });
+    });
+    await expect(askAgentSessionStream({ sessionId: SESSION, question: "  Where is the guide?  ", scope: { kind: "space", spaceId: "s-1" }, requester, onStage: (stage) => stages.push(stage), onTurn: (turnId) => turns.push(turnId) })).resolves.toEqual({
       answer: "Use [1]",
       confidence: "high",
-      citations: [{ id: "c-1", title: "Guide", href: "/knowledge/k-1#c-1" }],
+      citations: [{ id: "c-1", title: "Guide", href: "/knowledge/k-1#c-1", spaceId: "s-1" }],
+      conversationId: SESSION,
+      sessionId: SESSION,
+      turnId: TURN,
     });
+    expect(stages).toEqual(["retrieving", "evidence"]);
+    expect(turns).toEqual([TURN]);
   });
 
-  it("fails closed on malformed answer fields", async () => {
-    const requester = vi.fn(async () => streamed({ answer: 42, evidenceConfidence: "high", citations: [{ citationId: "c-1", knowledgeItemId: "" }] }));
-    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester })).resolves.toEqual({ answer: "", confidence: "low", citations: [] });
-  });
-
-  it("round-trips the server conversation id for follow-up turns", async () => {
-    const requester = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
-      expect(JSON.parse(String(init?.body))).toEqual({ question: "follow up", scope: { kind: "all" }, conversationId: "conversation-1" });
-      return streamed({ answer: "Grounded", evidenceConfidence: 0.9, citations: [], conversationId: "conversation-1" });
+  it("accepts the no-evidence marker and allowlists its suggestions", async () => {
+    const answer = await askAgentSessionStream({
+      sessionId: SESSION, question: "unknown", scope: { kind: "all" },
+      requester: async () => streamed({ answer: "No evidence", messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT", suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "run-untrusted-action", "KNOWLEDGE_CHAT_EXPAND_SCOPE", "KNOWLEDGE_CHAT_EXPAND_SCOPE"] }),
     });
-    await expect(askAgentStream({ question: "follow up", scope: { kind: "all" }, conversationId: "conversation-1", requester })).resolves.toMatchObject({ conversationId: "conversation-1" });
+    expect(answer).toMatchObject({ insufficientEvidence: true, suggestions: ["rewrite", "sources"] });
+    const other = await askAgentSessionStream({ sessionId: SESSION, question: "unknown", scope: { kind: "all" }, requester: async () => streamed({ messageKey: "something-else", suggestedActionKeys: ["KNOWLEDGE_CHAT_EXPAND_SCOPE"] }) });
+    expect(other).not.toHaveProperty("insufficientEvidence");
   });
 
-  it("reports pipeline stages and refuses to confirm an unterminated stream", async () => {
-    const stages: string[] = [];
-    const frames = ["retrieving", "evidence", "generating", "validating"].map((stage) => `data: ${JSON.stringify({ stage })}\n\n`).join("");
-    const streaming = vi.fn(async () => new Response(`${frames}data: ${JSON.stringify({ stage: "answer", body: { answer: "Grounded [1]", evidenceConfidence: 0.9, citations: [] } })}\n\n`, { headers: { "content-type": "text/event-stream" } }));
-    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester: streaming, onStage: (stage) => stages.push(stage) })).resolves.toMatchObject({ answer: "Grounded [1]", confidence: "high" });
-    expect(stages).toEqual(["retrieving", "evidence", "generating", "validating"]);
+  it("fails closed on a mismatched session, turn, or incomplete answer receipt", async () => {
+    const valid = { answer: "Done", citations: [], sources: [] };
+    const cases: Array<Record<string, unknown>> = [
+      { ...valid, sessionId: "other-session-identifier" },
+      { ...valid, conversationId: "other-session-identifier" },
+      { ...valid, turnId: "00000000-0000-0000-0000-000000000000" },
+      { ...valid, answer: 42 },
+      { ...valid, evidenceConfidence: "high" },
+      { ...valid, citations: [{ citationId: "c-1", knowledgeItemId: "" }] },
+      { ...valid, sources: [{}] },
+    ];
+    for (const body of cases) {
+      await expect(askAgentSessionStream({ sessionId: SESSION, question: "q", scope: { kind: "all" }, requester: async () => streamed(body) })).rejects.toThrow();
+    }
+    await expect(askAgentSessionStream({ sessionId: SESSION, question: "q", scope: { kind: "all" }, requester: async () => streamed(valid) })).resolves.toMatchObject({ answer: "Done", sessionId: SESSION, turnId: TURN });
+  });
 
+  it("reports stream errors and refuses to confirm an unterminated stream", async () => {
     const failed = `data: ${JSON.stringify({ stage: "error", error: { code: "AI_UNAVAILABLE", message: "AI service is temporarily unavailable", status: 503, retryable: true } })}\n\n`;
-    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester: async () => new Response(failed, { headers: { "content-type": "text/event-stream" } }) })).rejects.toMatchObject({ code: "AI_UNAVAILABLE", status: 503, retryable: true });
-
+    await expect(askAgentSessionStream({ sessionId: SESSION, question: "q", scope: { kind: "all" }, requester: async () => new Response(failed, { headers: { "content-type": "text/event-stream", "x-agent-turn-id": TURN } }) })).rejects.toMatchObject({ code: "AI_UNAVAILABLE", status: 503, retryable: true });
     const truncated = `data: ${JSON.stringify({ stage: "generating" })}\n\n`;
-    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester: async () => new Response(truncated, { headers: { "content-type": "text/event-stream" } }) })).rejects.toMatchObject({ code: "CHAT_STREAM_INTERRUPTED" });
+    await expect(askAgentSessionStream({ sessionId: SESSION, question: "q", scope: { kind: "all" }, requester: async () => new Response(truncated, { headers: { "content-type": "text/event-stream", "x-agent-turn-id": TURN } }) })).rejects.toMatchObject({ code: "AGENT_STREAM_INTERRUPTED" });
+    await expect(askAgentSessionStream({ sessionId: SESSION, question: "q", scope: { kind: "all" }, requester: async () => new Response(null, { status: 503 }) })).rejects.toMatchObject({ status: 503 });
   });
 
-  it("updates conversation sources through the explicit scope endpoint", async () => {
-    const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      expect(String(input)).toBe("/api/knowledge/chat/conversations/conversation-1/scope");
-      expect(init?.method).toBe("PATCH");
-      expect(JSON.parse(String(init?.body))).toEqual({ scope: { kind: "items", knowledgeItemIds: ["knowledge-2"] } });
-      return new Response(JSON.stringify({ conversation: { id: "conversation-1" } }), { status: 200 });
+  it("cancels stale requests and terminates exactly the observed turn once", async () => {
+    const calls: string[] = [];
+    const requester = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+      if (String(input).endsWith(`/turns/${TURN}/terminate`)) return Promise.resolve(Response.json({ turn: { turnId: TURN, status: "terminated" } }));
+      return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
     });
-    await expect(updateAgentConversationScope("conversation-1", { kind: "items", knowledgeItemIds: ["knowledge-2"] }, requester)).resolves.toBeUndefined();
-  });
-
-  it("requests server-side cancellation for an active conversation", async () => {
-    const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      expect(String(input)).toBe("/api/knowledge/chat/conversations/conversation-1/cancel");
-      expect(init?.method).toBe("POST");
-      return new Response(JSON.stringify({ cancelled: true }), { status: 202 });
-    });
-    await expect(cancelAgentConversation("conversation-1", requester)).resolves.toBe(true);
-  });
-
-  it("binds cited source context from the server source set without exposing raw content", async () => {
-    const requester = vi.fn(async () => streamed({
-      answer: "Use [1]", evidenceConfidence: 0.8, citations: ["citation-1"],
-      sources: [{ citationId: "citation-1", knowledgeItemId: "knowledge-1", title: "Guide", spaceId: "space-1", collectionId: "collection-1", headingPath: ["Guide"], startLine: 4, endLine: 8, body: "secret body" }],
-    }));
-    await expect(askAgentStream({ question: "q", scope: { kind: "all" }, requester })).resolves.toEqual({
-      answer: "Use [1]", confidence: "high", citations: [{ id: "citation-1", title: "Guide", href: "/knowledge/knowledge-1#citation-1", spaceId: "space-1", collectionId: "collection-1", headingPath: ["Guide"], startLine: 4, endLine: 8 }],
-    });
-  });
-
-  it("cancels stale agent requests", async () => {
-    const requester = vi.fn((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true })));
     const controller = createAgentRequestController(requester);
-    const first = controller.request("first", { kind: "all" });
-    const second = controller.request("second", { kind: "all" });
+    const first = controller.request(SESSION, "first", { kind: "all" });
+    const second = controller.request(SESSION, "second", { kind: "all" });
     expect(controller.isCurrent(first.generation)).toBe(false);
     expect(controller.isCurrent(second.generation)).toBe(true);
     await expect(first.promise).rejects.toMatchObject({ name: "AbortError" });
     controller.cancel();
     await expect(second.promise).rejects.toMatchObject({ name: "AbortError" });
     expect(controller.isCurrent(second.generation)).toBe(false);
-  });
-  it("does not send remote cancellation after an answer has completed", async () => {
-    const requester = vi.fn(async () => streamed({ answer: "Done", conversationId: "conversation-1", citations: [] }));
-    const controller = createAgentRequestController(requester);
-    await controller.request("Question", { kind: "all" }, "conversation-1").promise;
-    controller.cancel("conversation-1");
-    expect(requester).toHaveBeenCalledTimes(1);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // No stream reported a turn id (the mock never answers), so nothing is
+    // terminated speculatively.
+    expect(calls.some((call) => call.includes("/terminate"))).toBe(false);
   });
 
+  it("does not send a remote termination after an answer has completed", async () => {
+    const calls: string[] = [];
+    const requester = vi.fn(async (input: string | URL | Request) => {
+      calls.push(String(input));
+      return streamed({ answer: "Done" });
+    });
+    const controller = createAgentRequestController(requester);
+    await controller.request(SESSION, "Question", { kind: "all" }).promise;
+    controller.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toEqual([`/api/agent/sessions/${SESSION}/stream`]);
+  });
 });

@@ -20,7 +20,7 @@
 | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App 页面 | 标识 OAuth App | 否 |
 | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App 页面生成 | callback 换取 GitHub access token | 否 |
 | `BOOTSTRAP_ADMIN_EMAIL` | 人工选择的 GitHub primary、verified 邮箱 | 初始化唯一管理员 | 否 |
-| `ALLOWED_MEMBER_EMAILS` | 人工维护的逗号分隔邮箱列表 | 登录白名单 | 否 |
+| `ALLOWED_MEMBER_EMAILS` | 人工维护的逗号分隔邮箱列表 | GitHub 登录白名单（密码账户由邀请码创建；撤权用禁用成员） | 否 |
 | `AUTOMATION_CLIENT_ID` | 本地随机生成 | 标识生产 smoke/自动化客户端 | 是，非敏感标识 |
 | `AUTOMATION_SECRET` | 本地 CSPRNG 生成 | HMAC-SHA256 请求签名 | 是，敏感 |
 | `APP_TOKEN` | 本地 CSPRNG 生成 | Bearer 第二因子和 legacy API 校验 | 是，敏感 |
@@ -37,13 +37,14 @@
 
 若暂时不使用微信，无需添加任何微信 Secret；若要启用，按下文创建网站应用并将四项变量作为 Worker Secret 发布后再验证。
 
-### 邮箱密码自注册
+### 邮箱密码与邀请码
 
-登录页提供邮箱 + 密码登录和自注册，**不发送邮件，也不需要新增 Secret 或变量**。密码使用 PBKDF2-SHA256（100,000 次、随机盐）存储；连续 5 次失败锁定 15 分钟；注册按客户端 IP 每小时最多 5 个账户。
+登录页提供邮箱 + 密码登录；密码注册必须使用邀请码，**不发送邮件，也不需要新增 Secret 或变量**。密码使用 PBKDF2-SHA256（100,000 次、随机盐）存储；连续 5 次失败锁定 15 分钟；注册按客户端 IP 每小时最多 5 个账户。
 
-1. 应用 `0078_password_auth.sql` 后部署。它增加密码列与 canonical email 唯一索引，并删除旧验证码/邀请表。
-2. 注册是开放的：任何未占用的邮箱都可以创建 contributor 账户；已有成员（包括 GitHub 成员）的邮箱不能注册。
-3. 忘记密码时用邮箱 + 新密码直接重置；已有密码账户和旧一次性授权码账户（`access_sub` 以 `code:` 开头）都可以设置密码，仅有 GitHub/微信身份的成员不可重置。重置清零登录锁定并让旧会话失效。该流程不校验邮箱所有权、没有恢复码，因此任何知道可重置邮箱的人都能替换密码。
+1. 应用 `0078_password_auth.sql` 与 `0079_invitations.sql` 后部署。0078 增加密码列与 canonical email 唯一索引并删除旧验证码/邀请表；0079 建立邀请码表（码一次性、使用后绑定新成员）。
+2. 每位 active 成员在“设置”页按需获得一个终身可分享的邀请码；该码使用后不能再生成第二个。管理员在“菜单管理 → 邀请码”中可无限生成管理员码，并查看所有码的分享者/绑定成员/状态。
+3. 注册必须提供未使用的邀请码；已有成员（包括 GitHub 成员）的邮箱不能注册；注册失败不消耗码，成功与绑定在同一事务。
+4. 忘记密码必须提供该成员被绑定的邀请码 + 新密码；重置清零登录锁定并让旧会话失效。仅 GitHub/微信身份、没有绑定邀请码的成员不能重置密码。该流程不证明邮箱所有权，邀请码是唯一额外凭据，管理员可在菜单管理页协助核对。
 
 ## 2. 创建 GitHub OAuth App
 
@@ -86,7 +87,7 @@ admin@example.test
 
 ### 3.2 `ALLOWED_MEMBER_EMAILS`
 
-填写允许登录的全部邮箱，以英文逗号分隔：
+填写允许通过 GitHub 登录的全部邮箱，以英文逗号分隔（密码账户由邀请码创建，不读该变量；撤权请禁用成员）：
 
 ```text
 admin@example.test,contributor@example.test

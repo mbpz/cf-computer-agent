@@ -4,6 +4,7 @@ import { ApiRequestError, type Fetcher } from "../../frontend/lib/api";
 import { loginPassword, passwordAuthFailure, registerPassword, resetPassword } from "../../frontend/lib/password-auth-data";
 
 const MEMBER = { id: "m1", email: "new@example.test", role: "contributor" };
+const INVITATION = "ABCDEFGHJKLMNPQR";
 
 function requester(body: unknown, status = 200) {
   const calls: Array<{ path: string; init?: RequestInit }> = [];
@@ -17,28 +18,40 @@ function requester(body: unknown, status = 200) {
 describe("password auth data", () => {
   it("posts the exact registration body and returns the member", async () => {
     const { calls, fetchStub } = requester({ member: MEMBER }, 201);
-    await expect(registerPassword("new@example.test", "correct horse battery staple", fetchStub)).resolves.toEqual(MEMBER);
+    await expect(registerPassword("new@example.test", "correct horse battery staple", INVITATION, fetchStub)).resolves.toEqual(MEMBER);
     expect(calls[0]!.path).toBe("/auth/register");
-    expect(calls[0]!.init?.body).toBe(JSON.stringify({ email: "new@example.test", password: "correct horse battery staple" }));
+    expect(calls[0]!.init?.body).toBe(JSON.stringify({
+      email: "new@example.test",
+      password: "correct horse battery staple",
+      invitationCode: INVITATION,
+    }));
   });
 
-  it("posts the exact login and direct reset bodies", async () => {
+  it("normalizes a grouped, lowercase invitation code before sending it", async () => {
+    const { calls, fetchStub } = requester({ member: MEMBER }, 201);
+    await registerPassword("new@example.test", "correct horse battery staple", "abcd-efgh jklm-npqr", fetchStub);
+    expect(JSON.parse(String(calls[0]!.init?.body)).invitationCode).toBe(INVITATION);
+  });
+
+  it("posts the exact login and bound-reset bodies", async () => {
     const login = requester({ member: MEMBER });
     await expect(loginPassword("new@example.test", "correct horse battery staple", login.fetchStub)).resolves.toEqual(MEMBER);
     expect(login.calls[0]!.path).toBe("/auth/password");
+    expect(JSON.parse(String(login.calls[0]!.init?.body))).toEqual({ email: "new@example.test", password: "correct horse battery staple" });
 
     const reset = requester(undefined, 204);
-    await expect(resetPassword("new@example.test", "another password value", reset.fetchStub)).resolves.toBeUndefined();
+    await expect(resetPassword("new@example.test", "another password value", INVITATION, reset.fetchStub)).resolves.toBeUndefined();
     expect(reset.calls[0]!.path).toBe("/auth/password/reset");
     expect(reset.calls[0]!.init?.body).toBe(JSON.stringify({
       email: "new@example.test",
       password: "another password value",
+      invitationCode: INVITATION,
     }));
   });
 
   it("validates member and registration envelopes", async () => {
-    await expect(registerPassword("a@b.test", "password", requester({ member: MEMBER, recoveryCode: "old" }).fetchStub)).rejects.toThrow("PASSWORD_AUTH_RESPONSE_INVALID");
-    await expect(registerPassword("a@b.test", "password", requester({}).fetchStub)).rejects.toThrow("PASSWORD_AUTH_RESPONSE_INVALID");
+    await expect(registerPassword("a@b.test", "password", INVITATION, requester({ member: MEMBER, recoveryCode: "old" }).fetchStub)).rejects.toThrow("PASSWORD_AUTH_RESPONSE_INVALID");
+    await expect(registerPassword("a@b.test", "password", INVITATION, requester({}).fetchStub)).rejects.toThrow("PASSWORD_AUTH_RESPONSE_INVALID");
     await expect(loginPassword("a@b.test", "password", requester({ member: { ...MEMBER, role: "owner" } }).fetchStub)).rejects.toThrow("PASSWORD_AUTH_RESPONSE_INVALID");
     await expect(loginPassword("a@b.test", "password", requester({ member: { ...MEMBER, extra: 1 } }).fetchStub)).rejects.toThrow("PASSWORD_AUTH_RESPONSE_INVALID");
   });
@@ -53,6 +66,8 @@ describe("password auth data", () => {
       [new ApiRequestError("PASSWORD_LOGIN_INVALID", "", 401, false), "rejected"],
       [new ApiRequestError("MEMBER_DISABLED", "", 403, false), "disabled"],
       [new ApiRequestError("PASSWORD_RESET_INVALID", "", 401, false), "reset_rejected"],
+      [new ApiRequestError("REGISTRATION_INVITATION_REQUIRED", "", 400, false), "invitation_required"],
+      [new ApiRequestError("REGISTRATION_INVITATION_INVALID", "", 400, false), "invitation_invalid"],
       [new ApiRequestError("API_ERROR", "", 500, true), "unknown"],
     ];
     for (const [error, expected] of cases) expect(passwordAuthFailure(error)).toBe(expected);

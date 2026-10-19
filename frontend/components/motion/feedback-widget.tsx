@@ -13,8 +13,8 @@
 //   `citationIds` (`FeedbackData` gained the two fields) and may return `false`
 //   to mean "nothing was attempted", so a refused admission leaves the panel
 //   untouched instead of entering a false sending/sent state. This keeps the
-//   exact-intent retry contract of `AgentFeedbackAdmission.begin/settled`
-//   (`frontend/app.tsx:1407-1421`) and both unknown-result paths visible.
+//   exact-intent retry contract of an optional admission callback and both
+//   unknown-result paths visible.
 // Patch 3 (slot extension): `ratings` replaces the free-text form so
 //   `useful | not_useful | citation_error` are first-class submit surfaces;
 //   `persistent` renders the tab-record notices inline inside the same panel;

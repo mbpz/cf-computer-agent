@@ -98,7 +98,7 @@ export async function routeAuth(
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
     requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
-    const input = await parsePasswordAuthRequest(request);
+    const input = await parseRegistrationRequest(request);
     const registered = await services.passwords.register({
       ...input,
       ip: request.headers.get("cf-connecting-ip") ?? "",
@@ -168,16 +168,42 @@ export function clearSessionCookie(response: Response): Response {
   return response;
 }
 
-async function parsePasswordResetRequest(request: Request): Promise<{ email: string; password: string }> {
+async function parsePasswordResetRequest(request: Request): Promise<{ email: string; password: string; invitationCode?: string }> {
   const input = strictRecord(
     await parseJsonRequestAs(request, "PASSWORD_RESET_REQUEST_INVALID"),
-    ["email", "password"],
+    ["email", "password", "invitationCode"],
     "PASSWORD_RESET_REQUEST_INVALID",
   );
   if (typeof input.email !== "string" || typeof input.password !== "string") {
     throw new AppError("PASSWORD_RESET_REQUEST_INVALID", "Password reset request is invalid", 400);
   }
-  return { email: input.email, password: input.password };
+  // A missing or non-string code is not a shape error: the service answers it
+  // with the same PASSWORD_RESET_INVALID as a wrong code, so callers cannot
+  // distinguish "no code" from "not the code that created this member".
+  return {
+    email: input.email,
+    password: input.password,
+    ...(typeof input.invitationCode === "string" ? { invitationCode: input.invitationCode } : {}),
+  };
+}
+
+async function parseRegistrationRequest(request: Request): Promise<{ email: string; password: string; invitationCode?: string }> {
+  const input = strictRecord(
+    await parseJsonRequestAs(request, "PASSWORD_AUTH_REQUEST_INVALID"),
+    ["email", "password", "invitationCode"],
+    "PASSWORD_AUTH_REQUEST_INVALID",
+  );
+  if (typeof input.email !== "string" || typeof input.password !== "string") {
+    throw new AppError("PASSWORD_AUTH_REQUEST_INVALID", "Password authentication request is invalid", 400);
+  }
+  if (input.invitationCode !== undefined && input.invitationCode !== null && typeof input.invitationCode !== "string") {
+    throw new AppError("REGISTRATION_INVITATION_INVALID", "Invitation code is invalid", 400);
+  }
+  return {
+    email: input.email,
+    password: input.password,
+    ...(typeof input.invitationCode === "string" ? { invitationCode: input.invitationCode } : {}),
+  };
 }
 
 async function parsePasswordAuthRequest(request: Request): Promise<{ email: string; password: string }> {

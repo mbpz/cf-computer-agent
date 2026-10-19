@@ -9,7 +9,7 @@ import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
-import { MAX_REVIEW_NOTE_BYTES, validReviewNote, type ReviewDecision, type ReviewNoteInput, type ReviewReceipt, type ReviewRecovery } from "./review-detail-data";
+import { MAX_REVIEW_NOTE_BYTES, validReviewNote, type ReviewDecision, type ReviewNoteInput, type ReviewPublishInput, type ReviewReceipt, type ReviewRecovery } from "./review-detail-data";
 
 export type ReviewDecisionState =
   | { kind: "idle" }
@@ -26,7 +26,16 @@ const decisionLabel = (action: ReviewDecision) => action === "publish" ? "ADMIN_
 
 type ReviewDecisionControlsProps = {
   disabled?: boolean; terminal?: boolean; pendingAction?: ReviewDecision; decisionUnresolved?: boolean;
-  onDecision?: (action: ReviewDecision, details?: ReviewNoteInput) => void; locale?: LocaleRuntime; targetLabel: string; targetId: string; snapshot: unknown; confirmationLock?: { current: object | null };
+  /**
+   * The detail page's live publication metadata. When present, a publish decision
+   * submits it as the decision's third argument so the route can prefer the edited
+   * payload over the preview defaults.
+   */
+  publishPayload?: ReviewPublishInput;
+  /** The route's publish gate (an unconfirmed visibility expansion blocks publish). */
+  publishBlocked?: boolean;
+  onDecision?: (action: ReviewDecision, details?: ReviewNoteInput, publishOverrides?: ReviewPublishInput) => void;
+  locale?: LocaleRuntime; targetLabel: string; targetId: string; snapshot: unknown; confirmationLock?: { current: object | null };
 };
 export function ReviewDecisionControls(props: ReviewDecisionControlsProps) {
   const drafts = useReviewDrafts();
@@ -35,7 +44,7 @@ export function ReviewDecisionControls(props: ReviewDecisionControlsProps) {
   return drafts ? <ReviewDecisionEditor {...props} drafts={drafts} />
     : <ReviewDraftProvider locale={props.locale}><ReviewDecisionControls {...props} /></ReviewDraftProvider>;
 }
-function ReviewDecisionEditor({ disabled, terminal, pendingAction, decisionUnresolved, onDecision, locale, targetLabel, targetId, snapshot, confirmationLock, drafts }: ReviewDecisionControlsProps & { drafts: NonNullable<ReturnType<typeof useReviewDrafts>> }) {
+function ReviewDecisionEditor({ disabled, terminal, pendingAction, decisionUnresolved, publishPayload, publishBlocked = false, onDecision, locale, targetLabel, targetId, snapshot, confirmationLock, drafts }: ReviewDecisionControlsProps & { drafts: NonNullable<ReturnType<typeof useReviewDrafts>> }) {
   type Confirmation = { kind: "decision"; action: ReviewDecision; details?: ReviewNoteInput; snapshot: unknown; targetId: string; targetLabel: string }
     | { kind: "discard"; next: ReviewDecision | null; snapshot: unknown; targetId: string; targetLabel: string };
   const [selected, setSelected] = useState<NoteAction | null>(() => drafts.get(targetId)?.action ?? null);
@@ -73,12 +82,14 @@ function ReviewDecisionEditor({ disabled, terminal, pendingAction, decisionUnres
   const capture = { snapshot, targetId, targetLabel };
   const dirty = () => selected !== null && (currentDetails().note !== "" || currentDetails().reasonCode !== initialDetails(selected).reasonCode);
   const choose = (next: ReviewDecision | null) => {
+    if (next === "publish" && publishBlocked) return;
     setSelected(next === "publish" ? null : next);
     if (next === "publish") open({ kind: "decision", action: "publish", ...capture });
     else if (next) resetDetails();
     if (!next || next === "publish") resetDetails();
   };
   const requestChoice = (next: ReviewDecision | null) => {
+    if (next === "publish" && publishBlocked) return;
     if (locked || ownedElsewhere() || confirmationRef.current || drafts.isConfirming() || (next !== null && next === selected)) return;
     if (dirty()) open({ kind: "discard", next, ...capture });
     else choose(next);
@@ -89,13 +100,16 @@ function ReviewDecisionEditor({ disabled, terminal, pendingAction, decisionUnres
   };
   const confirm = () => {
     if (!valid || !confirmation || confirmationRef.current !== confirmation) return;
+    if (confirmation.kind === "decision" && confirmation.action === "publish" && publishBlocked) return;
     cancel(); // Consume synchronously: a stale/double click cannot send another decision.
     if (confirmation.kind === "discard") choose(confirmation.next);
+    else if (confirmation.action === "publish" && publishPayload !== undefined) onDecision?.(confirmation.action, confirmation.details, publishPayload);
     else onDecision?.(confirmation.action, confirmation.details);
   };
+  const publishExpansion = publishPayload?.visibilityReasonCode === "admin_visibility_expansion";
   const description = !confirmation ? "" : `${confirmation.targetLabel} (${confirmation.targetId}). ${confirmation.kind === "discard"
     ? frontendText(locale, "ADMIN_REVIEW_DISCARD_IMPACT")
-    : `${frontendText(locale, confirmation.action === "publish" ? "ADMIN_REVIEW_PUBLISH_IMPACT" : confirmation.action === "reject" ? "ADMIN_REVIEW_REJECT_IMPACT" : "ADMIN_REVIEW_REVISION_IMPACT")}${confirmation.details ? ` ${frontendText(locale, "SUBMISSIONS_REVIEW_REASON")}: ${frontendText(locale, `ADMIN_REVIEW_REASON_${confirmation.details.reasonCode.toUpperCase()}`)}. ${frontendText(locale, "ADMIN_REVIEW_NOTE")}: ${confirmation.details.note}` : ""}`}`;
+    : `${frontendText(locale, confirmation.action === "publish" ? publishPayload ? "ADMIN_REVIEW_PUBLISH_METADATA_IMPACT" : "ADMIN_REVIEW_PUBLISH_IMPACT" : confirmation.action === "reject" ? "ADMIN_REVIEW_REJECT_IMPACT" : "ADMIN_REVIEW_REVISION_IMPACT")}${publishExpansion ? ` ${frontendText(locale, "ADMIN_REVIEW_VISIBILITY_EXPANSION_REASON")}.` : ""}${confirmation.details ? ` ${frontendText(locale, "SUBMISSIONS_REVIEW_REASON")}: ${frontendText(locale, `ADMIN_REVIEW_REASON_${confirmation.details.reasonCode.toUpperCase()}`)}. ${frontendText(locale, "ADMIN_REVIEW_NOTE")}: ${confirmation.details.note}` : ""}`}`;
   return <>
     <div className="space-y-3" inert={valid} aria-hidden={valid || undefined}>
       <div className="flex flex-wrap gap-2">
@@ -113,7 +127,7 @@ function ReviewDecisionEditor({ disabled, terminal, pendingAction, decisionUnres
               label: pendingAction === action ? frontendText(locale, "ADMIN_REVIEW_ACTION_PENDING") : label,
               ariaLabel: `${label} ${targetLabel}`,
               tone: action === "reject" ? "destructive" : "default",
-              disabled: locked || valid,
+              disabled: locked || valid || (action === "publish" && publishBlocked),
               attributes: {
                 "aria-busy": pendingAction === action,
                 ...(action === "publish" ? {} : { "aria-expanded": selected === action }),

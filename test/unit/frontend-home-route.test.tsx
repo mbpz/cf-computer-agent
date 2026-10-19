@@ -172,13 +172,18 @@ describe("home summary real route", () => {
     expect(Array.from(document.querySelectorAll("button")).some(b => b.textContent === "Try again")).toBe(false);
     await answer(2, { items: [] }); expect(container.querySelector("#workbench-title")).toBeNull();
   });
-  it("aborts all reads on navigation and ignores late responses after return", async () => {
+  it("aborts home reads on navigation and ignores late responses after return", async () => {
     await render();
+    const homeReads = requests.slice(0, 3);
     await act(async () => { browser.history.pushState({}, "", "/settings"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); });
-    expect(requests.every(r => r.signal?.aborted)).toBe(true);
+    // The settings page issues its own GET (the member's invitation code); the
+    // contract here is that the three home reads are aborted on leave, not that
+    // the destination page's read is.
+    expect(homeReads.every(r => r.signal?.aborted)).toBe(true);
+    expect(requests.slice(3).map(r => r.path)).toContain("/api/invitations/mine");
     await act(async () => { browser.history.pushState({}, "", "/"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); });
-    expect(requests).toHaveLength(6);
-    await answer(3, taskSummary); await answer(4, { items: [] }); await answer(5, { items: [] });
+    expect(requests).toHaveLength(7);
+    await answer(4, taskSummary); await answer(5, { items: [] }); await answer(6, { items: [] });
     await answer(0, { ...taskSummary, todo: 99 }); await answer(1, knowledge); await answer(2, { items: [] });
     expect(container.textContent).not.toContain("Private guide"); expect(section("tasks")?.textContent).not.toContain("99");
   });

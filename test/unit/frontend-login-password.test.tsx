@@ -14,6 +14,8 @@ vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: ob
 const { Window } = await import("happy-dom");
 
 const PASSWORD = "correct horse battery staple";
+const INVITATION = "ABCDEFGHJKLMNPQR";
+const INVITATION_DISPLAY = "ABCD-EFGH-JKLM-NPQR";
 
 describe("password login page", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
@@ -39,11 +41,13 @@ describe("password login page", () => {
     await act(async () => form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })));
   }
   function toggle() { return container.querySelector("[data-login-mode-toggle]") as HTMLButtonElement; }
+  const invitationInput = () => container.querySelector("#login-invitation") as HTMLInputElement | null;
 
   it("logs in with the exact email and password", async () => {
     const login = vi.fn().mockResolvedValue({ id: "m1", email: "new@example.test", role: "contributor" });
     const navigate = vi.fn();
     await act(async () => root.render(<LoginPage locale={locale} login={login} navigate={navigate} />));
+    expect(invitationInput()).toBeNull();
     await act(async () => setValue("#login-email", " New@Example.test "));
     await act(async () => setValue("#login-password", PASSWORD));
     await submit();
@@ -51,25 +55,57 @@ describe("password login page", () => {
     expect(navigate).toHaveBeenCalledWith("/");
   });
 
-  it("switches to registration, validates confirmation and enters the workspace", async () => {
+  it("switches to registration, validates confirmation and sends the invitation code", async () => {
     const register = vi.fn().mockResolvedValue({ id: "m2", email: "new@example.test", role: "contributor" });
     const navigate = vi.fn();
     await act(async () => root.render(<LoginPage locale={locale} register={register} navigate={navigate} />));
     await act(async () => toggle().click());
     expect(container.querySelector("#login-password-confirm")).toBeTruthy();
+    expect(invitationInput()?.getAttribute("data-login-invitation")).not.toBeNull();
     await act(async () => setValue("#login-email", "new@example.test"));
     await act(async () => setValue("#login-password", PASSWORD));
     await act(async () => setValue("#login-password-confirm", "different password value"));
+    await act(async () => setValue("#login-invitation", INVITATION_DISPLAY));
     await submit();
     expect(register).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Passwords do not match.");
     await act(async () => setValue("#login-password-confirm", PASSWORD));
     await submit();
-    expect(register).toHaveBeenCalledWith("new@example.test", PASSWORD);
+    expect(register).toHaveBeenCalledWith("new@example.test", PASSWORD, INVITATION);
     expect(navigate).toHaveBeenCalledWith("/");
   });
 
-  it("resets a forgotten password with a new password only", async () => {
+  it("upper-cases an invitation typed in lowercase and sends its canonical form", async () => {
+    const register = vi.fn().mockResolvedValue({ id: "m3", email: "new@example.test", role: "contributor" });
+    await act(async () => root.render(<LoginPage locale={locale} register={register} navigate={vi.fn()} />));
+    await act(async () => toggle().click());
+    await act(async () => setValue("#login-email", "new@example.test"));
+    await act(async () => setValue("#login-password", PASSWORD));
+    await act(async () => setValue("#login-password-confirm", PASSWORD));
+    await act(async () => setValue("#login-invitation", "abcd-efgh jklm-npqr"));
+    // The visible value keeps the separators the member pasted, upper-cased.
+    expect(invitationInput()?.value).toBe("ABCD-EFGH JKLM-NPQR");
+    await submit();
+    expect(register).toHaveBeenCalledWith("new@example.test", PASSWORD, INVITATION);
+  });
+
+  it("requires a well-formed invitation code before registering", async () => {
+    const register = vi.fn();
+    await act(async () => root.render(<LoginPage locale={locale} register={register} navigate={vi.fn()} />));
+    await act(async () => toggle().click());
+    await act(async () => setValue("#login-email", "new@example.test"));
+    await act(async () => setValue("#login-password", PASSWORD));
+    await act(async () => setValue("#login-password-confirm", PASSWORD));
+    await submit();
+    expect(register).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Enter your invitation code.");
+    await act(async () => setValue("#login-invitation", "ABCDE"));
+    await submit();
+    expect(register).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("This invitation code is not valid. Check it and try again.");
+  });
+
+  it("resets a forgotten password with the invitation code used at registration", async () => {
     const reset = vi.fn().mockResolvedValue(undefined);
     await act(async () => root.render(<LoginPage locale={locale} reset={reset} navigate={vi.fn()} />));
     await act(async () => (container.querySelector("[data-login-forgot]") as HTMLButtonElement).click());
@@ -78,8 +114,9 @@ describe("password login page", () => {
     await act(async () => setValue("#login-email", "new@example.test"));
     await act(async () => setValue("#login-password", "another password value"));
     await act(async () => setValue("#login-password-confirm", "another password value"));
+    await act(async () => setValue("#login-invitation", INVITATION_DISPLAY));
     await submit();
-    expect(reset).toHaveBeenCalledWith("new@example.test", "another password value");
+    expect(reset).toHaveBeenCalledWith("new@example.test", "another password value", INVITATION);
     expect(container.textContent).toContain("Password reset. Sign in with your new password.");
     expect(container.textContent).toContain("Sign in with email");
   });
@@ -91,6 +128,7 @@ describe("password login page", () => {
     await act(async () => setValue("#login-email", "new@example.test"));
     await act(async () => setValue("#login-password", "short"));
     await act(async () => setValue("#login-password-confirm", "short"));
+    await act(async () => setValue("#login-invitation", INVITATION));
     await submit();
     expect(register).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Use a password of 12-128 characters.");
@@ -121,11 +159,46 @@ describe("password login page", () => {
       await act(async () => setValue("#login-email", "new@example.test"));
       await act(async () => setValue("#login-password", PASSWORD));
       await act(async () => setValue("#login-password-confirm", PASSWORD));
+      await act(async () => setValue("#login-invitation", INVITATION));
       await submit();
       expect(container.textContent, failure.code).toContain(text);
       await act(async () => root.unmount());
       root = (await import("react-dom/client")).createRoot(container);
     }
+  });
+
+  it("maps the invitation refusal codes without revealing whether a code was unknown or used", async () => {
+    await act(async () => root.render(<LoginPage locale={locale} register={vi.fn().mockRejectedValue(new ApiRequestError("REGISTRATION_INVITATION_REQUIRED", "", 400, false))} navigate={vi.fn()} />));
+    await act(async () => toggle().click());
+    await act(async () => setValue("#login-email", "new@example.test"));
+    await act(async () => setValue("#login-password", PASSWORD));
+    await act(async () => setValue("#login-password-confirm", PASSWORD));
+    await act(async () => setValue("#login-invitation", INVITATION));
+    await submit();
+    expect(container.textContent).toContain("Enter your invitation code.");
+
+    await act(async () => root.unmount());
+    root = (await import("react-dom/client")).createRoot(container);
+    await act(async () => root.render(<LoginPage locale={locale} register={vi.fn().mockRejectedValue(new ApiRequestError("REGISTRATION_INVITATION_INVALID", "", 400, false))} navigate={vi.fn()} />));
+    await act(async () => toggle().click());
+    await act(async () => setValue("#login-email", "new@example.test"));
+    await act(async () => setValue("#login-password", PASSWORD));
+    await act(async () => setValue("#login-password-confirm", PASSWORD));
+    await act(async () => setValue("#login-invitation", INVITATION));
+    await submit();
+    expect(container.textContent).toContain("This invitation code is not valid. Check it and try again.");
+    expect(container.textContent).not.toContain("used");
+  });
+
+  it("maps a rejected password reset to the email-or-invitation copy", async () => {
+    await act(async () => root.render(<LoginPage locale={locale} reset={vi.fn().mockRejectedValue(new ApiRequestError("PASSWORD_RESET_INVALID", "", 401, false))} navigate={vi.fn()} />));
+    await act(async () => (container.querySelector("[data-login-forgot]") as HTMLButtonElement).click());
+    await act(async () => setValue("#login-email", "new@example.test"));
+    await act(async () => setValue("#login-password", "another password value"));
+    await act(async () => setValue("#login-password-confirm", "another password value"));
+    await act(async () => setValue("#login-invitation", INVITATION));
+    await submit();
+    expect(container.textContent).toContain("The email or invitation code is incorrect.");
   });
 
   it("hides GitHub when unavailable but keeps the password form", async () => {

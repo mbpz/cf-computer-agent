@@ -61,8 +61,19 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 181 项，但 A01 
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:234:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:261:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:233:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:260:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/components/motion/feedback-widget.tsx:195:5` | unmounted-ui | beUI feedback-widget 挂载后注册 window keydown/pointerdown 监听 | 键盘/指针事件触发面板关闭判定；当前组件未挂载，不产生实际交互。 |
+| `frontend/components/motion/feedback-widget.tsx:196:5` | unmounted-ui | beUI feedback-widget 挂载后注册 window keydown/pointerdown 监听 | 键盘/指针事件触发面板关闭判定；当前组件未挂载。 |
+| `frontend/components/motion/feedback-widget.tsx:429:23` | unmounted-ui | 反馈面板处于错误/空态 | 渲染 role="alert" 的提示块；组件未挂载。 |
+| `frontend/components/motion/feedback-widget.tsx:444:25` | unmounted-ui | 反馈提交失败后出现重试按钮 | 点击重新提交反馈；组件未挂载。 |
+| `frontend/components/motion/feedback-widget.tsx:465:27` | unmounted-ui | 反馈面板打开态点击关闭按钮 | 关闭反馈面板并归还焦点；组件未挂载。 |
+| `frontend/components/motion/feedback-widget.tsx:483:33` | unmounted-ui | 反馈面板打开态选择评分 | 选择评分选项；组件未挂载。 |
+| `frontend/components/motion/feedback-widget.tsx:496:31` | unmounted-ui | 反馈提交中状态 | 显示发送中状态文本；组件未挂载。 |
+| `frontend/components/motion/feedback-widget.tsx:502:27` | unmounted-ui | 反馈面板打开态编辑补充说明 | textarea 写入补充反馈内容；组件未挂载。 |
+| `frontend/components/motion/feedback-widget.tsx:517:27` | unmounted-ui | 反馈面板打开态的次要操作按钮 | 触发次要操作（取消/跳过）；组件未挂载。 |
+| `frontend/components/motion/feedback-widget.tsx:526:27` | unmounted-ui | 反馈面板打开态点击提交 | StatefulButton 提交反馈；组件未挂载。 |
+| `frontend/components/motion/feedback-widget.tsx:544:13` | unmounted-ui | 页面角落的反馈触发按钮 | motion.button 打开反馈面板；该组件在 Agent 反馈移除后无调用方。 |
 | `frontend/components/motion/tabs.tsx:381:7` | unmounted-ui | `TabsContent` 的 value 不是当前选中页 | 面板保持挂载但 `hidden`；当前没有页面组合 `TabsContent`，载荷保留供后续/测试使用。 |
 | `frontend/components/motion/tabs.tsx:387:5` | unmounted-ui | `TabsContent` 的 value 是当前选中页 | 面板以 `motion.div` 显示并播放轻量入场；当前没有页面组合 `TabsContent`。 |
 | `frontend/components/ui/tabs.tsx:121:10` | unmounted-ui | `ui/tabs` 的 `TabsContent` 适配器被组合 | 转发 `value`/`className`/`children` 到已安装载荷；当前没有页面组合该适配器。 |
@@ -582,7 +593,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `30a90ba3e6e37b0c6230fae5a6733eb2fafb0aa60770827be5fb582d77495e3f`
+- `frontend/app.tsx`: `c23d167711b69e7c5f5f61afa8bc8dcb196d76bdb0fced203ed24a869d36bec8`
 - `frontend/components/motion/tabs.tsx`: `f5510f664873212342f07a95f072d22922eb427940f4a485c6ca3123f0f6b86c`
 - `frontend/components/ui/tabs.tsx`: `a3ec44982431b22612da1bd8af511e98eb170d6c3f8380254e213acdc38adb9b`
 - `frontend/components/agent/answer-panel.tsx`: `d604801b674d21ef059a70f79cc367326ceccf60ba5e400c4d3480eca1e63586`
@@ -641,6 +652,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - `frontend/public/sw.js`: `703801312e5cccba0cf162837b97878185fe03e18cdc2182c2fc4c5215923bad`
 - `tools/browser-vm/checkpoint-recovery-browser.mjs`: `06a498590a0c6e00c9cf5c91dff81de7a6aa3b01c4c9768aa718ebc0de3d9efe`
 - `tools/browser-vm/runtime-owner-browser.mjs`: `e5973069f711204d6ad79f011be6772e9243d403b6bb1ebd515ff361537c4c90`
+- `frontend/components/motion/feedback-widget.tsx`: `71edaa8d1cf0a11111d8d47e98786ea3e17f9c8c8e9588f2e5dabbe9defab2ef`
 
 
 ### 2026-10-10 知识页读取生命周期后重新审查
@@ -776,3 +788,5 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 - 两条与工具类不兼容的约束（按源码实测，记录以免下轮再撞）：`frontend/styles/globals.css:92` 的 `* { border-color: var(--border) }` 不在任何 cascade layer 内，因此压过 `@layer utilities` 里的全部 `border-*` 颜色工具类——落地页头部去掉了会变实线的 `border-transparent`，选语言触发器的 `border-input` 也不再用工具类表达；引用段落的 3px 主色竖线因此留在 `.workbench-source [data-cited]` 的普通规则里。另一条是 `figure.workbench-studio`：`.workbench-studio picture/img` 规则被保留，标记侧的类名也必须保留，否则海报圆角与移动端 9/11 比例静默丢失（本轮实测发现并修复）。
 - 指纹：刷新 1 条（`frontend/pages/workbench-landing/public-workbench-page.tsx`）。`workbench-feature-panel.tsx`、`workbench-landing.css` 没有未归属候选也没有 caller 证据，按“有候选才登记”的规则不入表。同轮生成的索引（476 文件 / 1772 候选 / 159 未归属）是相对工作树的重新生成，包含此前未入索引的 beUI 表单基元批次，不是本轮引入的候选变化。
 - 门禁：`npm run audit:frontend-operations` 与 `node --test scripts/frontend-operation-inventory.test.mjs` 10/10 通过；本轮仍只做源码对账，不改变 A01、A02、A05、D04 的开放状态。
+
+2026-10-18 决策实现后重新对账：Agent 反馈组件（`frontend/components/agent/agent-feedback.tsx`）与其意图模块随 `/agent` 迁移到 AgentSession 而被删除，beUI `feedback-widget` 随之成为未挂载组件，新增 11 条 `unmounted-ui` 候选；`frontend/app.tsx` 的两个未归属 app-boundary 候选坐标因路由导入调整移至 233:106、260:39。邀请码注册、设置页邀请码卡片与菜单邀请码面板均挂在已登记路由/能力根之内，不计入未归属项。当前生成索引 477 文件 / 1783 候选 / 173 未归属；同步 App 与 feedback-widget 指纹，不扩大本记录的运行验收结论。

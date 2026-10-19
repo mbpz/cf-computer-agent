@@ -15,6 +15,14 @@ vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(valu
 vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
 const { Window } = await import("happy-dom");
 
+/** Answers the publication-metadata form's option reads without counting them as detail reads. */
+function optionResponse(url: string): Promise<Response> | null {
+  if (/^\/api\/spaces\/[^/]+\/collections/u.test(url)) return Promise.resolve(json({ items: [] }));
+  if (url.startsWith("/api/spaces")) return Promise.resolve(json({ items: [{ id: "default", slug: "default", name: "Default", kind: "shared", status: "active", readOnly: false, position: 0 }] }));
+  if (url.startsWith("/api/admin/tags")) return Promise.resolve(json({ items: [] }));
+  return null;
+}
+
 describe("review comment draft and write ownership", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   const locale = createLocaleRuntime({ navigatorLanguage: "en" });
@@ -70,7 +78,13 @@ describe("review comment draft and write ownership", () => {
 
   it.each([403, 404, 500])("retains unsent comments across detail %s and restores only on reauthorized read", async status => {
     let read = 0;
-    const request: Fetcher = async (input) => String(input).endsWith("/comments") ? json({ comments: [] }) : ++read === 2 ? new Response(null, { status }) : preview("sub-1");
+    const request: Fetcher = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/comments")) return json({ comments: [] });
+      // The publication-metadata form loads its options beside the detail read.
+      const options = optionResponse(url); if (options) return options;
+      return ++read === 2 ? new Response(null, { status }) : preview("sub-1");
+    };
     await render(request); await type("Hidden private draft");
     // A dependency read is independent of this comment draft.
     await render((input, init) => request(input, init));
@@ -82,7 +96,7 @@ describe("review comment draft and write ownership", () => {
 
   it("retains an in-flight comment through detail denial and accepts its late matching receipt", async () => {
     const pending = deferred<Response>(); let reads = 0; let posts = 0;
-    const request: Fetcher = async (input, init) => { if (init?.method === "PUT") { posts++; const result = await pending.promise; return operationReceipt(String(input), (await result.json() as { comment: unknown }).comment); } if (String(input).endsWith("/comments")) return json({ comments: [] }); return ++reads === 2 ? new Response(null, { status: 403 }) : preview("sub-1"); };
+    const request: Fetcher = async (input, init) => { if (init?.method === "PUT") { posts++; const result = await pending.promise; return operationReceipt(String(input), (await result.json() as { comment: unknown }).comment); } const url = String(input); if (url.endsWith("/comments")) return json({ comments: [] }); const options = optionResponse(url); if (options) return options; return ++reads === 2 ? new Response(null, { status: 403 }) : preview("sub-1"); };
     await render(request); await type("A note"); await act(async () => button("Add comment").click());
     await render((input, init) => request(input, init)); expect(text()).toBeNull(); await leave(); expect(browser.location.pathname).toBe("/admin/submissions/sub-1"); expect(unload()).toBe(true);
     await act(async () => pending.resolve(receipt())); await flush(); expect(posts).toBe(1); expect(unload()).toBe(false);

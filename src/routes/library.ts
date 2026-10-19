@@ -718,7 +718,10 @@ export async function routeLibraryApi(
   throw new AppError("NOT_FOUND", "Not found", 404);
 }
 
-function chatScopeRequest(value: unknown): ChatScope {
+/** Shared ChatScope validation: the knowledge chat and the bounded agent
+ * session accept exactly the same source sets, so neither transport can widen
+ * or reinterpret the other's scope. */
+export function chatScopeRequest(value: unknown): ChatScope {
   if (!isRecord(value) || typeof value.kind !== "string") throw invalidChatRequest();
   if (value.kind === "all") {
     if (!hasExactKeys(value, ["kind"])) throw invalidChatRequest();

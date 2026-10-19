@@ -368,7 +368,7 @@ test("current frontend ownership discovers the required visible mutation minimum
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
   const expected = {
     "workbench-inbox": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/dependencies/:id", "DELETE /api/tasks/:id/links/:id", "DELETE /api/tasks/:id/subtasks/:id", "PATCH /api/inbox/:id", "PATCH /api/tasks/:id", "PATCH /api/tasks/:id/subtasks/:id", "POST /api/inbox", "POST /api/inbox/:id/promote/task", "POST /api/tasks", "POST /api/tasks/:id/dependencies", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "POST /api/tasks/:id/subtasks", "PUT /api/tasks/:id/tags"],
-    "workbench-agent": ["PATCH /api/knowledge/chat/conversations/:id/scope", "POST /api/knowledge/chat/conversations/:id/cancel", "POST /api/knowledge/chat/conversations/:id/feedback"],
+    "workbench-agent": ["POST /api/agent/sessions", "POST /api/agent/sessions/:id/turns/:id/terminate"],
     "workbench-tasks": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/dependencies/:id", "DELETE /api/tasks/:id/links/:linkId", "DELETE /api/tasks/:id/subtasks/:id", "PATCH /api/tasks/:id", "PATCH /api/tasks/:id/subtasks/:id", "POST /api/tasks", "POST /api/tasks/:id/dependencies", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "POST /api/tasks/:id/subtasks", "PUT /api/tasks/:id/tags"],
     "workbench-admin-duplicates": ["POST /api/admin/duplicates/:submissionId/decision"],
     "workbench-admin-members": ["PATCH /api/admin/members/:id/status"],
@@ -467,8 +467,8 @@ test("removing role detail API ownership and its mutation cannot bypass source d
 
 test("frontend scanner fails closed when request options method is not statically resolved", () => {
   withRepositoryProbe("frontend/lib/agent-data.ts", (source) => source.replace(
-    /(  await apiFetch\(`\/api\/knowledge\/chat\/conversations\/\$\{encodeURIComponent\(conversationId\)\}\/scope`, )(\{[\s\S]*?^  \}\);)/mu,
-    (_, callPrefix, inlineOptions) => `  const requestOptions = ${inlineOptions.slice(0, -2)};\n${callPrefix}requestOptions);`,
+    'const data = await apiFetch<AgentSessionPayload>("/api/agent/sessions", { requester, method: "POST" });',
+    'const requestOptions = { requester, method: "POST" };\n  const data = await apiFetch<AgentSessionPayload>("/api/agent/sessions", requestOptions);',
   ), (probeRoot) => {
     assert.throws(
       () => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }),
@@ -479,12 +479,12 @@ test("frontend scanner fails closed when request options method is not staticall
 
 test("frontend scanner preserves no-options GET and inline mutation methods", () => {
   withRepositoryProbe("frontend/lib/agent-data.ts", (source) => source.replace(
-    "  const data = await apiFetch<{ cancelled?: unknown }>(",
-    "  void apiFetch(\"/api/knowledge/chat/conversations\");\n  const data = await apiFetch<{ cancelled?: unknown }>(",
+    "  const data = await apiFetch<AgentSessionPayload>",
+    "  void apiFetch(\"/api/agent/sessions\");\n  const data = await apiFetch<AgentSessionPayload>",
   ), (probeRoot) => {
     const evidence = runtimeEvidenceSnapshot({ repositoryRoot: probeRoot });
-    assert.ok(evidence.mutations["workbench-agent"]["POST /api/knowledge/chat/conversations/:id/cancel"]);
-    assert.equal(evidence.mutations["workbench-agent"]["GET /api/knowledge/chat/conversations"], undefined);
+    assert.ok(evidence.mutations["workbench-agent"]["POST /api/agent/sessions"]);
+    assert.equal(evidence.mutations["workbench-agent"]["GET /api/agent/sessions"], undefined);
   });
 });
 

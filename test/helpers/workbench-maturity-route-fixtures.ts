@@ -247,17 +247,26 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
     case "search":
       if (pathname(path) === "/api/knowledge/search") return probeResponse(state, { ...numbered([]), degraded: false }, { ...numbered([{ knowledgeItemId: "ready-search", title: "READY::search", excerpt: "route fixture", matchedFields: [] }]), degraded: false });
       return null;
-    case "agent":
-      if (path === "/api/knowledge/chat/stream") {
+    case "agent": {
+      const sessionId = "agent-session-route-audit";
+      const turnId = "turn-route-audit-0001";
+      const session = { id: sessionId, memberId: "contributor-route-auditor", createdAt: NOW, lastSeenAt: NOW };
+      if (pathname(path) === "/api/agent/sessions" && (init?.method ?? "GET").toUpperCase() === "POST") {
+        return Response.json({ session }, { status: 201 });
+      }
+      if (pathname(path) === `/api/agent/sessions/${sessionId}`) return Response.json({ session });
+      if (pathname(path).endsWith("/messages")) return Response.json({ messages: { items: [], truncated: false } });
+      if (pathname(path).endsWith("/terminate")) return Response.json({ turn: { turnId, question: "", status: "terminated", createdAt: NOW, updatedAt: NOW } });
+      if (pathname(path) === `/api/agent/sessions/${sessionId}/stream`) {
         if (state === "loading") return neverResponse();
         if (state === "error") return apiError(503, "ROUTE_MATURITY_RETRYABLE_ERROR", true);
-        const key = new Headers(init?.headers).get("idempotency-key");
         const payload = state === "ready"
-          ? { answer: "READY::agent", evidenceConfidence: 1, citations: [], sources: [], conversationId: "conv-maturity", ...(key ? { idempotencyKey: key } : {}) }
+          ? { answer: "READY::agent", evidenceConfidence: 1, citations: [], sources: [], sessionId, conversationId: sessionId, turnId }
           : {};
-        return new Response(`data: ${JSON.stringify({ stage: "answer", body: payload })}\n\n`, { headers: { "content-type": "text/event-stream" } });
+        return new Response(`data: ${JSON.stringify({ stage: "answer", body: payload })}\n\n`, { headers: { "content-type": "text/event-stream", "x-agent-turn-id": turnId } });
       }
       return null;
+    }
     case "my-submissions":
       if (pathname(path) === "/api/submissions/mine") return probeResponse(state, numbered([]), numbered([{ id: "ready-my-submissions", title: "READY::my-submissions", status: "review_pending" }]));
       return null;

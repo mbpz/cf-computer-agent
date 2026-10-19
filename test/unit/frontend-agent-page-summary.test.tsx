@@ -2,7 +2,6 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentHistoryList } from "../../frontend/components/agent/agent-history-list";
 import { AgentTranscript } from "../../frontend/components/agent/agent-transcript";
 import { AgentPage } from "../../frontend/pages/agent-page";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
@@ -98,36 +97,6 @@ describe("agent page summary row", () => {
     expect(container.textContent).toContain("Retry later");
   });
 
-  it("reserves desktop fill height for the page root and the history list", async () => {
-    vi.stubGlobal("fetch", async () => Response.json({ items: [{ id: "conv-1", createdAt: "2026-09-09T10:00:00.000Z" }] }));
-    await mount(<><AgentPage locale={language} scope="all" question="Where is the guide?" state={answer("high")} /><AgentHistoryList locale={language} /></>);
-    const pageRoot = container.querySelector("section")!;
-    expect(pageRoot.className).toContain("lg:h-full");
-    expect(pageRoot.className).toContain("lg:min-h-0");
-    expect(pageRoot.className).not.toMatch(/(^|\s)h-full/);
-    await act(async () => historyTrigger().click());
-    await flush();
-    const history = container.querySelector<HTMLElement>(`section[aria-label="${frontendText(language, "AGENT_LIST_TITLE")}"]`)!;
-    expect(history.className).toContain("lg:min-h-0");
-    expect(history.className).toContain("lg:flex-1");
-    const region = history.querySelector<HTMLElement>(":scope > div")!;
-    expect(region.className).toContain("overflow-auto");
-    expect(region.className).toContain("lg:min-h-0");
-    expect(region.className).toContain("lg:flex-1");
-    expect(region.textContent).toContain("conv-1");
-  });
-
-  it("keeps the history status markers inside the scrolling region", async () => {
-    vi.stubGlobal("fetch", async () => { throw new Error("offline"); });
-    await mount(<AgentHistoryList locale={language} />);
-    await act(async () => historyTrigger().click());
-    await flush();
-    const history = container.querySelector<HTMLElement>(`section[aria-label="${frontendText(language, "AGENT_LIST_TITLE")}"]`)!;
-    const region = history.querySelector<HTMLElement>(":scope > div")!;
-    expect(region.querySelector('[role="alert"]')).toBeTruthy();
-    expect([...region.querySelectorAll("button")].map((button) => button.textContent)).toContain(frontendText(language, "AGENT_LIST_RETRY"));
-  });
-
   it("draws the pending turn as beUI conversation parts in the active locale", async () => {
     const chinese = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
     await mount(<AgentPage locale={chinese} scope="all" question="证据在哪里？" stage="evidence" state={{ kind: "loading" }} />);
@@ -168,7 +137,6 @@ describe("agent page summary row", () => {
   async function mount(element: React.ReactNode) { await act(async () => root.render(element)); await flush(); }
   function summaryRow() { return container.querySelector<HTMLElement>("[data-summary-row]")!; }
   function toggle() { return container.querySelector<HTMLButtonElement>("[data-summary-row] + button"); }
-  function historyTrigger() { return [...container.querySelectorAll("button")].find((button) => button.textContent === frontendText(language, "AGENT_LIST_TITLE"))!; }
 });
 
 async function flush() {

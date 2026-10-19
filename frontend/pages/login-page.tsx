@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
+import { isInvitationCode, normalizeInvitationCode } from "../lib/invitations-data";
 import {
   loginPassword,
   passwordAuthFailure,
@@ -16,6 +17,11 @@ import {
 } from "../lib/password-auth-data";
 
 type Mode = "login" | "register" | "reset";
+
+/** Upper-cases while typing but keeps the separators a pasted code may carry. */
+function uppercaseInvitation(value: string): string {
+  return value.toUpperCase();
+}
 
 export function LoginPage({
   locale,
@@ -38,6 +44,7 @@ export function LoginPage({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [invitation, setInvitation] = useState("");
   const [notice, setNotice] = useState<string>();
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string>();
@@ -52,7 +59,11 @@ export function LoginPage({
     if (reason === "rejected") return "LOGIN_PASSWORD_REJECTED";
     if (reason === "locked") return "LOGIN_PASSWORD_LOCKED";
     if (reason === "disabled") return "LOGIN_PASSWORD_DISABLED";
-    if (reason === "reset_rejected") return "LOGIN_RESET_REJECTED";
+    // The reset failure deliberately does not say whether the email or the code was
+    // wrong, and the registration code copy does not distinguish unknown from used.
+    if (reason === "invitation_required") return "LOGIN_INVITATION_REQUIRED";
+    if (reason === "invitation_invalid") return "LOGIN_INVITATION_INVALID";
+    if (reason === "reset_rejected") return "LOGIN_RESET_INVITATION_REJECTED";
     return mode === "login" ? "LOGIN_PASSWORD_ERROR" : mode === "reset" ? "LOGIN_RESET_ERROR" : "LOGIN_REGISTER_ERROR";
   };
 
@@ -66,6 +77,15 @@ export function LoginPage({
       return;
     }
     if (mode !== "login") {
+      const invitationCode = normalizeInvitationCode(invitation);
+      if (invitationCode.length === 0) {
+        setFormError(frontendText(locale, "LOGIN_INVITATION_REQUIRED"));
+        return;
+      }
+      if (!isInvitationCode(invitationCode)) {
+        setFormError(frontendText(locale, "LOGIN_INVITATION_INVALID"));
+        return;
+      }
       if (!passwordAllowed(password)) {
         setFormError(frontendText(locale, "LOGIN_REGISTER_WEAK"));
         return;
@@ -81,13 +101,14 @@ export function LoginPage({
     setNotice(undefined);
     try {
       if (mode === "register") {
-        await register(target, password);
+        await register(target, password, normalizeInvitationCode(invitation));
         navigate("/");
       } else if (mode === "reset") {
-        await reset(target, password);
+        await reset(target, password, normalizeInvitationCode(invitation));
         setMode("login");
         setPassword("");
         setConfirm("");
+        setInvitation("");
         setNotice(frontendText(locale, "LOGIN_RESET_SUCCESS"));
       } else {
         await login(target, password);
@@ -106,6 +127,7 @@ export function LoginPage({
     setMode(next);
     setPassword("");
     setConfirm("");
+    setInvitation("");
     setNotice(undefined);
     setFormError(undefined);
   };
@@ -143,6 +165,22 @@ export function LoginPage({
                   <Label htmlFor="login-password">{frontendText(locale, resetting ? "LOGIN_RESET_NEW_PASSWORD_LABEL" : "LOGIN_PASSWORD_LABEL")}</Label>
                   <Input id="login-password" type="password" autoComplete={registering || resetting ? "new-password" : "current-password"} value={password} disabled={pending} onChange={(value) => { setPassword(value); if (formError) setFormError(undefined); }} />
                 </div>
+                {(registering || resetting) && <div className="space-y-1">
+                  <Label htmlFor="login-invitation">{frontendText(locale, resetting ? "LOGIN_RESET_INVITATION_LABEL" : "LOGIN_INVITATION_LABEL")}</Label>
+                  <Input
+                    id="login-invitation"
+                    data-login-invitation
+                    type="text"
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    placeholder={frontendText(locale, "LOGIN_INVITATION_PLACEHOLDER")}
+                    value={invitation}
+                    disabled={pending}
+                    onChange={(value) => { setInvitation(uppercaseInvitation(value)); if (formError) setFormError(undefined); }}
+                  />
+                  <p className="text-xs text-muted-foreground">{frontendText(locale, resetting ? "LOGIN_RESET_INVITATION_DESCRIPTION" : "LOGIN_INVITATION_DESCRIPTION")}</p>
+                </div>}
                 {(registering || resetting) && <div className="space-y-1">
                   <Label htmlFor="login-password-confirm">{frontendText(locale, resetting ? "LOGIN_RESET_CONFIRM_LABEL" : "LOGIN_REGISTER_CONFIRM_LABEL")}</Label>
                   <Input id="login-password-confirm" type="password" autoComplete="new-password" value={confirm} disabled={pending} onChange={(value) => { setConfirm(value); if (formError) setFormError(undefined); }} />

@@ -1,4 +1,5 @@
 import { ApiRequestError, apiFetch, type Fetcher } from "./api";
+import { normalizeInvitationCode } from "./invitations-data";
 
 export interface PasswordAuthMember {
   id: string;
@@ -40,12 +41,13 @@ async function credentials(path: string, email: string, password: string, reques
   return parseMember(data);
 }
 
-export async function registerPassword(email: string, password: string, requester: Fetcher = fetch): Promise<PasswordAuthMember> {
+/** Registration requires an unused, unbound invitation code. */
+export async function registerPassword(email: string, password: string, invitationCode: string, requester: Fetcher = fetch): Promise<PasswordAuthMember> {
   const data = await apiFetch<unknown>("/auth/register", {
     requester,
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, invitationCode: normalizeInvitationCode(invitationCode) }),
   });
   return parseMember(data);
 }
@@ -54,12 +56,13 @@ export function loginPassword(email: string, password: string, requester: Fetche
   return credentials("/auth/password", email, password, requester);
 }
 
-export async function resetPassword(email: string, password: string, requester: Fetcher = fetch): Promise<void> {
+/** Reset must prove ownership with the invitation code used at registration. */
+export async function resetPassword(email: string, password: string, invitationCode: string, requester: Fetcher = fetch): Promise<void> {
   await apiFetch<unknown>("/auth/password/reset", {
     requester,
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, invitationCode: normalizeInvitationCode(invitationCode) }),
   });
 }
 
@@ -72,6 +75,8 @@ export type PasswordAuthFailure =
   | "locked"
   | "disabled"
   | "reset_rejected"
+  | "invitation_required"
+  | "invitation_invalid"
   | "unknown";
 
 export function passwordAuthFailure(error: unknown): PasswordAuthFailure {
@@ -84,6 +89,9 @@ export function passwordAuthFailure(error: unknown): PasswordAuthFailure {
     case "PASSWORD_LOGIN_LOCKED": return "locked";
     case "PASSWORD_LOGIN_INVALID": return "rejected";
     case "MEMBER_DISABLED": return "disabled";
+    // Unknown and already-used codes are deliberately indistinguishable here.
+    case "REGISTRATION_INVITATION_REQUIRED": return "invitation_required";
+    case "REGISTRATION_INVITATION_INVALID": return "invitation_invalid";
     case "PASSWORD_RESET_INVALID": return "reset_rejected";
     default: return error.status === 400 ? "invalid" : "unknown";
   }

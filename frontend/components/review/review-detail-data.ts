@@ -7,13 +7,51 @@ export interface ReviewPublishInput {
   readonly spaceId: string;
   readonly collectionId: string | null;
   readonly tagIds: readonly string[];
+  /**
+   * Set only for a reviewer-confirmed expansion of an `admin_only` request to
+   * `shared`; the server rejects the code on every other publish and rejects a
+   * silent expansion that omits it.
+   */
+  readonly visibilityReasonCode?: "admin_visibility_expansion";
 }
 
 export interface ReviewDetailData {
   readonly detail: ReviewDetailModel;
+  /** Editable publication metadata, initialised from the submitted request. */
   readonly publish: ReviewPublishInput;
+  /** The visibility the submitter asked for; only this proves an expansion. */
+  readonly requestedVisibility: "shared" | "admin_only";
   /** Authoritative submission version, absent for a server that predates it. */
   readonly version?: string;
+}
+
+/** A publish that moves an `admin_only` request to `shared` needs explicit consent. */
+export function reviewVisibilityExpansion(
+  requestedVisibility: "shared" | "admin_only",
+  visibility: "shared" | "admin_only",
+): boolean {
+  return requestedVisibility === "admin_only" && visibility === "shared";
+}
+
+/**
+ * The exact publish payload for one decision. The expansion reason code is added
+ * only when it is required and stripped otherwise, so the confirmed intent and
+ * the replayed body always carry the same six fields.
+ */
+export function reviewPublishPayload(
+  requestedVisibility: "shared" | "admin_only",
+  publish: ReviewPublishInput,
+): ReviewPublishInput {
+  const base = {
+    title: publish.title,
+    visibility: publish.visibility,
+    spaceId: publish.spaceId,
+    collectionId: publish.collectionId,
+    tagIds: [...publish.tagIds],
+  };
+  return reviewVisibilityExpansion(requestedVisibility, publish.visibility)
+    ? { ...base, visibilityReasonCode: "admin_visibility_expansion" }
+    : base;
 }
 
 /**
@@ -41,9 +79,10 @@ export function normalizeReviewPreview(input: unknown): ReviewDetailData | null 
     const message = typeof record.message === "string" ? record.message.trim() : "";
     return code && message ? `${code}: ${message}` : code || message;
   }).filter(Boolean).slice(0, 20);
+  const requestedVisibility: "shared" | "admin_only" = preview.requestedVisibility === "admin_only" ? "admin_only" : "shared";
   const publish: ReviewPublishInput = {
     title: typeof preview.title === "string" ? preview.title.trim() : "",
-    visibility: preview.requestedVisibility === "admin_only" ? "admin_only" : "shared",
+    visibility: requestedVisibility,
     spaceId: typeof preview.requestedSpaceId === "string" ? preview.requestedSpaceId.trim() : "",
     collectionId: typeof preview.requestedCollectionId === "string" ? preview.requestedCollectionId.trim() : null,
     tagIds: Array.isArray(preview.tagIds) ? preview.tagIds.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0).map((tag) => tag.trim()).slice(0, 50) : [],
@@ -63,6 +102,7 @@ export function normalizeReviewPreview(input: unknown): ReviewDetailData | null 
   return {
     detail,
     publish,
+    requestedVisibility,
     ...(preview.updatedAt === undefined ? {} : { version: preview.updatedAt }),
   };
 }

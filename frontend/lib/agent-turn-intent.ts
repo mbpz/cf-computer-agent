@@ -30,10 +30,18 @@ export function createAgentIntent(memberId: string, question: string, scope: Age
   return { version: 1, memberId, key: crypto.randomUUID(), question: question.trim(), scope, ...(conversationId ? { conversationId } : {}) };
 }
 
+/** A pending journal may be written before the session exists and then upgraded
+ * once the session id is known; any other difference is a competing attempt. */
 export function saveAgentIntent(intent: AgentTurnIntent): boolean {
   try {
     const stored = loadAgentIntent(intent.memberId);
-    if (stored.kind === "blocked" || (stored.kind === "ready" && JSON.stringify(stored.intent) !== JSON.stringify(intent))) return false;
+    if (stored.kind === "blocked") return false;
+    if (stored.kind === "ready") {
+      const current = stored.intent;
+      const sameFields = JSON.stringify({ ...current, conversationId: undefined }) === JSON.stringify({ ...intent, conversationId: undefined });
+      const upgradesSession = current.conversationId === undefined || current.conversationId === intent.conversationId;
+      if (!sameFields || !upgradesSession) return false;
+    }
     browserStorage().setItem(storageKey(intent.memberId), JSON.stringify(intent));
     const saved = loadAgentIntent(intent.memberId);
     return saved.kind === "ready" && JSON.stringify(saved.intent) === JSON.stringify(intent);

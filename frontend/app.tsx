@@ -12,7 +12,6 @@ import { PlanningWriteRecovery, usePlanningWriteRecovery } from "./components/pl
 import { loadPlanningIntent, clearPlanningIntent } from "./lib/planning-create-intent";
 import { ProjectRelationsEditor } from "./components/project-relations-editor";
 import { useCreateDraft } from "./lib/use-create-draft";
-import { AgentHistoryList } from "./components/agent/agent-history-list";
 import { AgentTranscript } from "./components/agent/agent-transcript";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Alert, AlertTitle } from "./components/ui/alert";
@@ -78,9 +77,9 @@ import { type SavedViewItem } from "./lib/saved-views-data";
 import { useSavedViews } from "./lib/use-saved-views";
 import { discardBlockedSearchComposerDraft, loadSearchComposerDraft, persistSearchComposerDraft } from "./lib/search-composer-draft";
 import { clearAgentIntent, createAgentIntent, loadAgentIntent, saveAgentIntent, type AgentTurnIntent, type StoredAgentIntent } from "./lib/agent-turn-intent";
-import { clearAgentFeedback, discardBlockedAgentFeedback, loadAgentFeedback, type AgentFeedbackIntent } from "./lib/agent-feedback-intent";
 import { discardBlockedAgentComposerDraft, loadAgentComposerDraft, persistAgentComposerDraft } from "./lib/agent-composer-draft";
-import { agentScopeSearch, agentLocationFromSearch, agentUnavailableReason, loadAgentConversation, createAgentRequestController, submitAgentFeedback, type AgentConversation, type AgentScope, type AgentTurnState, type ChatStage } from "./lib/agent-data";
+import { agentScopeSearch, agentLocationFromSearch, agentUnavailableReason, createAgentSession, createAgentRequestController, loadAgentMessages, loadAgentSession, type AgentMessage, type AgentScope, type AgentTurnState, type ChatStage } from "./lib/agent-data";
+import { clearAgentSession, loadAgentSession as loadStoredAgentSession, saveAgentSession } from "./lib/agent-session-store";
 import { loadPrivateKnowledgeNotesPage, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
 import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, saveSubmissionIntent, type SubmissionIntent } from "./lib/submission-intent";
@@ -1232,7 +1231,11 @@ export function AgentRoute({ locale, search = "", memberId }: { locale: LocaleRu
   try { location = agentLocationFromSearch(search); } catch {
     return <PageState kind="error" title={frontendText(locale, "AGENT_SCOPE_INVALID")}><a href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
   }
-  return <AgentConversationRoute key={`${memberId ?? "preview"}:${search}`} memberId={memberId} locale={locale} initialScope={location.scope} restoreId={location.conversationId} />;
+  // An absent scope in the URL means "resume the member's stored scope", not
+  // "force all sources"; only an explicitly written source selection wins.
+  const params = new URLSearchParams(search);
+  const explicitScope = ["scope", "spaceId", "collectionId", "knowledgeItemId"].some((key) => params.has(key));
+  return <AgentConversationRoute key={`${memberId ?? "preview"}:${search}`} memberId={memberId} locale={locale} initialScope={explicitScope ? location.scope : undefined} restoreId={location.conversationId} />;
 }
 
 function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: { locale: LocaleRuntime; initialScope?: AgentScope; restoreId?: string; memberId?: string }) {
@@ -1240,47 +1243,64 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   const intentRef = useRef<AgentTurnIntent | null>(stored.kind === "ready" ? stored.intent : null);
   const [unconfirmed, setUnconfirmed] = useState(stored.kind === "ready");
   const [storageBlocked, setStorageBlocked] = useState(stored.kind === "blocked");
-  const [scope, setScope] = useState<AgentScope>(initialScope ?? { kind: "all" });
+  // The durable session is recovered from the URL first (an explicit bookmark),
+  // then from this member's browser record. `conversationId` is the URL name that
+  // now carries a session id, so existing recovery links keep working.
+  const [storedSession] = useState(() => memberId ? loadStoredAgentSession(memberId) : { kind: "empty" as const });
+  const initialSessionId = restoreId ?? (storedSession.kind === "ready" ? storedSession.session.sessionId : undefined);
+  const restoredSessionScope = restoreId === undefined && storedSession.kind === "ready" ? storedSession.session.scope : undefined;
+  const initialScopeRef = useRef<AgentScope>(initialScope ?? restoredSessionScope ?? { kind: "all" });
+  const [scope, setScope] = useState<AgentScope>(initialScopeRef.current);
   const scopeRef = useRef(scope);
-  const [history, setHistory] = useState<AgentConversation["messages"]>([]);
-  const [recovery, setRecovery] = useState<"loading" | "ready" | "error">(restoreId ? "loading" : "ready");
+  const [history, setHistory] = useState<AgentMessage[]>([]);
+  const [recovery, setRecovery] = useState<"loading" | "ready" | "error">(initialSessionId && stored.kind === "empty" ? "loading" : "ready");
   const [recoveryVersion, setRecoveryVersion] = useState(0);
+  const sessionIdRef = useRef<string | undefined>(initialSessionId);
   useEffect(() => {
-    if (!restoreId || stored.kind !== "empty") return;
+    if (!initialSessionId || stored.kind !== "empty") return;
     const abort = new AbortController(); let current = true;
     setRecovery("loading");
-    void loadAgentConversation(restoreId, { signal: abort.signal }).then((conversation) => {
-      if (!current) return;
-      scopeRef.current = conversation.scope; setScope(conversation.scope);
-      sourceDraft.checkpoint(agentSourceFields(conversation.scope)); sourceDraft.reset(); setHistory(conversation.messages);
-      conversationIdRef.current = conversation.id; setRecovery("ready");
-    }).catch(() => { if (current) setRecovery("error"); });
+    void (async () => {
+      try {
+        await loadAgentSession(initialSessionId, { signal: abort.signal });
+        const page = await loadAgentMessages(initialSessionId, 20, { signal: abort.signal });
+        if (!current) return;
+        sessionIdRef.current = initialSessionId;
+        setHistory(page.messages);
+        // The source scope is not part of the stored session; the URL/stored
+        // selection stays authoritative, so a recovery read cannot widen it.
+        setRecovery("ready");
+      } catch (error) {
+        if (!current) return;
+        if (error instanceof ApiRequestError && (error.status === 404 || error.status === 403)) {
+          // A missing or no-longer-owned session is dropped; the next question
+          // starts a fresh session instead of retrying a dead id forever.
+          if (memberId) clearAgentSession(memberId, initialSessionId);
+          sessionIdRef.current = undefined;
+          setHistory([]);
+          setRecovery("ready");
+          return;
+        }
+        setRecovery("error");
+      }
+    })();
     return () => { current = false; abort.abort(); };
-  }, [restoreId, recoveryVersion]);
+  }, [initialSessionId, recoveryVersion]);
   const [lastQuestion, setLastQuestion] = useState("");
   const [state, setState] = useState<AgentTurnState>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [], conflicts: [] });
   const [stage, setStage] = useState<ChatStage | null>(null);
   const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
   const pendingRef = useRef(false);
-  const conversationIdRef = useRef<string | undefined>(undefined);
   const alive = useRef(true);
-  // Route-owned reservation survives child UI changes. Only a verified feedback
-  // receipt releases it; unknown delivery is not an ordinary discardable draft.
-  const [feedbackStored] = useState(() => memberId ? loadAgentFeedback(memberId) : { kind: "empty" as const });
-  const feedbackLock = useRef<string | null>(feedbackStored.kind === "ready" ? feedbackStored.intent.conversationId : null);
-  const [feedbackBlocked, setFeedbackBlocked] = useState(feedbackStored.kind !== "empty");
-  const [feedbackIntent, setFeedbackIntent] = useState<AgentFeedbackIntent | null>(feedbackStored.kind === "ready" ? feedbackStored.intent : null);
-  const [feedbackRecordBlocked, setFeedbackRecordBlocked] = useState(feedbackStored.kind === "blocked");
-  const [feedbackNotice, setFeedbackNotice] = useState<string>();
   // Submitted turns and unsent input share admission, but have distinct lifetimes.
-  const locked = () => feedbackLock.current !== null || pendingRef.current || intentRef.current !== null
+  const locked = () => pendingRef.current || intentRef.current !== null
     || (!!memberId && loadAgentIntent(memberId).kind !== "empty");
   const [composerStored] = useState(() => memberId && stored.kind === "empty" ? loadAgentComposerDraft(memberId) : { kind: "empty" as const });
   const [composerBlocked, setComposerBlocked] = useState(composerStored.kind === "blocked");
   const [composerNotice, setComposerNotice] = useState<string>();
   const questionBaseline = useRef("");
   const questionInitial = composerStored.kind === "ready" ? composerStored.draft.question : "";
-  const sourceBaseline = agentSourceFields(initialScope ?? {kind: "all"});
+  const sourceBaseline = agentSourceFields(initialScopeRef.current);
   const sourceInitial = composerStored.kind === "ready" && composerStored.draft.source ? composerStored.draft.source : sourceBaseline;
   const questionDraft = useCreateDraft({question: questionInitial}, {question: ""}, locked, locale,
     (): boolean => !alive.current || sourceDraft.isConfirming() || recovery !== "ready" || storageBlocked || unconfirmed);
@@ -1301,19 +1321,13 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
   }, [memberId, composerBlocked]);
   if (!controllerRef.current) controllerRef.current = createAgentRequestController();
-  useEffect(() => {alive.current = true; return () => {alive.current = false; controllerRef.current?.cancel(conversationIdRef.current);};}, []);
+  useEffect(() => {alive.current = true; return () => {alive.current = false; controllerRef.current?.cancel();};}, []);
   const submit = (nextQuestion = questionDraft.current.current.question) => {
     const normalized = nextQuestion.trim();
-    if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming() || !normalized || !controllerRef.current || feedbackLock.current !== null || pendingRef.current || (recovery !== "ready" && !unconfirmed) || storageBlocked) return;
-    let intent = intentRef.current;
-    if (memberId) {
-      try {
-        if (!intent) intent = createAgentIntent(memberId, normalized, scopeRef.current, conversationIdRef.current);
-        if (!saveAgentIntent(intent)) { setStorageBlocked(true); return; }
-        intentRef.current = intent;
-      } catch { setStorageBlocked(true); return; }
-    }
-    const sentQuestion = intent?.question ?? normalized;
+    if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming() || !normalized || !controllerRef.current || pendingRef.current || (recovery !== "ready" && !unconfirmed) || storageBlocked) return;
+    const existing = intentRef.current;
+    const sentQuestion = existing?.question ?? normalized;
+    const sendScope = existing?.scope ?? scopeRef.current;
     pendingRef.current = true;
     setUnconfirmed(false);
     // Retry uses its original question without overwriting a newer unsent follow-up.
@@ -1325,23 +1339,50 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     setLastQuestion(sentQuestion);
     setState({ kind: "loading" });
     setStage(null);
-    const request = controllerRef.current.request(sentQuestion, intent?.scope ?? scopeRef.current, intent ? intent.conversationId : conversationIdRef.current, intent?.key, setStage);
-    void request.promise.then(({ generation, answer }) => {
-      if (controllerRef.current?.isCurrent(generation)) {
+    let generation: number | undefined;
+    void (async () => {
+      try {
+        if (memberId) {
+          // The journal is written before any network write: a question whose
+          // recovery cannot be stored must never start a turn.
+          const journal = existing ?? createAgentIntent(memberId, sentQuestion, sendScope);
+          if (!saveAgentIntent(journal)) { pendingRef.current = false; setStorageBlocked(true); return; }
+          intentRef.current = journal;
+        }
+        // The first question of a new conversation creates the durable session;
+        // a retried question reuses the session recorded in its journal.
+        let sessionId = intentRef.current?.conversationId ?? sessionIdRef.current;
+        if (!sessionId) sessionId = await createAgentSession();
+        if (!alive.current || !pendingRef.current) return;
+        if (memberId && intentRef.current && intentRef.current.conversationId !== sessionId) {
+          // Upgrade the journal once the session exists so a lost receipt is
+          // retried against the same session instead of creating a second one.
+          const withSession = { ...intentRef.current, conversationId: sessionId };
+          if (!saveAgentIntent(withSession)) { pendingRef.current = false; setStorageBlocked(true); return; }
+          intentRef.current = withSession;
+        }
+        sessionIdRef.current = sessionId;
+        const request = controllerRef.current!.request(sessionId, sentQuestion, sendScope, setStage);
+        generation = request.generation;
+        const { answer } = await request.promise;
+        if (!controllerRef.current?.isCurrent(request.generation)) return;
         pendingRef.current = false;
-        if (memberId && intent && !clearAgentIntent(memberId, intent.key)) { setStorageBlocked(true); return; }
+        if (memberId && intentRef.current && !clearAgentIntent(memberId, intentRef.current.key)) { setStorageBlocked(true); return; }
         intentRef.current = null;
-        if (intent) {scopeRef.current = intent.scope; setScope(intent.scope);}
+        // Remember the verified session for reload recovery. This is best-effort:
+        // a blocked store must not turn a confirmed answer into a failure.
+        if (memberId) void saveAgentSession({ version: 1, memberId, sessionId: answer.sessionId, scope: sendScope });
+        scopeRef.current = sendScope; setScope(sendScope);
         setRecovery("ready");
-        conversationIdRef.current = answer.conversationId;
+        sessionIdRef.current = answer.sessionId;
         setState(answer.insufficientEvidence
-          ? { kind: "refused", citations: answer.citations, conversationId: answer.conversationId, suggestions: answer.suggestions }
-          : { kind: "ready", answer: answer.answer, confidence: answer.confidence, citations: answer.citations, conflicts: answer.conflicts, conversationId: answer.conversationId });
-      }
-    }).catch((error: unknown) => {
-      if (controllerRef.current?.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) {
+          ? { kind: "refused", citations: answer.citations, conversationId: answer.sessionId, suggestions: answer.suggestions }
+          : { kind: "ready", answer: answer.answer, confidence: answer.confidence, citations: answer.citations, conflicts: answer.conflicts, conversationId: answer.sessionId });
+      } catch (error) {
+        if (!alive.current || (generation !== undefined && !controllerRef.current?.isCurrent(generation))) return;
+        if (error instanceof DOMException && error.name === "AbortError") return;
         pendingRef.current = false;
-        if (intent) setUnconfirmed(true);
+        if (intentRef.current) setUnconfirmed(true);
         // A quota deferral or a degraded AI backend is a server answer about the
         // request, so it is never shown as a generic transport error.
         const reason = agentUnavailableReason(error);
@@ -1349,13 +1390,13 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
           ? { kind: "unavailable", reason, code: error instanceof ApiRequestError ? error.code : "AGENT_UNAVAILABLE" }
           : { kind: "error", message: frontendText(locale, "COMMON_ANSWER_UNAVAILABLE") });
       }
-    });
+    })();
   };
   const cancel = () => {
     if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming() || !pendingRef.current) return;
-    controllerRef.current?.cancel(conversationIdRef.current);
-    // A delayed conversation-level cancellation must not target a subsequent turn.
-    conversationIdRef.current = undefined;
+    // The controller terminates exactly the turn the stream reported before it
+    // aborted, so a stopped request cannot leave an active turn behind.
+    controllerRef.current?.cancel();
     pendingRef.current = false;
     if (memberId && !clearAgentIntent(memberId, intentRef.current?.key)) { setStorageBlocked(true); return; }
     intentRef.current = null; setUnconfirmed(false); setRecovery("ready");
@@ -1365,71 +1406,43 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     if (!alive.current || questionDraft.isConfirming() || locked() || recovery !== "ready") {onSettled(); return;}
     writeWorkspaceHistory("push", `/agent${agentScopeSearch(nextScope)}`, () => {
       onCommit();
-      controllerRef.current?.cancel(); conversationIdRef.current = undefined;
+      controllerRef.current?.cancel();
+      if (memberId) clearAgentSession(memberId);
+      sessionIdRef.current = undefined;
       scopeRef.current = nextScope; setScope(nextScope); setHistory([]); questionDraft.checkpoint({question: ""}); questionBaseline.current = ""; questionDraft.reset(); setLastQuestion("");
       setState({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
     }, onSettled);
   };
   const abandon = () => {
-    if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming() || feedbackLock.current !== null || pendingRef.current) return;
-    if (memberId && !clearAgentIntent(memberId)) { setStorageBlocked(true); return; }
-    controllerRef.current?.cancel(); intentRef.current = null; conversationIdRef.current = undefined;
+    if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming() || pendingRef.current) return;
+    if (memberId) {
+      if (!clearAgentIntent(memberId)) { setStorageBlocked(true); return; }
+      clearAgentSession(memberId);
+    }
+    controllerRef.current?.cancel(); intentRef.current = null; sessionIdRef.current = undefined;
     setStorageBlocked(false); setUnconfirmed(false); setRecovery("ready");
-    scopeRef.current = initialScope ?? { kind: "all" }; setScope(scopeRef.current); setHistory([]); questionDraft.checkpoint({question: ""}); questionBaseline.current = ""; questionDraft.reset(); setLastQuestion("");
+    scopeRef.current = initialScopeRef.current; setScope(scopeRef.current); setHistory([]); questionDraft.checkpoint({question: ""}); questionBaseline.current = ""; questionDraft.reset(); setLastQuestion("");
     setState({ kind: "cancelled" });
-  };
-  const retryFeedback = () => {
-    const intent = feedbackIntent;
-    if (!alive.current || !memberId || !intent) return;
-    feedbackLock.current = intent.conversationId; setFeedbackBlocked(true); setFeedbackNotice(undefined);
-    void submitAgentFeedback(intent.conversationId, intent.rating, intent.citationIds).then(() => {
-      if (!alive.current || feedbackLock.current !== intent.conversationId) return;
-      if (!clearAgentFeedback(memberId, intent)) { setFeedbackNotice(frontendText(locale, "AGENT_FEEDBACK_RECORD_STUCK")); return; }
-      feedbackLock.current = null; setFeedbackBlocked(false); setFeedbackIntent(null);
-    }).catch(() => { if (alive.current) setFeedbackNotice(frontendText(locale, "AGENT_FEEDBACK_UNKNOWN")); });
-  };
-  const discardFeedback = () => {
-    if (!memberId || !feedbackRecordBlocked || !discardBlockedAgentFeedback(memberId)) return;
-    setFeedbackRecordBlocked(false); setFeedbackBlocked(false); setFeedbackNotice(undefined);
   };
   const discardComposer = () => {
     if (!memberId || !composerBlocked || !discardBlockedAgentComposerDraft(memberId)) return;
     setComposerBlocked(false); setComposerNotice(undefined);
-  };
-  const feedbackAdmission = {
-    begin: (id: string) => {
-      if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming()
-        || pendingRef.current || intentRef.current !== null || storageBlocked || unconfirmed || recovery !== "ready"
-        || (memberId && loadAgentIntent(memberId).kind !== "empty")
-        || conversationIdRef.current !== id || (state.kind !== "ready" && state.kind !== "refused") || state.conversationId !== id
-        || (feedbackLock.current !== null && feedbackLock.current !== id)) return false;
-      feedbackLock.current = id; setFeedbackBlocked(true); return true;
-    },
-    settled: (id: string) => {
-      if (!alive.current || feedbackLock.current !== id) return;
-      feedbackLock.current = null; setFeedbackBlocked(false);
-    },
   };
   const content = () => {
     if (storageBlocked) return <PageState kind="error" title={frontendText(locale, "AGENT_INTENT_STORAGE_BLOCKED")} description={frontendText(locale, "AGENT_INTENT_STORAGE_DETAIL")}><Button onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
     if (unconfirmed && intentRef.current) return <div data-agent-unavailable={state.kind === "unavailable" ? state.reason : undefined}><PageState kind="degraded" title={frontendText(locale, "AGENT_INTENT_UNKNOWN")} description={frontendText(locale, "AGENT_INTENT_UNKNOWN_DETAIL")}><p className="whitespace-pre-wrap">{intentRef.current.question}</p><p><code>{JSON.stringify(intentRef.current.scope)}</code></p>{state.kind === "unavailable" && <p>{frontendText(locale, state.reason === "quota" ? "AGENT_UNAVAILABLE_QUOTA" : "AGENT_UNAVAILABLE_DEGRADED")}</p>}<Button onClick={() => submit(intentRef.current!.question)}>{frontendText(locale, "AGENT_INTENT_RETRY")}</Button><Button variant="outline" onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState></div>;
     if (recovery === "loading" && state.kind !== "loading") return <PageState kind="loading" title={frontendText(locale, "AGENT_RESTORING")} />;
     if (recovery === "error") return <PageState kind="error" title={frontendText(locale, "AGENT_RESTORE_FAILED")} description={frontendText(locale, "AGENT_RESTORE_FAILED_DETAIL")}><Button onClick={() => setRecoveryVersion((value) => value + 1)}>{frontendText(locale, "AGENT_RETRY")}</Button><a className="ml-4" href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
-    const visibleConversation = state.kind === "ready" || state.kind === "refused" ? state.conversationId : undefined;
     return <div className="flex flex-col gap-6 lg:h-full lg:min-h-0">
       {composerBlocked && <div role="alert" data-agent-composer-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "AGENT_COMPOSER_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardComposer}>{frontendText(locale, "AGENT_COMPOSER_RECORD_DISCARD")}</Button></div>}
       {composerNotice && <p role="alert">{composerNotice}</p>}
-      {feedbackRecordBlocked && <div role="alert" data-agent-feedback-record-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "AGENT_FEEDBACK_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RECORD_DISCARD")}</Button></div>}
-      {feedbackIntent && visibleConversation !== feedbackIntent.conversationId && <div role="alert" data-agent-feedback-unconfirmed className="space-y-2 rounded-md border p-4"><p>{feedbackNotice ?? frontendText(locale, "AGENT_FEEDBACK_UNKNOWN")}</p><Button type="button" variant="outline" onClick={retryFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RETRY")}</Button></div>}
       {history.length > 0 && <AgentTranscript locale={locale} messages={history} />}
-      {conversationIdRef.current && <a className="underline" href={`/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}`}>{frontendText(locale, "AGENT_RESTORE_LINK")}</a>}
-      <AgentPage locale={locale} memberId={memberId} scope={scope} state={state} stage={stage} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} isWriteBlocked={locked} sourceDraft={sourceDraft} feedbackAdmission={feedbackAdmission} feedbackBlocked={feedbackBlocked} />
-      <AgentHistoryList locale={locale} />
+      {sessionIdRef.current && <a className="underline" href={`/agent?conversationId=${encodeURIComponent(sessionIdRef.current)}`}>{frontendText(locale, "AGENT_RESTORE_LINK")}</a>}
+      <AgentPage locale={locale} scope={scope} state={state} stage={stage} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} isWriteBlocked={locked} sourceDraft={sourceDraft} />
     </div>;
   };
   return <><div className="flex flex-col lg:h-full lg:min-h-0" inert={questionDraft.confirming || sourceDraft.confirming ? true : undefined}>{content()}</div>{questionDraft.confirmation}{sourceDraft.confirmation}</>;
 }
-
 export function SubmitRoute({ locale, memberId }: { locale: LocaleRuntime; memberId: string }) {
   return <MemberSubmitForm key={memberId} locale={locale} memberId={memberId} />;
 }

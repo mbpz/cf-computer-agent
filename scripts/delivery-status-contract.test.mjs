@@ -851,7 +851,7 @@ function assertReadmeContract(readme, rows) {
   assert.match(maturity, /^- Shared numbered pagination is (?:fully )?localized in English and Simplified Chinese\./mu);
   assert.match(maturity, /^- These collaboration routes are locally `ready`; that means an executable API\/UI vertical exists, not that it has been merged to `main`, pushed, deployed, remotely migrated, production-smoked, or accepted in a signed browser\.$/mu);
   assert.match(maturity, /^- \*\*Current-main release and acceptance are determined only by the \[delivery status ledger\]\(\.\/docs\/product\/delivery-status-ledger\.md\)\.\*\*/mu);
-  assert.match(product, /GitHub OAuth provides a primary, verified identity; `ALLOWED_MEMBER_EMAILS` authorizes login before any D1 member lookup\. D1 then governs the member record, hashed session, role, active\/disabled status, and capability\./u);
+  assert.match(product, /GitHub OAuth provides a primary, verified identity; `ALLOWED_MEMBER_EMAILS` authorizes (?:GitHub )?login before any D1 member lookup\. D1 then governs the member record, hashed session, role, active\/disabled status, and capability\./u);
   assert.match(api, /^- Tasks: `\/api\/tasks\*` for active members with `tasks:use`; member isolation, idempotent writes, and numbered pagination\.$/mu);
   assert.match(api, /^- Notifications: `\/api\/notifications\*` for the authenticated recipient only;/mu);
   assert.match(api, /^- Contextual messages: `\/api\/discussions\*` for currently authorized task or knowledge contexts;/mu);

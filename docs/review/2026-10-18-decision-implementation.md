@@ -1,0 +1,82 @@
+# 三项决策的实现记录（2026-10-18）
+
+依据用户对全功能评审的三条决定实施，均为**本地实现**，不含生产迁移、部署或真实浏览器验收。
+
+## 决策与结果
+
+| # | 决定 | 结果 |
+| --- | --- | --- |
+| 1 | 不接受开放注册：注册需邀请码；每位成员只能分享一个邀请码、一次性使用；管理员可无限生成；邀请码绑定新成员；重置密码需校验邀请码；管理员在菜单管理查看所有邀请码 | **已实现**（迁移 `0079`、后端服务/路由、登录/设置/菜单管理前端、测试与文档） |
+| 2 | `/agent` 改为真正调用 AgentSession | **已实现**（会话创建/恢复、接地检索 + 严格引用、turn 持久化/终止、前端会话生命周期） |
+| 3 | 补审核元数据编辑 UI | **已实现**（标题/Space/Collection/Tag/可见性 + 扩权确认 + 意图重放） |
+
+## 1. 邀请码注册与绑定式重置
+
+**数据**：`migrations/0079_invitations.sql` 新增 `invitations`（`kind=admin|member`、`owner_member_id`、`bound_member_id`、`status=unused|used`、`created_by_member_id`、时间戳）；唯一 `code`、唯一 `bound_member_id`、每成员唯一 `owner_member_id` 部分索引。
+
+**语义**：
+- 注册必须携带未使用邀请码；成员插入与码占用在同一 D1 batch（`INSERT ... SELECT WHERE EXISTS(unused)` + `UPDATE ... WHERE status='unused'`，两边 `changes=1`），并发同码只成功一个，失败不消耗码。
+- 每位成员首次访问“我的邀请码”时创建一个 `kind=member` 码；终身只能有一个，使用后只读。
+- 管理员 `POST /api/admin/invitations` 可无限生成 `kind=admin` 码（每次 1–20），`GET` 分页查看全部码、分享者与绑定成员。
+- 重置必须是 `active` 成员、存在绑定码且提供的码常量时间匹配；成功覆盖密码、清锁定、删全部会话、写审计；未知/错码/无绑定/禁用统一失败。
+- 码以明文存储（管理员/成员需要读取与复制），日志与审计不写码。
+
+**主要文件**：`src/invitations/*`、`src/routes/{auth,invitations,admin-invitations}.ts`、`src/password/{service,repository}.ts`、`src/app.ts`；`frontend/lib/invitations-data.ts`、`frontend/pages/login-page.tsx`、`frontend/lib/password-auth-data.ts`、`frontend/components/settings/my-invitation-card.tsx`、`frontend/pages/settings-page.tsx`、`frontend/components/admin/invitation-admin-panel.tsx`、`frontend/pages/admin/menus-page.tsx`、`frontend/lib/i18n.ts`。
+
+**文档**：新设计 `docs/superpowers/specs/2026-10-18-invitation-code-registration-design.md`；旧开放注册设计与证据已标注被取代；README、生产手册、设置手册、账本 IDN-007/ADM-007 同步。
+
+**验证**：`test/worker/password-auth.test.ts` + `test/worker/invitation-auth.test.ts` 22/22；`test/unit/invitations.test.ts` 11/11；前端邀请码定向 28 通过；`verify-m1-migrations --files` = 79。
+
+## 2. `/agent` 接入 AgentSession
+
+- `POST /api/agent/sessions/:id/stream` 改为：`startTurn` → 读取历史 → `searchInternal(scope)` → `CitedAnswerService.answer` → 生成后再次授权 citation → `completeTurn`；错误/断流 `terminateTurn`。
+- 新增 owner-only `POST /turns/:turnId/terminate`；SSE 帧与知识问答一致，终结 body 增加 `sessionId`/`turnId`。
+- 前端改为创建/恢复 AgentSession、加载消息、终止 turn；删除旧 chat conversation feedback/history 依赖；member-scoped localStorage 恢复会话。
+- 工具路由保持 allowlist；无发布/删除/改权限/网络/Shell 工具。
+
+**验证**：`test/worker/agent-session.test.ts` 13/13；前端 agent 8 文件 67 通过；`npm run typecheck` 通过。
+
+## 3. 审核元数据编辑 UI
+
+- 审核详情新增“发布信息”表单：标题、Space/Collection（成员目标加载器）、Tag 多选（按 Space 的管理标签加载，保留提交者 tags）、可见性。
+- `admin_only → shared` 必须勾选 `data-review-visibility-expansion`；未确认时 Publish 禁用；确认后 payload 带 `visibilityReasonCode:"admin_visibility_expansion"`，非扩权不带。
+- 编辑值通过 `publishOverrides` 进入 `prepareReviewDecision`，并纳入 intent；未知结果重试原样重放编辑后的 body。
+- 选项加载失败就地错误 + 重试，页头常驻；仅共享 UI 原语。
+
+**验证**：审核定向 12 文件 210 通过；`typecheck:frontend`、legacy audit 通过。
+
+## 门禁与文档一致性
+
+- 迁移台账 78→79：`scripts/verify-m1-migrations.mjs` 与 `scripts/m1-release-contract.test.mjs` 已更新哈希/计数。
+- 领域审计：修复 `7ef7055a` 遗留的 artifacts DELETE 漏登记；登记新增邀请码/Agent 操作；删除已移除的 chat scope/cancel/feedback 声明；重新生成 `docs/operations/evidence/2026-09-26-workbench-functional-domain-audit.md`；`audit:workbench-domain` 及 31 项领域审计测试通过。
+- 缺口矩阵：新增 4 条 domain 缺口（邀请码生成、Studio 产物删除、Agent 会话创建/终止）、移除 2 条已不存在的 chat 缺口；同步 R3/R6 阶段计数与汇总（83 gap：25 P0 / 57 P1 / 1 P2）。
+- 前端操作清单重新生成（477 文件 / 1783 候选 / 173 未归属），并更新 `frontend-operation-unassigned-review.md`（新增 11 条 feedback-widget 未挂载候选、App 坐标与指纹）。
+- README/账本/手册：invitation-only 恢复；密码重置规则改为绑定邀请码；`ALLOWED_MEMBER_EMAILS` 仅约束 GitHub 登录、撤权用禁用成员。
+
+## 全量门禁
+
+<!-- GATE-RESULT -->
+| 阶段 | 结果 |
+| --- | --- |
+| `npm run check` | **退出码 0** |
+| `test:smoke` | 88/88 |
+| `test:i18n` | 14/14 |
+| `verify:delivery-status` | 30/30 |
+| `test:unit` | **410 文件 / 5606 用例通过** |
+| `test:worker` | **79 文件 / 1321 用例通过** |
+| `verify:landing` | 100/100 |
+| `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1728.12 KiB / gzip 327.58 KiB） |
+| `audit:workbench-domain` / 其 31 项测试 | 通过（证据已重新生成） |
+| `verify:workbench-maturity` | 15/15 |
+
+说明：Workerd 运行中出现 `wrangler` 调试日志写入用户目录的 `EPERM` 告警（沙箱限制），不影响命令退出码与测试结果。
+<!-- GATE-RESULT -->
+
+## 剩余风险 / 未覆盖
+
+- 未应用远程 `0078`/`0079`，未部署；生产 schema 仍是旧版本，不能声称已发布。
+- 未做真实浏览器/移动键盘/密码管理器/深色主题/双账号验收。
+- 邀请码明文与管理员可见是产品要求，但需在生产复核管理员权限与日志/截图泄露面。
+- 重置接口未新增独立 IP 限流；绑定码为 16 位随机，发布前按 OPS-009 复核免费层 CPU/暴力面。
+- Agent 接地回合不自动调用工具带；工具仍由 API 暴露。旧 chat conversation 反馈面已从 `/agent` 移除，后端端点保留。
+- 审核元数据编辑未单独接离页守卫（按本次需求未要求）。

@@ -1,4 +1,3 @@
-import { AgentFeedback, type AgentFeedbackAdmission } from "../components/agent/agent-feedback";
 import { useEffect, useState } from "react";
 import type { useCreateDraft } from "../lib/use-create-draft";
 import { AnswerPanel } from "../components/agent/answer-panel";
@@ -63,7 +62,7 @@ function useElapsedSeconds() {
   return seconds;
 }
 
-export function AgentPage({ scope, state, locale, question = "", onQuestionChange, onSubmit, onCancel, onRetry, onStartScope, isWriteBlocked, sourceDraft, feedbackAdmission, feedbackBlocked = false, memberId, stage }: { scope: string | AgentScope; state: AgentTurnState; stage?: ChatStage | null; locale?: LocaleRuntime; question?: string; onQuestionChange?: (question: string) => void; onSubmit?: () => void; onCancel?: () => void; onRetry?: () => void; sourceDraft?: SourceDraft; feedbackAdmission?: AgentFeedbackAdmission; feedbackBlocked?: boolean; memberId?: string; isWriteBlocked?: () => boolean; onStartScope?: (scope: AgentScope, onCommit: () => void, onSettled: () => void) => void }) {
+export function AgentPage({ scope, state, locale, question = "", onQuestionChange, onSubmit, onCancel, onRetry, onStartScope, isWriteBlocked, sourceDraft, stage }: { scope: string | AgentScope; state: AgentTurnState; stage?: ChatStage | null; locale?: LocaleRuntime; question?: string; onQuestionChange?: (question: string) => void; onSubmit?: () => void; onCancel?: () => void; onRetry?: () => void; sourceDraft?: SourceDraft; isWriteBlocked?: () => boolean; onStartScope?: (scope: AgentScope, onCommit: () => void, onSettled: () => void) => void }) {
   const scopeLabel = typeof scope === "string" ? scope || "all" : scope.kind;
   // Question, scope and low confidence share one clampable line; the confidence
   // field only appears when the answer reports low confidence.
@@ -91,15 +90,15 @@ export function AgentPage({ scope, state, locale, question = "", onQuestionChang
         onSubmit={() => onSubmit?.()}
         onStop={onCancel}
         loading={state.kind === "loading"}
-        disabled={state.kind === "loading" || feedbackBlocked}
+        disabled={state.kind === "loading"}
         placeholder={frontendText(locale, "AGENT_QUESTION_PLACEHOLDER")}
         aria-label={frontendText(locale, "AGENT_QUESTION_LABEL")}
         autoComplete="off"
         minRows={1}
       />
     </div>
-    {onStartScope && sourceDraft && <AgentSourceControls key={JSON.stringify(scope)} draft={sourceDraft} locale={locale} disabled={state.kind === "loading" || feedbackBlocked} isWriteBlocked={isWriteBlocked} onStartScope={onStartScope} />}
-    {state.kind === "loading" ? <div><div data-page-state="loading" aria-busy="true"><StreamingResponse status="streaming" announce={false}><AgentStageProgress locale={locale} stage={stage ?? null} /></StreamingResponse></div></div> : state.kind === "cancelled" ? <PageState kind="degraded" title={frontendText(locale, "AGENT_STOPPED_WAITING")} description={frontendText(locale, "AGENT_STOPPED_DETAIL")} /> : state.kind === "unavailable" ? <div data-agent-unavailable={state.reason}><PageState kind="degraded" title={frontendText(locale, state.reason === "quota" ? "AGENT_UNAVAILABLE_QUOTA" : "AGENT_UNAVAILABLE_DEGRADED")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState></div> : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_ANSWER_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState> : <>{state.kind === "refused" ? <AgentRefusal locale={locale} state={state} onRetry={onRetry} /> : <AnswerPanel locale={locale} state={state} />}{state.conversationId && <AgentFeedback admission={feedbackAdmission} memberId={memberId} key={state.conversationId} locale={locale} conversationId={state.conversationId} citationIds={state.citations.map((citation) => citation.id)} />}</>}
+    {onStartScope && sourceDraft && <AgentSourceControls key={JSON.stringify(scope)} draft={sourceDraft} locale={locale} disabled={state.kind === "loading"} isWriteBlocked={isWriteBlocked} onStartScope={onStartScope} />}
+    {state.kind === "loading" ? <div><div data-page-state="loading" aria-busy="true"><StreamingResponse status="streaming" announce={false}><AgentStageProgress locale={locale} stage={stage ?? null} /></StreamingResponse></div></div> : state.kind === "cancelled" ? <PageState kind="degraded" title={frontendText(locale, "AGENT_STOPPED_WAITING")} description={frontendText(locale, "AGENT_STOPPED_DETAIL")} /> : state.kind === "unavailable" ? <div data-agent-unavailable={state.reason}><PageState kind="degraded" title={frontendText(locale, state.reason === "quota" ? "AGENT_UNAVAILABLE_QUOTA" : "AGENT_UNAVAILABLE_DEGRADED")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState></div> : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_ANSWER_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "AGENT_RETRY")}</Button></PageState> : <>{state.kind === "refused" ? <AgentRefusal locale={locale} state={state} onRetry={onRetry} /> : <AnswerPanel locale={locale} state={state} />}</>}
   </section>;
 }
 

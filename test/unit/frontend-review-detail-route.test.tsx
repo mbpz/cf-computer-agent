@@ -19,7 +19,16 @@ describe("review detail read recovery", () => {
   const locale = createLocaleRuntime({ navigatorLanguage: "en" });
   beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions/sub-1" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
-  const withComments = (requester: Fetcher): Fetcher => (input, init) => String(input).endsWith("/comments") ? Promise.resolve(json({ comments: [] })) : requester(input, init);
+  const withComments = (requester: Fetcher): Fetcher => (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/comments")) return Promise.resolve(json({ comments: [] }));
+    // The publication-metadata options load beside the detail read; answer them
+    // here so the read counters these suites assert on only see detail requests.
+    if (/^\/api\/spaces\/[^/]+\/collections/u.test(url)) return Promise.resolve(json({ items: [] }));
+    if (url.startsWith("/api/spaces")) return Promise.resolve(json({ items: [{ id: "default", slug: "default", name: "Default", kind: "shared", status: "active", readOnly: false, position: 0 }] }));
+    if (url.startsWith("/api/admin/tags")) return Promise.resolve(json({ items: [], nextCursor: undefined }));
+    return requester(input, init);
+  };
   async function render(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} locale={locale} requester={requester} />)); await flush(); }
   async function renderMember(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} memberId="member-a" locale={locale} requester={requester} />)); await flush(); }
   function button(label: string) { const found = [...document.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(found).toBeTruthy(); return found; }

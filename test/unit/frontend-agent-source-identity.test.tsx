@@ -12,6 +12,9 @@ vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: ob
 vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (text: string) => <div data-test-markdown>{text}</div> }));
 const { Window } = await import("happy-dom");
 
+const SESSION = "abcdefghijklmnopqrstuvwx";
+const TURN = "8f14e45f-ceea-4670-a1c6-8c1b2d3e4f50";
+
 const source: { citationId: string; knowledgeItemId: string; title?: string; spaceId?: string } = {
   citationId: "cite-1",
   knowledgeItemId: "knowledge-a",
@@ -67,16 +70,17 @@ describe("agent source identity read", () => {
   });
 
   async function ask() {
-    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const key = new Headers(init?.headers).get("idempotency-key");
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/agent/sessions") return Response.json({ session: { id: SESSION } });
       return new Response(`data: ${JSON.stringify({ stage: "answer", body: {
         answer: "Grounded answer",
-        conversationId: "conv-1",
         evidenceConfidence: 0.9,
         citations: ["cite-1"],
         sources: [{ ...source }],
-        idempotencyKey: key,
-      } })}\n\n`, { headers: { "content-type": "text/event-stream" } });
+        sessionId: SESSION,
+        conversationId: SESSION,
+        turnId: TURN,
+      } })}\n\n`, { headers: { "content-type": "text/event-stream", "x-agent-turn-id": TURN } });
     });
     await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" />));
     await flush();

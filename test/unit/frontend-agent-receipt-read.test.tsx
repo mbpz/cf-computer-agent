@@ -13,6 +13,9 @@ const { Window } = await import("happy-dom");
 
 vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (text: string) => <div data-test-markdown>{text}</div> }));
 
+const SESSION = "abcdefghijklmnopqrstuvwx";
+const TURN = "8f14e45f-ceea-4670-a1c6-8c1b2d3e4f50";
+
 describe("agent receipt read", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   const language = createLocaleRuntime({ navigatorLanguage: "en" });
@@ -20,9 +23,9 @@ describe("agent receipt read", () => {
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   it("does not show a missing confidence as low confidence", async () => {
-    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const key = new Headers(init?.headers).get("idempotency-key");
-      return Response.json({ answer: "Grounded answer", conversationId: "conv-1", citations: [], sources: [], idempotencyKey: key });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/agent/sessions") return Response.json({ session: { id: SESSION } });
+      return Response.json({ answer: "Grounded answer", conversationId: SESSION, citations: [], sources: [] });
     });
     await mount();
     await question("Where is the guide?");
@@ -33,9 +36,9 @@ describe("agent receipt read", () => {
   });
 
   it("shows low confidence when the receipt includes it", async () => {
-    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const key = new Headers(init?.headers).get("idempotency-key");
-      return new Response(`data: ${JSON.stringify({ stage: "answer", body: { answer: "Grounded answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], idempotencyKey: key } })}\n\n`, { headers: { "content-type": "text/event-stream" } });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/agent/sessions") return Response.json({ session: { id: SESSION } });
+      return new Response(`data: ${JSON.stringify({ stage: "answer", body: { answer: "Grounded answer", evidenceConfidence: 0.3, citations: [], sources: [], sessionId: SESSION, conversationId: SESSION, turnId: TURN } })}\n\n`, { headers: { "content-type": "text/event-stream", "x-agent-turn-id": TURN } });
     });
     await mount();
     await question("Where is the guide?");

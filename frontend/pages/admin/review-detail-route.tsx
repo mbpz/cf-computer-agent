@@ -3,12 +3,14 @@ import { ReviewDraftProvider, useReviewDrafts } from "../../components/review/re
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { ApiRequestError, type Fetcher } from "../../lib/api";
-import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewDetailData, type ReviewOperation, type ReviewNoteInput } from "../../components/review/review-detail-data";
+import { loadReviewDetail, prepareReviewDecision, reviewPublishPayload, reviewVisibilityExpansion, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewDetailData, type ReviewOperation, type ReviewNoteInput, type ReviewPublishInput } from "../../components/review/review-detail-data";
 import { ReviewDetailPage, type ReviewDecisionState, type ReviewDetailState } from "./review-detail-page";
+import { ReviewPublishMetadataForm } from "../../components/review/review-publish-metadata-form";
 import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../lib/workspace-location";
 import { createAsyncOwner } from "../../lib/async-owner";
 import { ReviewCommentsPanel } from "../../components/review/review-comments-panel";
 import { ReviewSourcePanel } from "../../components/review/review-source-panel";
+import { reviewDecisionLocked } from "../../components/review/review-decision-controls";
 import { clearReviewDecision, discardBlockedReviewDecision, loadReviewDecision, saveReviewDecision } from "../../lib/review-decision-intent";
 
 export type ReviewDetailRouteState = { kind: "loading" } | { kind: "ready"; data: ReviewDetailData } | { kind: "error" | "forbidden" | "not-found"; message: string };
@@ -28,6 +30,11 @@ function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; 
   const [recordNotice, setRecordNotice] = useState<string>();
   const [state, setState] = useState<ReviewDetailRouteState>({ kind: "loading" });
   const [decisionState, setDecisionState] = useState<ReviewDecisionState>(stored.kind === "ready" ? { kind: "error", action: stored.intent.action, recovery: "retry" } : { kind: "idle" });
+  // The reviewer's live publication metadata. It starts from the submitted request
+  // and is never overwritten by a later read, so a reload after a failed write
+  // cannot silently discard an edit the reviewer is holding.
+  const [publishDraft, setPublishDraft] = useState<ReviewPublishInput | null>(null);
+  const [expansionConfirmed, setExpansionConfirmed] = useState(false);
   const owner = useMemo(() => createAsyncOwner(), []);
   const readRef = useRef<AbortController | null>(null);
   const decisionRef = useRef<object | null>(null);
@@ -96,6 +103,12 @@ function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; 
     };
   }, [owner, read]);
 
+  // Seed the editable metadata once this submission is readable. Later reads keep
+  // the reviewer's edit; requestedVisibility still comes from the live read.
+  useEffect(() => {
+    if (state.kind === "ready" && publishDraft === null) setPublishDraft(state.data.publish);
+  }, [state, publishDraft]);
+
   const send = async (operation: ReviewOperation, previouslyUncertain = false) => {
     if (readRef.current || decisionRef.current || state.kind !== "ready" || state.data.detail.id !== operation.id) return;
     const { action } = operation;
@@ -141,10 +154,15 @@ function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; 
     if (!memberId || !blockedRef.current || !discardBlockedReviewDecision(memberId, id)) return;
     blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
   }
-  const decide = (action: ReviewDecision, details?: ReviewNoteInput) => {
+  const decide = (action: ReviewDecision, details?: ReviewNoteInput, publishOverrides?: ReviewPublishInput) => {
     if (blockedRef.current || readRef.current || decisionRef.current || operationRef.current || state.kind !== "ready" || state.data.detail.status !== "review_pending") return;
     try {
-      const operation = prepareReviewDecision(id, action, state.data.publish, details, state.data.version);
+      const draft = publishOverrides ?? publishDraft ?? state.data.publish;
+      // A visible expansion must never publish on an unconfirmed form state, even
+      // if a stale confirmation dialog was opened before the visibility changed.
+      if (action === "publish" && reviewVisibilityExpansion(state.data.requestedVisibility, draft.visibility) && !expansionConfirmed) return;
+      const publish = action === "publish" ? reviewPublishPayload(state.data.requestedVisibility, draft) : state.data.publish;
+      const operation = prepareReviewDecision(id, action, publish, details, state.data.version);
       if (memberId && !saveReviewDecision(memberId, id, operation)) {
         setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_NOT_RECORDED")); return;
       }
@@ -154,7 +172,19 @@ function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; 
   };
 
   const pageState: ReviewDetailState = state.kind === "ready" ? { kind: "ready", detail: state.data.detail } : state;
+  const metadataDisabled = Boolean(recordBlocked) || Boolean(operationRef.current) || reviewDecisionLocked(decisionState);
+  const publishDraftValue = state.kind === "ready" ? publishDraft : null;
+  const requestedVisibility = state.kind === "ready" ? state.data.requestedVisibility : "shared";
+  const publishPayload = publishDraftValue ? reviewPublishPayload(requestedVisibility, publishDraftValue) : undefined;
+  const publishBlocked = publishDraftValue !== null && reviewVisibilityExpansion(requestedVisibility, publishDraftValue.visibility) && !expansionConfirmed;
+  const metadata = state.kind === "ready" && publishDraftValue !== null
+    ? <ReviewPublishMetadataForm key={state.data.detail.id} value={publishDraftValue} requestedVisibility={requestedVisibility}
+        expansionConfirmed={expansionConfirmed} onExpansionChange={setExpansionConfirmed}
+        onChange={(next) => { setPublishDraft(next); if (!reviewVisibilityExpansion(requestedVisibility, next.visibility)) setExpansionConfirmed(false); }}
+        disabled={metadataDisabled} locale={locale} requester={requester} />
+    : undefined;
   return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState} unresolvedDecision={Boolean(operationRef.current) || commentsOwner.unresolved} retainedDraft={Boolean(drafts.get(id)) || commentsOwner.hasDraft}
+    metadata={metadata} publishPayload={publishPayload} publishBlocked={publishBlocked}
     onRetry={() => { void read(); }} onRetryDecision={() => { if (decisionState.kind === "error" && decisionState.recovery === "retry" && operationRef.current) void send(operationRef.current, true); }}
     decisionRecordBlocked={recordBlocked} decisionRecordNotice={recordNotice} onDiscardDecisionRecord={discardRecord}
     onDecision={recordBlocked ? undefined : decide} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />}

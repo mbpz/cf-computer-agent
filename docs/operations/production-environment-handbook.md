@@ -36,7 +36,7 @@ D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 n
 | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App 自动生成 | 标识 OAuth App；本身不是密码 |
 | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App 页面生成 | callback 换取 GitHub access token |
 | `BOOTSTRAP_ADMIN_EMAIL` | 人工填写 GitHub primary、verified 邮箱 | 第一个管理员账号；必须包含在 allowlist 中 |
-| `ALLOWED_MEMBER_EMAILS` | 人工填写英文逗号分隔的小写邮箱 | 允许登录的成员白名单 |
+| `ALLOWED_MEMBER_EMAILS` | 人工填写英文逗号分隔的小写邮箱 | 允许 GitHub 登录的成员白名单（密码账户由邀请码创建；撤权用禁用成员） |
 | `AUTOMATION_CLIENT_ID` | 本地随机生成 | 标识自动化客户端；本身不是密码 |
 | `AUTOMATION_SECRET` | 本地 CSPRNG 独立生成 | HMAC-SHA256 请求签名 |
 | `APP_TOKEN` | 本地 CSPRNG 独立生成 | 自动化 Bearer 第二因子及 legacy API 校验 |
@@ -47,7 +47,7 @@ D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 n
 
 禁止把这些值写入仓库、`wrangler.jsonc`、`.dev.vars`、命令参数、URL、日志、截图或聊天。已经公开过的值必须轮换。
 
-邮箱密码登录还需要 `0078_password_auth.sql`：增加密码哈希与登录锁定列，建立 canonical email 唯一索引，并删除旧验证码/邀请表。该迁移只向前兼容；应用前需备份 D1。注册开放，现有邮箱（包括仅 GitHub 成员）不能被注册覆盖；忘记密码使用邮箱 + 新密码直接重置，旧 `code:` 账户也可设置首个密码；不校验邮箱所有权，也没有恢复码。
+邮箱密码登录还需要 `0078_password_auth.sql` 与 `0079_invitations.sql`：前者增加密码哈希与登录锁定列、建立 canonical email 唯一索引并删除旧验证码/邀请表；后者新增邀请码表与一次性绑定。两个迁移都只向前兼容；应用前需备份 D1。密码注册必须使用邀请码：每位成员终身可分享一个码，管理员可无限生成，码使用一次即绑定新成员；忘记密码必须同时提供该成员被绑定的邀请码。`ALLOWED_MEMBER_EMAILS` 只约束 GitHub/微信登录，不是密码账户的撤权通道；撤权必须禁用成员。现有邮箱（包括仅 GitHub 成员）不能被注册覆盖；GitHub/微信专属成员不能设置或重置密码。
 
 ## 3. GitHub OAuth App
 

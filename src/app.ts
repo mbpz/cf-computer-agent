@@ -37,6 +37,8 @@ import { resolvePrincipal, type Principal } from "./identity/principal";
 import { SessionService } from "./identity/session";
 import { PasswordRepository } from "./password/repository";
 import { PasswordAuthService } from "./password/service";
+import { InvitationsRepository } from "./invitations/repository";
+import { InvitationsService } from "./invitations/service";
 import { emitStructuredLog } from "./ops/structured-log";
 import { KnowledgeService } from "./knowledge/service";
 import { createRequestPublishedContent } from "./knowledge/published-content";
@@ -52,8 +54,10 @@ import { routeAdminReviewApi } from "./routes/admin-review";
 import { routeAdminSummaryApi } from "./routes/admin-summary";
 import { routeAdminRolesApi } from "./routes/admin-roles";
 import { routeAdminMenusApi } from "./routes/admin-menus";
+import { routeAdminInvitationsApi } from "./routes/admin-invitations";
 import { routeAgentApi } from "./routes/agent";
 import { clearOAuthCookies, clearWeChatCookie, routeAuth } from "./routes/auth";
+import { routeInvitationsApi } from "./routes/invitations";
 import { routeLibraryApi } from "./routes/library";
 import { routeMemberApi } from "./routes/member";
 import { routeSession } from "./routes/session";
@@ -377,8 +381,11 @@ function createRequestServices(
   );
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   const sessions = new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil, workScope: dependencies.workScope });
+  const invitationRecords = new InvitationsRepository(env.DB);
+  const invitations = new InvitationsService(invitationRecords);
   const passwords = new PasswordAuthService(
     new PasswordRepository(env.DB, audit),
+    invitationRecords,
     dependencies.passwordAuth,
   );
   return {
@@ -413,6 +420,7 @@ function createRequestServices(
     legacyRepository,
     memberRecords,
     members,
+    invitations,
     passwords,
     publication: new PublicationService(publicationRecords, publishedContent.committer, publishedContent.remover),
     publishedContent,
@@ -496,7 +504,18 @@ async function dispatchApiRequest(
   if (session) return session;
   const navigation = await routeNavigationApi(request, url, context, principal, { menus: services.menus });
   if (navigation) return navigation;
-  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions, services.ai, services.agentTools, services.workScope);
+  const invitations = await routeInvitationsApi(request, url, context, principal, { invitations: services.invitations });
+  if (invitations) return invitations;
+  const adminInvitations = await routeAdminInvitationsApi(request, url, context, principal, { invitations: services.invitations });
+  if (adminInvitations) return adminInvitations;
+  const agent = await routeAgentApi(request, url, context, principal, {
+    sessions: services.agentSessions,
+    ai: services.ai,
+    tools: services.agentTools,
+    library: services.library,
+    citedAnswers: services.citedAnswers,
+    workScope: services.workScope,
+  });
   if (agent) return agent;
   const member = await routeMemberApi(request, url, context, principal, services);
   if (member) return member;

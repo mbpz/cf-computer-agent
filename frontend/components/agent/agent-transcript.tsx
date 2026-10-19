@@ -1,6 +1,6 @@
 import { Message, MessageBubble, MessageBubbleContent, MessageContent, MessageFooter, MessageHeader, MessageScroller } from "../agents/message";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
-import type { AgentConversation } from "../../lib/agent-data";
+import type { AgentMessage } from "../../lib/agent-data";
 
 /** The restored conversation, drawn with beUI's message parts: the scroller owns
  * the transcript region and its live log, `Message` owns the per-turn row and
@@ -8,7 +8,7 @@ import type { AgentConversation } from "../../lib/agent-data";
  * has always shown (question / previous answer) and each citation keeps its
  * link, because a restored transcript is a re-read of server-held history and
  * not a new answer. */
-export function AgentTranscript({ messages, locale }: { messages: AgentConversation["messages"]; locale?: LocaleRuntime }) {
+export function AgentTranscript({ messages, locale }: { messages: readonly AgentMessage[]; locale?: LocaleRuntime }) {
   const historyLabel = frontendText(locale, "AGENT_HISTORY");
   return <section aria-label={historyLabel} className="space-y-3">
     <h2>{historyLabel}</h2>
