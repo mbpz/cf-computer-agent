@@ -69,6 +69,13 @@ CREATE INDEX invitations_created_at ON invitations(created_at DESC);
 - `401 PASSWORD_RESET_INVALID`：邮箱未知、成员非 active、没有绑定邀请码、邀请码不匹配、并发条件更新失败统一
 - 成功后覆盖密码、清失败计数/锁定、删除该成员全部会话、写 `member.password_reset` 审计。
 
+### 管理员邀请关系网
+
+`GET /api/admin/invitations/network` → `{ nodes: [...], stats: { members, invited, roots, maxDepth } }`，仅 `member:manage` + admin。
+
+- 每个成员最多一个邀请人，因此关系是森林；`inviterId` 由绑定邀请码推导（成员码 owner / 管理员码 creator），`0080` 回填码标记 `backfilled` 且不产生邀请边（作为根）。
+- 前端使用仓库内置 beUI `motion/file-tree` 表达层级（点击“查看关系网”后按需加载），不引入第三方图库。
+
 ### 成员“我的邀请码”（已认证成员）
 
 `GET /api/invitations/mine` → `200 { boundInvitation: { code, formattedCode, kind, createdAt, usedAt } | null, invitation: { code, formattedCode, status, createdAt, usedAt, bound, boundEmail } | null }`

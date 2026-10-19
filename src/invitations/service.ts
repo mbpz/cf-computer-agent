@@ -14,6 +14,8 @@ import {
   type InvitationFilter,
   type InvitationKind,
   type InvitationListItem,
+  type InvitationNetwork,
+  type InvitationNetworkNode,
   type InvitationPage,
   type BoundMemberInvitation,
   type MemberInvitation,
@@ -121,6 +123,38 @@ export class InvitationsService {
 
   listPage(request: NumberedPageRequest, filter?: InvitationFilter): Promise<InvitationPage> {
     return this.repository.listPage(request, filter);
+  }
+
+  /** The invitation-fission forest: members, their inviter and depth stats. */
+  async network(): Promise<InvitationNetwork> {
+    const nodes = await this.repository.network();
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const children = new Map<string, InvitationNetworkNode[]>();
+    const roots: InvitationNetworkNode[] = [];
+    for (const node of nodes) {
+      const inviter = node.inviterId !== null ? byId.get(node.inviterId) : undefined;
+      // Missing inviters (deleted/FK anomaly) and self-links are roots, never a cycle.
+      if (!inviter || inviter.id === node.id) roots.push(node);
+      else children.set(inviter.id, [...(children.get(inviter.id) ?? []), node]);
+    }
+    const depthOf = new Map<string, number>();
+    const visit = (node: InvitationNetworkNode, depth: number): void => {
+      if (depthOf.has(node.id)) return;
+      depthOf.set(node.id, depth);
+      for (const child of children.get(node.id) ?? []) visit(child, depth + 1);
+    };
+    for (const root of roots) visit(root, 0);
+    // Any node not reached from a root (a cycle in malformed data) contributes depth 0.
+    for (const node of nodes) if (!depthOf.has(node.id)) visit(node, 0);
+    return {
+      nodes,
+      stats: {
+        members: nodes.length,
+        invited: nodes.filter((node) => node.inviterId !== null && byId.has(node.inviterId) && node.inviterId !== node.id).length,
+        roots: roots.length,
+        maxDepth: Math.max(0, ...depthOf.values()),
+      },
+    };
   }
 
   private async insertAdminInvitation(adminMemberId: string, createdAt: string): Promise<Invitation> {

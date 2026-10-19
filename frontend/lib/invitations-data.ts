@@ -64,6 +64,28 @@ export interface AdminInvitation {
 
 export type AdminInvitationsPage = FrontendNumberedPage<AdminInvitation>;
 
+export interface InvitationNetworkNode {
+  readonly id: string;
+  readonly email: string;
+  readonly role: "admin" | "contributor";
+  readonly status: "active" | "disabled";
+  readonly createdAt: string;
+  readonly inviterId: string | null;
+  readonly invitation: {
+    readonly id: string;
+    readonly code: string;
+    readonly formattedCode: string;
+    readonly kind: InvitationKind;
+    readonly createdAt: string;
+    readonly backfilled: boolean;
+  } | null;
+}
+
+export interface InvitationNetwork {
+  readonly nodes: readonly InvitationNetworkNode[];
+  readonly stats: { readonly members: number; readonly invited: number; readonly roots: number; readonly maxDepth: number };
+}
+
 export interface LoadAdminInvitationsInput extends FrontendPageRequest {
   status?: InvitationStatus | "";
   kind?: InvitationKind | "";
@@ -222,6 +244,44 @@ export async function createMyInvitation(requester: Fetcher = fetch): Promise<My
     method: "POST",
     headers: { "content-type": "application/json" },
   }));
+}
+
+/** Reads the invitation-fission forest (members plus who invited them). */
+export async function loadInvitationNetwork(requester: Fetcher = fetch, signal?: AbortSignal): Promise<InvitationNetwork> {
+  const body = record(await apiFetch<unknown>("/api/admin/invitations/network", { requester, signal }), "INVITATION_NETWORK_INVALID");
+  if (Object.keys(body).length !== 2 || !Array.isArray(body.nodes)) throw invalid("INVITATION_NETWORK_INVALID");
+  const nodes = body.nodes.map((value): InvitationNetworkNode => {
+    const node = record(value, "INVITATION_NETWORK_INVALID");
+    assertKnownKeys(node, ["id", "email", "role", "status", "createdAt", "inviterId", "invitation"], "INVITATION_NETWORK_INVALID");
+    const id = required(node.id, "INVITATION_NETWORK_INVALID");
+    const email = required(node.email, "INVITATION_NETWORK_INVALID");
+    if (node.role !== "admin" && node.role !== "contributor") throw invalid("INVITATION_NETWORK_INVALID");
+    if (node.status !== "active" && node.status !== "disabled") throw invalid("INVITATION_NETWORK_INVALID");
+    const createdAt = required(node.createdAt, "INVITATION_NETWORK_INVALID");
+    const inviterId = node.inviterId === null ? null : required(node.inviterId, "INVITATION_NETWORK_INVALID");
+    let invitation: InvitationNetworkNode["invitation"] = null;
+    if (node.invitation !== null) {
+      const item = record(node.invitation, "INVITATION_NETWORK_INVALID");
+      assertKnownKeys(item, ["id", "code", "formattedCode", "kind", "createdAt", "backfilled"], "INVITATION_NETWORK_INVALID");
+      const canonical = canonicalCode(item, "INVITATION_NETWORK_INVALID");
+      const kind = invitationKind(item.kind, "INVITATION_NETWORK_INVALID");
+      if (typeof item.backfilled !== "boolean") throw invalid("INVITATION_NETWORK_INVALID");
+      invitation = { id: required(item.id, "INVITATION_NETWORK_INVALID"), code: canonical.code, formattedCode: canonical.formattedCode, kind, createdAt: required(item.createdAt, "INVITATION_NETWORK_INVALID"), backfilled: item.backfilled };
+    }
+    return Object.freeze({ id, email, role: node.role, status: node.status, createdAt, inviterId, invitation });
+  });
+  if (new Set(nodes.map((node) => node.id)).size !== nodes.length) throw invalid("INVITATION_NETWORK_INVALID");
+  const rawStats = record(body.stats, "INVITATION_NETWORK_INVALID");
+  const statsOk = ["members", "invited", "roots", "maxDepth"].every((key) => Number.isSafeInteger(rawStats[key]) && (rawStats[key] as number) >= 0);
+  if (!statsOk) throw invalid("INVITATION_NETWORK_INVALID");
+  const stats = {
+    members: rawStats.members as number,
+    invited: rawStats.invited as number,
+    roots: rawStats.roots as number,
+    maxDepth: rawStats.maxDepth as number,
+  };
+  if (stats.members !== nodes.length || stats.invited > stats.members || stats.roots > stats.members) throw invalid("INVITATION_NETWORK_INVALID");
+  return Object.freeze({ nodes: Object.freeze(nodes), stats: Object.freeze(stats) });
 }
 
 export async function loadAdminInvitations({ page, pageSize, status, kind, requester = fetch, signal }: LoadAdminInvitationsInput): Promise<AdminInvitationsPage> {

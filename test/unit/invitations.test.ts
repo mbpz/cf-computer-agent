@@ -10,6 +10,7 @@ import {
   INVITATION_CODE_PATTERN,
   type Invitation,
   type InvitationFilter,
+  type InvitationNetworkNode,
   type InvitationPage,
 } from "../../src/invitations/types";
 import type { NumberedPageRequest } from "../../src/pagination";
@@ -192,6 +193,10 @@ class MemoryRepository implements InvitationsRepositoryPort {
 
   async findBoundByMemberId(memberId: string): Promise<Invitation | null> {
     return this.records.find((invitation) => invitation.boundMemberId === memberId) ?? null;
+  }
+
+  async network(): Promise<InvitationNetworkNode[]> {
+    return [];
   }
 
   async insert(invitation: Invitation): Promise<Invitation> {

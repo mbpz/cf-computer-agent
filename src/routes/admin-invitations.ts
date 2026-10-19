@@ -8,7 +8,7 @@ import { INVITATION_GENERATE_MAX, INVITATION_GENERATE_MIN, type InvitationKind, 
 import { parseJsonRequestAs, strictRecord } from "./member";
 
 export interface AdminInvitationRouteServices {
-  invitations: Pick<InvitationsService, "generateAdminInvitations" | "listPage">;
+  invitations: Pick<InvitationsService, "generateAdminInvitations" | "listPage" | "network">;
 }
 
 /**
@@ -23,6 +23,13 @@ export async function routeAdminInvitationsApi(
   principal: Principal,
   services: AdminInvitationRouteServices,
 ): Promise<Response | undefined> {
+  if (url.pathname === "/api/admin/invitations/network") {
+    requireCapability(principal, "member:manage");
+    requireAdminMember(principal);
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse(await services.invitations.network(), 200, context.requestId);
+  }
   if (url.pathname !== "/api/admin/invitations") return undefined;
   requireCapability(principal, "member:manage");
   const admin = requireAdminMember(principal);

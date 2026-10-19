@@ -69,6 +69,31 @@ export interface MemberInvitationsView {
   invitation: MemberInvitation | null;
 }
 
+/** One member in the invitation-fission forest. `inviterId` is null for roots
+ * (bootstrap/GitHub-only/backfilled legacy accounts) and for backfilled codes. */
+export interface InvitationNetworkNode {
+  id: string;
+  email: string;
+  role: "admin" | "contributor";
+  status: "active" | "disabled";
+  createdAt: string;
+  inviterId: string | null;
+  invitation: {
+    id: string;
+    code: string;
+    formattedCode: string;
+    kind: InvitationKind;
+    createdAt: string;
+    /** True for the 0080 repair rows: they are not a real invitation relation. */
+    backfilled: boolean;
+  } | null;
+}
+
+export interface InvitationNetwork {
+  nodes: InvitationNetworkNode[];
+  stats: { members: number; invited: number; roots: number; maxDepth: number };
+}
+
 export interface InvitationFilter {
   status?: InvitationStatus;
   kind?: InvitationKind;

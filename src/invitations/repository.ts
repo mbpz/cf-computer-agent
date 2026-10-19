@@ -6,6 +6,7 @@ import {
   type Invitation,
   type InvitationFilter,
   type InvitationKind,
+  type InvitationNetworkNode,
   type InvitationPage,
   type InvitationStatus,
 } from "./types";
@@ -27,6 +28,8 @@ export interface InvitationsRepositoryPort {
   /** The code that created `memberId`, used to prove identity before a password reset. */
   findBoundByMemberId(memberId: string): Promise<Invitation | null>;
   listPage(request: NumberedPageRequest, filter?: InvitationFilter): Promise<InvitationPage>;
+  /** All members with the invitation that created them, for the admin forest. */
+  network(): Promise<InvitationNetworkNode[]>;
 }
 
 type InvitationRow = {
@@ -106,6 +109,47 @@ export class InvitationsRepository implements InvitationsRepositoryPort {
     }
     if (results[0]?.meta.changes !== 1) throw new Error("Invitation creation did not persist");
     return invitation;
+  }
+
+  async network(): Promise<InvitationNetworkNode[]> {
+    const rows = await this.db.prepare(
+      `SELECT m.id, m.email, m.role, m.status, m.created_at,
+              i.id AS invitation_id, i.code AS invitation_code, i.kind AS invitation_kind,
+              i.created_at AS invitation_created_at,
+              CASE
+                WHEN i.id IS NULL THEN NULL
+                WHEN substr(i.id, 1, 9) = 'backfill-' THEN NULL
+                WHEN i.owner_member_id IS NOT NULL THEN i.owner_member_id
+                WHEN i.created_by_member_id <> i.bound_member_id THEN i.created_by_member_id
+                ELSE NULL
+              END AS inviter_id
+       FROM members m
+       LEFT JOIN invitations i ON i.bound_member_id = m.id
+       ORDER BY m.created_at ASC, m.id ASC
+       LIMIT 2000`,
+    ).all<{
+      id: string; email: string; role: "admin" | "contributor"; status: "active" | "disabled";
+      created_at: string; invitation_id: string | null; invitation_code: string | null;
+      invitation_kind: InvitationKind | null; invitation_created_at: string | null; inviter_id: string | null;
+    }>();
+    return rows.results.map((row) => ({
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      status: row.status,
+      createdAt: row.created_at,
+      inviterId: row.inviter_id,
+      invitation: row.invitation_id === null || row.invitation_code === null || row.invitation_kind === null || row.invitation_created_at === null
+        ? null
+        : {
+          id: row.invitation_id,
+          code: row.invitation_code,
+          formattedCode: formatInvitationCode(row.invitation_code),
+          kind: row.invitation_kind,
+          createdAt: row.invitation_created_at,
+          backfilled: row.invitation_id.startsWith("backfill-"),
+        },
+    }));
   }
 
   async listPage(request: NumberedPageRequest, filter: InvitationFilter = {}): Promise<InvitationPage> {

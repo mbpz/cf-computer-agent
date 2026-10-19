@@ -44,6 +44,14 @@
 - 设置页拆成两张卡：“账号绑定的邀请码”和“我的邀请码”；分享码被使用后显示新成员邮箱且只读。
 - 安全边界：绑定码对本人可见（重置需要它），但只返回本人数据；接口仍只允许 active member 读取自己的记录。
 
+### 1.3 管理员邀请关系网（2026-10-19 补充）
+
+- 新增 `GET /api/admin/invitations/network`：返回全部成员节点、其邀请人（由绑定邀请码推导）与 `members/invited/roots/maxDepth` 统计。
+- 前端 `InvitationNetworkPanel` 挂在 `/admin/menus` 邀请码面板之后；使用仓库内置的 **beUI `motion/file-tree`** 表达邀请裂变森林（每个成员最多一个邀请人），点击“查看关系网”后加载，默认展开、显示邮箱/邀请码类型与码/角色/禁用状态；历史回填节点作为根节点并标注。
+- 未引入第三方 graph 库或自定义 Canvas：邀请关系在数据上就是森林，beUI 树已满足键盘与展开语义。
+
+验证：worker 关系网与 403 用例、前端 3 个渲染/重试/空态用例通过；全量门禁见 §6。
+
 ## 2. `/agent` 接入 AgentSession
 
 - `POST /api/agent/sessions/:id/stream` 改为：`startTurn` → 读取历史 → `searchInternal(scope)` → `CitedAnswerService.answer` → 生成后再次授权 citation → `completeTurn`；错误/断流 `terminateTurn`。
@@ -79,10 +87,10 @@
 | `test:smoke` | 88/88 |
 | `test:i18n` | 14/14 |
 | `verify:delivery-status` | 30/30 |
-| `test:unit` | **411 文件 / 5612 用例通过** |
-| `test:worker` | **80 文件 / 1325 用例通过** |
+| `test:unit` | **412 文件 / 5615 用例通过** |
+| `test:worker` | **80 文件 / 1326 用例通过** |
 | `verify:landing` | 100/100 |
-| `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1734.18 KiB / gzip 328.60 KiB） |
+| `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1737.14 KiB / gzip 329.27 KiB） |
 | `audit:workbench-domain` / 其 31 项测试 | 通过（证据已重新生成） |
 | `verify:workbench-maturity` | 15/15 |
 

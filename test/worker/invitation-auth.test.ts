@@ -153,6 +153,33 @@ describe("invitation registration, binding and administration", () => {
     expect(await count("SELECT COUNT(*) AS total FROM invitations WHERE owner_member_id = ?", owner.memberId)).toBe(1);
   });
 
+  it("returns the invitation-fission forest to administrators only", async () => {
+    const admin = await adminToken();
+    const [adminCode] = await generateAdmin(admin.token);
+    const owner = await register("forest-owner@example.test", adminCode!.code);
+    const created = await api("/api/invitations/mine", { method: "POST", token: owner.token });
+    expect(created.status).toBe(201);
+    const ownerCode = (await created.json() as { invitation: { code: string } }).invitation.code;
+    const invitee = await register("forest-invitee@example.test", ownerCode);
+
+    const network = await api("/api/admin/invitations/network", { token: admin.token });
+    expect(network.status).toBe(200);
+    const body = await network.json() as {
+      nodes: Array<{ id: string; email: string; inviterId: string | null; invitation: { backfilled: boolean } | null }>;
+      stats: { members: number; invited: number; roots: number; maxDepth: number };
+    };
+    expect(body.nodes).toHaveLength(3);
+    const adminNode = body.nodes.find((node) => node.id === admin.memberId)!;
+    const ownerNode = body.nodes.find((node) => node.id === owner.memberId)!;
+    const inviteeNode = body.nodes.find((node) => node.id === invitee.memberId)!;
+    expect(adminNode).toMatchObject({ inviterId: null, invitation: null });
+    expect(ownerNode.inviterId).toBe(admin.memberId);
+    expect(inviteeNode.inviterId).toBe(owner.memberId);
+    expect(body.stats).toEqual({ members: 3, invited: 2, roots: 1, maxDepth: 2 });
+    expect((await api("/api/admin/invitations/network", { token: owner.token })).status).toBe(403);
+    expect((await api("/api/admin/invitations/network", { method: "POST", token: admin.token })).status).toBe(405);
+  });
+
   it("lets exactly one concurrent registration for the same code create a member", async () => {
     const admin = await adminToken();
     const [invitation] = await generateAdmin(admin.token);

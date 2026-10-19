@@ -48,7 +48,14 @@
 | `node scripts/verify-m1-migrations.mjs --files` | `[pass] migration-files count=79` |
 | `npm run test:smoke` | 88 + 14 + 30 通过 |
 | `npm run typecheck` | Worker + 前端通过 |
-| `npm run check`（HEAD 工作树） | 退出码 0（unit 411 文件/5612、worker 80 文件/1325、smoke 88+14+30、landing 100） |
+| `npm run check`（HEAD 工作树） | 退出码 0（unit 412 文件/5615、worker 80 文件/1326、smoke 88+14+30、landing 100） |
+
+## 管理员邀请码关系网（2026-10-19 补充）
+
+- `GET /api/admin/invitations/network`（`member:manage` + admin）返回全部成员节点：`id/email/role/status/createdAt/inviterId/invitation{code,formattedCode,kind,createdAt,backfilled}` 与 `stats{members,invited,roots,maxDepth}`。
+- `inviterId` 取自绑定到该成员的邀请码：成员码取 owner；管理员码取 creator（creator 等于本人时视为根）；`0080` 回填码标记 `backfilled=true` 且 `inviterId=null`，不伪造真实邀请边。
+- 前端 `InvitationNetworkPanel` 使用仓库已内置的 beUI `motion/file-tree`（树天然表达“每人最多一个邀请人”的森林），点击“查看关系网”后加载并默认展开全部节点，显示邮箱、邀请码类型/码、角色与禁用状态，并用 `SummaryRow` 展示成员/被邀请/根节点/最大层级。无新增第三方图库。
+- 验证：`test/worker/invitation-auth.test.ts` 覆盖管理员关系网与 contributor 403；`test/unit/frontend-invitation-network.test.tsx` 3/3 覆盖渲染、重试与空态；回填节点在 `test/worker/account-password.test.ts` 断言为根。
 
 ## 历史账户兼容（2026-10-19 补充）
 

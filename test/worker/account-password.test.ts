@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
+import { InvitationsRepository } from "../../src/invitations/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 
 const ORIGIN = "https://memory.crgmhrc.asia";
@@ -117,6 +118,11 @@ describe("authenticated password change", () => {
     expect(row!.code).toMatch(/^[A-HJ-NP-Z2-9]{16}$/u);
     expect(row!.used_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
     expect(await count("SELECT COUNT(*) AS total FROM invitations WHERE bound_member_id = 'legacy-github'")).toBe(0);
+    const network = await new InvitationsRepository(env.DB).network();
+    expect(network.find((node) => node.id === "legacy-password")).toMatchObject({
+      inviterId: null,
+      invitation: { backfilled: true },
+    });
   });
 
   it("lets a member without a password set a first password from a live session", async () => {
