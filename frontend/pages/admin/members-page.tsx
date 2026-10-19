@@ -8,6 +8,9 @@ import { PageHeader } from "../../components/ui/page-header";
 import { FilterSelect } from "../../components/ui/filter-select";
 import { AppliedFilters } from "../../components/ui/applied-filters";
 import { PageState } from "../../components/ui/page-state";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { InvitationAdminPanel } from "../../components/admin/invitation-admin-panel";
+import { InvitationNetworkPanel } from "../../components/admin/invitation-network-panel";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { FrontendPageMetadata, SupportedPageSize } from "../../lib/numbered-page";
 
@@ -111,12 +114,20 @@ export function MembersPage({
     confirmLabel: frontendText(locale, confirmation.nextStatus === "disabled" ? "ADMIN_MEMBER_CONFIRM_DISABLE" : "ADMIN_MEMBER_CONFIRM_ENABLE"),
     destructive: confirmation.nextStatus === "disabled",
   } : null;
+  const [tab, setTab] = useState<"members" | "invitations" | "network">("members");
 
-  // The page shell is constant: the header and status filter render for every
+  // The page shell is constant: the header and tabs render for every
   // state; loading and read failure only replace the member table.
   return <><section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={validConfirmation} aria-hidden={validConfirmation || undefined}>
     <PageHeader title={frontendText(locale, "ADMIN_MEMBERS_TITLE")} description={frontendText(locale, "ADMIN_MEMBERS_DESCRIPTION")}
-      actions={<FilterSelect label="Status" ariaLabel="Member status" value={status} disabled={pending} onChange={(value) => onStatusFilterChange?.(value as "" | "active" | "disabled")} options={[{ value: "", label: "All" }, { value: "active", label: "Active" }, { value: "disabled", label: "Disabled" }]} />} />
+      actions={tab === "members" ? <FilterSelect label="Status" ariaLabel="Member status" value={status} disabled={pending} onChange={(value) => onStatusFilterChange?.(value as "" | "active" | "disabled")} options={[{ value: "", label: "All" }, { value: "active", label: "Active" }, { value: "disabled", label: "Disabled" }]} /> : undefined} />
+    <Tabs value={tab} onValueChange={(value) => setTab(value as "members" | "invitations" | "network")} className="flex min-h-0 flex-col gap-4">
+      <TabsList>
+        <TabsTrigger value="members">{frontendText(locale, "ADMIN_MEMBERS_TITLE")}</TabsTrigger>
+        <TabsTrigger value="invitations">{frontendText(locale, "ADMIN_INVITATIONS_TITLE")}</TabsTrigger>
+        <TabsTrigger value="network">{frontendText(locale, "ADMIN_NETWORK_TITLE")}</TabsTrigger>
+      </TabsList>
+      <TabsContent value="members" className="flex min-h-0 flex-col gap-5">
     <AppliedFilters
       ariaLabel={frontendText(locale, "COMMON_APPLIED_FILTERS")}
       clearLabel={frontendText(locale, "COMMON_CLEAR_FILTERS")}
@@ -151,6 +162,10 @@ export function MembersPage({
             ]}
           />
         </>}
+      </TabsContent>
+      <TabsContent value="invitations">{tab === "invitations" && <InvitationAdminPanel locale={locale} />}</TabsContent>
+      <TabsContent value="network">{tab === "network" && <InvitationNetworkPanel locale={locale} autoLoad />}</TabsContent>
+    </Tabs>
   </section>
     <ConfirmAction open={validConfirmation}
       title={dialog?.title ?? ""}

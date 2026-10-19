@@ -74,9 +74,6 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 181 项，但 A01 
 | `frontend/components/motion/feedback-widget.tsx:517:27` | unmounted-ui | 反馈面板打开态的次要操作按钮 | 触发次要操作（取消/跳过）；组件未挂载。 |
 | `frontend/components/motion/feedback-widget.tsx:526:27` | unmounted-ui | 反馈面板打开态点击提交 | StatefulButton 提交反馈；组件未挂载。 |
 | `frontend/components/motion/feedback-widget.tsx:544:13` | unmounted-ui | 页面角落的反馈触发按钮 | motion.button 打开反馈面板；该组件在 Agent 反馈移除后无调用方。 |
-| `frontend/components/motion/tabs.tsx:381:7` | unmounted-ui | `TabsContent` 的 value 不是当前选中页 | 面板保持挂载但 `hidden`；当前没有页面组合 `TabsContent`，载荷保留供后续/测试使用。 |
-| `frontend/components/motion/tabs.tsx:387:5` | unmounted-ui | `TabsContent` 的 value 是当前选中页 | 面板以 `motion.div` 显示并播放轻量入场；当前没有页面组合 `TabsContent`。 |
-| `frontend/components/ui/tabs.tsx:121:10` | unmounted-ui | `ui/tabs` 的 `TabsContent` 适配器被组合 | 转发 `value`/`className`/`children` 到已安装载荷；当前没有页面组合该适配器。 |
 
 ## `frontend/components/agents/agent-activity/activity-row.tsx`（0）
 
@@ -583,6 +580,8 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
 | `frontend/lib/use-toast.tsx:28:7` | app-boundary | ToastProvider 挂载（App 已认证分支） | 把通知栈固定渲染在右下角（`fixed position="bottom-right"`，`maxVisible` 3）并 portal 到 body；`dismissLabel` 取本地化文案；不在无 Provider 时抛错。 |
+
+2026-10-19 成员管理三 tab 后复核：邀请码管理与关系网从 `/admin/menus` 移到 `/admin/members` 的三个 tab，成员页真正组合 `TabsContent` 后，此前三条未归属候选（`motion/tabs.tsx:381`、`:387`、`ui/tabs.tsx:121`）随该路由进入 root 图，未归属由 173 降至 170。App 与邀请码面板坐标未变；同步本记录的分类/指纹结论，不扩大运行验收。
 
 ## 验证范围与维护
 

@@ -10,8 +10,6 @@ import { OverflowActions, type OverflowActionItem } from "../../components/motio
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { menuSnapshot } from "../../../shared/admin-menu-fields";
 import { ConfirmAction } from "../../components/ui/confirm-action";
-import { InvitationAdminPanel } from "../../components/admin/invitation-admin-panel";
-import { InvitationNetworkPanel } from "../../components/admin/invitation-network-panel";
 import { MenuEditor, describeMenuChanges } from "./menu-editor";
 import { useCreateDraft } from "../../lib/use-create-draft";
 import { discardBlockedAdminMenuDraft, discardBlockedMenuPositionDraft, loadAdminMenuDraft, loadMenuPositionDraft, menuEditorBaseline, persistAdminMenuDraft, persistMenuPositionDraft, releaseMenuPositionDraft, type MenuEditorFields } from "../../lib/admin-menu-draft";
@@ -136,8 +134,6 @@ function ReadyMenus({ menus, locale, header, onLoadRetry, onUpdate, onDelete, on
       if (saved) setEditor(null);
     }} />}
     {menus.length ? <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_MENUS_TREE")}</CardTitle></CardHeader><CardContent><FileTree ariaLabel={frontendText(locale, "ADMIN_MENUS_TREE")} value={editor?.menu?.id ?? null} defaultExpandedIds={folderIds(menus)} classNames={{ item: "h-auto min-h-9 py-1" }}>{menus.map((menu) => menuBranch(menu, nodeProps))}</FileTree></CardContent></Card> : <PageState kind="empty" title={frontendText(locale, "ADMIN_MENUS_EMPTY")} description={frontendText(locale, "ADMIN_MENUS_DESCRIPTION")} />}
-    <InvitationAdminPanel locale={locale} />
-    <InvitationNetworkPanel locale={locale} />
   </section><ConfirmAction open={validConfirmation}
     title={frontendText(locale, confirmation?.input ? "ADMIN_MENUS_CONFIRM_TITLE" : "ADMIN_MENUS_DELETE_CONFIRM_TITLE")}
     description={confirmation ? `${confirmation.menu.key} · ${confirmation.menu.path || confirmation.menu.id}. ${confirmation.input ? describeMenuChanges(confirmation.menu, confirmation.input, locale) : describeDeleteImpact(confirmation.menu, locale)}` : ""}

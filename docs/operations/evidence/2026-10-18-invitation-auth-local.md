@@ -1,7 +1,7 @@
 # 证据：邀请码注册与绑定式密码重置（本地实现）
 
 - 日期：2026-10-18
-- 范围：`IDN-007`（邀请码注册/登录/绑定式重置）、`ADM-007`（管理员在菜单管理页查看与生成邀请码）
+- 范围：`IDN-007`（邀请码注册/登录/绑定式重置）、`ADM-005`（管理员在成员管理页查看与生成邀请码、查看关系网）
 - 性质：本地实现、迁移字节校验、Workerd/React 测试；**不含**生产迁移、部署或真实浏览器验收
 - 设计：`docs/superpowers/specs/2026-10-18-invitation-code-registration-design.md`
 
@@ -14,7 +14,7 @@
 - `src/routes/invitations.ts`：`POST /api/invitations/mine`（active member、同源、幂等，返回码/状态/绑定布尔值，不暴露绑定成员）。
 - `src/routes/admin-invitations.ts`：`GET/POST /api/admin/invitations`（`member:manage` + `requireAdminMember`、数字分页、status/kind 筛选、1–20 生成）。
 - `src/app.ts`：创建 InvitationsService/Repository、注入 PasswordAuthService、分派新路由。
-- 前端：`frontend/lib/invitations-data.ts`；`frontend/pages/login-page.tsx` + `frontend/lib/password-auth-data.ts`（注册/重置必填邀请码、归一化、错误映射）；`frontend/components/settings/my-invitation-card.tsx` + 设置页（幂等创建、复制、已用只读）；`frontend/components/admin/invitation-admin-panel.tsx` + 菜单管理页（生成、筛选、共享 DataTable 数字分页、forbidden/error 态）；`frontend/lib/i18n.ts` en/zh 各 2109 键对等。
+- 前端：`frontend/lib/invitations-data.ts`；`frontend/pages/login-page.tsx` + `frontend/lib/password-auth-data.ts`（注册/重置必填邀请码、归一化、错误映射）；`frontend/components/settings/my-invitation-card.tsx` + 设置页（幂等创建、复制、已用只读）；`frontend/components/admin/invitation-admin-panel.tsx` + 成员管理页“邀请码”tab（生成、筛选、共享 DataTable 数字分页、forbidden/error 态）；`frontend/lib/i18n.ts` en/zh 各 2109 键对等。
 - `scripts/verify-m1-migrations.mjs`、`scripts/m1-release-contract.test.mjs`：迁移台账 78→79 与 0079 哈希 pin。
 
 ## 行为矩阵（Workerd / React）
@@ -48,7 +48,7 @@
 | `node scripts/verify-m1-migrations.mjs --files` | `[pass] migration-files count=79` |
 | `npm run test:smoke` | 88 + 14 + 30 通过 |
 | `npm run typecheck` | Worker + 前端通过 |
-| `npm run check`（HEAD 工作树） | 退出码 0（unit 412 文件/5615、worker 80 文件/1326、smoke 88+14+30、landing 100） |
+| `npm run check`（HEAD 工作树） | 退出码 0（unit 413 文件/5616、worker 80 文件/1326、smoke 88+14+30、landing 100） |
 
 ## 管理员邀请码关系网（2026-10-19 补充）
 
@@ -60,7 +60,7 @@
 ## 历史账户兼容（2026-10-19 补充）
 
 - 已登录成员可调用 `POST /api/account/password` 设置或修改密码：已有密码必须校验当前密码，无密码账户（如仅 GitHub）可从会话设置首个密码；成功后清除锁定并撤销该成员的其它会话，保留当前会话。前端入口在“设置 → 密码”。
-- `migrations/0080_backfill_password_invitations.sql` 为 0079 之前已存在的 `password_hash IS NOT NULL` 成员回填一条 `kind=admin`、`status=used`、`bound_member_id=成员` 的邀请码；管理员在菜单管理邀请码面板可查看并转交。没有密码的 GitHub/微信专属成员不回填（仍不能无会话重置）。
+- `migrations/0080_backfill_password_invitations.sql` 为 0079 之前已存在的 `password_hash IS NOT NULL` 成员回填一条 `kind=admin`、`status=used`、`bound_member_id=成员` 的邀请码；管理员在成员管理“邀请码”tab 可查看并转交。没有密码的 GitHub/微信专属成员不回填（仍不能无会话重置）。
 - 验证：`test/worker/account-password.test.ts` 4/4（含改密、撤销其它会话、错误/同源/方法、首个密码、0080 回填）；前端 `test/unit/frontend-account-password.test.tsx` 4/4。
 
 ## 未覆盖 / 非声明

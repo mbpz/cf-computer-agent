@@ -14,7 +14,7 @@
 1. **注册必须使用邀请码。** 密码注册不再开放；`POST /auth/register` 必须携带一个未使用、未绑定的邀请码。
 2. **邀请码一次性、绑定新成员。** 一个邀请码只能创建一个新成员；注册成功即标记 `used` 并写入 `bound_member_id`。并发使用同一码只有一个成功。
 3. **每位成员只能分享一个邀请码（终身一个）。** 成员首次访问“我的邀请码”时按需生成一个 `kind='member'` 的码；该码使用后不能再次生成（`owner_member_id` 唯一）。成员可把自己的码分享给新用户。
-4. **管理员可无限生成邀请码。** `POST /api/admin/invitations` 生成 `kind='admin'` 的码，数量无终身配额（单次请求 1–20 个）；管理员可在菜单管理页看到所有成员/邀请码的绑定关系与状态。
+4. **管理员可无限生成邀请码。** `POST /api/admin/invitations` 生成 `kind='admin'` 的码，数量无终身配额（单次请求 1–20 个）；管理员可在成员管理页看到所有成员/邀请码的绑定关系与状态。
 5. **重置密码必须校验该成员被绑定的邀请码。** `POST /auth/password/reset` 除邮箱和新密码外必须提供注册时使用的邀请码（即 `bound_member_id = 成员` 的那一条）；不正确、缺失或该成员没有绑定邀请码时统一失败。GitHub/微信专属成员仍不能重置密码。
 6. **注册/重置/登录的其它边界不变**：PBKDF2 参数、登录锁定、注册按 IP 限流、同源校验、创建会话、重置撤销全部会话。
 7. **管理员生成码与成员分享码在数据结构上同表**，只以 `kind`、`owner_member_id` 区分；两种码都单次使用、都绑定使用者。
@@ -43,7 +43,7 @@ CREATE INDEX invitations_created_at ON invitations(created_at DESC);
 ```
 
 - 码格式：16 位 `[A-HJ-NP-Z2-9]`（去除易混淆字符）；展示为 `XXXX-XXXX-XXXX-XXXX`，输入时大小写/分隔符归一化。
-- 码以明文存储：管理员需要在菜单管理页看到码，成员需要复制分享；因此不哈希。接口仅向管理员和码拥有者返回码，其它角色不返回。
+- 码以明文存储：管理员需要在成员管理页看到码，成员需要复制分享；因此不哈希。接口仅向管理员和码拥有者返回码，其它角色不返回。
 - 迁移只追加；不修改 0077/0078。
 
 ## 接口
@@ -104,13 +104,13 @@ CREATE INDEX invitations_created_at ON invitations(created_at DESC);
 
 - `/login`：注册模式新增必填“邀请码”输入（格式提示、可粘贴带分隔符）；重置模式同样新增“注册时使用的邀请码”。错误映射：required/invalid 使用双语文案，不区分“未知码/已用码”。
 - `/settings`：新增“我的邀请码”卡片。首次进入自动创建并显示；可复制；状态为可用/已使用；已使用后只读并提示不可再生成。
-- `/admin/menus`：新增“邀请码”区块（PageHeader 下、菜单树之后）：生成按钮（每次 1 个，可重复点击 = 无限生成）、状态/类型筛选、分页表格（code、类型、分享者、绑定成员、状态、创建/使用时间）。使用共享 `DataTable`/`FilterSelect`/`AppliedFilters`/`PageState`/`Button`，不得用原生控件。
+- `/admin/members`：成员管理页拆为 3 个 tab——成员（原列表/禁用）、邀请码（生成按钮每次 1 个、可重复 = 无限生成；状态/类型筛选；共享 `DataTable` 数字分页：code、类型、分享者、绑定成员、状态、创建/使用时间）、关系网（beUI `file-tree` 森林 + 统计）。均使用共享 `DataTable`/`FilterSelect`/`AppliedFilters`/`PageState`/`Tabs`/`Button`，不得用原生控件。
 
 ## 历史账户兼容
 
 - 0079 之前已有的密码账户没有绑定邀请码。为避免其永久无法重置：
   1. 已登录成员可通过 `POST /api/account/password` 设置/修改密码（已有密码需当前密码，无密码账户可设首个），成功后撤销其它会话。
-  2. `migrations/0080_backfill_password_invitations.sql` 为这类账户回填一条已绑定、used 状态的邀请码；管理员在菜单管理邀请码面板可见并转交账户所有者。
+  2. `migrations/0080_backfill_password_invitations.sql` 为这类账户回填一条已绑定、used 状态的邀请码；管理员在成员管理“邀请码”tab 可见并转交账户所有者。
 - 回填只针对 `password_hash IS NOT NULL` 的成员；仅 GitHub/微信身份的成员不回填，仍按“无密码则不能无会话重置”处理。
 
 ## 不变量

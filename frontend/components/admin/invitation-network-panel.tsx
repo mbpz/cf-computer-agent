@@ -27,10 +27,10 @@ interface ForestNode {
  * are roots and are labelled so administrators do not read them as real
  * invitation edges.
  */
-export function InvitationNetworkPanel({ locale, loadNetwork = loadInvitationNetwork }: { locale?: LocaleRuntime; loadNetwork?: typeof loadInvitationNetwork }) {
+export function InvitationNetworkPanel({ locale, autoLoad = false, loadNetwork = loadInvitationNetwork }: { locale?: LocaleRuntime; /** The card starts expanded (used when it owns an active tab). */ autoLoad?: boolean; loadNetwork?: typeof loadInvitationNetwork }) {
   const [state, setState] = useState<NetworkState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoLoad);
   const alive = useRef(true);
 
   useEffect(() => {

@@ -6,7 +6,7 @@
 
 | # | 决定 | 结果 |
 | --- | --- | --- |
-| 1 | 不接受开放注册：注册需邀请码；每位成员只能分享一个邀请码、一次性使用；管理员可无限生成；邀请码绑定新成员；重置密码需校验邀请码；管理员在菜单管理查看所有邀请码 | **已实现**（迁移 `0079`、后端服务/路由、登录/设置/菜单管理前端、测试与文档） |
+| 1 | 不接受开放注册：注册需邀请码；每位成员只能分享一个邀请码、一次性使用；管理员可无限生成；邀请码绑定新成员；重置密码需校验邀请码；管理员在成员管理查看所有邀请码 | **已实现**（迁移 `0079`、后端服务/路由、登录/设置/成员管理三 tab 前端、测试与文档） |
 | 2 | `/agent` 改为真正调用 AgentSession | **已实现**（会话创建/恢复、接地检索 + 严格引用、turn 持久化/终止、前端会话生命周期） |
 | 3 | 补审核元数据编辑 UI | **已实现**（标题/Space/Collection/Tag/可见性 + 扩权确认 + 意图重放） |
 
@@ -21,7 +21,7 @@
 - 重置必须是 `active` 成员、存在绑定码且提供的码常量时间匹配；成功覆盖密码、清锁定、删全部会话、写审计；未知/错码/无绑定/禁用统一失败。
 - 码以明文存储（管理员/成员需要读取与复制），日志与审计不写码。
 
-**主要文件**：`src/invitations/*`、`src/routes/{auth,invitations,admin-invitations}.ts`、`src/password/{service,repository}.ts`、`src/app.ts`；`frontend/lib/invitations-data.ts`、`frontend/pages/login-page.tsx`、`frontend/lib/password-auth-data.ts`、`frontend/components/settings/my-invitation-card.tsx`、`frontend/pages/settings-page.tsx`、`frontend/components/admin/invitation-admin-panel.tsx`、`frontend/pages/admin/menus-page.tsx`、`frontend/lib/i18n.ts`。
+**主要文件**：`src/invitations/*`、`src/routes/{auth,invitations,admin-invitations}.ts`、`src/password/{service,repository}.ts`、`src/app.ts`；`frontend/lib/invitations-data.ts`、`frontend/pages/login-page.tsx`、`frontend/lib/password-auth-data.ts`、`frontend/components/settings/my-invitation-card.tsx`、`frontend/pages/settings-page.tsx`、`frontend/components/admin/invitation-admin-panel.tsx`、`frontend/components/admin/invitation-network-panel.tsx`、`frontend/pages/admin/members-page.tsx`、`frontend/lib/i18n.ts`。
 
 **文档**：新设计 `docs/superpowers/specs/2026-10-18-invitation-code-registration-design.md`；旧开放注册设计与证据已标注被取代；README、生产手册、设置手册、账本 IDN-007/ADM-007 同步。
 
@@ -32,7 +32,7 @@
 已有密码账户若没有绑定邀请码，重置会统一失败。补充两条路径：
 
 - `POST /api/account/password`：已登录成员设置或修改密码；已有密码必须校验当前密码，无密码账户（如仅 GitHub）可从会话设置首个密码；成功后清除锁定并撤销其它会话，保留当前会话。设置页新增“密码”卡片。
-- `migrations/0080_backfill_password_invitations.sql`：为 0079 之前 `password_hash IS NOT NULL` 的成员回填 `kind=admin`、`status=used`、绑定到该成员的邀请码；管理员在菜单管理邀请码面板可见并转交，用于无会话找回。没有密码的 GitHub/微信专属成员不回填。
+- `migrations/0080_backfill_password_invitations.sql`：为 0079 之前 `password_hash IS NOT NULL` 的成员回填 `kind=admin`、`status=used`、绑定到该成员的邀请码；管理员在成员管理“邀请码”tab 可见并转交，用于无会话找回。没有密码的 GitHub/微信专属成员不回填。
 
 验证：`test/worker/account-password.test.ts` 4/4、`test/unit/frontend-account-password.test.tsx` 4/4；迁移台账更新为 80。
 
@@ -47,7 +47,7 @@
 ### 1.3 管理员邀请关系网（2026-10-19 补充）
 
 - 新增 `GET /api/admin/invitations/network`：返回全部成员节点、其邀请人（由绑定邀请码推导）与 `members/invited/roots/maxDepth` 统计。
-- 前端 `InvitationNetworkPanel` 挂在 `/admin/menus` 邀请码面板之后；使用仓库内置的 **beUI `motion/file-tree`** 表达邀请裂变森林（每个成员最多一个邀请人），点击“查看关系网”后加载，默认展开、显示邮箱/邀请码类型与码/角色/禁用状态；历史回填节点作为根节点并标注。
+- 前端 `InvitationNetworkPanel` 挂在 `/admin/members` 的“关系网”tab；使用仓库内置的 **beUI `motion/file-tree`** 表达邀请裂变森林（每个成员最多一个邀请人），点击“查看关系网”后加载，默认展开、显示邮箱/邀请码类型与码/角色/禁用状态；历史回填节点作为根节点并标注。
 - 未引入第三方 graph 库或自定义 Canvas：邀请关系在数据上就是森林，beUI 树已满足键盘与展开语义。
 
 验证：worker 关系网与 403 用例、前端 3 个渲染/重试/空态用例通过；全量门禁见 §6。
@@ -87,7 +87,7 @@
 | `test:smoke` | 88/88 |
 | `test:i18n` | 14/14 |
 | `verify:delivery-status` | 30/30 |
-| `test:unit` | **412 文件 / 5615 用例通过** |
+| `test:unit` | **413 文件 / 5616 用例通过** |
 | `test:worker` | **80 文件 / 1326 用例通过** |
 | `verify:landing` | 100/100 |
 | `build` | 通过（Vite + secret 扫描 + legacy audit + `wrangler deploy --dry-run`，上传 1737.14 KiB / gzip 329.27 KiB） |
