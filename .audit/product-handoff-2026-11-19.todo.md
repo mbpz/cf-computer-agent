@@ -1,7 +1,7 @@
 # Product handoff 2026-11-19
 
 - [x] Read the Poteto Principles.
-- [ ] Phase A: Frame
+- [x] Phase A: Frame
 
 Ground first, then commit. Don't start the run until you can state:
 
@@ -11,7 +11,7 @@ Ground first, then commit. Don't start the run until you can state:
 
 Present the framing and tradeoffs before committing to a long run. Reversible work proceeds (the **never-block-on-the-human** principle skill), but a multi-hour run earns one checkpoint.
 
-- [ ] Phase B: Design the workflow
+- [x] Phase B: Design the workflow
 
 Decompose into atomic, independently-landable units. Sequence riskiest-unknown-first. Scaffold and verification come before features (the **foundational-thinking** principle skill).
 
@@ -22,7 +22,7 @@ Decompose into atomic, independently-landable units. Sequence riskiest-unknown-f
 
 Then execute the design. Add its steps to the todolist as concrete items between the Phase C and Phase D entries. Run each under the Phase C loop discipline, and weave the Phase D log through them, a row as each step lands, rather than saving the whole trail for the end.
 
-- [ ] Phase C: Run the loop
+- [x] Phase C: Run the loop
 
 Each unit is an experiment. State the hypothesis, make the smallest change, measure against the predicate on the real artifact, keep it if it advanced, revert it if it didn't. Apply the **sequence-verifiable-units** principle skill, verifying each unit before starting the next instead of batching checks at the end.
 
@@ -30,11 +30,17 @@ Each unit is an experiment. State the hypothesis, make the smallest change, meas
 - Pair delegated work with a judge. If a worker games the gate, reset and harden the contract. If the gate itself is wrong, fix the gate in its own change rather than routing around it.
 - A verdict is VERIFIED, NOT VERIFIED, or INCONCLUSIVE. Inconclusive is not a pass. Don't hide a negative.
 
-- [ ] Phase D: Keep the audit trail
+- [x] 固定 HEAD、对账功能父项和证据台账。
+- [x] 静态核查近期 UI 与账户/RBAC，按源文件验证风险。
+- [x] 运行独立静态门禁与 UI 构建。
+- [x] 写交接并完成同模型独立核查。
+- [x] 记录完整门禁未验证的边界与串行复验顺序。
+
+- [x] Phase D: Keep the audit trail
 
 Log the run via the **show-me-your-work** skill. figure-it-out's work is usually ambitious enough to commit the trail so the reviewer can read it in the PR. The trail plus the diff is what lets the human come back and trust the work.
 
-- [ ] Phase E: Verify and hand back
+- [x] Phase E: Verify and hand back
 
 Check the whole against the Phase A predicate on the real product, not just the harness. Encode any recurring correction as a gate, a lint rule, a check, or a script (the **encode-lessons-in-structure** principle skill).
 
