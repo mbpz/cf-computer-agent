@@ -61,4 +61,10 @@ From the repository root on the fixed working tree:
 | `npm run verify:m1:docs` | exit 0; 14 evidence blocks, 76/76 atoms |
 | `npm run check` | exit 0; unit 414 files / 5635 tests, worker 81 files / 1327 tests, smoke 88, i18n 14, delivery 30, landing 100; build upload 1745.68 KiB / gzip 330.71 KiB |
 
-No migration was applied, no deployment or remote D1 change was made, and no signed-browser acceptance is claimed. H01–H11 are locally implemented with regression tests; production acceptance remains open in the delivery ledger.
+## Production check (2026-11-23 23:23 Shanghai)
+
+Wrangler OAuth was completed successfully. The remote D1 ledger already contained `0081_password_recovery.sql` as migration id 82 (82 applied rows); `npm run db:migrate:remote` reported “No migrations to apply”. The remote recovery schema has `password_recovery_codes`, `password_recovery_attempts` and their indexes.
+
+The production Worker version `2a67c519-1d65-42fe-b6af-230b10604f82` (created 2026-11-23T15:13:31Z) serves the same built asset hashes as the local `frontend/dist` from commit `0bf412a0` (`/assets/index-sIPpdZRP.js`, `/assets/rolldown-runtime-hePW80VL.js`). Production probes: `POST /auth/password/reset` → `410 PASSWORD_RESET_DEPRECATED`; `POST /auth/password/recovery` with a dummy code → `401 PASSWORD_RECOVERY_INVALID`. Therefore the remote code and migration already match this fix batch; no new version upload was needed.
+
+No signed-browser acceptance is claimed. H01–H11 are locally implemented with regression tests; production journey acceptance remains open in the delivery ledger.
