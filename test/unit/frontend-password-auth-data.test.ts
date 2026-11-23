@@ -33,19 +33,19 @@ describe("password auth data", () => {
     expect(JSON.parse(String(calls[0]!.init?.body)).invitationCode).toBe(INVITATION);
   });
 
-  it("posts the exact login and bound-reset bodies", async () => {
+  it("posts the exact login and independent recovery bodies", async () => {
     const login = requester({ member: MEMBER });
     await expect(loginPassword("new@example.test", "correct horse battery staple", login.fetchStub)).resolves.toEqual(MEMBER);
     expect(login.calls[0]!.path).toBe("/auth/password");
     expect(JSON.parse(String(login.calls[0]!.init?.body))).toEqual({ email: "new@example.test", password: "correct horse battery staple" });
 
     const reset = requester(undefined, 204);
-    await expect(resetPassword("new@example.test", "another password value", INVITATION, reset.fetchStub)).resolves.toBeUndefined();
-    expect(reset.calls[0]!.path).toBe("/auth/password/reset");
+    await expect(resetPassword("new@example.test", "another password value", "abcd-efgh-jklm-npqr-stuv", reset.fetchStub)).resolves.toBeUndefined();
+    expect(reset.calls[0]!.path).toBe("/auth/password/recovery");
     expect(reset.calls[0]!.init?.body).toBe(JSON.stringify({
       email: "new@example.test",
       password: "another password value",
-      invitationCode: INVITATION,
+      recoveryCode: "ABCDEFGHJKLMNPQRSTUV",
     }));
   });
 
@@ -65,7 +65,8 @@ describe("password auth data", () => {
       [new ApiRequestError("PASSWORD_LOGIN_LOCKED", "", 429, true), "locked"],
       [new ApiRequestError("PASSWORD_LOGIN_INVALID", "", 401, false), "rejected"],
       [new ApiRequestError("MEMBER_DISABLED", "", 403, false), "disabled"],
-      [new ApiRequestError("PASSWORD_RESET_INVALID", "", 401, false), "reset_rejected"],
+      [new ApiRequestError("PASSWORD_RECOVERY_INVALID", "", 401, false), "reset_rejected"],
+      [new ApiRequestError("PASSWORD_RECOVERY_RATE_LIMITED", "", 429, true), "rate_limited"],
       [new ApiRequestError("REGISTRATION_INVITATION_REQUIRED", "", 400, false), "invitation_required"],
       [new ApiRequestError("REGISTRATION_INVITATION_INVALID", "", 400, false), "invitation_invalid"],
       [new ApiRequestError("API_ERROR", "", 500, true), "unknown"],

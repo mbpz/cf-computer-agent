@@ -7,6 +7,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { isInvitationCode, normalizeInvitationCode } from "../lib/invitations-data";
+import { isRecoveryCode, normalizeRecoveryCode } from "../lib/password-auth-data";
 import {
   loginPassword,
   passwordAuthFailure,
@@ -45,6 +46,7 @@ export function LoginPage({
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [invitation, setInvitation] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
   const [notice, setNotice] = useState<string>();
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string>();
@@ -76,7 +78,7 @@ export function LoginPage({
       setFormError(frontendText(locale, mode === "login" ? "LOGIN_PASSWORD_INVALID" : mode === "reset" ? "LOGIN_RESET_INVALID" : "LOGIN_REGISTER_INVALID"));
       return;
     }
-    if (mode !== "login") {
+    if (mode === "register") {
       const invitationCode = normalizeInvitationCode(invitation);
       if (invitationCode.length === 0) {
         setFormError(frontendText(locale, "LOGIN_INVITATION_REQUIRED"));
@@ -86,6 +88,12 @@ export function LoginPage({
         setFormError(frontendText(locale, "LOGIN_INVITATION_INVALID"));
         return;
       }
+    }
+    if (mode === "reset" && !isRecoveryCode(recoveryCode)) {
+      setFormError(frontendText(locale, "LOGIN_RESET_RECOVERY_INVALID"));
+      return;
+    }
+    if (mode !== "login") {
       if (!passwordAllowed(password)) {
         setFormError(frontendText(locale, "LOGIN_REGISTER_WEAK"));
         return;
@@ -104,11 +112,11 @@ export function LoginPage({
         await register(target, password, normalizeInvitationCode(invitation));
         navigate("/");
       } else if (mode === "reset") {
-        await reset(target, password, normalizeInvitationCode(invitation));
+        await reset(target, password, normalizeRecoveryCode(recoveryCode));
         setMode("login");
         setPassword("");
         setConfirm("");
-        setInvitation("");
+        setRecoveryCode("");
         setNotice(frontendText(locale, "LOGIN_RESET_SUCCESS"));
       } else {
         await login(target, password);
@@ -128,6 +136,7 @@ export function LoginPage({
     setPassword("");
     setConfirm("");
     setInvitation("");
+    setRecoveryCode("");
     setNotice(undefined);
     setFormError(undefined);
   };
@@ -165,8 +174,8 @@ export function LoginPage({
                   <Label htmlFor="login-password">{frontendText(locale, resetting ? "LOGIN_RESET_NEW_PASSWORD_LABEL" : "LOGIN_PASSWORD_LABEL")}</Label>
                   <Input id="login-password" type="password" autoComplete={registering || resetting ? "new-password" : "current-password"} value={password} disabled={pending} onChange={(value) => { setPassword(value); if (formError) setFormError(undefined); }} />
                 </div>
-                {(registering || resetting) && <div className="space-y-1">
-                  <Label htmlFor="login-invitation">{frontendText(locale, resetting ? "LOGIN_RESET_INVITATION_LABEL" : "LOGIN_INVITATION_LABEL")}</Label>
+                {registering && <div className="space-y-1">
+                  <Label htmlFor="login-invitation">{frontendText(locale, "LOGIN_INVITATION_LABEL")}</Label>
                   <Input
                     id="login-invitation"
                     data-login-invitation
@@ -179,7 +188,23 @@ export function LoginPage({
                     disabled={pending}
                     onChange={(value) => { setInvitation(uppercaseInvitation(value)); if (formError) setFormError(undefined); }}
                   />
-                  <p className="text-xs text-muted-foreground">{frontendText(locale, resetting ? "LOGIN_RESET_INVITATION_DESCRIPTION" : "LOGIN_INVITATION_DESCRIPTION")}</p>
+                  <p className="text-xs text-muted-foreground">{frontendText(locale, "LOGIN_INVITATION_DESCRIPTION")}</p>
+                </div>}
+                {resetting && <div className="space-y-1">
+                  <Label htmlFor="login-recovery-code">{frontendText(locale, "LOGIN_RESET_RECOVERY_LABEL")}</Label>
+                  <Input
+                    id="login-recovery-code"
+                    data-login-recovery-code
+                    type="text"
+                    autoComplete="one-time-code"
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    placeholder={frontendText(locale, "LOGIN_RESET_RECOVERY_PLACEHOLDER")}
+                    value={recoveryCode}
+                    disabled={pending}
+                    onChange={(value) => { setRecoveryCode(value.toUpperCase()); if (formError) setFormError(undefined); }}
+                  />
+                  <p className="text-xs text-muted-foreground">{frontendText(locale, "LOGIN_RESET_RECOVERY_DESCRIPTION")}</p>
                 </div>}
                 {(registering || resetting) && <div className="space-y-1">
                   <Label htmlFor="login-password-confirm">{frontendText(locale, resetting ? "LOGIN_RESET_CONFIRM_LABEL" : "LOGIN_REGISTER_CONFIRM_LABEL")}</Label>

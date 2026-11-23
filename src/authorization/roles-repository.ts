@@ -12,6 +12,8 @@ export interface RoleRecord {
   name: string;
   description: string;
   allowBits: string;
+  /** Stored row mask OR the built-in fallback for this role's member type. */
+  effectiveBits: string;
   memberCount: number;
   assignedMemberIds: string[];
   status: "active" | "disabled";
@@ -45,7 +47,15 @@ export class RolesRepository {
        ORDER BY r.is_system DESC, r.key ASC
        LIMIT 50`,
     ).all<RoleRow>();
-    return { items: rows.results.map(mapRole) };
+    const items = rows.results.map(mapRole);
+    for (const role of items) {
+      if (!role.isSystem) continue;
+      const builtIn = await this.builtInMemberIds(role.key);
+      const merged = [...new Set([...role.assignedMemberIds, ...builtIn])];
+      role.assignedMemberIds = merged;
+      role.memberCount = merged.length;
+    }
+    return { items };
   }
 
   async update(id: string, input: { name?: string; description?: string; allowBits: string }, actorId: string, expectedAllowBits?: string): Promise<RoleRecord> {
@@ -92,7 +102,7 @@ export class RolesRepository {
     const claimId = crypto.randomUUID();
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({ kind: "role.create", memberId: actorId, key, name, description, allowBits })));
     const requestHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-    const recorded: RoleRecord = { id, key, name, description, allowBits, memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
+    const recorded: RoleRecord = { id, key, name, description, allowBits, effectiveBits: serializePermissionMask(effectiveMask(parsePermissionMask(allowBits), false, key)), memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
     try {
       const results = await this.db.batch([
         this.db.prepare(
@@ -139,7 +149,20 @@ export class RolesRepository {
        WHERE r.id = ?
        GROUP BY r.id`,
     ).bind(id).first<RoleRow>();
-    return row ? mapRole(row) : null;
+    if (!row) return null;
+    const role = mapRole(row);
+    if (role.isSystem) {
+      const merged = [...new Set([...role.assignedMemberIds, ...await this.builtInMemberIds(role.key)])];
+      role.assignedMemberIds = merged;
+      role.memberCount = merged.length;
+    }
+    return role;
+  }
+
+  /** Built-in roles derive membership from `members.role`; custom roles use role_members. */
+  private async builtInMemberIds(key: string): Promise<string[]> {
+    const rows = await this.db.prepare("SELECT id FROM members WHERE role = ? ORDER BY created_at ASC, id ASC").bind(key).all<{ id: string }>();
+    return rows.results.map((member) => member.id);
   }
 
   async permissionMaskForMember(memberId: string, fallbackRole: MemberRole): Promise<bigint> {
@@ -226,6 +249,10 @@ function permissionMaskForRole(role: MemberRole): bigint {
   return permissionMaskFor(["knowledge:read", "knowledge:create", "submission:create", "submission:read-own", "agent:use", "search:use", "workspace.tasks"]);
 }
 
+function effectiveMask(stored: bigint, isSystem: boolean, key: string): bigint {
+  return stored | permissionMaskForRole(isSystem && key === "admin" ? "admin" : "contributor");
+}
+
 function mapRole(row: RoleRow): RoleRecord {
   return {
     id: row.id,
@@ -233,6 +260,7 @@ function mapRole(row: RoleRow): RoleRecord {
     name: row.name,
     description: row.description,
     allowBits: serializePermissionMask(parsePermissionMask(row.allow_bits)),
+    effectiveBits: serializePermissionMask(effectiveMask(parsePermissionMask(row.allow_bits), row.is_system === 1, row.key)),
     memberCount: Number(row.member_count) || 0,
     assignedMemberIds: typeof row.member_ids === "string" && row.member_ids.length > 0
       ? row.member_ids.split(",").filter(Boolean)

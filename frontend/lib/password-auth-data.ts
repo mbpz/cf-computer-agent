@@ -9,6 +9,15 @@ export interface PasswordAuthMember {
 
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
+const RECOVERY_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{20}$/u;
+
+/** Canonical form of a recovery credential; registration codes never qualify. */
+export function normalizeRecoveryCode(input: string): string {
+  return input.replace(/[\s-]/gu, "").toUpperCase();
+}
+export function isRecoveryCode(input: string): boolean {
+  return RECOVERY_CODE_PATTERN.test(normalizeRecoveryCode(input));
+}
 
 const memberKeys = ["id", "email", "role"] as const;
 
@@ -56,13 +65,14 @@ export function loginPassword(email: string, password: string, requester: Fetche
   return credentials("/auth/password", email, password, requester);
 }
 
-/** Reset must prove ownership with the invitation code used at registration. */
-export async function resetPassword(email: string, password: string, invitationCode: string, requester: Fetcher = fetch): Promise<void> {
-  await apiFetch<unknown>("/auth/password/reset", {
+/** Recovery uses a short-lived one-time code issued by an administrator; the
+ * registration invitation is not accepted as a recovery credential. */
+export async function resetPassword(email: string, password: string, recoveryCode: string, requester: Fetcher = fetch): Promise<void> {
+  await apiFetch<unknown>("/auth/password/recovery", {
     requester,
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password, invitationCode: normalizeInvitationCode(invitationCode) }),
+    body: JSON.stringify({ email, password, recoveryCode: normalizeRecoveryCode(recoveryCode) }),
   });
 }
 
@@ -106,7 +116,10 @@ export function passwordAuthFailure(error: unknown): PasswordAuthFailure {
     // Unknown and already-used codes are deliberately indistinguishable here.
     case "REGISTRATION_INVITATION_REQUIRED": return "invitation_required";
     case "REGISTRATION_INVITATION_INVALID": return "invitation_invalid";
-    case "PASSWORD_RESET_INVALID": return "reset_rejected";
+    case "PASSWORD_RECOVERY_INVALID": return "reset_rejected";
+    case "PASSWORD_RECOVERY_RATE_LIMITED": return "rate_limited";
+    case "PASSWORD_RECOVERY_REQUEST_INVALID": return "invalid";
+    case "PASSWORD_RESET_DEPRECATED": return "reset_rejected";
     default: return error.status === 400 ? "invalid" : "unknown";
   }
 }

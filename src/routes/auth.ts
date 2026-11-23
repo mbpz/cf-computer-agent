@@ -20,7 +20,7 @@ export interface AuthRouteServices {
   oauth: GitHubOAuthClient;
   wechat: WeChatOAuthClient;
   members: Pick<MembersService, "resolveGitHubLogin" | "resolveWeChatLogin">;
-  passwords: Pick<PasswordAuthService, "register" | "login" | "resetPassword">;
+  passwords: Pick<PasswordAuthService, "register" | "login" | "recoverPassword">;
   sessions: Pick<SessionService, "create" | "logout">;
 }
 
@@ -114,10 +114,20 @@ export async function routeAuth(
 
   if (url.pathname === "/auth/password/reset") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
+    // The old reset flow accepted the registration invitation as the recovery
+    // proof. It is closed; administrators issue an independent one-time code.
+    throw new AppError("PASSWORD_RESET_DEPRECATED", "Password reset requires a recovery code", 410);
+  }
+
+  if (url.pathname === "/auth/password/recovery") {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
     requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
-    const input = await parsePasswordResetRequest(request);
-    await services.passwords.resetPassword(input);
+    const input = await parsePasswordRecoveryRequest(request);
+    await services.passwords.recoverPassword({
+      ...input,
+      ip: request.headers.get("cf-connecting-ip") ?? "",
+    });
     return authResponse(null, 204, context);
   }
 
@@ -168,23 +178,16 @@ export function clearSessionCookie(response: Response): Response {
   return response;
 }
 
-async function parsePasswordResetRequest(request: Request): Promise<{ email: string; password: string; invitationCode?: string }> {
+async function parsePasswordRecoveryRequest(request: Request): Promise<{ email: string; password: string; recoveryCode: string }> {
   const input = strictRecord(
-    await parseJsonRequestAs(request, "PASSWORD_RESET_REQUEST_INVALID"),
-    ["email", "password", "invitationCode"],
-    "PASSWORD_RESET_REQUEST_INVALID",
+    await parseJsonRequestAs(request, "PASSWORD_RECOVERY_REQUEST_INVALID"),
+    ["email", "password", "recoveryCode"],
+    "PASSWORD_RECOVERY_REQUEST_INVALID",
   );
-  if (typeof input.email !== "string" || typeof input.password !== "string") {
-    throw new AppError("PASSWORD_RESET_REQUEST_INVALID", "Password reset request is invalid", 400);
+  if (typeof input.email !== "string" || typeof input.password !== "string" || typeof input.recoveryCode !== "string") {
+    throw new AppError("PASSWORD_RECOVERY_REQUEST_INVALID", "Password recovery request is invalid", 400);
   }
-  // A missing or non-string code is not a shape error: the service answers it
-  // with the same PASSWORD_RESET_INVALID as a wrong code, so callers cannot
-  // distinguish "no code" from "not the code that created this member".
-  return {
-    email: input.email,
-    password: input.password,
-    ...(typeof input.invitationCode === "string" ? { invitationCode: input.invitationCode } : {}),
-  };
+  return { email: input.email, password: input.password, recoveryCode: input.recoveryCode };
 }
 
 async function parseRegistrationRequest(request: Request): Promise<{ email: string; password: string; invitationCode?: string }> {

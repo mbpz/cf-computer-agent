@@ -11,6 +11,11 @@ export interface BatchReviewItemOutcome {
   readonly error?: { readonly code: string; readonly status: number; readonly retryable: boolean };
 }
 
+/** The POST was sent but its 200 body could not be trusted; the outcome is unknown. */
+export class BatchReviewUnknownOutcomeError extends Error {
+  constructor() { super("BATCH_REVIEW_OUTCOME_UNKNOWN"); }
+}
+
 export interface BatchReviewResult {
   readonly requested: number;
   readonly succeeded: number;
@@ -91,5 +96,11 @@ export async function sendBatchReview(actions: readonly BatchItemAction[], reque
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ actions }),
   });
-  return normalizeBatchReview(payload, actions);
+  try {
+    return normalizeBatchReview(payload, actions);
+  } catch {
+    // The request reached the server; a malformed body means an unknown result,
+    // never a client-side validation rejection.
+    throw new BatchReviewUnknownOutcomeError();
+  }
 }

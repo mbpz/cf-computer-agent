@@ -105,18 +105,19 @@ describe("password login page", () => {
     expect(container.textContent).toContain("This invitation code is not valid. Check it and try again.");
   });
 
-  it("resets a forgotten password with the invitation code used at registration", async () => {
+  it("resets a forgotten password with an administrator-issued one-time recovery code", async () => {
     const reset = vi.fn().mockResolvedValue(undefined);
     await act(async () => root.render(<LoginPage locale={locale} reset={reset} navigate={vi.fn()} />));
     await act(async () => (container.querySelector("[data-login-forgot]") as HTMLButtonElement).click());
     expect(container.textContent).toContain("Reset your password");
-    expect(container.querySelector("#login-recovery-code")).toBeNull();
+    expect(container.querySelector("#login-invitation")).toBeNull();
+    expect(container.querySelector("#login-recovery-code")).not.toBeNull();
     await act(async () => setValue("#login-email", "new@example.test"));
     await act(async () => setValue("#login-password", "another password value"));
     await act(async () => setValue("#login-password-confirm", "another password value"));
-    await act(async () => setValue("#login-invitation", INVITATION_DISPLAY));
+    await act(async () => setValue("#login-recovery-code", "abcd-efgh-jklm-npqr-stuv"));
     await submit();
-    expect(reset).toHaveBeenCalledWith("new@example.test", "another password value", INVITATION);
+    expect(reset).toHaveBeenCalledWith("new@example.test", "another password value", "ABCDEFGHJKLMNPQRSTUV");
     expect(container.textContent).toContain("Password reset. Sign in with your new password.");
     expect(container.textContent).toContain("Sign in with email");
   });
@@ -190,15 +191,28 @@ describe("password login page", () => {
     expect(container.textContent).not.toContain("used");
   });
 
-  it("maps a rejected password reset to the email-or-invitation copy", async () => {
-    await act(async () => root.render(<LoginPage locale={locale} reset={vi.fn().mockRejectedValue(new ApiRequestError("PASSWORD_RESET_INVALID", "", 401, false))} navigate={vi.fn()} />));
+  it("maps a rejected password recovery to the email-or-recovery copy", async () => {
+    await act(async () => root.render(<LoginPage locale={locale} reset={vi.fn().mockRejectedValue(new ApiRequestError("PASSWORD_RECOVERY_INVALID", "", 401, false))} navigate={vi.fn()} />));
     await act(async () => (container.querySelector("[data-login-forgot]") as HTMLButtonElement).click());
     await act(async () => setValue("#login-email", "new@example.test"));
     await act(async () => setValue("#login-password", "another password value"));
     await act(async () => setValue("#login-password-confirm", "another password value"));
-    await act(async () => setValue("#login-invitation", INVITATION));
+    await act(async () => setValue("#login-recovery-code", "ABCDE-FGHJK-LMNPQ-RSTUV"));
     await submit();
-    expect(container.textContent).toContain("The email or invitation code is incorrect.");
+    expect(container.textContent).toContain("The email or recovery code is incorrect or has expired.");
+  });
+
+  it("rejects a registration invitation as a recovery code before calling the server", async () => {
+    const reset = vi.fn();
+    await act(async () => root.render(<LoginPage locale={locale} reset={reset} navigate={vi.fn()} />));
+    await act(async () => (container.querySelector("[data-login-forgot]") as HTMLButtonElement).click());
+    await act(async () => setValue("#login-email", "new@example.test"));
+    await act(async () => setValue("#login-password", "another password value"));
+    await act(async () => setValue("#login-password-confirm", "another password value"));
+    await act(async () => setValue("#login-recovery-code", "ABCD-EFGH-JKLM-NPQR"));
+    await submit();
+    expect(reset).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Enter the 20-character recovery code.");
   });
 
   it("hides GitHub when unavailable but keeps the password form", async () => {

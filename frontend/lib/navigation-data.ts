@@ -17,6 +17,12 @@ export interface NavigationDataNode {
   children: NavigationDataNode[];
 }
 
+/** Dispatched after an authorized menu write so the shell re-projects the tree. */
+export const NAVIGATION_REFRESH_EVENT = "memory-garden:navigation-refresh";
+export function requestNavigationRefresh(): void {
+  window.dispatchEvent(new window.Event(NAVIGATION_REFRESH_EVENT));
+}
+
 export async function loadNavigation(): Promise<NavigationDataNode[]> {
   const payload = await apiFetch<unknown>("/api/navigation");
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("NAVIGATION_INVALID");

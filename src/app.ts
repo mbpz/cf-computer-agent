@@ -165,6 +165,9 @@ export interface AppDependencies {
     auditId?: () => string;
     now?: () => Date;
     registrationLimit?: number;
+    registrationFailureLimit?: number;
+    recoveryLimit?: number;
+    recoveryTtlMs?: number;
     loginFailureThreshold?: number;
     lockMs?: number;
   };
@@ -386,7 +389,6 @@ function createRequestServices(
   const invitations = new InvitationsService(invitationRecords);
   const passwords = new PasswordAuthService(
     new PasswordRepository(env.DB, audit),
-    invitationRecords,
     dependencies.passwordAuth,
   );
   return {

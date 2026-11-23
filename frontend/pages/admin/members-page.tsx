@@ -11,6 +11,7 @@ import { PageState } from "../../components/ui/page-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { InvitationAdminPanel } from "../../components/admin/invitation-admin-panel";
 import { InvitationNetworkPanel } from "../../components/admin/invitation-network-panel";
+import type { MemberRecoveryCode } from "../../lib/admin-members-data";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { FrontendPageMetadata, SupportedPageSize } from "../../lib/numbered-page";
 
@@ -35,6 +36,8 @@ export function MembersPage({
   onLoadMore,
   onStatusChange,
   locale,
+  isAdmin = false,
+  issueRecovery,
 }: {
   onLoadRetry?: () => void;
   members: readonly { id: string; email?: string; role?: string; status?: string }[];
@@ -56,6 +59,9 @@ export function MembersPage({
   onLoadMore?: () => void;
   onStatusChange?: (id: string, status: "active" | "disabled") => void;
   locale: LocaleRuntime;
+  /** Only the built-in admin role may see invitation or recovery-issuance surfaces. */
+  isAdmin?: boolean;
+  issueRecovery?: (id: string) => Promise<MemberRecoveryCode>;
 }) {
   type StatusConfirmation = {
     kind: "status";
@@ -115,17 +121,34 @@ export function MembersPage({
     destructive: confirmation.nextStatus === "disabled",
   } : null;
   const [tab, setTab] = useState<"members" | "invitations" | "network">("members");
+  const [openedTabs, setOpenedTabs] = useState<ReadonlySet<"members" | "invitations" | "network">>(new Set(["members"]));
+  const [recovery, setRecovery] = useState<{ label: string; value: MemberRecoveryCode } | null>(null);
+  const [recoveryPending, setRecoveryPending] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string>();
+  const issueRecoveryCode = async (member: typeof members[number]) => {
+    if (!isAdmin || !issueRecovery || recoveryPending) return;
+    setRecoveryPending(member.id);
+    setRecoveryError(undefined);
+    try {
+      const value = await issueRecovery(member.id);
+      setRecovery({ label: member.email || member.id, value });
+    } catch {
+      setRecoveryError(frontendText(locale, "ADMIN_MEMBER_RECOVERY_FAILED"));
+    } finally {
+      setRecoveryPending(null);
+    }
+  };
 
   // The page shell is constant: the header and tabs render for every
   // state; loading and read failure only replace the member table.
   return <><section className="flex flex-col gap-5 lg:h-full lg:min-h-0" inert={validConfirmation} aria-hidden={validConfirmation || undefined}>
     <PageHeader title={frontendText(locale, "ADMIN_MEMBERS_TITLE")} description={frontendText(locale, "ADMIN_MEMBERS_DESCRIPTION")}
       actions={tab === "members" ? <FilterSelect label="Status" ariaLabel="Member status" value={status} disabled={pending} onChange={(value) => onStatusFilterChange?.(value as "" | "active" | "disabled")} options={[{ value: "", label: "All" }, { value: "active", label: "Active" }, { value: "disabled", label: "Disabled" }]} /> : undefined} />
-    <Tabs value={tab} onValueChange={(value) => setTab(value as "members" | "invitations" | "network")} className="flex min-h-0 flex-col gap-4">
+    <Tabs value={tab} onValueChange={(value) => { const next = value as "members" | "invitations" | "network"; setTab(next); setOpenedTabs((current) => current.has(next) ? current : new Set([...current, next])); }} className="flex min-h-0 flex-col gap-4">
       <TabsList>
         <TabsTrigger value="members">{frontendText(locale, "ADMIN_MEMBERS_TITLE")}</TabsTrigger>
-        <TabsTrigger value="invitations">{frontendText(locale, "ADMIN_INVITATIONS_TITLE")}</TabsTrigger>
-        <TabsTrigger value="network">{frontendText(locale, "ADMIN_NETWORK_TITLE")}</TabsTrigger>
+        {isAdmin && <TabsTrigger value="invitations">{frontendText(locale, "ADMIN_INVITATIONS_TITLE")}</TabsTrigger>}
+        {isAdmin && <TabsTrigger value="network">{frontendText(locale, "ADMIN_NETWORK_TITLE")}</TabsTrigger>}
       </TabsList>
       <TabsContent value="members" className="flex min-h-0 flex-col gap-5">
     <AppliedFilters
@@ -134,6 +157,13 @@ export function MembersPage({
       filters={status ? [{ id: "status", label: `Status: ${status}`, onRemove: () => onStatusFilterChange?.("") }] : []}
       onClear={() => onStatusFilterChange?.("")}
     />
+    {recovery && <div data-member-recovery-result role="status" className="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
+      <p className="font-medium">{frontendText(locale, "ADMIN_MEMBER_RECOVERY_TITLE")} · {recovery.label}</p>
+      <code data-member-recovery-code className="block select-all rounded bg-background px-2 py-1 font-mono text-base tracking-wider">{recovery.value.formattedCode}</code>
+      <p className="text-xs text-muted-foreground">{frontendText(locale, "ADMIN_MEMBER_RECOVERY_EXPIRES")}: {recovery.value.expiresAt} · {frontendText(locale, "ADMIN_MEMBER_RECOVERY_ONE_TIME")}</p>
+      <Button type="button" size="sm" variant="outline" onClick={() => setRecovery(null)}>{frontendText(locale, "ADMIN_MEMBER_RECOVERY_DISMISS")}</Button>
+    </div>}
+    {recoveryError && <p role="alert" data-member-recovery-error className="text-sm text-destructive">{recoveryError}</p>}
     {loading ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
       : error ? <PageState kind={forbidden ? "forbidden" : "error"} title={error} description={frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>
         : <>
@@ -158,13 +188,13 @@ export function MembersPage({
               { key: "email", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_EMAIL"), cellClassName: "whitespace-normal", cell: (member) => <p className="line-clamp-1 font-medium">{member.email || frontendText(locale, "ADMIN_EMAIL_UNAVAILABLE")}</p> },
               { key: "role", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_ROLE"), width: "160px", cell: (member) => <span className="text-sm text-muted-foreground">{member.role || frontendText(locale, "ADMIN_ROLE_UNAVAILABLE")}</span> },
               { key: "status", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_STATUS"), width: "160px", cell: (member) => { const disabled = member.status === "disabled"; return <Badge variant={disabled ? "destructive" : member.status === "active" ? "success" : "secondary"}>{disabled ? frontendText(locale, "ADMIN_DISABLED") : member.status === "active" ? frontendText(locale, "ADMIN_ACTIVE") : frontendText(locale, "ADMIN_MEMBER_STATUS_UNAVAILABLE")}</Badge>; } },
-              { key: "actions", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_ACTIONS"), align: "right", width: "160px", cell: (member) => { const disabled = member.status === "disabled"; const itemPending = pending || pendingIds.includes(member.id); const mutable = member.role === "contributor" && (member.status === "active" || member.status === "disabled"); const actionLabel = disabled ? frontendText(locale, "ADMIN_ENABLE") : frontendText(locale, "ADMIN_DISABLE"); const target = member.email || member.id; return mutable ? <Button aria-label={`${actionLabel} ${target}`} size="sm" variant="outline" disabled={itemPending || forbidden || !onStatusChange} onClick={() => requestStatusConfirmation(member)}>{actionLabel}</Button> : null; } },
+              { key: "actions", header: frontendText(locale, "ADMIN_MEMBERS_COLUMN_ACTIONS"), align: "right", width: "260px", cell: (member) => { const disabled = member.status === "disabled"; const itemPending = pending || pendingIds.includes(member.id); const mutable = member.role === "contributor" && (member.status === "active" || member.status === "disabled"); const actionLabel = disabled ? frontendText(locale, "ADMIN_ENABLE") : frontendText(locale, "ADMIN_DISABLE"); const target = member.email || member.id; return <div className="flex flex-wrap items-center justify-end gap-2">{mutable ? <Button aria-label={`${actionLabel} ${target}`} size="sm" variant="outline" disabled={itemPending || forbidden || !onStatusChange} onClick={() => requestStatusConfirmation(member)}>{actionLabel}</Button> : null}{isAdmin && issueRecovery && member.status === "active" && <Button data-member-recovery-issue={member.id} size="sm" variant="ghost" disabled={recoveryPending === member.id || forbidden} onClick={() => void issueRecoveryCode(member)}>{frontendText(locale, "ADMIN_MEMBER_RECOVERY_ISSUE")}</Button>}</div>; } },
             ]}
           />
         </>}
       </TabsContent>
-      <TabsContent value="invitations">{tab === "invitations" && <InvitationAdminPanel locale={locale} />}</TabsContent>
-      <TabsContent value="network">{tab === "network" && <InvitationNetworkPanel locale={locale} autoLoad />}</TabsContent>
+      <TabsContent value="invitations">{isAdmin && openedTabs.has("invitations") && <InvitationAdminPanel locale={locale} />}</TabsContent>
+      <TabsContent value="network">{isAdmin && openedTabs.has("network") && <InvitationNetworkPanel locale={locale} autoLoad />}</TabsContent>
     </Tabs>
   </section>
     <ConfirmAction open={validConfirmation}

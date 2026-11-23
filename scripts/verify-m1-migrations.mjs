@@ -86,6 +86,7 @@ const localMigrations = [...migrations,
   ["0078_password_auth.sql", "16c553f8fb6b2d775ea77ceadd8d10bc689237e9d8d2a2705faeca7940a96eb7"],
   ["0079_invitations.sql", "00f98c0ba22c1da433ae03e527de9561a2c81e35f90fad67d18ae0d4776082d5"],
   ["0080_backfill_password_invitations.sql", "0d998da74bf5da56382adf0ff8693da305cf6bf304f3bcd3dc10ec66bf114607"],
+  ["0081_password_recovery.sql", "b3dba1c20cfc3496b894c9312624ba5405f6e8ff3c1c7b137eddc67de7c9d10a"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

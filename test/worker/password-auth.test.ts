@@ -223,116 +223,24 @@ describe("invitation-code password registration and login", () => {
     expect(rows.results[0]!.password_hash).not.toBe(rows.results[1]!.password_hash);
   });
 
-  it("resets the password only with the invitation code bound to the member and revokes existing sessions", async () => {
-    const account = await registerAccount("recover@example.test");
-    const reset = await api(app(), "/auth/password/reset", "POST", {
-      email: "recover@example.test",
+  it("closes invitation-based reset and accepts only the independent recovery endpoint", async () => {
+    const account = await registerAccount("closed-reset@example.test");
+    const old = await api(app(), "/auth/password/reset", "POST", {
+      email: "closed-reset@example.test",
       password: "a brand new password",
       invitationCode: account.invitationCode,
     });
-    expect(reset.status).toBe(204);
-    expect(await reset.text()).toBe("");
-    expect((await api(app(), "/api/session", "GET", undefined, account.token)).status).toBe(401);
-    expect((await api(app(), "/auth/password", "POST", { email: "recover@example.test", password: PASSWORD })).status).toBe(401);
-    expect((await api(app(), "/auth/password", "POST", { email: "recover@example.test", password: "a brand new password" })).status).toBe(200);
-    expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.password_reset'")).toBe(1);
-    expect(await env.DB.prepare("SELECT failed_login_count, locked_until FROM members WHERE email = 'recover@example.test'").first())
-      .toEqual({ failed_login_count: 0, locked_until: null });
-    // The reset code stays claimed by the same member; it is not re-consumed.
-    expect(await invitationRow(account.invitationCode)).toMatchObject({ status: "used", bound_member_id: account.memberId });
-
-    // The same bound code can reset again; the previous password stops working.
-    expect((await api(app(), "/auth/password/reset", "POST", {
-      email: "recover@example.test",
-      password: "another password value",
-      invitationCode: grouped(account.invitationCode),
-    })).status).toBe(204);
-    expect((await api(app(), "/auth/password", "POST", { email: "recover@example.test", password: "a brand new password" })).status).toBe(401);
-    expect((await api(app(), "/auth/password", "POST", { email: "recover@example.test", password: "another password value" })).status).toBe(200);
-    expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.password_reset'")).toBe(2);
-  });
-
-  it("rejects resets without the exact bound invitation code", async () => {
-    const account = await registerAccount("bound@example.test");
-    const otherAccount = await registerAccount("other-bound@example.test");
-    // A different, still unused code is not proof of identity.
-    const otherUnused = await seedInvitation();
-
-    for (const input of [
-      { email: "unknown@example.test", password: "another password value", invitationCode: otherUnused },
-      { email: "bound@example.test", password: "another password value", invitationCode: otherUnused },
-      { email: "bound@example.test", password: "another password value", invitationCode: otherAccount.invitationCode },
-      { email: "existing@example.test", password: "another password value", invitationCode: otherUnused },
-      { email: "bound@example.test", password: "another password value" },
-      { email: "bound@example.test", password: "another password value", invitationCode: "ABCD" },
-      { email: "bound@example.test", password: "another password value", invitationCode: 42 },
-    ] as const) {
-      const response = await api(app(), "/auth/password/reset", "POST", input);
-      expect(response.status, JSON.stringify(input)).toBe(401);
-      await expect(response.json()).resolves.toMatchObject({ error: { code: "PASSWORD_RESET_INVALID" } });
-    }
+    expect(old.status).toBe(410);
+    await expect(old.json()).resolves.toMatchObject({ error: { code: "PASSWORD_RESET_DEPRECATED" } });
+    // The registration invitation is not accepted as a recovery credential.
+    const wrong = await api(app(), "/auth/password/recovery", "POST", {
+      email: "closed-reset@example.test",
+      password: "a brand new password",
+      recoveryCode: grouped(account.invitationCode),
+    });
+    expect(wrong.status).toBe(401);
+    expect((await api(app(), "/auth/password", "POST", { email: "closed-reset@example.test", password: PASSWORD })).status).toBe(200);
     expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.password_reset'")).toBe(0);
-    // The account's own code never leaked into any failure, and it still works.
-    expect((await api(app(), "/auth/password/reset", "POST", {
-      email: "bound@example.test",
-      password: "a brand new password",
-      invitationCode: account.invitationCode,
-    })).status).toBe(204);
-  });
-
-  it("rejects a disabled member's reset and a member without a bound invitation", async () => {
-    const account = await registerAccount("disabled-reset@example.test");
-    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = ?").bind(account.memberId).run();
-    const disabled = await api(app(), "/auth/password/reset", "POST", {
-      email: "disabled-reset@example.test",
-      password: "a brand new password",
-      invitationCode: account.invitationCode,
-    });
-    expect(disabled.status).toBe(401);
-    await expect(disabled.json()).resolves.toMatchObject({ error: { code: "PASSWORD_RESET_INVALID" } });
-
-    // Members created by the retired one-time-code login have no bound code.
-    await env.DB.prepare(
-      `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES
-       ('legacy-code-user', 'code:legacy', 'legacy@example.test', 'contributor', 'active', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z')`,
-    ).run();
-    await env.DB.prepare(
-      `INSERT INTO auth_sessions (token_hash, member_id, created_at, expires_at, last_seen_at) VALUES
-       (?, 'legacy-code-user', '2026-10-18T12:00:00.000Z', '2026-11-18T12:00:00.000Z', '2026-10-18T12:00:00.000Z')`,
-    ).bind("a".repeat(64)).run();
-    const legacy = await api(app(), "/auth/password/reset", "POST", {
-      email: "legacy@example.test",
-      password: "a brand new password",
-      invitationCode: account.invitationCode,
-    });
-    expect(legacy.status).toBe(401);
-    expect(await count("SELECT COUNT(*) AS total FROM auth_sessions WHERE member_id = 'legacy-code-user'")).toBe(1);
-    expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.password_reset'")).toBe(0);
-  });
-
-  it("rejects weak passwords and malformed reset requests", async () => {
-    const account = await registerAccount("other-reset@example.test");
-    const weak = await api(app(), "/auth/password/reset", "POST", {
-      email: "other-reset@example.test",
-      password: WEAK,
-      invitationCode: account.invitationCode,
-    });
-    expect(weak.status).toBe(400);
-    await expect(weak.json()).resolves.toMatchObject({ error: { code: "PASSWORD_POLICY_INVALID" } });
-
-    for (const body of [
-      "{}",
-      '{"email":"a@b.test"}',
-      '{"email":"a@b.test","password":"x","extra":1}',
-      '{"email":"a@b.test","recoveryCode":"AAAAAA-AAAAAA-AAAAAA-AAAAAA","password":"another password value"}',
-      "[]",
-      "{",
-    ]) {
-      const response = await api(app(), "/auth/password/reset", "POST", body);
-      expect(response.status, body).toBe(400);
-      await expect(response.json()).resolves.toMatchObject({ error: { code: "PASSWORD_RESET_REQUEST_INVALID" } });
-    }
-    expect((await api(app(), "/auth/password/reset", "GET")).status).toBe(405);
   });
 
   async function registerAccount(email: string): Promise<{ token: string; invitationCode: string; memberId: string }> {

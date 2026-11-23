@@ -1,9 +1,9 @@
 import { AppError } from "../http";
 import { canonicalEmail } from "../identity/email";
-import type { InvitationsRepositoryPort } from "../invitations/repository";
-import { invitationCodesMatch, normalizeInvitationCode } from "../invitations/types";
+import { normalizeInvitationCode } from "../invitations/types";
 import type { Member } from "../members/types";
 import { hashPassword, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, verifyPassword } from "./hash";
+import { formatRecoveryCode, generateRecoveryCode, hashRecoveryCode, normalizeRecoveryCode, RECOVERY_CODE_TTL_MS } from "./recovery-code";
 import { RegistrationInvitationConflictError, type PasswordRepositoryPort } from "./repository";
 
 const encoder = new TextEncoder();
@@ -14,6 +14,9 @@ export interface PasswordAuthServiceOptions {
   auditId?: () => string;
   now?: () => Date;
   registrationLimit?: number;
+  registrationFailureLimit?: number;
+  recoveryLimit?: number;
+  recoveryTtlMs?: number;
   loginFailureThreshold?: number;
   lockMs?: number;
 }
@@ -31,30 +34,34 @@ export interface PasswordAuthServiceOptions {
  * Password login is limited to five failures per account; the account then
  * locks for fifteen minutes.
  *
- * A forgotten password is replaced only by presenting the invitation code that
- * created the member (the row whose `bound_member_id` is that member). Unknown
- * email, disabled member, missing binding and mismatched code are the same
- * `PASSWORD_RESET_INVALID` failure, so an attacker who only knows the email
- * cannot replace the password. GitHub/WeChat-only members have no bound code
- * and remain ineligible.
+ * A forgotten password is replaced only by a short-lived, single-use recovery
+ * code issued by an administrator for that member. Registration invitation
+ * codes are provenance and are never accepted as recovery credentials. Unknown
+ * email, disabled member, expired/reused code and a wrong code all return the
+ * same failure, so an attacker who only knows the email cannot replace it.
  */
 export class PasswordAuthService {
   private readonly id: () => string;
   private readonly auditId: () => string;
   private readonly now: () => Date;
   private readonly registrationLimit: number;
+  private readonly registrationFailureLimit: number;
+  private readonly recoveryLimit: number;
+  private readonly recoveryTtlMs: number;
   private readonly loginFailureThreshold: number;
   private readonly lockMs: number;
 
   constructor(
     private readonly repository: PasswordRepositoryPort,
-    private readonly invitations: Pick<InvitationsRepositoryPort, "findBoundByMemberId">,
     options: PasswordAuthServiceOptions = {},
   ) {
     this.id = options.id || (() => crypto.randomUUID());
     this.auditId = options.auditId || (() => crypto.randomUUID());
     this.now = options.now || (() => new Date());
     this.registrationLimit = options.registrationLimit ?? 5;
+    this.registrationFailureLimit = options.registrationFailureLimit ?? 20;
+    this.recoveryLimit = options.recoveryLimit ?? 10;
+    this.recoveryTtlMs = options.recoveryTtlMs ?? RECOVERY_CODE_TTL_MS;
     this.loginFailureThreshold = options.loginFailureThreshold ?? 5;
     this.lockMs = options.lockMs ?? 15 * 60 * 1_000;
   }
@@ -67,9 +74,14 @@ export class PasswordAuthService {
     const invitationCode = this.requireRegistrationInvitation(input.invitationCode);
     const now = this.currentTime();
     const ipHash = await sha256Hex(input.ip || "unknown");
-    const attempts = await this.repository.countRegistrationAttempts(ipHash, new Date(now.getTime() - HOUR_MS).toISOString());
+    const since = new Date(now.getTime() - HOUR_MS).toISOString();
+    const attempts = await this.repository.countRegistrationAttempts(ipHash, since);
     if (attempts >= this.registrationLimit) {
       throw new AppError("REGISTRATION_RATE_LIMITED", "Too many registrations from this address", 429, true);
+    }
+    const failures = await this.repository.countRegistrationFailures(ipHash, since);
+    if (failures >= this.registrationFailureLimit) {
+      throw new AppError("REGISTRATION_RATE_LIMITED", "Too many rejected registrations from this address", 429, true);
     }
     if (await this.repository.findByCanonicalEmail(email)) {
       throw new AppError("REGISTRATION_EMAIL_TAKEN", "This email is already registered", 409);
@@ -101,6 +113,7 @@ export class PasswordAuthService {
       return { member: record.member };
     } catch (error) {
       if (error instanceof RegistrationInvitationConflictError) {
+        await this.repository.recordRegistrationFailure(ipHash, createdAt);
         throw new AppError("REGISTRATION_INVITATION_INVALID", "Invitation code is invalid", 400);
       }
       if (error instanceof Error && /members_canonical_email|UNIQUE constraint failed: members\.email/iu.test(error.message)) {
@@ -148,47 +161,76 @@ export class PasswordAuthService {
     return record.member;
   }
 
-  async resetPassword(input: { email: string; password: string; invitationCode?: string | null }): Promise<void> {
-    const email = canonicalEmail(input.email);
-    if (!email) {
-      throw new AppError("PASSWORD_RESET_REQUEST_INVALID", "Password reset request is invalid", 400);
+  /** Issues a 30-minute, single-use recovery code and returns it once. */
+  async issueRecoveryCode(actorMemberId: string, memberId: string): Promise<{ code: string; formattedCode: string; expiresAt: string }> {
+    const target = await this.repository.findById(memberId);
+    if (!target || target.member.status !== "active") {
+      throw new AppError("MEMBER_NOT_FOUND", "Member not found", 404);
     }
-    if (!this.passwordAllowed(input.password)) {
-      throw new AppError("PASSWORD_POLICY_INVALID", "Enter a valid email and a password of 12-128 characters", 400);
-    }
-    const providedCode = typeof input.invitationCode === "string"
-      ? normalizeInvitationCode(input.invitationCode)
-      : null;
     const now = this.currentTime();
+    const code = generateRecoveryCode();
+    const expiresAt = new Date(now.getTime() + this.recoveryTtlMs).toISOString();
+    await this.repository.createRecoveryCode({
+      id: this.id(),
+      memberId,
+      codeHash: await hashRecoveryCode(code),
+      expiresAt,
+      createdByMemberId: actorMemberId,
+      createdAt: now.toISOString(),
+    }, {
+      id: this.auditId(),
+      actorKind: "member",
+      actorId: actorMemberId,
+      action: "member.recovery_code_issued",
+      resourceType: "member",
+      resourceId: memberId,
+      metadata: { expiresAt },
+      createdAt: now.toISOString(),
+    });
+    return { code, formattedCode: formatRecoveryCode(code), expiresAt };
+  }
+
+  /** Replaces a password with a one-time recovery code and revokes sessions. */
+  async recoverPassword(input: { email: string; password: string; recoveryCode: string; ip: string }): Promise<void> {
+    const email = canonicalEmail(input.email);
+    const code = normalizeRecoveryCode(input.recoveryCode);
+    if (!email) throw new AppError("PASSWORD_RECOVERY_REQUEST_INVALID", "Password recovery request is invalid", 400);
+    if (!this.passwordAllowed(input.password)) {
+      throw new AppError("PASSWORD_POLICY_INVALID", "Enter a valid password of 12-128 characters", 400);
+    }
+    const now = this.currentTime();
+    const ipHash = await sha256Hex(input.ip || "unknown");
+    const attempts = await this.repository.countRecoveryAttempts(ipHash, new Date(now.getTime() - HOUR_MS).toISOString());
+    if (attempts >= this.recoveryLimit) {
+      throw new AppError("PASSWORD_RECOVERY_RATE_LIMITED", "Too many recovery attempts", 429, true);
+    }
     const record = await this.repository.findByCanonicalEmail(email);
-    // Always pay the PBKDF2 cost so an unknown email is not visibly faster.
-    const newPasswordHash = await hashPassword(input.password);
-    if (!record || record.member.status !== "active" || providedCode === null) {
-      throw new AppError("PASSWORD_RESET_INVALID", "Password reset could not be completed", 401);
+    // Always pay the password-hash cost, even for an unknown email or bad code.
+    const passwordHash = await hashPassword(input.password);
+    if (!record || record.member.status !== "active" || code === null) {
+      await this.repository.recordRecoveryAttempt(ipHash, now.toISOString());
+      throw new AppError("PASSWORD_RECOVERY_INVALID", "Password recovery could not be completed", 401);
     }
-    // Only the invitation that created this member proves the caller is the
-    // same person; there is no email/recovery-code fallback.
-    const bound = await this.invitations.findBoundByMemberId(record.member.id);
-    if (!bound || !invitationCodesMatch(bound.code, providedCode)) {
-      throw new AppError("PASSWORD_RESET_INVALID", "Password reset could not be completed", 401);
+    const consumed = await this.repository.consumeRecoveryCode({
+      memberId: record.member.id,
+      codeHash: await hashRecoveryCode(code),
+      expectedPasswordHash: record.passwordHash,
+      passwordHash,
+      now: now.toISOString(),
+    }, {
+      id: this.auditId(),
+      actorKind: "member",
+      actorId: record.member.id,
+      action: "member.password_reset",
+      resourceType: "member",
+      resourceId: record.member.id,
+      metadata: {},
+      createdAt: now.toISOString(),
+    });
+    if (!consumed) {
+      await this.repository.recordRecoveryAttempt(ipHash, now.toISOString());
+      throw new AppError("PASSWORD_RECOVERY_INVALID", "Password recovery could not be completed", 401);
     }
-    const reset = await this.repository.resetPassword(
-      record.member.id,
-      record.passwordHash,
-      newPasswordHash,
-      now.toISOString(),
-      {
-        id: this.auditId(),
-        actorKind: "member",
-        actorId: record.member.id,
-        action: "member.password_reset",
-        resourceType: "member",
-        resourceId: record.member.id,
-        metadata: {},
-        createdAt: now.toISOString(),
-      },
-    );
-    if (!reset) throw new AppError("PASSWORD_RESET_INVALID", "Password reset could not be completed", 401);
   }
 
   /** Changes or sets the password for the authenticated member. Existing

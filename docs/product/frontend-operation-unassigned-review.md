@@ -61,9 +61,9 @@ A01、A02、A05、D04 仍开放。源码人工分类覆盖这 181 项，但 A01 
 
 | 源码坐标 | 分类 | 触发/可见条件 | 行为与边界 |
 | --- | --- | --- | --- |
-| `frontend/app.tsx:234:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
-| `frontend/app.tsx:261:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
-| `frontend/app.tsx:3747:10` | app-boundary | 批量处理路由渲染；返回或全部成功提交 | 定义回跳 `/admin/submissions` 的回调，传给 ReviewBatchPage 的 onBack/onComplete；写入 workspace history，不直接调用 API。 |
+| `frontend/app.tsx:235:106` | app-boundary | 已认证会话通过外层守卫；AppShell 内部触发导航/退出 | navigate 写入 workspace history；logout(owner) 执行账户退出，具体按钮与 pending 仍由 AppShell 控制。 |
+| `frontend/app.tsx:262:39` | app-boundary | renderPage 进入 settings 且存在 session | 将 locale、member email/role 传入 SettingsPage；没有新增网络写入。 |
+| `frontend/app.tsx:3750:10` | app-boundary | 批量处理路由渲染；返回或全部成功提交 | 定义回跳 `/admin/submissions` 的回调，传给 ReviewBatchPage 的 onBack/onComplete；写入 workspace history，不直接调用 API。 |
 | `frontend/components/motion/feedback-widget.tsx:195:5` | unmounted-ui | beUI feedback-widget 挂载后注册 window keydown/pointerdown 监听 | 键盘/指针事件触发面板关闭判定；当前组件未挂载，不产生实际交互。 |
 | `frontend/components/motion/feedback-widget.tsx:196:5` | unmounted-ui | beUI feedback-widget 挂载后注册 window keydown/pointerdown 监听 | 键盘/指针事件触发面板关闭判定；当前组件未挂载。 |
 | `frontend/components/motion/feedback-widget.tsx:429:23` | unmounted-ui | 反馈面板处于错误/空态 | 渲染 role="alert" 的提示块；组件未挂载。 |
@@ -593,8 +593,8 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `05a951f167d43d9f3aac47b37c50c9f4e19122ce0cb33e35f6ddb381c3f90b96`
-- `frontend/components/motion/tabs.tsx`: `f5510f664873212342f07a95f072d22922eb427940f4a485c6ca3123f0f6b86c`
+- `frontend/app.tsx`: `0b3eba0de2a7b1dc1ed2cdc41b94937c05856c8dd193d32a05214f0bf5bf6b7e`
+- `frontend/components/motion/tabs.tsx`: `cee3e467d5680308c4405d409da9052532ce5fd4abf07fb8c64c0f36f791b0d6`
 - `frontend/components/ui/tabs.tsx`: `a3ec44982431b22612da1bd8af511e98eb170d6c3f8380254e213acdc38adb9b`
 - `frontend/components/agent/answer-panel.tsx`: `d604801b674d21ef059a70f79cc367326ceccf60ba5e400c4d3480eca1e63586`
 - `frontend/components/agents/citations.tsx`: `d9f0714f0ba41e3e2838d5d5004b7010c5d9a222a78b51a719f7a392873000a1`

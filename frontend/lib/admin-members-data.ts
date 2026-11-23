@@ -4,6 +4,8 @@ import { createNumberedRequestController, normalizeNumberedPage, type FrontendNu
 export interface AdminMember { id: string; email?: string; role?: string; status?: string; }
 export interface LoadAdminMembersInput extends FrontendPageRequest { status?: "active" | "disabled"; signal?: AbortSignal; }
 export type AdminMembersPage = FrontendNumberedPage<AdminMember>;
+export interface MemberRecoveryCode { code: string; formattedCode: string; expiresAt: string; }
+const RECOVERY_CODE = /^[A-HJ-NP-Z2-9]{20}$/u;
 
 export async function loadAdminMembers({ page, pageSize, status, requester = fetch, signal }: LoadAdminMembersInput & { requester?: Fetcher }): Promise<AdminMembersPage> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -18,6 +20,16 @@ export async function updateMemberStatus(memberId: string, status: "active" | "d
   const member = normalizeMember(data?.member);
   if (member.id !== memberId || member.status !== status || member.role !== "contributor") throw new Error("MEMBER_RESPONSE_INVALID");
   return member;
+}
+
+export async function issueMemberRecoveryCode(memberId: string, requester: Fetcher = fetch): Promise<MemberRecoveryCode> {
+  const data = await apiFetch<Record<string, unknown>>(`/api/admin/members/${encodeURIComponent(memberId)}/recovery-code`, { requester, method: "POST" });
+  const { code, formattedCode, expiresAt } = data ?? {};
+  if (typeof code !== "string" || !RECOVERY_CODE.test(code) || typeof formattedCode !== "string"
+    || formattedCode.replace(/-/gu, "") !== code || typeof expiresAt !== "string" || Number.isNaN(Date.parse(expiresAt))) {
+    throw new Error("MEMBER_RECOVERY_RESPONSE_INVALID");
+  }
+  return { code, formattedCode, expiresAt };
 }
 
 function normalizeMember(value: unknown): AdminMember {

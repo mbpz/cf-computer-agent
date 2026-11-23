@@ -67,8 +67,8 @@ function recordFetch(respond: (actions: SentAction[]) => unknown) {
 describe("review batch surface", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   beforeEach(async () => {
-    browser = new Window({ url: "https://app.test/admin/submissions" });
-    for (const [key, value] of Object.entries({ window: browser, document: browser.document, navigator: browser.navigator, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) vi.stubGlobal(key, value);
+    browser = new Window({ url: "https://app.test/admin/submissions/batch" });
+    for (const [key, value] of Object.entries({ window: browser, document: browser.document, navigator: browser.navigator, sessionStorage: browser.sessionStorage, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) vi.stubGlobal(key, value);
     container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node);
     const { createRoot } = await import("react-dom/client"); root = createRoot(container);
   });
@@ -79,8 +79,8 @@ describe("review batch surface", () => {
   async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); }); }
   async function clickOn(target: HTMLElement) { await act(async () => { target.click(); }); await flush(); }
   const locale = createLocaleRuntime({ storage: { getItem: () => "en", setItem: () => {} } });
-  async function mountBatch(canReview = true, onComplete = vi.fn()) {
-    await act(async () => { root.render(<ReviewBatchPage locale={locale} memberId="member-admin" canReview={canReview} load={async () => page()} onComplete={onComplete} />); });
+  async function mountBatch(canReview = true, onComplete = vi.fn(), options: { search?: string; load?: typeof import("../../frontend/lib/admin-review-data").loadReviewQueuePage } = {}) {
+    await act(async () => { root.render(<ReviewBatchPage locale={locale} memberId="member-admin" canReview={canReview} search={options.search} load={options.load ?? (async () => page())} onComplete={onComplete} />); });
     await flush();
     return onComplete;
   }
@@ -188,12 +188,61 @@ describe("review batch surface", () => {
     expect(node('[data-batch-outcome="review-1"]').getAttribute("data-batch-outcome-status")).toBe("succeeded");
   });
 
-  it("never presents a fully successful summary when the counts disagree with the items", async () => {
+  it("opens the page requested by the queue and can page while keeping selection page-scoped", async () => {
+    const calls: Array<{ page: number; pageSize: number }> = [];
+    const secondPage: ReviewQueuePageResult = { items: [{ id: "review-3", title: "Third", submitter: "member-3", status: "review_pending", updatedAt: "2026-10-03T00:00:00.000Z" }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } };
+    const load = async (input: { page: number; pageSize: number }) => { calls.push({ page: input.page, pageSize: input.pageSize }); return input.page === 2 ? secondPage : page(); };
+    await mountBatch(true, vi.fn(), { search: "?page=2&pageSize=20", load: load as never });
+    expect(calls[0]).toEqual({ page: 2, pageSize: 20 });
+    expect(container.textContent).toContain("Third");
+    await selectAll();
+    expect(container.querySelector('[data-batch-select="review-3"]')?.querySelector('[role="checkbox"]')?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("does not navigate a late completion after the batch page was left", async () => {
+    const gate = Promise.withResolvers<void>();
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const actions = requestActions(init);
+      await gate.promise;
+      return json(summary(actions, new Set()));
+    });
+    const onComplete = await mountBatch();
+    await selectAll();
+    await act(async () => { node<HTMLButtonElement>("[data-batch-send]").click(); });
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client"); root = createRoot(container);
+    await act(async () => { gate.resolve(); await gate.promise; });
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it("restores a frozen unknown attempt after a remount instead of resubmitting it", async () => {
+    recordFetch((actions) => summary(actions, new Set()));
+    // A malformed 200 leaves the frozen attempt in sessionStorage.
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const actions = requestActions(init);
+      return json({ requested: actions.length, succeeded: actions.length, failed: 0, items: [] });
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    expect(sessionStorage.getItem("memory-garden:review-batch-intent:v1:member-admin")).not.toBeNull();
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client"); root = createRoot(container);
+    await mountBatch();
+    expect(container.querySelector("[data-batch-unknown]")).not.toBeNull();
+    expect(container.querySelector("[data-batch-select]")).toBeTruthy();
+    // Restoration does not fire a second POST by itself.
+    expect(container.querySelector("[data-batch-unknown]")).toBeTruthy();
+  });
+
+  it("treats a malformed 200 body as an unknown result and keeps the original attempts", async () => {
     vi.stubGlobal("fetch", async () => json({ requested: 2, succeeded: 2, failed: 0, items: [{ submissionId: "review-1", action: "reject", status: "succeeded", result: {} }] }));
     await mountBatch();
     await selectAll();
     await clickOn(node("[data-batch-send]"));
     expect(container.querySelector("[data-batch-results]")).toBeNull();
-    expect(node("[data-batch-rejected]").textContent).toContain("BATCH_REVIEW_RESPONSE_INVALID");
+    expect(node("[data-batch-unknown]").textContent).toContain("The batch result is unknown");
+    expect(node("[data-batch-retry-original]")).toBeTruthy();
+    expect(node("[data-batch-discard-unknown]")).toBeTruthy();
   });
 });

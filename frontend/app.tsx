@@ -111,7 +111,7 @@ import { notificationTargetHref, parseNotificationSearch, writeNotificationSearc
 import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussionMessageResult, loadDiscussionMessages, loadDiscussionThread, loadDiscussionThreads, sendDiscussionMessage } from "./lib/discussions-data";
 import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
-import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
+import { issueMemberRecoveryCode, loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
 import { clearAdminAssetRetry, discardBlockedAdminAssetRetry, loadAdminAssetRetries, saveAdminAssetRetry } from "./lib/admin-asset-retry-intent";
 import { clearAdminMemberStatus, discardBlockedAdminMemberStatus, loadAdminMemberStatuses, saveAdminMemberStatus, type AdminMemberStatusIntent } from "./lib/admin-member-status-intent";
 import { createAdminSpace, manageAdminSpace, loadAdminSpacesPage, loadAdminCollections, type AdminSpace, type AdminSpaceCommand } from "./lib/admin-spaces-data";
@@ -146,6 +146,7 @@ import { pageKindForPath } from "./app-routes";
 import type { SessionSnapshot } from "./contracts/api";
 import { loadFavoriteIntent, prepareFavoriteIntent, finishFavoriteIntent, favoriteIntentKey, type ReaderFavoriteIntent, type FavoriteWritePhase } from "./lib/reader-favorite-intent";
 import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, registerWorkspaceLeaveGuard, subscribeWorkspaceLocation, WORKSPACE_LOCATION_CHANGE_EVENT, writeWorkspaceHistory } from "./lib/workspace-location";
+import { requestNavigationRefresh } from "./lib/navigation-data";
 
 export function App() {
   const [location, setLocation] = useState(readWorkspaceLocation);
@@ -269,11 +270,11 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-knowledge-trash": return <RecycleBinRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
     case "admin-knowledge-item": return <AdminKnowledgeItemRoute key={JSON.stringify([session?.member.id, pathname, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} knowledgeItemId={decodeRouteId(pathname)} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
     case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
-    case "admin-review-batch": return <ReviewBatchRoute locale={locale} memberId={session?.member.id} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
+    case "admin-review-batch": return <ReviewBatchRoute locale={locale} search={search} memberId={session?.member.id} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
     case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} memberId={session?.member.id} />;
-    case "admin-members": return <AdminMembersRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
+    case "admin-members": return <AdminMembersRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} isAdmin={session?.member.role === "admin"} />;
     case "admin-spaces": return <AdminSpacesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} />;
     case "admin-audit": return <AdminAuditRoute locale={locale} search={search} />;
     case "not-found": return <NotFoundPage locale={locale} />;
@@ -590,6 +591,8 @@ export function AdminMenusRoute({ locale, memberId }: { locale: LocaleRuntime; m
     try {
       await operation();
       if (epoch.current !== scope) return false;
+      // A committed menu write changes the authority the shell sidebars project.
+      requestNavigationRefresh();
       // A receipt acknowledges the request, not the current menu hierarchy. Always read it.
       writeRef.current = null;
       setSaving(false);
@@ -3742,9 +3745,9 @@ function needsBoardReplacement(
     || column.kind !== "ready" || column.pending || Boolean(column.loadError);
 }
 
-function ReviewBatchRoute({ locale, memberId, canReview }: { locale: LocaleRuntime; memberId?: string; canReview: boolean }) {
+function ReviewBatchRoute({ locale, search, memberId, canReview }: { locale: LocaleRuntime; search: string; memberId?: string; canReview: boolean }) {
   const back = () => writeWorkspaceHistory("push", "/admin/submissions");
-  return <ReviewBatchPage locale={locale} memberId={memberId} canReview={canReview} onBack={back} onComplete={back} />;
+  return <ReviewBatchPage locale={locale} search={search} memberId={memberId} canReview={canReview} onBack={back} onComplete={back} />;
 }
 
 export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string; memberId?: string; canReview: boolean }) {
@@ -3907,7 +3910,11 @@ function ReviewQueueSession({ locale, memberId, canReview }: { locale: LocaleRun
   }
   return <ReviewQueuePage onOpenDetail={(id) => writeWorkspaceHistory("push", `/admin/submissions/${encodeURIComponent(id)}`)} locale={locale} state={state}
     canBatch={canReview}
-    onOpenBatch={() => writeWorkspaceHistory("push", "/admin/submissions/batch")}
+    onOpenBatch={() => {
+      const page = state.kind === "ready" ? state.data.pagination.page : 1;
+      const pageSize = state.kind === "ready" ? state.data.pagination.pageSize : 20;
+      writeWorkspaceHistory("push", `/admin/submissions/batch?page=${page}&pageSize=${pageSize}`);
+    }}
     pendingId={pendingId} completedId={completedId} decisionState={decisionState} localError={recordNotice ?? localError} pending={pending || recordBlocked}
     decisionRecordBlocked={recordBlocked} onDiscardDecisionRecord={discardRecord}
     onRetry={() => retryRead()} onReloadDecision={() => retryRead()}
@@ -4060,7 +4067,7 @@ export function AdminDuplicateRoute({ locale, memberId }: { locale: LocaleRuntim
     onLoadMore={() => { const controller = controllerRef.current; if (controller && state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) void read(controller, state.data.pagination.page + 1, false, true); }} />;
 }
 
-export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMembers, update = updateMemberStatus }: { locale: LocaleRuntime; search: string; memberId?: string; load?: typeof loadAdminMembers; update?: typeof updateMemberStatus }) {
+export function AdminMembersRoute({ locale, search, memberId, isAdmin = false, load = loadAdminMembers, update = updateMemberStatus, issueRecovery = issueMemberRecoveryCode }: { locale: LocaleRuntime; search: string; memberId?: string; isAdmin?: boolean; load?: typeof loadAdminMembers; update?: typeof updateMemberStatus; issueRecovery?: typeof issueMemberRecoveryCode }) {
   const [status, setStatus] = useState<"active" | "disabled" | undefined>(() => memberStatusSearch(search));
   const [statusStored] = useState(() => memberId ? loadAdminMemberStatuses(memberId) : { kind: "empty" as const });
   const blockedRef = useRef(statusStored.kind === "blocked");
@@ -4219,7 +4226,7 @@ export function AdminMembersRoute({ locale, search, memberId, load = loadAdminMe
   }
   return <MembersPage onLoadRetry={retryRead} locale={locale} status={status || ""} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} pageError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending || recordBlocked} pendingIds={pendingIds} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} actionError={recordNotice ?? actionError} statusRecordBlocked={recordBlocked} onDiscardStatusRecord={discardRecord} onPageChange={(next) => { const controller = controllerRef.current; if (controller && state.kind === "ready") void read(controller, next); }} onPageSizeChange={(size) => setPageSize(size)} onStatusFilterChange={(next) => changeStatusFilter(next || undefined)}
     onLoadMore={() => { const controller = controllerRef.current; if (controller && state.kind === "ready" && state.data.pagination.page < state.data.pagination.totalPages) void read(controller, state.data.pagination.page + 1, false, true); }}
-    onStatusChange={recordBlocked ? undefined : changeStatus} />;
+    onStatusChange={recordBlocked ? undefined : changeStatus} isAdmin={isAdmin} issueRecovery={issueRecovery} />;
 }
 
 export function AdminSpacesRoute({ locale, memberId }: { locale: LocaleRuntime; memberId?: string }) {

@@ -54,6 +54,18 @@ describe("role permission and membership confirmation", () => {
   }
   function unloadWarns() { const e = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(e); return e.defaultPrevented; }
 
+  it("distinguishes the stored role mask from the effective permissions", async () => {
+    const recordOnly: AdminRole = { id: "record", key: "record", name: "Record only", description: "", allowBits: "0x0", effectiveBits: "0x1", memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
+    await mountDetail({ state: { kind: "ready", roles: [recordOnly] }, roleId: "record" });
+    expect(document.querySelector('[data-role-stored-mask="0"]')).not.toBeNull();
+    expect(document.querySelector('[data-role-effective-mask="1"]')).not.toBeNull();
+    expect(document.body.textContent).toContain("Effective permissions include the built-in fallback");
+    const first = document.querySelector('button[role="checkbox"]') as HTMLButtonElement;
+    await act(async () => first.click());
+    expect(document.querySelector("[data-role-record-only]")).not.toBeNull();
+    expect(document.querySelector('[data-role-effective-mask="1"]')).not.toBeNull();
+  });
+
   it.each(["Role key", "Role name", "Permission mask"])("protects the create input %s from navigation and unload until committed discard", async label => {
     await mountCreate(); expect(unloadWarns()).toBe(false);
     await act(async () => { await input(label, "draft"); writeWorkspaceHistory("push", "/tasks"); });

@@ -6,6 +6,7 @@ export interface AdminRole {
   name: string;
   description: string;
   allowBits: string;
+  effectiveBits: string;
   memberCount: number;
   assignedMemberIds: string[];
   status: "active" | "disabled";
@@ -17,9 +18,12 @@ export function normalizeAdminRole(value: unknown): AdminRole | null {
   const record = value as Record<string, unknown>;
   if (typeof record.id !== "string" || !record.id || typeof record.key !== "string" || !record.key || typeof record.name !== "string" || !record.name || typeof record.description !== "string") return null;
   if (typeof record.allowBits !== "string" || !/^0x[0-9a-f]+$/iu.test(record.allowBits)) return null;
+  if (record.effectiveBits !== undefined && (typeof record.effectiveBits !== "string" || !/^0x[0-9a-f]+$/iu.test(record.effectiveBits))) return null;
   try {
     const mask = BigInt(record.allowBits);
-    if (mask < 0n || mask > ((1n << 64n) - 1n)) return null;
+    const effective = record.effectiveBits === undefined ? mask : BigInt(record.effectiveBits);
+    if (mask < 0n || mask > ((1n << 64n) - 1n) || effective < 0n || effective > ((1n << 64n) - 1n)) return null;
+    if ((effective & mask) !== mask) return null;
   } catch { return null; }
   if (typeof record.memberCount !== "number" || !Number.isSafeInteger(record.memberCount) || record.memberCount < 0) return null;
   if (record.status !== "active" && record.status !== "disabled") return null;
@@ -31,6 +35,7 @@ export function normalizeAdminRole(value: unknown): AdminRole | null {
     name: record.name,
     description: record.description,
     allowBits: record.allowBits.toLowerCase(),
+    effectiveBits: (record.effectiveBits === undefined ? record.allowBits : record.effectiveBits).toLowerCase(),
     memberCount: record.memberCount,
     assignedMemberIds: record.assignedMemberIds as string[],
     status: record.status,

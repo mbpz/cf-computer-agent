@@ -44,6 +44,7 @@
 | workbench-knowledge-reader:query_or_idempotency:create-research-draft | domain:POST /api/knowledge/:id/research-runs/:runId/draft | workbench-knowledge-reader | 研究草稿写入没有幂等键，只能靠冻结请求日志恢复。 | query_or_idempotency | R3-011 | R3-007 | frontend/lib/knowledge-derivatives-data.ts<br>src/routes/library.ts | test/unit/frontend-knowledge-reader-derivatives-data.test.tsx | 同一次研究草稿写入失败后按冻结请求日志重试只产生一条草稿，跨成员运行被拒绝。 | P0 |
 | workbench-knowledge-reader:query_or_idempotency:delete-studio-artifact | domain:DELETE /api/knowledge/:id/artifacts/:id | workbench-knowledge-reader | Studio 产物删除是成员作用域的破坏性写入，没有操作回执或重放键，响应丢失后无法确认是否已删除。 | query_or_idempotency | R3-011 | R3-007 | src/routes/library.ts<br>frontend/lib/studio-artifacts-data.ts | test/worker/m1-api.test.ts | 删除 Studio 产物后刷新不再可见；重复删除收敛为同一结果且不影响其它成员产物。 | P0 |
 | workbench-admin-members:query_or_idempotency:generate-admin-invitations | domain:POST /api/admin/invitations | workbench-admin-members | 管理员邀请码生成刻意非幂等：每次点击都创建新码，没有重放键，重复提交会生成无法区分的多余邀请码。 | query_or_idempotency | R6-005 | R2-005<br>R6-011 | src/routes/admin-invitations.ts<br>frontend/components/admin/invitation-admin-panel.tsx | test/worker/invitation-auth.test.ts | 管理员生成邀请码后刷新仍可在列表中核对全部码；重复点击按设计生成新码并明确可见。 | P0 |
+| workbench-admin-members:query_or_idempotency:issue-recovery-code | domain:POST /api/admin/members/:id/recovery-code | workbench-admin-members | 恢复码发放会作废旧码且没有客户端重放键；响应丢失后重试可能生成第二个码。 | query_or_idempotency | R6-005 | R2-005 | src/password/service.ts<br>src/password/repository.ts | test/worker/password-recovery.test.ts | 管理员发放恢复码后旧码失效；成员用新码一次性重置，重复/过期码被拒绝。 | P0 |
 | workbench-settings:states:persisted-settings-boundary | manifest:0@5e57e601f4cd | workbench-settings | 设置页没有路由级异步状态、持久化或保存 pending 边界。 | states | R1-012 | R1-005<br>R1-013 | frontend/pages/settings-page.tsx<br>src/identity/session.ts | test/unit/settings-page.test.tsx | 用户修改主题或语言时可见 pending、失败恢复和持久化结果，退出后 session 正确关闭。 | P1 |
 | workbench-knowledge:states:auxiliary-data-recovery | manifest:0@edac5a3b202d | workbench-knowledge | 知识页辅助 recent、favorite、note、activity、review 请求失败仍被折叠或彼此割裂。 | states | R2-010 | R2-004<br>R2-005 | frontend/pages/knowledge-page.tsx<br>src/routes/library.ts | test/unit/frontend-user-read-pages.test.tsx | 主列表成功但任一辅助请求失败时保留已加载内容并提供独立重试和明确状态。 | P1 |
 | workbench-search:journey:filter-restore-and-result-open | manifest:0@425b859782bc | workbench-search | 搜索降级、筛选恢复和打开结果的端到端旅程仍不完整。 | journey | R3-014 | R2-011<br>R3-013 | frontend/pages/search-page.tsx<br>src/knowledge/search.ts | test/unit/search.test.ts | 过滤搜索后刷新、后退、FTS5 降级并打开结果，条件和高亮保持一致。 | P1 |
@@ -104,7 +105,7 @@
 | workbench-admin-review-batch:query_or_idempotency:current-page-batch-scope | manifest:0@3df77ea3dca4 | workbench-admin-review-batch | 批量决策已从审核队列移到独立批量页；当前页选择、逐项结果、失败项按原操作编号重试以及全部成功返回队列已有本地测试。跨页选择、发布批量、发布与 signed-browser 验收仍开放。 | query_or_idempotency | R6-003 | R2-008 | frontend/pages/admin/review-batch-page.tsx<br>frontend/components/review/review-batch-owner.tsx | test/unit/frontend-review-batch.test.tsx | 从审核队列进入批量页，选择本页提交；全部成功回到队列，部分失败只重试失败项且不重复决策。 | P1 |
 | workbench-submit:evidence:signed-submission-acceptance | manifest:0@fb2c7e57f268 | workbench-submit | 本地提交、pending、失败重试、成功及 submitter 幂等已证明；成员提交闭环新增草稿、URL 取件与替代文件面：草稿更新按所有者与草稿状态条件写、重放同一载荷收敛，URL 取件与替代提交按幂等键回放原记录；草稿创建没有服务端键（idempotency_key 为 NULL，提交者唯一索引无法去重），只能靠客户端日志与最新草稿回读收敛；成员侧标签选择器刻意不接线（提交/草稿/重提载荷不接受 tagIds，标签在发布时附加）。丢弃采用 DELETE：API 仍拒绝空或缺字段的草稿正文（m1-api 回归测试），不会把它读成丢弃意图，本次排除不改变草稿创建仍是缺口这一结论。发布与 signed-browser 验收仍缺失。 | evidence | R8-009 | R3-001<br>R8-001<br>R8-008 | frontend/pages/submit-page.tsx<br>src/submissions/repository.ts | test/worker/submissions.test.ts | 真实 contributor 完成提交并由 admin 看见同一记录，自动化与人工 signed-browser 证据分开保存。 | P2 |
 <!-- gap-matrix:end -->
-2026-10-18 决策增量：邀请码注册/绑定式重置与 AgentSession 改造登记 4 条 domain 缺口——`POST /api/admin/invitations`（归 R6-007）、`DELETE /api/knowledge/:id/artifacts/:id`（归 R3-011）、`POST /api/agent/sessions` 与 `POST /api/agent/sessions/:id/turns/:id/terminate`（归 R3-016）；移除已不存在的 chat scope/cancel 两条 agent 缺口。当前实算 **84 gap（25 P0 / 58 P1 / 1 P2）**；历史快照不回填。
+2026-10-18 决策增量：邀请码注册/绑定式重置与 AgentSession 改造登记 4 条 domain 缺口——`POST /api/admin/invitations`（归 R6-007）、`DELETE /api/knowledge/:id/artifacts/:id`（归 R3-011）、`POST /api/agent/sessions` 与 `POST /api/agent/sessions/:id/turns/:id/terminate`（归 R3-016）；移除已不存在的 chat scope/cancel 两条 agent 缺口。当前实算 **85 gap（26 P0 / 58 P1 / 1 P2）**；历史快照不回填。
 
 
 2026-10-16 成员提交闭环增量：登记 `POST /api/submissions/drafts`（草稿创建没有服务端幂等键，唯一索引不去重 NULL，只有客户端日志与成员最新草稿回读能在重试前收敛，归 R3-001）为 1 条 domain 缺口；`PATCH /api/submissions/drafts/:id`、`POST /api/submissions/:id/resubmit`、`POST /api/assets/from-url`、`POST /api/assets/:id/alternative` 四条按条件写/幂等键与服务端回放证据判定为 proven，不新增行。`workbench-submit` 与 `workbench-my-submissions` 的文案登记两条刻意不接线决定（成员标签选择器因载荷不接受 tagIds；成员评论 POST 因只有 /api/admin 有操作回执端点）并重算指纹。当前实算 74 gap（36 manifest / 38 domain；23 P0 / 50 P1 / 1 P2）。历史快照不回填。
@@ -114,9 +115,9 @@
 | 维度 | 数量 |
 | --- | ---: |
 | manifest 聚合 gap | 40 |
-| domain mutation-safety gap | 44 |
-| 总计 | 84 |
-| P0 | 25 |
+| domain mutation-safety gap | 45 |
+| 总计 | 85 |
+| P0 | 26 |
 | P1 | 58 |
 | P2 | 1 |
 

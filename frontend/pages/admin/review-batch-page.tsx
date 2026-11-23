@@ -10,8 +10,19 @@ import { loadReviewQueuePage, type ReviewQueueItem, type ReviewQueuePageResult }
 import type { Fetcher } from "../../lib/api";
 import { ReviewBatchResults, ReviewBatchToolbar, useReviewBatch } from "../../components/review/review-batch-owner";
 import type { BatchReviewItemOutcome } from "../../lib/admin-batch-review-data";
+import type { SupportedPageSize } from "../../lib/numbered-page";
+import { readWorkspaceLocation } from "../../lib/workspace-location";
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE: SupportedPageSize = 20;
+function batchPage(search: string): { page: number; pageSize: SupportedPageSize } {
+  const params = new URLSearchParams(search);
+  const page = Number(params.get("page"));
+  const pageSize = Number(params.get("pageSize"));
+  return {
+    page: Number.isSafeInteger(page) && page > 0 ? page : 1,
+    pageSize: pageSize === 20 || pageSize === 50 || pageSize === 100 ? pageSize : DEFAULT_PAGE_SIZE,
+  };
+}
 
 type QueueState = { kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string };
 
@@ -22,8 +33,9 @@ type QueueState = { kind: "loading" } | { kind: "ready"; data: ReviewQueuePageRe
  * surface used), and a fully successful submit returns to the queue. Partial
  * failures stay here with per-item outcomes so only the failures can be retried.
  */
-export function ReviewBatchPage({ locale, memberId, canReview = true, load = loadReviewQueuePage, onBack, onComplete, requester = fetch }: {
+export function ReviewBatchPage({ locale, memberId, canReview = true, search = "", load = loadReviewQueuePage, onBack, onComplete, requester = fetch }: {
   locale: LocaleRuntime;
+  search?: string;
   memberId?: string;
   canReview?: boolean;
   load?: typeof loadReviewQueuePage;
@@ -32,15 +44,21 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, load = loa
   onComplete?: () => void;
   requester?: Fetcher;
 }) {
+  const initial = batchPage(search);
+  const [page, setPage] = useState(initial.page);
+  const [pageSize, setPageSize] = useState<SupportedPageSize>(initial.pageSize);
   const [state, setState] = useState<QueueState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
   const alive = useRef(true);
+  const mounted = useRef(true);
+  const pendingPage = useRef<number | null>(null);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   useEffect(() => {
     alive.current = true;
     const controller = new AbortController();
     setState({ kind: "loading" });
-    load({ page: 1, pageSize: PAGE_SIZE, requester, signal: controller.signal })
+    load({ page, pageSize, requester, signal: controller.signal })
       .then((data) => { if (alive.current && !controller.signal.aborted) setState({ kind: "ready", data }); })
       .catch((error: unknown) => {
         if (!alive.current || controller.signal.aborted) return;
@@ -48,14 +66,18 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, load = loa
         setState(status === 403 ? { kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") } : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
       });
     return () => { alive.current = false; controller.abort(); };
-  }, [load, locale, requester, retry]);
+  }, [load, locale, page, pageSize, requester, retry]);
 
+  const started = useCallback(() => { pendingPage.current = page; }, [page]);
   const settled = useCallback((outcomes: readonly BatchReviewItemOutcome[]) => {
+    if (!mounted.current || pendingPage.current !== page) return;
+    pendingPage.current = null;
+    if (readWorkspaceLocation().pathname !== "/admin/submissions/batch") return;
     if (outcomes.length > 0 && outcomes.every((outcome) => outcome.status === "succeeded")) onComplete?.();
-  }, [onComplete]);
+  }, [onComplete, page]);
 
   const rows = state.kind === "ready" ? state.data.items : [];
-  const batch = useReviewBatch({ items: rows, memberId, locale, enabled: canReview && state.kind === "ready", requester, onSettled: settled });
+  const batch = useReviewBatch({ items: rows, memberId, locale, enabled: canReview && state.kind === "ready", requester, onStart: started, onSettled: settled });
   const allSelected = rows.length > 0 && rows.every((row) => batch.selected.has(row.id));
 
   const columns: DataTableColumn<ReviewQueueItem>[] = [
@@ -87,6 +109,14 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, load = loa
       </PageState>
       : <>
         <ReviewBatchToolbar batch={batch} rows={rows} page={state.data.pagination.page} pageSize={state.data.pagination.pageSize} locale={locale} />
+        {batch.state.kind === "unknown" && <div data-batch-unknown role="alert" className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+          <p className="font-medium">{frontendText(locale, "ADMIN_REVIEW_BATCH_UNKNOWN_TITLE")}</p>
+          <p className="text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_BATCH_UNKNOWN_DESCRIPTION")}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" data-batch-retry-original onClick={() => void batch.retryAttempts()}>{frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_ORIGINAL")}</Button>
+            <Button type="button" size="sm" variant="outline" data-batch-discard-unknown onClick={batch.discardUnknown}>{frontendText(locale, "ADMIN_REVIEW_BATCH_DISCARD_UNKNOWN")}</Button>
+          </div>
+        </div>}
         <DataTable
           locale={locale}
           rows={state.data.items}
@@ -94,6 +124,9 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, load = loa
           ariaLabel={frontendText(locale, "ADMIN_REVIEW_BATCH_PAGE_TITLE")}
           emptyState={<PageState kind="empty" title={frontendText(locale, "ADMIN_REVIEW_EMPTY")} description={frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")} />}
           loading={batch.state.kind === "pending"}
+          pagination={state.data.pagination}
+          onPageChange={(next) => { if (batch.freeze) return; batch.clear(); setPage(next); }}
+          onPageSizeChange={(size) => { if (batch.freeze) return; batch.clear(); setPageSize(size); setPage(1); }}
           fill
           rowHeight={88}
           className="lg:min-h-0 lg:flex-1"

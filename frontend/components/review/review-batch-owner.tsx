@@ -12,13 +12,15 @@ import {
   BATCH_REJECT_REASON_CODES, BATCH_REVISION_REASON_CODE, batchScope, failedRetryActions, planBatchActions,
   type BatchActionKind, type BatchItemAction, type BatchPlanDiagnosticCode, type BatchPlannableRow,
 } from "../../lib/review-batch-plan";
-import { sendBatchReview, type BatchReviewItemOutcome } from "../../lib/admin-batch-review-data";
+import { BatchReviewUnknownOutcomeError, sendBatchReview, type BatchReviewItemOutcome } from "../../lib/admin-batch-review-data";
+import { clearBatchIntent, loadBatchIntent, saveBatchIntent, type StoredBatchIntent } from "../../lib/review-batch-intent";
 
 /** The batch surface state machine: nothing, applying, per-item outcomes, or a refusal. */
 export type ReviewBatchState =
   | { kind: "idle" }
   | { kind: "pending"; count: number }
   | { kind: "done"; outcomes: readonly BatchReviewItemOutcome[]; attempts: readonly BatchItemAction[]; retried: boolean }
+  | { kind: "unknown"; attempts: readonly BatchItemAction[]; message: string }
   | { kind: "rejected"; message: string };
 
 export interface ReviewBatchController {
@@ -40,6 +42,10 @@ export interface ReviewBatchController {
   readonly freeze: boolean;
   send: () => void;
   retryFailed: () => void;
+  /** Replays the frozen unknown attempt with its original numbers and payload. */
+  retryAttempts: () => void;
+  /** Drops a restored unknown attempt; it is not resent. */
+  discardUnknown: () => void;
 }
 
 export interface UseReviewBatchInput {
@@ -50,6 +56,8 @@ export interface UseReviewBatchInput {
   /** False unless the reviewer holds `knowledge:review`: then no batch affordance exists. */
   enabled: boolean;
   requester?: Fetcher;
+  /** Called when an attempt is frozen and sent; the page records its ownership. */
+  onStart?: (attempts: readonly BatchItemAction[]) => void;
   /** Called after a completed batch (including retries) with the per-item outcomes. */
   onSettled?: (outcomes: readonly BatchReviewItemOutcome[]) => void;
 }
@@ -104,7 +112,7 @@ function mergeOutcomes(previous: readonly BatchReviewItemOutcome[], next: readon
  * exact same writes — the server replays its recorded result instead of acting
  * twice. The selection freezes while a batch is in flight.
  */
-export function useReviewBatch({ items, memberId, locale, enabled, requester = fetch, onSettled }: UseReviewBatchInput): ReviewBatchController {
+export function useReviewBatch({ items, memberId, locale, enabled, requester = fetch, onStart, onSettled }: UseReviewBatchInput): ReviewBatchController {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [decision, setDecisionState] = useState<BatchActionKind>("reject");
   const [reasonCode, setReasonCodeState] = useState<string>(defaultReason("reject"));
@@ -113,6 +121,36 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
   const [notice, setNotice] = useState<string | null>(null);
   const operationIdsRef = useRef<Map<string, string>>(new Map());
   const pendingRef = useRef(false);
+  const restoredRef = useRef(false);
+  const restoredIntentRef = useRef<StoredBatchIntent | null>(null);
+
+  // Restore a frozen attempt after refresh/route changes before any new send.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (!memberId) return;
+    const stored = loadBatchIntent(memberId);
+    if (!stored) return;
+    restoredIntentRef.current = stored;
+    operationIdsRef.current = new Map(stored.attempts.map((action) => [action.submissionId, action.operationId]));
+    setDecisionState(stored.decision);
+    setReasonCodeState(stored.reasonCode);
+    setNoteState(stored.note);
+    if (stored.status === "done" && stored.outcomes) {
+      setState({ kind: "done", outcomes: stored.outcomes, attempts: stored.attempts, retried: false });
+    } else {
+      setState({ kind: "unknown", attempts: stored.attempts, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
+    }
+  }, [locale, memberId]);
+
+  // Rows arrive after the restore effect; select only the stored ids that exist.
+  useEffect(() => {
+    const stored = restoredIntentRef.current;
+    if (!stored || items.length === 0) return;
+    restoredIntentRef.current = null;
+    const present = new Set(items.map((item) => item.id));
+    setSelected(new Set(stored.attempts.map((action) => action.submissionId).filter((id) => present.has(id))));
+  }, [items]);
 
   // Rows that leave the page leave the selection: a scope statement only ever
   // names the current page.
@@ -150,6 +188,16 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
   const setReasonCode = useCallback((next: string) => { if (!pendingRef.current) setReasonCodeState(next); }, []);
   const setNote = useCallback((next: string) => { if (!pendingRef.current) setNoteState(boundNote(next)); }, []);
 
+  const persist = useCallback((attempts: readonly BatchItemAction[], status: StoredBatchIntent["status"], outcomes: readonly BatchReviewItemOutcome[] | null) => {
+    if (!memberId || attempts.length === 0) return;
+    saveBatchIntent({
+      version: 1, memberId, decision, reasonCode, note, attempts, outcomes, status,
+      savedAt: new Date().toISOString(),
+    });
+  }, [decision, memberId, note, reasonCode]);
+  const unknownFailure = (error: unknown): boolean => error instanceof BatchReviewUnknownOutcomeError
+    || (error instanceof ApiRequestError && (error.retryable || error.status >= 500));
+
   const send = useCallback(async () => {
     if (!enabled) return;
     if (pendingRef.current) { setNotice(frontendText(locale, "ADMIN_REVIEW_BATCH_LOCKED")); return; }
@@ -159,17 +207,27 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
     if (plan.kind === "unplannable") { setNotice(diagnosticMessage(plan.code, locale)); return; }
     setNotice(null);
     pendingRef.current = true;
+    onStart?.(plan.actions);
+    persist(plan.actions, "pending", null);
     setState({ kind: "pending", count: plan.actions.length });
     try {
       const result = await sendBatchReview(plan.actions, requester);
+      if (memberId && result.items.every((outcome) => outcome.status === "succeeded")) clearBatchIntent(memberId);
+      else persist(plan.actions, "done", result.items);
       setState({ kind: "done", outcomes: result.items, attempts: plan.actions, retried: false });
       onSettled?.(result.items);
     } catch (error) {
-      setState({ kind: "rejected", message: batchFailureMessage(error, locale) });
+      if (memberId && unknownFailure(error)) {
+        persist(plan.actions, "unknown", null);
+        setState({ kind: "unknown", attempts: plan.actions, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
+      } else {
+        if (memberId) clearBatchIntent(memberId);
+        setState({ kind: "rejected", message: batchFailureMessage(error, locale) });
+      }
     } finally {
       pendingRef.current = false;
     }
-  }, [decision, enabled, items, locale, note, onSettled, reasonCode, requester, selected]);
+  }, [decision, enabled, items, locale, memberId, note, onSettled, onStart, persist, reasonCode, requester, selected]);
 
   const retryFailed = useCallback(async () => {
     if (!enabled) return;
@@ -179,10 +237,14 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
     if (retryActions.length === 0) return;
     setNotice(null);
     pendingRef.current = true;
+    onStart?.(retryActions);
+    persist(state.attempts, "pending", state.outcomes);
     setState({ kind: "pending", count: retryActions.length });
     try {
       const result = await sendBatchReview(retryActions, requester);
       const outcomes = mergeOutcomes(state.outcomes, result.items);
+      if (memberId && outcomes.every((outcome) => outcome.status === "succeeded")) clearBatchIntent(memberId);
+      else persist(state.attempts, "done", outcomes);
       setState({ kind: "done", outcomes, attempts: state.attempts, retried: true });
       onSettled?.(outcomes);
     } catch (error) {
@@ -192,9 +254,43 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
     } finally {
       pendingRef.current = false;
     }
-  }, [enabled, locale, onSettled, requester, state]);
+  }, [enabled, locale, memberId, onSettled, onStart, persist, requester, state]);
 
-  return { selected, toggle, selectAllPage, clear, decision, setDecision, reasonCode, setReasonCode, note, setNote, state, notice, freeze: frozen, send, retryFailed };
+  const retryAttempts = useCallback(async () => {
+    if (!enabled || pendingRef.current || state.kind !== "unknown") return;
+    const attempts = state.attempts;
+    if (attempts.length === 0) return;
+    pendingRef.current = true;
+    onStart?.(attempts);
+    persist(attempts, "pending", null);
+    setState({ kind: "pending", count: attempts.length });
+    try {
+      const result = await sendBatchReview(attempts, requester);
+      if (memberId && result.items.every((outcome) => outcome.status === "succeeded")) clearBatchIntent(memberId);
+      else persist(attempts, "done", result.items);
+      setState({ kind: "done", outcomes: result.items, attempts, retried: true });
+      onSettled?.(result.items);
+    } catch (error) {
+      if (memberId && unknownFailure(error)) {
+        persist(attempts, "unknown", null);
+        setState({ kind: "unknown", attempts, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
+      } else {
+        setNotice(batchFailureMessage(error, locale));
+        setState({ kind: "unknown", attempts, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
+      }
+    } finally {
+      pendingRef.current = false;
+    }
+  }, [enabled, locale, memberId, onSettled, onStart, persist, requester, state]);
+
+  const discardUnknown = useCallback(() => {
+    if (pendingRef.current) return;
+    if (memberId) clearBatchIntent(memberId);
+    setState({ kind: "idle" });
+    setSelected(new Set());
+  }, [memberId]);
+
+  return { selected, toggle, selectAllPage, clear, decision, setDecision, reasonCode, setReasonCode, note, setNote, state, notice, freeze: frozen, send, retryFailed, retryAttempts, discardUnknown };
 }
 
 /** The scope substitutions for `ADMIN_REVIEW_BATCH_SCOPE`, always naming the current page. */

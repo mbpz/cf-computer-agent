@@ -1212,11 +1212,11 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-admin-members",
-    apiPaths: ["/api/admin/members", "/api/admin/members/:id/status", "/api/admin/invitations"],
+    apiPaths: ["/api/admin/members", "/api/admin/members/:id/status", "/api/admin/invitations", "/api/admin/members/:id/recovery-code"],
     persistencePaths: ["src/members/repository.ts", "src/invitations/repository.ts", "migrations/0001_phase1_control_plane.sql", "migrations/0033_numbered_pagination_indexes.sql", "migrations/0079_invitations.sql"],
     ownerPredicate: null,
     pagination: "numbered",
-    mutations: ["PATCH /api/admin/members/:id/status — proven: caller expectedStatus compare-and-set in the UPDATE predicate; stale or racing writes conflict", "POST /api/admin/invitations — gap: administrator code generation is intentionally non-idempotent (each click creates new codes) and has no replay key"],
+    mutations: ["PATCH /api/admin/members/:id/status — proven: caller expectedStatus compare-and-set in the UPDATE predicate; stale or racing writes conflict", "POST /api/admin/invitations — gap: administrator code generation is intentionally non-idempotent (each click creates new codes) and has no replay key", "POST /api/admin/members/:id/recovery-code — gap: issuing a one-time recovery code retires earlier unused codes and has no client replay key; a lost response can issue a second code"],
     mutationSafety: "mixed",
   },
   {

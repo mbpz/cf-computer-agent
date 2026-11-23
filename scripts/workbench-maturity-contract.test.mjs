@@ -160,6 +160,7 @@ const DOMAIN_GAP_POLICIES = new Map(Object.entries({
   "workbench-admin-submissions|POST /api/admin/submissions/:id/request-revision": { slug: "request-revision", symptom: "审核队列退回操作缺少幂等、通知去重与并发策略。", owner: "R6-003" },
   "workbench-agent|POST /api/agent/sessions": { slug: "create-agent-session", symptom: "创建 AgentSession 是每次请求新建 Durable Object 的非幂等写入，缺少客户端重放键；重复创建只会得到新的空会话。", owner: "R3-016" },
   "workbench-agent|POST /api/agent/sessions/:id/turns/:id/terminate": { slug: "terminate-agent-turn", symptom: "终止 Agent turn 是行级幂等写入，但没有操作回执或预期版本，响应丢失后无法核对是否已终止。", owner: "R3-016" },
+  "workbench-admin-members|POST /api/admin/members/:id/recovery-code": { slug: "issue-recovery-code", symptom: "恢复码发放会作废旧码且没有客户端重放键；响应丢失后重试可能生成第二个码。", owner: "R6-005" },
   "workbench-admin-members|POST /api/admin/invitations": { slug: "generate-admin-invitations", symptom: "管理员邀请码生成刻意非幂等：每次点击都创建新码，没有重放键，重复提交会生成无法区分的多余邀请码。", owner: "R6-005" },
   "workbench-knowledge-reader|DELETE /api/knowledge/:id/artifacts/:id": { slug: "delete-studio-artifact", symptom: "Studio 产物删除是成员作用域的破坏性写入，没有操作回执或重放键，响应丢失后无法确认是否已删除。", owner: "R3-011" },
   "workbench-environments|POST /api/environments": { slug: "create-environment", symptom: "环境创建已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },

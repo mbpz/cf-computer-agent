@@ -10,6 +10,7 @@ export type AuditActorKind = "member" | "automation" | "system";
 export interface AuditActionMap {
   "member.login": { resourceType: "member"; metadata: { role: MemberRole } };
   "member.password_reset": { resourceType: "member"; metadata: Record<string, never> };
+  "member.recovery_code_issued": { resourceType: "member"; metadata: { expiresAt: string } };
   "member.identity_linked": { resourceType: "member"; metadata: { provider: "github" | "wechat" } };
   "member.status_updated": { resourceType: "member"; metadata: { previousStatus: MemberStatus; newStatus: MemberStatus } };
   "member.invitation_issued": { resourceType: "member_invitation"; metadata: { email: string; expiresAt: string } };
@@ -72,6 +73,7 @@ export type AuditAction = keyof AuditActionMap;
 export const auditActions = Object.freeze<readonly AuditAction[]>([
   "member.login",
   "member.password_reset",
+  "member.recovery_code_issued",
   "member.identity_linked",
   "member.status_updated",
   "member.invitation_issued",
@@ -200,6 +202,12 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       assertResourceType(resourceType, "member");
       readPlainDataObject(input, new Set());
       return safeMetadata({});
+    }
+    case "member.recovery_code_issued": {
+      assertResourceType(resourceType, "member");
+      const metadata = readPlainDataObject(input, new Set(["expiresAt"]));
+      if (!isNonEmptyString(metadata.expiresAt)) throw invalidMetadata();
+      return safeMetadata({ expiresAt: metadata.expiresAt });
     }
     case "member.identity_linked": {
       assertResourceType(resourceType, "member");

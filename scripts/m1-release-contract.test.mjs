@@ -260,7 +260,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^\[pass\] migration-files count=80$/mu);
+  assert.match(result.output, /^\[pass\] migration-files count=81$/mu);
 });
 
 test("keeps asset pairing migration compatible with remote D1 statement execution", async () => {

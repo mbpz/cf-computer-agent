@@ -7,6 +7,7 @@ import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonReques
 import type { Principal } from "../identity/principal";
 import type { MembersRepository } from "../members/repository";
 import type { MembersService } from "../members/service";
+import type { PasswordAuthService } from "../password/service";
 import type { Member, MemberStatus } from "../members/types";
 import { parseNumberedPageRequest, parsePageRequest } from "../pagination";
 import { pageRequest, record, strictRecord, stringValue } from "./member";
@@ -37,6 +38,7 @@ export interface AdminRouteServices {
   duplicates: DuplicateCandidatesService;
   maintenance: MaintenanceControlService;
   operationReceipts: AdminOperationReceipts;
+  passwords: Pick<PasswordAuthService, "issueRecoveryCode">;
 }
 
 /** Bounded client operation number; the identity a recorded operation replays under. */
@@ -375,6 +377,16 @@ export async function routeAdminApi(
     }
     const member = await services.members.setContributorStatus(actor, decodePathId(memberStatus[1]!), status, input.expectedStatus);
     return jsonResponse({ member: memberDto(member) }, 200, context.requestId);
+  }
+
+  const recoveryCode = /^\/api\/admin\/members\/([^/]+)\/recovery-code$/.exec(url.pathname);
+  if (recoveryCode) {
+    requireCapability(principal, "member:manage");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const admin = requireAdminMember(principal);
+    const issued = await services.passwords.issueRecoveryCode(admin.memberId, decodePathId(recoveryCode[1]!));
+    return jsonResponse(issued, 201, context.requestId);
   }
 
   if (url.pathname === "/api/admin/spaces") {

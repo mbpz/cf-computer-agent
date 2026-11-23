@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { AdminMenusRoute } from "../../frontend/app";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
+import { NAVIGATION_REFRESH_EVENT } from "../../frontend/lib/navigation-data";
 import { chooseValue } from "./helpers/listbox";
 
 const vmContexts = new WeakSet<object>();
@@ -69,6 +70,19 @@ describe("menu write recovery", () => {
     expect(calls).toEqual(["GET"]);
     if(label === "Save menu") expect((document.querySelector('[name="path"]') as HTMLInputElement).value).toBe("/draft");
   });
+  it("asks the shell to refresh navigation after a committed menu write", async () => {
+    let refreshes = 0;
+    const listener = () => { refreshes += 1; };
+    browser.addEventListener(NAVIGATION_REFRESH_EVENT, listener);
+    stubFetch(async (_: unknown, init?: RequestInit) => init?.method ? json({ menu: menu({ path: "/renamed" }) }) : json({ tree: [menu()] }));
+    await render();
+    await click("Edit menu");
+    await field("path", "/renamed");
+    await confirmChange("Save menu");
+    expect(refreshes).toBe(1);
+    browser.removeEventListener(NAVIGATION_REFRESH_EVENT, listener);
+  });
+
   it("discards a deletion confirmation on unmount without replaying it", async () => {
     const calls: string[] = [];
     stubFetch(async (_: unknown, init?: RequestInit) => { calls.push(init?.method || "GET"); return json({tree:[menu()]}); });

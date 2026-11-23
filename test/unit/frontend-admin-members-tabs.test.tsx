@@ -13,6 +13,7 @@ vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: ob
 const { Window } = await import("happy-dom");
 
 const EMPTY_MEMBERS: AdminMembersPage = { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } };
+const MEMBER_PAGE: AdminMembersPage = { items: [{ id: "member-1", email: "member@example.test", role: "contributor", status: "active" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } };
 const NETWORK = {
   nodes: [{ id: "admin-1", email: "admin@example.test", role: "admin", status: "active", createdAt: "2026-10-01T00:00:00.000Z", inviterId: null, invitation: null }],
   stats: { members: 1, invited: 0, roots: 1, maxDepth: 0 },
@@ -44,8 +45,8 @@ describe("member management tabs", () => {
   async function flush() {
     await act(async () => { const { promise, resolve } = Promise.withResolvers<void>(); setTimeout(resolve, 0); await promise; for (let index = 0; index < 14; index += 1) await Promise.resolve(); });
   }
-  async function render() {
-    await act(async () => root.render(<AdminMembersRoute locale={locale} memberId="admin-1" search="" load={async () => EMPTY_MEMBERS} update={async () => { throw new Error("unused"); }} />));
+  async function render(isAdmin = true, options: { members?: AdminMembersPage; issueRecovery?: (id: string) => Promise<{ code: string; formattedCode: string; expiresAt: string }> } = {}) {
+    await act(async () => root.render(<AdminMembersRoute locale={locale} memberId="admin-1" search="" isAdmin={isAdmin} load={async () => options.members ?? EMPTY_MEMBERS} update={async () => { throw new Error("unused"); }} issueRecovery={options.issueRecovery} />));
     await flush();
   }
   function tab(value: "members" | "invitations" | "network"): HTMLButtonElement {
@@ -53,6 +54,41 @@ describe("member management tabs", () => {
     expect(element, value).toBeTruthy();
     return element as HTMLButtonElement;
   }
+
+  it("shows only the member list to a delegated member manager", async () => {
+    await render(false);
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(1);
+    expect(container.querySelector('[data-tab-value="invitations"]')).toBeNull();
+    expect(container.querySelector('[data-tab-value="network"]')).toBeNull();
+    expect(requests.some((path) => path.includes("/api/admin/invitations"))).toBe(false);
+  });
+
+  it("lets an administrator issue a one-time recovery code from the member row", async () => {
+    const issueRecovery = vi.fn().mockResolvedValue({ code: "ABCDEFGHJKLMNPQRSTUV", formattedCode: "ABCD-EFGH-JKLM-NPQR-STUV", expiresAt: "2026-06-01T12:30:00.000Z" });
+    await render(true, { members: MEMBER_PAGE, issueRecovery });
+    const issue = container.querySelector('[data-member-recovery-issue="member-1"]') as HTMLButtonElement | null;
+    expect(issue).not.toBeNull();
+    await act(async () => issue!.click());
+    await flush();
+    expect(issueRecovery).toHaveBeenCalledWith("member-1");
+    expect(container.querySelector("[data-member-recovery-code]")?.textContent).toBe("ABCD-EFGH-JKLM-NPQR-STUV");
+    expect(container.textContent).toContain("2026-06-01T12:30:00.000Z");
+    expect(container.textContent).toContain("member@example.test");
+  });
+
+  it("keeps the invitation panel and its result mounted across member-tab switches", async () => {
+    await render();
+    await act(async () => tab("invitations").click());
+    await flush();
+    const invitationReads = requests.filter((path) => path.startsWith("/api/admin/invitations?")).length;
+    expect(container.querySelector("[data-admin-invitations]")).not.toBeNull();
+    await act(async () => tab("members").click());
+    await flush();
+    await act(async () => tab("invitations").click());
+    await flush();
+    expect(requests.filter((path) => path.startsWith("/api/admin/invitations?")).length).toBe(invitationReads);
+    expect(container.querySelector("[data-admin-invitations]")).not.toBeNull();
+  });
 
   it("shows members, invitation codes and the relationship network as three tabs", async () => {
     await render();
@@ -76,6 +112,7 @@ describe("member management tabs", () => {
     expect(container.querySelector("[data-invitation-network]")).not.toBeNull();
     expect(container.textContent).toContain("admin@example.test");
     expect(requests.some((path) => path === "/api/admin/invitations/network")).toBe(true);
-    expect(container.querySelector("[data-admin-invitations]")).toBeNull();
+    // Invitation state is preserved while the other tab is active.
+    expect(container.querySelector("[data-admin-invitations]")).not.toBeNull();
   });
 });

@@ -41,6 +41,16 @@ describe("asset queue tabs", () => {
     return container.querySelector('[role="tabpanel"][data-state="active"]');
   }
 
+  it("keeps the hygiene panel mounted across tab switches so its receipt survives", async () => {
+    await render();
+    const before = container.querySelector("[data-asset-hygiene]");
+    expect(before).not.toBeNull();
+    await act(async () => tab("hygiene").click());
+    expect(container.querySelector("[data-asset-hygiene]")).toBe(before);
+    await act(async () => tab("queue").click());
+    expect(container.querySelector("[data-asset-hygiene]")).toBe(before);
+  });
+
   it("splits the page into asset-queue and storage-hygiene tabs", async () => {
     await render();
     // The page header uses the menu name while the tabs name the two surfaces.

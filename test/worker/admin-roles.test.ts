@@ -34,6 +34,21 @@ describe("admin roles API", () => {
     const payload = await allowed.json() as { items: Array<{ key: string; allowBits: string }> };
     expect(payload.items.some((item) => item.key === "admin" && item.allowBits === "0x37ffff")).toBe(true);
     expect(payload.items.some((item) => item.key === "editor" && item.allowBits === "0x4003")).toBe(true);
+    // Built-in roles derive membership from members.role; a newly registered
+    // contributor must not be missing from the Contributor role count/list.
+    const contributorRole = payload.items.find((item: { key: string }) => item.key === "contributor") as unknown as { assignedMemberIds: string[]; memberCount: number; effectiveBits: string };
+    expect(contributorRole.assignedMemberIds).toContain("role-contributor");
+    expect(contributorRole.memberCount).toBe(1);
+    expect(contributorRole.effectiveBits).toBe("0x1600c3");
+    await env.DB.prepare(
+      `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES
+       ('new-contributor', 'subject-new-contributor', 'new-contributor@example.test', 'contributor', 'active', '2026-08-26T01:00:00.000Z', '2026-08-26T01:00:00.000Z')`,
+    ).run();
+    const refreshed = await api("/api/admin/roles", admin);
+    const refreshedPayload = await refreshed.json() as { items: Array<{ key: string; assignedMemberIds: string[]; memberCount: number }> };
+    const refreshedContributor = refreshedPayload.items.find((item) => item.key === "contributor")!;
+    expect(refreshedContributor.assignedMemberIds).toContain("new-contributor");
+    expect(refreshedContributor.memberCount).toBe(2);
     const denied = await api("/api/admin/roles", contributor);
     expect(denied.status).toBe(403);
   });

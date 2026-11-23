@@ -23,7 +23,7 @@ import {
 } from "../../frontend/lib/submission-draft-data";
 import type { SubmissionTarget } from "../../frontend/lib/submission-data";
 
-const NOW = "2026-10-16T09:00:00.000Z";
+const NOW = new Date().toISOString();
 const target: SubmissionTarget = { requestedSpaceId: "space-a", requestedCollectionId: null, requestedVisibility: "shared" };
 
 function storage(seed: Record<string, string> = {}) {

@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：480；操作/转发候选：1807。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：481；操作/转发候选：1818。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -194,7 +194,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/components/review/review-source-panel.tsx | 9 |
 | frontend/components/settings/change-password-card.tsx | 7 |
 | frontend/components/settings/my-invitation-card.tsx | 8 |
-| frontend/components/shell/app-shell.tsx | 67 |
+| frontend/components/shell/app-shell.tsx | 68 |
 | frontend/components/shell/command-palette.tsx | 3 |
 | frontend/components/shell/context-rail.tsx | 6 |
 | frontend/components/shell/navigation-policy.ts | 0 |
@@ -376,6 +376,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/lib/reader-note-intent.ts | 0 |
 | frontend/lib/reader-visit-intent.ts | 0 |
 | frontend/lib/responsive-contract.ts | 0 |
+| frontend/lib/review-batch-intent.ts | 0 |
 | frontend/lib/review-batch-plan.ts | 0 |
 | frontend/lib/review-comment-intent.ts | 0 |
 | frontend/lib/review-data.ts | 0 |
@@ -436,16 +437,16 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/admin/duplicate-queue-page.tsx | 8 |
 | frontend/pages/admin/knowledge-item-page.tsx | 14 |
 | frontend/pages/admin/knowledge-item-route.tsx | 2 |
-| frontend/pages/admin/members-page.tsx | 14 |
+| frontend/pages/admin/members-page.tsx | 18 |
 | frontend/pages/admin/menu-editor.tsx | 10 |
 | frontend/pages/admin/menus-page.tsx | 16 |
 | frontend/pages/admin/recycle-bin-page.tsx | 15 |
 | frontend/pages/admin/recycle-bin-route.tsx | 1 |
-| frontend/pages/admin/review-batch-page.tsx | 5 |
+| frontend/pages/admin/review-batch-page.tsx | 9 |
 | frontend/pages/admin/review-detail-page.tsx | 7 |
 | frontend/pages/admin/review-detail-route.tsx | 3 |
 | frontend/pages/admin/review-queue-page.tsx | 9 |
-| frontend/pages/admin/role-detail-page.tsx | 21 |
+| frontend/pages/admin/role-detail-page.tsx | 22 |
 | frontend/pages/admin/role-permission-groups.ts | 0 |
 | frontend/pages/admin/roles-page.tsx | 3 |
 | frontend/pages/admin/spaces-page.tsx | 42 |
@@ -461,7 +462,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/inbox-page.tsx | 12 |
 | frontend/pages/knowledge-page.tsx | 39 |
 | frontend/pages/knowledge-reader-page.tsx | 51 |
-| frontend/pages/login-page.tsx | 10 |
+| frontend/pages/login-page.tsx | 11 |
 | frontend/pages/messages/discussion-model.ts | 0 |
 | frontend/pages/messages/messages-page.tsx | 6 |
 | frontend/pages/messages/thread-page.tsx | 20 |
@@ -519,10 +520,10 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /settings | frontend/pages/settings-page.tsx#SettingsPage | 46 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin | frontend/pages/admin/admin-dashboard-route.tsx#AdminDashboardRoute | 48 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/submissions | frontend/app.tsx#ReviewQueueRoute | 124 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
-| /admin/submissions/batch | frontend/pages/admin/review-batch-page.tsx#ReviewBatchPage | 86 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
+| /admin/submissions/batch | frontend/pages/admin/review-batch-page.tsx#ReviewBatchPage | 93 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/duplicates | frontend/app.tsx#AdminDuplicateRoute; frontend/lib/admin-duplicates-data.ts#* | 106 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/assets | frontend/app.tsx#AdminAssetsRoute; frontend/lib/admin-assets-data.ts#* | 156 | frontend/components/charts/donut-chart.tsx#DonutChartCenter; frontend/components/charts/donut-chart.tsx#DonutChartLegend; frontend/components/charts/donut-chart.tsx#DonutChartPlot; frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
-| /admin/members | frontend/app.tsx#AdminMembersRoute; frontend/lib/admin-members-data.ts#* | 144 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
+| /admin/members | frontend/app.tsx#AdminMembersRoute; frontend/lib/admin-members-data.ts#* | 148 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/roles | frontend/app.tsx#AdminRolesRoute; frontend/lib/admin-roles-data.ts#* | 75 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/menus | frontend/app.tsx#AdminMenusRoute; frontend/lib/admin-menus-data.ts#* | 85 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/spaces | frontend/app.tsx#AdminSpacesRoute; frontend/lib/admin-spaces-data.ts#* | 99 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
@@ -534,13 +535,13 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /messages/:id | frontend/app.tsx#DiscussionThreadRoute | 85 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/submissions/:id | frontend/pages/admin/review-detail-route.tsx#ReviewDetailRoute | 131 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/roles/new | frontend/app.tsx#AdminRoleNewRoute; frontend/pages/admin/create-role-page.tsx#AdminRoleCreatePage | 49 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| /admin/roles/:id | frontend/app.tsx#AdminRoleDetailRoute; frontend/pages/admin/role-detail-page.tsx#AdminRoleDetailPage | 74 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| /admin/roles/:id | frontend/app.tsx#AdminRoleDetailRoute; frontend/pages/admin/role-detail-page.tsx#AdminRoleDetailPage | 75 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 89 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/knowledge/trash | frontend/pages/admin/recycle-bin-route.tsx#RecycleBinRoute | 89 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/knowledge/:id | frontend/pages/admin/knowledge-item-route.tsx#AdminKnowledgeItemRoute | 40 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
-| &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 183 | 无（不代表动态边界已核对） |
+| &lt;authenticated-shell&gt; | frontend/components/shell/app-shell.tsx#AppShell | 184 | 无（不代表动态边界已核对） |
 | &lt;anonymous-home&gt; | frontend/pages/workbench-landing/public-workbench-page.tsx#PublicWorkbenchPage | 68 | frontend/components/ui/card.tsx#Card |
-| &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 26 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
+| &lt;login&gt; | frontend/pages/login-page.tsx#LoginPage | 27 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 
 尚未归入上述入口的候选：171。这些可能是 App 全局守卫、未接线组件或静态图盲区，必须核对，不能删掉以提高覆盖率。
 
@@ -548,91 +549,91 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 234:106 App | AppShell page | onNavigate=navigate; onLogout=() =&gt; logout(owner) | earlier return: sessionError; earlier return: anonymous && pathname === "/"; earlier return: anonymous; earlier return: !session |
-| 261:39 renderPage | SettingsPage  |  | {"kind":"branch","expression":"session","branch":"true"} |
-| 361:10 HomeRoute | HomePage  | onLoadMoreRecent=loadMoreRecent; onRetry=() =&gt; { if (pending.current) return; pending.current = true; setState({ kind: "loading" }); setRetry(value =&gt; … |  |
-| 434:10 AdminAnalyticsRoute | AdminAnalyticsPage  | onDaysChange=changeDays; onLoadMore=() =&gt; { if (state.kind === "ready" && state.data.recentVisitors.pagination.page &lt; state.data.recentVisitors.paginat… |  |
-| 470:10 AdminRolesRoute | AdminRolesPage  | onLoadRetry=controller.retryRead |  |
-| 476:10 AdminRoleNewRoute | AdminRoleCreatePage  | onCreate=controller.createRole; onCreated=back; onCancel=back; onDiscardRecord=controller.discardRecord; onRetryWrite=controller.retryWrite; onLoadRetry=cont… |  |
-| 485:10 AdminRoleDetailRoute | AdminRoleDetailPage  | onBack=() =&gt; writeWorkspaceHistory("push", "/admin/roles"); onLoadRetry=controller.retryRead; onSave=controller.recordBlocked ? undefined : (role, allowBi… |  |
-| 520:5 AdminMenusRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 612:10 AdminMenusRoute | AdminMenusPage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onCreate=recordBlocked ? undefined : (input) =&gt; mutate({ op: "create", input }, () =&gt; createAdmin… |  |
-| 667:5 KnowledgeReaderSession | owner.addEventListener  | "beforeunload", warn |  |
-| 801:5 KnowledgeReaderSession | window.addEventListener  | "storage", onStorage |  |
-| 829:14 KnowledgeReaderSession | KnowledgeReaderPage  | onRetry=() =&gt; setRetry((value) =&gt; value + 1) | {"kind":"branch","expression":"state.kind !== \"ready\"","branch":"true"} |
-| 888:10 KnowledgeReaderSession | KnowledgeReaderPage  | onCompare=showDiff; onRetryRelated=retryRelated; onRetryBacklinks=retryBacklinks; onCheckFavorite=checkFavorite; onToggleFavorite=toggleFavorite | earlier return: state.kind !== "ready" |
-| 896:10 KnowledgeRoute | MemberKnowledgeRoute  |  | spread: props |
-| 1077:10 MemberKnowledgeRoute | KnowledgePage  | onFilterChange=(next) =&gt; writeWorkspaceHistory("push", &#96;/knowledge${writeKnowledgeFilters(readWorkspaceLocation().search, next)}&#96;); onRetry=() =&g… |  |
-| 1142:5 MemberSearchRoute | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
-| 1228:10 MemberSearchRoute | SearchPage  | onFilterChange=(next) =&gt; { const nextSearch = writeSearchFilters(readWorkspaceLocation().search, next); writeWorkspaceHistory("push", &#96;/search${nextSe… |  |
-| 1234:88 AgentRoute | a frontendText(locale, "AGENT_NEW_CONVERSATION") | href="/agent" |  |
-| 1322:5 AgentConversationRoute | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
-| 1434:183 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_ABANDON") | onClick=abandon | {"kind":"branch","expression":"storageBlocked","branch":"true"} |
-| 1435:558 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_RETRY") | onClick=() =&gt; submit(intentRef.current!.question) | {"kind":"branch","expression":"unconfirmed && intentRef.current","branch":"true"}; earlier return: storageBlocked |
-| 1435:671 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_ABANDON") | onClick=abandon | {"kind":"branch","expression":"unconfirmed && intentRef.current","branch":"true"}; earlier return: storageBlocked |
-| 1437:181 AgentConversationRoute | Button frontendText(locale, "AGENT_RETRY") | onClick=() =&gt; setRecoveryVersion((value) =&gt; value + 1) | {"kind":"branch","expression":"recovery === \"error\"","branch":"true"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
-| 1437:292 AgentConversationRoute | a frontendText(locale, "AGENT_NEW_CONVERSATION") | href="/agent" | {"kind":"branch","expression":"recovery === \"error\"","branch":"true"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
-| 1439:27 AgentConversationRoute | div  |  | {"kind":"logical","expression":"composerBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier … |
-| 1439:187 AgentConversationRoute | Button frontendText(locale, "AGENT_COMPOSER_RECORD_DISCARD") | onClick=discardComposer; type="button" | {"kind":"logical","expression":"composerBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier … |
-| 1440:26 AgentConversationRoute | p composerNotice |  | {"kind":"logical","expression":"composerNotice","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier r… |
-| 1442:32 AgentConversationRoute | a frontendText(locale, "AGENT_RESTORE_LINK") | href=&#96;/agent?conversationId=${encodeURIComponent(sessionIdRef.current)}&#96; | {"kind":"logical","expression":"sessionIdRef.current","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ear… |
-| 1443:7 AgentConversationRoute | AgentPage  | onQuestionChange=value =&gt; questionDraft.edit("question", value); onSubmit=() =&gt; submit(); onCancel=cancel; onRetry=() =&gt; submit(lastQuestion); onSta… | earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier return: recovery === "loading" && state.kind !== "loading"; earlier… |
-| 1678:41 MemberSubmitForm | SubmitPage  | onDraftChange=changeDraft; onSubmit=() =&gt; submit(draftRef.current); onDraftRetry=() =&gt; { if (draftWrites.state.reason === "unknown" &#124;&#124; draftW… | spread: (resubmitView ? { resubmit: resubmitView, onResubmitRestart: restartResubmit, onResubmitLeave: leaveResubmit, onResubmitStatusRetry: () =&gt; { if (r… |
-| 1758:10 MySubmissionsRoute | MySubmissionsPage  | onResubmit=memberId ? startResubmit : undefined; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onPageChange=(next) =&gt; load(next); onPageSizeC… |  |
-| 1809:5 TasksRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 1966:27 TasksRoute | Button frontendText(locale, "TASKS_WRITE_RECORD_DISCARD") | onClick=discardRecord | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 1970:7 TasksRoute | Button frontendText(locale, "TASKS_CHECK_WRITE") | onClick=() =&gt; void resolveListUnknown("check") | disabled=listRecovering; {"kind":"logical","expression":"listUnknown","operator":"&&"} |
-| 1971:7 TasksRoute | Button frontendText(locale, "TASKS_RETRY_WRITE") | onClick=() =&gt; void resolveListUnknown("retry") | disabled=listRecovering; {"kind":"logical","expression":"listUnknown","operator":"&&"} |
-| 1973:29 TasksRoute | p actionNotice |  | {"kind":"logical","expression":"actionNotice","operator":"&&"} |
-| 1973:90 TasksRoute | TasksPage  | onCreate=() =&gt; setEditor({ taskId: null }); onOpen=(taskId) =&gt; setEditor({ taskId }); onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onFilt… |  |
-| 1973:1381 TasksRoute | TaskEditor  | onClose=() =&gt; setEditor(null); onChanged=() =&gt; setRetryVersion((value) =&gt; value + 1); onDenied=clearDeniedTasks | {"kind":"logical","expression":"editor","operator":"&&"}; spread: (editor.restored ? { restored: editor.restored } : {}) |
-| 1999:5 InboxRoute | owner.addEventListener  | "beforeunload", warn | earlier return: !taskTarget?.restored &#124;&#124; taskAccessReady |
-| 2117:27 InboxRoute | Button frontendText(locale, "TASKS_WRITE_RECORD_DISCARD") | onClick=() =&gt; { if (memberId && discardBlockedTaskWrite(memberId)) setTaskRecordBlocked(false); } | {"kind":"logical","expression":"taskRecordBlocked","operator":"&&"} |
-| 2120:27 InboxRoute | Button frontendText(locale, "NAV_TASKS") | onClick=() =&gt; writeWorkspaceHistory("push", "/tasks") | {"kind":"logical","expression":"taskCreatePending && taskAccessReady","operator":"&&"} |
-| 2121:12 InboxRoute | PlanningWriteRecovery  | onDenied=clearDenied; onReadFailure=clearReadFailure |  |
-| 2121:198 InboxRoute | InboxPage  | onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onCreateLock=locked =&gt; { captureLockedRef.current = locked; setCaptureLocked(locked); }; onCreate… |  |
-| 2155:73 InboxRoute | TaskEditor  | onClose=() =&gt; setTaskTarget(null); onChanged=() =&gt; setRetryVersion(value =&gt; value + 1); onDenied=error =&gt; { if (clearDenied(error)) setTaskTarget… | {"kind":"logical","expression":"taskTarget && taskAccessReady","operator":"&&"}; spread: (taskTarget.restored ? { restored: taskTarget.restored } : {}) |
-| 2269:12 GoalsRoute | PlanningWriteRecovery  | onDenied=clearDeniedGoals |  |
-| 2269:160 GoalsRoute | GoalsPage  | onManageTasks=(goal) =&gt; { if (pendingRef.current &#124;&#124; createLockedRef.current &#124;&#124; writeRecovery.locked &#124;&#124; relationGoalRef.curre… |  |
-| 2282:22 GoalsRoute | GoalTasksEditor  | onDenied=clearDeniedGoals; onReadFailure=relationReadFailed; onClose=() =&gt; void closeRelations(); onBeginWrite=writeRecovery.begin; onFinishWrite=writeRec… | {"kind":"logical","expression":"relationGoal","operator":"&&"} |
-| 2436:12 ProjectsRoute | PlanningWriteRecovery  | onDenied=clearDeniedProjects |  |
-| 2436:166 ProjectsRoute | ProjectsPage  | onManageRelations=openRelations; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRetrySummary=(project) =&gt; void retrySummary(project); onCrea… |  |
-| 2438:40 ProjectsRoute | ProjectRelationsEditor  | onSummary=updateRelationSummary; onDenied=clearDeniedProjects; onClose=closeRelations; onBeginWrite=writeRecovery.begin; onFinishWrite=writeRecovery.finish | {"kind":"logical","expression":"relationProject","operator":"&&"} |
-| 2562:12 ProjectTimelineRoute | PlanningWriteRecovery  | onDenied=clearDenied |  |
-| 2562:165 ProjectTimelineRoute | ProjectTimelinePage  | onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onBack=() =&gt; writeWorkspaceHistory("push", "/projects"); onCreate=async input =&gt; { if (pending… |  |
-| 2671:12 CalendarRoute | PlanningWriteRecovery  | onDenied=clearDenied; onReadFailure=clearReadFailure |  |
-| 2671:198 CalendarRoute | CalendarPage  | onRangeChange=changeRange; onPageChange=(next) =&gt; void load(next); onPageSizeChange=(size) =&gt; setPageSize(size); onLoadMore=() =&gt; { if (state.kind =… |  |
-| 2713:51 TodayRoute | TodayPage  | onOpen=setTarget; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1) |  |
-| 2713:184 TodayRoute | TodayTargetDetail  | onClose=() =&gt; setTarget(null); onDenied=clearDenied | {"kind":"logical","expression":"target","operator":"&&"} |
-| 2738:5 FocusRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 2889:5 FocusRoute | p frontendText(locale, transitionRecovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_TRANSITION_UNCERTAIN") |  | {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"} |
-| 2890:5 FocusRoute | Button frontendText(locale, "FOCUS_RETRY") | onClick=() =&gt; setRetryVersion(value =&gt; value + 1) | disabled=pending; {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"} |
-| 2891:81 FocusRoute | Button frontendText(locale, "FOCUS_RETRY_TRANSITION") | onClick=() =&gt; void mutate(epoch =&gt; sendTransition(epoch, transitionRecovery.intent, true)) | disabled=pending; {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; {"kind":"logical","expr… |
-| 2895:5 FocusRoute | p frontendText(locale, recovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_START_UNCERTAIN") |  | {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; earlier return: transitionRecovery.kind !== "empty"… |
-| 2896:5 FocusRoute | Button frontendText(locale, "FOCUS_RETRY") | onClick=() =&gt; setRetryVersion(value =&gt; value + 1) | disabled=pending; {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; earlier return: transitionRecover… |
-| 2897:61 FocusRoute | Button frontendText(locale, "FOCUS_RETRY_START") | onClick=() =&gt; void mutate(epoch =&gt; sendStart(epoch, recovery.intent, recovery.intent), true) | disabled=pending; {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; {"kind":"logical","expression":"r… |
-| 2899:10 FocusRoute | FocusPage  | onDenied=clearDenied; onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onStart=input =&gt; void mutate(epoch =&gt; sendStart(epoch, input)); onTransi… | earlier return: transitionRecovery.kind !== "empty" && state.kind === "ready"; earlier return: recovery.kind !== "empty" && state.kind === "ready" |
-| 2941:51 WorkbenchReviewRoute | WorkbenchReviewPage  | onOpen=setTarget; onPeriodChange=changePeriod; onRetry=() =&gt; { setState({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onDiscardPeriod… |  |
-| 2941:366 WorkbenchReviewRoute | SnapshotTargetDetail  | onClose=() =&gt; setTarget(null); onDenied=clearDenied | {"kind":"logical","expression":"target","operator":"&&"} |
-| 3070:5 NotificationsRoute | window.addEventListener  | "beforeunload", warn |  |
-| 3131:10 NotificationsRoute | NotificationsPage  | onRetry=() =&gt; { setRevokedTarget(false); invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onFilterChange=(next: Notif… |  |
-| 3231:10 MessagesRoute | MessagesPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page: query.page + 1, limit: query.limit, cursor }); onPrevious=(… |  |
-| 3332:10 MemberDiscussionThreadRoute | ThreadPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRefresh=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page… |  |
-| 3417:5 BoardsRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 3569:10 BoardsRoute | BoardsPage  | onDiscardRecord=() =&gt; { if (!memberId &#124;&#124; !discardBlockedBoardMove(memberId)) { setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK"));… |  |
-| 3747:10 ReviewBatchRoute | ReviewBatchPage  | onBack=back; onComplete=back |  |
-| 3751:94 ReviewQueueRoute | ReviewQueueSession  |  | spread: props |
-| 3779:5 ReviewQueueSession | owner.addEventListener  | "beforeunload", warn |  |
-| 3908:10 ReviewQueueSession | ReviewQueuePage  | onOpenDetail=(id) =&gt; writeWorkspaceHistory("push", &#96;/admin/submissions/${encodeURIComponent(id)}&#96;); onOpenBatch=() =&gt; writeWorkspaceHistory("pu… |  |
-| 3951:5 AdminDuplicateRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 4059:10 AdminDuplicateRoute | DuplicateQueuePage  | onLoadRetry=retryRead; onDiscardDecisionRecord=discardRecord; onDecision=recordBlocked ? undefined : (id, decision) =&gt; void decide(id, decision); onPageCh… |  |
-| 4099:5 AdminMembersRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 4220:10 AdminMembersRoute | MembersPage  | onLoadRetry=retryRead; onDiscardStatusRecord=discardRecord; onPageChange=(next) =&gt; { const controller = controllerRef.current; if (controller && state.kin… |  |
-| 4246:5 AdminSpacesRoute | owner.addEventListener  | "beforeunload", warn |  |
-| 4354:10 AdminSpacesRoute | SpacesPage  | onLoadRetry=() =&gt; void read(); onLoadMore=() =&gt; void read("spaces"); onLoadCollections=id =&gt; void read("collections", id); onDiscardRecord=discardRe… |  |
-| 4422:10 AdminAuditRoute | AuditPage  | onRetry=retry; onActionChange=changeFilter; onPageChange=(next) =&gt; load(next); onPageSizeChange=(size) =&gt; setPageSize(size); onLoadMore=() =&gt; { if (… |  |
-| 4465:7 AdminAssetsRoute | owner.addEventListener  | "beforeunload", warn | {"kind":"branch","expression":"locked && !leaveGuardRef.current","branch":"true"} |
-| 4613:10 AdminAssetsRoute | AssetQueuePage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onRetry=recordBlocked ? undefined : (id) =&gt; void retry(id); onPreview=(id) =&gt; void showPreview(id… |  |
+| 235:106 App | AppShell page | onNavigate=navigate; onLogout=() =&gt; logout(owner) | earlier return: sessionError; earlier return: anonymous && pathname === "/"; earlier return: anonymous; earlier return: !session |
+| 262:39 renderPage | SettingsPage  |  | {"kind":"branch","expression":"session","branch":"true"} |
+| 362:10 HomeRoute | HomePage  | onLoadMoreRecent=loadMoreRecent; onRetry=() =&gt; { if (pending.current) return; pending.current = true; setState({ kind: "loading" }); setRetry(value =&gt; … |  |
+| 435:10 AdminAnalyticsRoute | AdminAnalyticsPage  | onDaysChange=changeDays; onLoadMore=() =&gt; { if (state.kind === "ready" && state.data.recentVisitors.pagination.page &lt; state.data.recentVisitors.paginat… |  |
+| 471:10 AdminRolesRoute | AdminRolesPage  | onLoadRetry=controller.retryRead |  |
+| 477:10 AdminRoleNewRoute | AdminRoleCreatePage  | onCreate=controller.createRole; onCreated=back; onCancel=back; onDiscardRecord=controller.discardRecord; onRetryWrite=controller.retryWrite; onLoadRetry=cont… |  |
+| 486:10 AdminRoleDetailRoute | AdminRoleDetailPage  | onBack=() =&gt; writeWorkspaceHistory("push", "/admin/roles"); onLoadRetry=controller.retryRead; onSave=controller.recordBlocked ? undefined : (role, allowBi… |  |
+| 521:5 AdminMenusRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 615:10 AdminMenusRoute | AdminMenusPage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onCreate=recordBlocked ? undefined : (input) =&gt; mutate({ op: "create", input }, () =&gt; createAdmin… |  |
+| 670:5 KnowledgeReaderSession | owner.addEventListener  | "beforeunload", warn |  |
+| 804:5 KnowledgeReaderSession | window.addEventListener  | "storage", onStorage |  |
+| 832:14 KnowledgeReaderSession | KnowledgeReaderPage  | onRetry=() =&gt; setRetry((value) =&gt; value + 1) | {"kind":"branch","expression":"state.kind !== \"ready\"","branch":"true"} |
+| 891:10 KnowledgeReaderSession | KnowledgeReaderPage  | onCompare=showDiff; onRetryRelated=retryRelated; onRetryBacklinks=retryBacklinks; onCheckFavorite=checkFavorite; onToggleFavorite=toggleFavorite | earlier return: state.kind !== "ready" |
+| 899:10 KnowledgeRoute | MemberKnowledgeRoute  |  | spread: props |
+| 1080:10 MemberKnowledgeRoute | KnowledgePage  | onFilterChange=(next) =&gt; writeWorkspaceHistory("push", &#96;/knowledge${writeKnowledgeFilters(readWorkspaceLocation().search, next)}&#96;); onRetry=() =&g… |  |
+| 1145:5 MemberSearchRoute | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
+| 1231:10 MemberSearchRoute | SearchPage  | onFilterChange=(next) =&gt; { const nextSearch = writeSearchFilters(readWorkspaceLocation().search, next); writeWorkspaceHistory("push", &#96;/search${nextSe… |  |
+| 1237:88 AgentRoute | a frontendText(locale, "AGENT_NEW_CONVERSATION") | href="/agent" |  |
+| 1325:5 AgentConversationRoute | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
+| 1437:183 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_ABANDON") | onClick=abandon | {"kind":"branch","expression":"storageBlocked","branch":"true"} |
+| 1438:558 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_RETRY") | onClick=() =&gt; submit(intentRef.current!.question) | {"kind":"branch","expression":"unconfirmed && intentRef.current","branch":"true"}; earlier return: storageBlocked |
+| 1438:671 AgentConversationRoute | Button frontendText(locale, "AGENT_INTENT_ABANDON") | onClick=abandon | {"kind":"branch","expression":"unconfirmed && intentRef.current","branch":"true"}; earlier return: storageBlocked |
+| 1440:181 AgentConversationRoute | Button frontendText(locale, "AGENT_RETRY") | onClick=() =&gt; setRecoveryVersion((value) =&gt; value + 1) | {"kind":"branch","expression":"recovery === \"error\"","branch":"true"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
+| 1440:292 AgentConversationRoute | a frontendText(locale, "AGENT_NEW_CONVERSATION") | href="/agent" | {"kind":"branch","expression":"recovery === \"error\"","branch":"true"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ea… |
+| 1442:27 AgentConversationRoute | div  |  | {"kind":"logical","expression":"composerBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier … |
+| 1442:187 AgentConversationRoute | Button frontendText(locale, "AGENT_COMPOSER_RECORD_DISCARD") | onClick=discardComposer; type="button" | {"kind":"logical","expression":"composerBlocked","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier … |
+| 1443:26 AgentConversationRoute | p composerNotice |  | {"kind":"logical","expression":"composerNotice","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier r… |
+| 1445:32 AgentConversationRoute | a frontendText(locale, "AGENT_RESTORE_LINK") | href=&#96;/agent?conversationId=${encodeURIComponent(sessionIdRef.current)}&#96; | {"kind":"logical","expression":"sessionIdRef.current","operator":"&&"}; earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; ear… |
+| 1446:7 AgentConversationRoute | AgentPage  | onQuestionChange=value =&gt; questionDraft.edit("question", value); onSubmit=() =&gt; submit(); onCancel=cancel; onRetry=() =&gt; submit(lastQuestion); onSta… | earlier return: storageBlocked; earlier return: unconfirmed && intentRef.current; earlier return: recovery === "loading" && state.kind !== "loading"; earlier… |
+| 1681:41 MemberSubmitForm | SubmitPage  | onDraftChange=changeDraft; onSubmit=() =&gt; submit(draftRef.current); onDraftRetry=() =&gt; { if (draftWrites.state.reason === "unknown" &#124;&#124; draftW… | spread: (resubmitView ? { resubmit: resubmitView, onResubmitRestart: restartResubmit, onResubmitLeave: leaveResubmit, onResubmitStatusRetry: () =&gt; { if (r… |
+| 1761:10 MySubmissionsRoute | MySubmissionsPage  | onResubmit=memberId ? startResubmit : undefined; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onPageChange=(next) =&gt; load(next); onPageSizeC… |  |
+| 1812:5 TasksRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 1969:27 TasksRoute | Button frontendText(locale, "TASKS_WRITE_RECORD_DISCARD") | onClick=discardRecord | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 1973:7 TasksRoute | Button frontendText(locale, "TASKS_CHECK_WRITE") | onClick=() =&gt; void resolveListUnknown("check") | disabled=listRecovering; {"kind":"logical","expression":"listUnknown","operator":"&&"} |
+| 1974:7 TasksRoute | Button frontendText(locale, "TASKS_RETRY_WRITE") | onClick=() =&gt; void resolveListUnknown("retry") | disabled=listRecovering; {"kind":"logical","expression":"listUnknown","operator":"&&"} |
+| 1976:29 TasksRoute | p actionNotice |  | {"kind":"logical","expression":"actionNotice","operator":"&&"} |
+| 1976:90 TasksRoute | TasksPage  | onCreate=() =&gt; setEditor({ taskId: null }); onOpen=(taskId) =&gt; setEditor({ taskId }); onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onFilt… |  |
+| 1976:1381 TasksRoute | TaskEditor  | onClose=() =&gt; setEditor(null); onChanged=() =&gt; setRetryVersion((value) =&gt; value + 1); onDenied=clearDeniedTasks | {"kind":"logical","expression":"editor","operator":"&&"}; spread: (editor.restored ? { restored: editor.restored } : {}) |
+| 2002:5 InboxRoute | owner.addEventListener  | "beforeunload", warn | earlier return: !taskTarget?.restored &#124;&#124; taskAccessReady |
+| 2120:27 InboxRoute | Button frontendText(locale, "TASKS_WRITE_RECORD_DISCARD") | onClick=() =&gt; { if (memberId && discardBlockedTaskWrite(memberId)) setTaskRecordBlocked(false); } | {"kind":"logical","expression":"taskRecordBlocked","operator":"&&"} |
+| 2123:27 InboxRoute | Button frontendText(locale, "NAV_TASKS") | onClick=() =&gt; writeWorkspaceHistory("push", "/tasks") | {"kind":"logical","expression":"taskCreatePending && taskAccessReady","operator":"&&"} |
+| 2124:12 InboxRoute | PlanningWriteRecovery  | onDenied=clearDenied; onReadFailure=clearReadFailure |  |
+| 2124:198 InboxRoute | InboxPage  | onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onCreateLock=locked =&gt; { captureLockedRef.current = locked; setCaptureLocked(locked); }; onCreate… |  |
+| 2158:73 InboxRoute | TaskEditor  | onClose=() =&gt; setTaskTarget(null); onChanged=() =&gt; setRetryVersion(value =&gt; value + 1); onDenied=error =&gt; { if (clearDenied(error)) setTaskTarget… | {"kind":"logical","expression":"taskTarget && taskAccessReady","operator":"&&"}; spread: (taskTarget.restored ? { restored: taskTarget.restored } : {}) |
+| 2272:12 GoalsRoute | PlanningWriteRecovery  | onDenied=clearDeniedGoals |  |
+| 2272:160 GoalsRoute | GoalsPage  | onManageTasks=(goal) =&gt; { if (pendingRef.current &#124;&#124; createLockedRef.current &#124;&#124; writeRecovery.locked &#124;&#124; relationGoalRef.curre… |  |
+| 2285:22 GoalsRoute | GoalTasksEditor  | onDenied=clearDeniedGoals; onReadFailure=relationReadFailed; onClose=() =&gt; void closeRelations(); onBeginWrite=writeRecovery.begin; onFinishWrite=writeRec… | {"kind":"logical","expression":"relationGoal","operator":"&&"} |
+| 2439:12 ProjectsRoute | PlanningWriteRecovery  | onDenied=clearDeniedProjects |  |
+| 2439:166 ProjectsRoute | ProjectsPage  | onManageRelations=openRelations; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRetrySummary=(project) =&gt; void retrySummary(project); onCrea… |  |
+| 2441:40 ProjectsRoute | ProjectRelationsEditor  | onSummary=updateRelationSummary; onDenied=clearDeniedProjects; onClose=closeRelations; onBeginWrite=writeRecovery.begin; onFinishWrite=writeRecovery.finish | {"kind":"logical","expression":"relationProject","operator":"&&"} |
+| 2565:12 ProjectTimelineRoute | PlanningWriteRecovery  | onDenied=clearDenied |  |
+| 2565:165 ProjectTimelineRoute | ProjectTimelinePage  | onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onBack=() =&gt; writeWorkspaceHistory("push", "/projects"); onCreate=async input =&gt; { if (pending… |  |
+| 2674:12 CalendarRoute | PlanningWriteRecovery  | onDenied=clearDenied; onReadFailure=clearReadFailure |  |
+| 2674:198 CalendarRoute | CalendarPage  | onRangeChange=changeRange; onPageChange=(next) =&gt; void load(next); onPageSizeChange=(size) =&gt; setPageSize(size); onLoadMore=() =&gt; { if (state.kind =… |  |
+| 2716:51 TodayRoute | TodayPage  | onOpen=setTarget; onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1) |  |
+| 2716:184 TodayRoute | TodayTargetDetail  | onClose=() =&gt; setTarget(null); onDenied=clearDenied | {"kind":"logical","expression":"target","operator":"&&"} |
+| 2741:5 FocusRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 2892:5 FocusRoute | p frontendText(locale, transitionRecovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_TRANSITION_UNCERTAIN") |  | {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"} |
+| 2893:5 FocusRoute | Button frontendText(locale, "FOCUS_RETRY") | onClick=() =&gt; setRetryVersion(value =&gt; value + 1) | disabled=pending; {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"} |
+| 2894:81 FocusRoute | Button frontendText(locale, "FOCUS_RETRY_TRANSITION") | onClick=() =&gt; void mutate(epoch =&gt; sendTransition(epoch, transitionRecovery.intent, true)) | disabled=pending; {"kind":"branch","expression":"transitionRecovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; {"kind":"logical","expr… |
+| 2898:5 FocusRoute | p frontendText(locale, recovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_START_UNCERTAIN") |  | {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; earlier return: transitionRecovery.kind !== "empty"… |
+| 2899:5 FocusRoute | Button frontendText(locale, "FOCUS_RETRY") | onClick=() =&gt; setRetryVersion(value =&gt; value + 1) | disabled=pending; {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; earlier return: transitionRecover… |
+| 2900:61 FocusRoute | Button frontendText(locale, "FOCUS_RETRY_START") | onClick=() =&gt; void mutate(epoch =&gt; sendStart(epoch, recovery.intent, recovery.intent), true) | disabled=pending; {"kind":"branch","expression":"recovery.kind !== \"empty\" && state.kind === \"ready\"","branch":"true"}; {"kind":"logical","expression":"r… |
+| 2902:10 FocusRoute | FocusPage  | onDenied=clearDenied; onRetry=() =&gt; setRetryVersion(value =&gt; value + 1); onStart=input =&gt; void mutate(epoch =&gt; sendStart(epoch, input)); onTransi… | earlier return: transitionRecovery.kind !== "empty" && state.kind === "ready"; earlier return: recovery.kind !== "empty" && state.kind === "ready" |
+| 2944:51 WorkbenchReviewRoute | WorkbenchReviewPage  | onOpen=setTarget; onPeriodChange=changePeriod; onRetry=() =&gt; { setState({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onDiscardPeriod… |  |
+| 2944:366 WorkbenchReviewRoute | SnapshotTargetDetail  | onClose=() =&gt; setTarget(null); onDenied=clearDenied | {"kind":"logical","expression":"target","operator":"&&"} |
+| 3073:5 NotificationsRoute | window.addEventListener  | "beforeunload", warn |  |
+| 3134:10 NotificationsRoute | NotificationsPage  | onRetry=() =&gt; { setRevokedTarget(false); invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) =&gt; value + 1); }; onFilterChange=(next: Notif… |  |
+| 3234:10 MessagesRoute | MessagesPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page: query.page + 1, limit: query.limit, cursor }); onPrevious=(… |  |
+| 3335:10 MemberDiscussionThreadRoute | ThreadPage  | onRetry=() =&gt; setRetryVersion((value) =&gt; value + 1); onRefresh=() =&gt; setRetryVersion((value) =&gt; value + 1); onNext=(cursor) =&gt; navigate({ page… |  |
+| 3420:5 BoardsRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 3572:10 BoardsRoute | BoardsPage  | onDiscardRecord=() =&gt; { if (!memberId &#124;&#124; !discardBlockedBoardMove(memberId)) { setActionError(frontendText(locale, "BOARDS_MOVE_RECORD_STUCK"));… |  |
+| 3750:10 ReviewBatchRoute | ReviewBatchPage  | onBack=back; onComplete=back |  |
+| 3754:94 ReviewQueueRoute | ReviewQueueSession  |  | spread: props |
+| 3782:5 ReviewQueueSession | owner.addEventListener  | "beforeunload", warn |  |
+| 3911:10 ReviewQueueSession | ReviewQueuePage  | onOpenDetail=(id) =&gt; writeWorkspaceHistory("push", &#96;/admin/submissions/${encodeURIComponent(id)}&#96;); onOpenBatch=() =&gt; { const page = state.kind… |  |
+| 3958:5 AdminDuplicateRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 4066:10 AdminDuplicateRoute | DuplicateQueuePage  | onLoadRetry=retryRead; onDiscardDecisionRecord=discardRecord; onDecision=recordBlocked ? undefined : (id, decision) =&gt; void decide(id, decision); onPageCh… |  |
+| 4106:5 AdminMembersRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 4227:10 AdminMembersRoute | MembersPage  | onLoadRetry=retryRead; onDiscardStatusRecord=discardRecord; onPageChange=(next) =&gt; { const controller = controllerRef.current; if (controller && state.kin… |  |
+| 4253:5 AdminSpacesRoute | owner.addEventListener  | "beforeunload", warn |  |
+| 4361:10 AdminSpacesRoute | SpacesPage  | onLoadRetry=() =&gt; void read(); onLoadMore=() =&gt; void read("spaces"); onLoadCollections=id =&gt; void read("collections", id); onDiscardRecord=discardRe… |  |
+| 4429:10 AdminAuditRoute | AuditPage  | onRetry=retry; onActionChange=changeFilter; onPageChange=(next) =&gt; load(next); onPageSizeChange=(size) =&gt; setPageSize(size); onLoadMore=() =&gt; { if (… |  |
+| 4472:7 AdminAssetsRoute | owner.addEventListener  | "beforeunload", warn | {"kind":"branch","expression":"locked && !leaveGuardRef.current","branch":"true"} |
+| 4620:10 AdminAssetsRoute | AssetQueuePage  | onLoadRetry=retryRead; onDiscardRecord=discardRecord; onRetry=recordBlocked ? undefined : (id) =&gt; void retry(id); onPreview=(id) =&gt; void showPreview(id… |  |
 
 ## frontend/components/admin/invitation-admin-panel.tsx
 
@@ -1840,16 +1841,16 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 227:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT_ALL") | onClick=batch.selectAllPage; type="button" | disabled=frozen &#124;&#124; rows.length === 0 |
-| 228:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_CLEAR") | onClick=batch.clear; type="button" | disabled=frozen &#124;&#124; selectedOnPage === 0 |
-| 232:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REJECT") | onClick=() =&gt; batch.setDecision("reject"); type="button" | disabled=frozen |
-| 233:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REQUEST_REVISION") | onClick=() =&gt; batch.setDecision("request_revision"); type="button" | disabled=frozen |
-| 238:13 ReviewBatchToolbar | Select  | onValueChange=(value) =&gt; batch.setReasonCode(value) | disabled=frozen; {"kind":"branch","expression":"batch.decision === \"reject\"","branch":"true"} |
-| 248:11 ReviewBatchToolbar | Textarea  | onChange=(event) =&gt; batch.setNote(event.target.value) | disabled=frozen |
-| 252:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_ACTION_LABEL") | onClick=batch.send; type="button" | disabled=selectedOnPage === 0 |
-| 257:26 ReviewBatchToolbar | p batch.notice |  | {"kind":"logical","expression":"batch.notice","operator":"&&"} |
-| 272:5 ReviewBatchResults | Alert  |  | {"kind":"branch","expression":"state.kind === \"rejected\"","branch":"true"} |
-| 300:11 ReviewBatchResults | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_FAILED").replace("{count}", String(failed)) | onClick=onRetryFailed; type="button" | {"kind":"logical","expression":"failed &gt; 0","operator":"&&"}; earlier return: state.kind === "rejected"; earlier return: state.kind !== "done" |
+| 323:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT_ALL") | onClick=batch.selectAllPage; type="button" | disabled=frozen &#124;&#124; rows.length === 0 |
+| 324:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_CLEAR") | onClick=batch.clear; type="button" | disabled=frozen &#124;&#124; selectedOnPage === 0 |
+| 328:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REJECT") | onClick=() =&gt; batch.setDecision("reject"); type="button" | disabled=frozen |
+| 329:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REQUEST_REVISION") | onClick=() =&gt; batch.setDecision("request_revision"); type="button" | disabled=frozen |
+| 334:13 ReviewBatchToolbar | Select  | onValueChange=(value) =&gt; batch.setReasonCode(value) | disabled=frozen; {"kind":"branch","expression":"batch.decision === \"reject\"","branch":"true"} |
+| 344:11 ReviewBatchToolbar | Textarea  | onChange=(event) =&gt; batch.setNote(event.target.value) | disabled=frozen |
+| 348:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_ACTION_LABEL") | onClick=batch.send; type="button" | disabled=selectedOnPage === 0 |
+| 353:26 ReviewBatchToolbar | p batch.notice |  | {"kind":"logical","expression":"batch.notice","operator":"&&"} |
+| 368:5 ReviewBatchResults | Alert  |  | {"kind":"branch","expression":"state.kind === \"rejected\"","branch":"true"} |
+| 396:11 ReviewBatchResults | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_FAILED").replace("{count}", String(failed)) | onClick=onRetryFailed; type="button" | {"kind":"logical","expression":"failed &gt; 0","operator":"&&"}; earlier return: state.kind === "rejected"; earlier return: state.kind !== "done" |
 
 ## frontend/components/review/review-chunk-panel.tsx
 
@@ -1971,73 +1972,74 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 130:11 AppShell | span unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—" |  | {"kind":"repeat","expression":"collaborationLinks"}; {"kind":"branch","expression":"link.path === \"/notifications\"","branch":"true"} |
-| 137:7 AppShell | a locale.t("SHELL_SKIP_MAIN") | href="#main-content" |  |
-| 138:7 AppShell | AnimatedSidebarProvider  | onOpenChange=(next) =&gt; setCollapsed(!next) | open=!collapsed |
-| 158:13 AppShell | Button  | onClick=() =&gt; setCollapsed((value) =&gt; !value); type="button" | aria-expanded=!collapsed; {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 163:13 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 164:40 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"logical","expression":"adminRoutes.length &gt; 0","operator… |
-| 167:93 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"branch","expression":"collapsed","branch":"true"} |
-| 168:81 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"branch","expression":"collapsed","branch":"false"} |
-| 172:70 AppShell | Breadcrumb  | onNavigate=navigate | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 174:13 AppShell | CommandPalette  | onNavigate=navigate; onToggleTheme=toggleTheme; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 186:76 AppShell | Button locale.t("COMMON_RETRY") | onClick=notificationSummary.retry | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"logical","expression":"notificationsLinkVisible && unreadSt… |
-| 188:13 AppShell | Popover  | onOpenChange=(open) =&gt; setActiveMenu(open ? "language" : null) | open=activeMenu === "language"; {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 190:17 AppShell | Button  | type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
-| 192:45 AppShell | PopoverContent  |  | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
-| 193:17 AppShell | Button locale.t("SHELL_LANGUAGE_EN") | onClick=() =&gt; { locale.setLocale("en"); setActiveMenu(null); }; type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
-| 194:17 AppShell | Button locale.t("SHELL_LANGUAGE_ZH_CN") | onClick=() =&gt; { locale.setLocale("zh-CN"); setActiveMenu(null); }; type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
-| 199:148 AppShell | MobileNavigation  | onNavigate=navigate; onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
-| 216:36 NavGroup | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"repeat","expression":"nodes"} |
-| 237:29 NavNode | Button  | onClick=(event) =&gt; event.preventDefault(); type="button" | aria-disabled="true" |
-| 241:9 NavNode | AnimatedSidebarMenuButton label | onSelect=(event) =&gt; { event.preventDefault(); onNavigate(path); }; href=path | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"true"} |
-| 242:9 NavNode | AnimatedSidebarMenuButton label | onSelect=() =&gt; onToggle(node.id) | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"false"} |
-| 243:10 NavNode | AnimatedSidebarMenuItem  |  |  |
-| 246:45 NavNode | Button  | onClick=() =&gt; onToggle(node.id); type="button" | aria-expanded=expanded[node.id] ?? false; {"kind":"logical","expression":"hasChildren && path && !collapsed","operator":"&&"} |
-| 248:111 NavNode | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"logical","expression":"hasChildren && open","operator":"&&"}; {"kind":"container","tag":"AnimatedSidebarMenuSub","attributes":{"open":"true"}}; {"ki… |
-| 314:23 Breadcrumb | BreadcrumbLink locale.t("NAV_HOME") | onClick=(event) =&gt; { event.preventDefault(); onNavigate?.("/"); }; href="/" |  |
-| 322:33 NavIcon | Checks  |  | {"kind":"branch","expression":"path === \"/tasks\"","branch":"true"}; spread: props |
-| 323:34 NavIcon | Kanban  |  | {"kind":"branch","expression":"path === \"/boards\"","branch":"true"}; earlier return: path === "/tasks"; spread: props |
-| 324:41 NavIcon | Bell  |  | {"kind":"branch","expression":"path === \"/notifications\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; spread: … |
-| 325:36 NavIcon | ChatCircle  |  | {"kind":"branch","expression":"path === \"/messages\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
-| 326:33 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/graph\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 327:28 NavIcon | House  |  | {"kind":"branch","expression":"path === \"/\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path … |
-| 328:37 NavIcon | BookOpen  |  | {"kind":"branch","expression":"path === \"/knowledge\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retu… |
-| 329:34 NavIcon | UploadSimple  |  | {"kind":"branch","expression":"path === \"/submit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
-| 330:34 NavIcon | MagnifyingGlass  |  | {"kind":"branch","expression":"path === \"/search\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
-| 331:33 NavIcon | Sparkle  |  | {"kind":"branch","expression":"path === \"/agent\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 332:42 NavIcon | Files  |  | {"kind":"branch","expression":"path === \"/my-submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier… |
-| 333:33 NavIcon | Target  |  | {"kind":"branch","expression":"path === \"/goals\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 334:36 NavIcon | FolderSimple  |  | {"kind":"branch","expression":"path === \"/projects\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
-| 335:36 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/calendar\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
-| 336:33 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/today\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 337:33 NavIcon | Timer  |  | {"kind":"branch","expression":"path === \"/focus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 338:34 NavIcon | Check  |  | {"kind":"branch","expression":"path === \"/review\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
-| 339:33 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
-| 340:45 NavIcon | NotePencil  |  | {"kind":"branch","expression":"path === \"/admin/submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earl… |
-| 341:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/assets\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
-| 342:49 NavIcon | Trash  |  | {"kind":"branch","expression":"path === \"/admin/knowledge/trash\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; … |
-| 343:41 NavIcon | UsersThree  |  | {"kind":"branch","expression":"path === \"/admin/members\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier … |
-| 344:39 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin/roles\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
-| 345:39 NavIcon | DotsThree  |  | {"kind":"branch","expression":"path === \"/admin/menus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
-| 346:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/spaces\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
-| 347:39 NavIcon | Scroll  |  | {"kind":"branch","expression":"path === \"/admin/audit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
-| 348:43 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/admin/analytics\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlie… |
-| 349:10 NavIcon | DotsThree  |  | earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path === "/notifications"; earlier return: path === "/messages"; earli… |
-| 403:10 AccountMenu | Popover  | onOpenChange=(next) =&gt; onActiveMenuChange(next ? menuId : null) | open=open |
-| 405:7 AccountMenu | Button  | onKeyDown=(event) =&gt; { if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return; event.preventDefault(); focusOnOpen.current = event.key === "Arro… | {"kind":"container","tag":"Popover","attributes":{"open":"open"}} |
-| 415:14 AccountMenu | PopoverContent  | onKeyDown=onMenuKeyDown | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 417:7 AccountMenu | Button locale.t("SHELL_SETTINGS") | onClick=selectSettings; type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 420:9 AccountMenu | Button locale.t("SHELL_THEME_LIGHT") / selectedThemeIndicator("light") | onClick=() =&gt; selectTheme("light"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 421:9 AccountMenu | Button locale.t("SHELL_THEME_DARK") / selectedThemeIndicator("dark") | onClick=() =&gt; selectTheme("dark"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 422:9 AccountMenu | Button locale.t("SHELL_THEME_SYSTEM") / selectedThemeIndicator("system") | onClick=() =&gt; selectTheme("system"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 424:23 AccountMenu | p logoutError |  | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"}; {"kind":"logical","expression":"lo… |
-| 425:7 AccountMenu | Button logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT") | onClick=onLogout; type="button" | disabled=logoutPending; {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
-| 434:10 MobileNavigation | Sheet  | onOpenChange=setOpen | open=open |
-| 434:52 MobileNavigation | Button locale.t("SHELL_OPEN_NAVIGATION") | onClick=() =&gt; setOpen((current) =&gt; !current); type="button" | aria-expanded=open; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}} |
-| 434:991 MobileNavigation | Button  | type="button" | disabled=true; aria-disabled="true"; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"repeat","expression":"flattenNavigation(nodes)… |
-| 434:1502 MobileNavigation | motion.a  | onClick=(event) =&gt; { event.preventDefault(); setOpen(false); onNavigate(path); }; href=path | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"repeat","expression":"flattenNavigation(nodes)"}; {"kind":"branch","expression":"ro… |
-| 434:2394 MobileNavigation | AccountMenu  | onActiveMenuChange=onActiveMenuChange; onThemeChange=onThemeChange; onNavigate=(path) =&gt; { setOpen(false); onNavigate(path); }; onLogout=onLogout | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}} |
+| 73:5 AppShell | window.addEventListener  | NAVIGATION_REFRESH_EVENT, refresh |  |
+| 136:11 AppShell | span unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—" |  | {"kind":"repeat","expression":"collaborationLinks"}; {"kind":"branch","expression":"link.path === \"/notifications\"","branch":"true"} |
+| 143:7 AppShell | a locale.t("SHELL_SKIP_MAIN") | href="#main-content" |  |
+| 144:7 AppShell | AnimatedSidebarProvider  | onOpenChange=(next) =&gt; setCollapsed(!next) | open=!collapsed |
+| 164:13 AppShell | Button  | onClick=() =&gt; setCollapsed((value) =&gt; !value); type="button" | aria-expanded=!collapsed; {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 169:13 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 170:40 AppShell | NavGroup  | onNavigate=navigate; onToggle=(id) =&gt; setExpanded((value) =&gt; ({ ...value, [id]: !value[id] })) | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"logical","expression":"adminRoutes.length &gt; 0","operator… |
+| 173:93 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"branch","expression":"collapsed","branch":"true"} |
+| 174:81 AppShell | AccountMenu  | onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onNavigate=navigate; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"branch","expression":"collapsed","branch":"false"} |
+| 178:70 AppShell | Breadcrumb  | onNavigate=navigate | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 180:13 AppShell | CommandPalette  | onNavigate=navigate; onToggleTheme=toggleTheme; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 192:76 AppShell | Button locale.t("COMMON_RETRY") | onClick=notificationSummary.retry | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"logical","expression":"notificationsLinkVisible && unreadSt… |
+| 194:13 AppShell | Popover  | onOpenChange=(open) =&gt; setActiveMenu(open ? "language" : null) | open=activeMenu === "language"; {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 196:17 AppShell | Button  | type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
+| 198:45 AppShell | PopoverContent  |  | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
+| 199:17 AppShell | Button locale.t("SHELL_LANGUAGE_EN") | onClick=() =&gt; { locale.setLocale("en"); setActiveMenu(null); }; type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
+| 200:17 AppShell | Button locale.t("SHELL_LANGUAGE_ZH_CN") | onClick=() =&gt; { locale.setLocale("zh-CN"); setActiveMenu(null); }; type="button" | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}}; {"kind":"container","tag":"Popover","attributes":{"open":"activeMenu… |
+| 205:148 AppShell | MobileNavigation  | onNavigate=navigate; onActiveMenuChange=setActiveMenu; onThemeChange=changeTheme; onLogout=onLogout | {"kind":"container","tag":"AnimatedSidebarProvider","attributes":{"open":"!collapsed"}} |
+| 222:36 NavGroup | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"repeat","expression":"nodes"} |
+| 243:29 NavNode | Button  | onClick=(event) =&gt; event.preventDefault(); type="button" | aria-disabled="true" |
+| 247:9 NavNode | AnimatedSidebarMenuButton label | onSelect=(event) =&gt; { event.preventDefault(); onNavigate(path); }; href=path | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"true"} |
+| 248:9 NavNode | AnimatedSidebarMenuButton label | onSelect=() =&gt; onToggle(node.id) | {"kind":"branch","expression":"path && unavailable","branch":"false"}; {"kind":"branch","expression":"path","branch":"false"} |
+| 249:10 NavNode | AnimatedSidebarMenuItem  |  |  |
+| 252:45 NavNode | Button  | onClick=() =&gt; onToggle(node.id); type="button" | aria-expanded=expanded[node.id] ?? false; {"kind":"logical","expression":"hasChildren && path && !collapsed","operator":"&&"} |
+| 254:111 NavNode | NavNode  | onNavigate=onNavigate; onToggle=onToggle | {"kind":"logical","expression":"hasChildren && open","operator":"&&"}; {"kind":"container","tag":"AnimatedSidebarMenuSub","attributes":{"open":"true"}}; {"ki… |
+| 320:23 Breadcrumb | BreadcrumbLink locale.t("NAV_HOME") | onClick=(event) =&gt; { event.preventDefault(); onNavigate?.("/"); }; href="/" |  |
+| 328:33 NavIcon | Checks  |  | {"kind":"branch","expression":"path === \"/tasks\"","branch":"true"}; spread: props |
+| 329:34 NavIcon | Kanban  |  | {"kind":"branch","expression":"path === \"/boards\"","branch":"true"}; earlier return: path === "/tasks"; spread: props |
+| 330:41 NavIcon | Bell  |  | {"kind":"branch","expression":"path === \"/notifications\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; spread: … |
+| 331:36 NavIcon | ChatCircle  |  | {"kind":"branch","expression":"path === \"/messages\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
+| 332:33 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/graph\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 333:28 NavIcon | House  |  | {"kind":"branch","expression":"path === \"/\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path … |
+| 334:37 NavIcon | BookOpen  |  | {"kind":"branch","expression":"path === \"/knowledge\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retu… |
+| 335:34 NavIcon | UploadSimple  |  | {"kind":"branch","expression":"path === \"/submit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
+| 336:34 NavIcon | MagnifyingGlass  |  | {"kind":"branch","expression":"path === \"/search\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
+| 337:33 NavIcon | Sparkle  |  | {"kind":"branch","expression":"path === \"/agent\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 338:42 NavIcon | Files  |  | {"kind":"branch","expression":"path === \"/my-submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier… |
+| 339:33 NavIcon | Target  |  | {"kind":"branch","expression":"path === \"/goals\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 340:36 NavIcon | FolderSimple  |  | {"kind":"branch","expression":"path === \"/projects\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
+| 341:36 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/calendar\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier retur… |
+| 342:33 NavIcon | CalendarBlank  |  | {"kind":"branch","expression":"path === \"/today\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 343:33 NavIcon | Timer  |  | {"kind":"branch","expression":"path === \"/focus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 344:34 NavIcon | Check  |  | {"kind":"branch","expression":"path === \"/review\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return:… |
+| 345:33 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: … |
+| 346:45 NavIcon | NotePencil  |  | {"kind":"branch","expression":"path === \"/admin/submissions\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earl… |
+| 347:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/assets\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
+| 348:49 NavIcon | Trash  |  | {"kind":"branch","expression":"path === \"/admin/knowledge/trash\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; … |
+| 349:41 NavIcon | UsersThree  |  | {"kind":"branch","expression":"path === \"/admin/members\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier … |
+| 350:39 NavIcon | ShieldCheck  |  | {"kind":"branch","expression":"path === \"/admin/roles\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
+| 351:39 NavIcon | DotsThree  |  | {"kind":"branch","expression":"path === \"/admin/menus\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
+| 352:40 NavIcon | Stack  |  | {"kind":"branch","expression":"path === \"/admin/spaces\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier r… |
+| 353:39 NavIcon | Scroll  |  | {"kind":"branch","expression":"path === \"/admin/audit\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier re… |
+| 354:43 NavIcon | ChartLine  |  | {"kind":"branch","expression":"path === \"/admin/analytics\"","branch":"true"}; earlier return: path === "/tasks"; earlier return: path === "/boards"; earlie… |
+| 355:10 NavIcon | DotsThree  |  | earlier return: path === "/tasks"; earlier return: path === "/boards"; earlier return: path === "/notifications"; earlier return: path === "/messages"; earli… |
+| 409:10 AccountMenu | Popover  | onOpenChange=(next) =&gt; onActiveMenuChange(next ? menuId : null) | open=open |
+| 411:7 AccountMenu | Button  | onKeyDown=(event) =&gt; { if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return; event.preventDefault(); focusOnOpen.current = event.key === "Arro… | {"kind":"container","tag":"Popover","attributes":{"open":"open"}} |
+| 421:14 AccountMenu | PopoverContent  | onKeyDown=onMenuKeyDown | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 423:7 AccountMenu | Button locale.t("SHELL_SETTINGS") | onClick=selectSettings; type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 426:9 AccountMenu | Button locale.t("SHELL_THEME_LIGHT") / selectedThemeIndicator("light") | onClick=() =&gt; selectTheme("light"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 427:9 AccountMenu | Button locale.t("SHELL_THEME_DARK") / selectedThemeIndicator("dark") | onClick=() =&gt; selectTheme("dark"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 428:9 AccountMenu | Button locale.t("SHELL_THEME_SYSTEM") / selectedThemeIndicator("system") | onClick=() =&gt; selectTheme("system"); type="button" | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 430:23 AccountMenu | p logoutError |  | {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"}; {"kind":"logical","expression":"lo… |
+| 431:7 AccountMenu | Button logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT") | onClick=onLogout; type="button" | disabled=logoutPending; {"kind":"container","tag":"Popover","attributes":{"open":"open"}}; {"kind":"logical","expression":"open","operator":"&&"} |
+| 440:10 MobileNavigation | Sheet  | onOpenChange=setOpen | open=open |
+| 440:52 MobileNavigation | Button locale.t("SHELL_OPEN_NAVIGATION") | onClick=() =&gt; setOpen((current) =&gt; !current); type="button" | aria-expanded=open; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}} |
+| 440:991 MobileNavigation | Button  | type="button" | disabled=true; aria-disabled="true"; {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"repeat","expression":"flattenNavigation(nodes)… |
+| 440:1502 MobileNavigation | motion.a  | onClick=(event) =&gt; { event.preventDefault(); setOpen(false); onNavigate(path); }; href=path | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}}; {"kind":"repeat","expression":"flattenNavigation(nodes)"}; {"kind":"branch","expression":"ro… |
+| 440:2394 MobileNavigation | AccountMenu  | onActiveMenuChange=onActiveMenuChange; onThemeChange=onThemeChange; onNavigate=(path) =&gt; { setOpen(false); onNavigate(path); }; onLogout=onLogout | {"kind":"container","tag":"Sheet","attributes":{"open":"open"}} |
 
 ## frontend/components/shell/command-palette.tsx
 
@@ -2758,20 +2760,24 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 123:36 MembersPage | FilterSelect  | onChange=(value) =&gt; onStatusFilterChange?.(value as "" &#124; "active" &#124; "disabled") | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression"… |
-| 124:5 MembersPage | Tabs  | onValueChange=(value) =&gt; setTab(value as "members" &#124; "invitations" &#124; "network") | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 126:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_MEMBERS_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 127:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_INVITATIONS_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 128:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_NETWORK_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 131:5 MembersPage | AppliedFilters  | onClear=() =&gt; onStatusFilterChange?.("") | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 138:159 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
-| 140:35 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
-| 140:201 MembersPage | Button frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD") | onClick=onDiscardStatusRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
-| 141:58 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
-| 141:281 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression"… |
-| 142:11 MembersPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
-| 161:536 MembersPage | Button actionLabel | onClick=() =&gt; requestStatusConfirmation(member) | disabled=itemPending &#124;&#124; forbidden &#124;&#124; !onStatusChange; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation … |
-| 170:5 MembersPage | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=confirmAction | open=validConfirmation |
+| 146:36 MembersPage | FilterSelect  | onChange=(value) =&gt; onStatusFilterChange?.(value as "" &#124; "active" &#124; "disabled") | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression"… |
+| 147:5 MembersPage | Tabs  | onValueChange=(value) =&gt; { const next = value as "members" &#124; "invitations" &#124; "network"; setTab(next); setOpenedTabs((current) =&gt; current.has(… | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 149:9 MembersPage | TabsTrigger frontendText(locale, "ADMIN_MEMBERS_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 150:21 MembersPage | TabsTrigger frontendText(locale, "ADMIN_INVITATIONS_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"isAdmin","opera… |
+| 151:21 MembersPage | TabsTrigger frontendText(locale, "ADMIN_NETWORK_TITLE") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"isAdmin","opera… |
+| 154:5 MembersPage | AppliedFilters  | onClear=() =&gt; onStatusFilterChange?.("") | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 160:18 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"recovery","oper… |
+| 164:7 MembersPage | Button frontendText(locale, "ADMIN_MEMBER_RECOVERY_DISMISS") | onClick=() =&gt; setRecovery(null); type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"recovery","oper… |
+| 166:23 MembersPage | p recoveryError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"recoveryError",… |
+| 168:159 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
+| 170:35 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
+| 170:201 MembersPage | Button frontendText(locale, "ADMIN_MEMBER_STATUS_RECORD_DISCARD") | onClick=onDiscardStatusRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
+| 171:58 MembersPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
+| 171:281 MembersPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=pending; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression"… |
+| 172:11 MembersPage | DataTable  | onPageChange=onPageChange; onPageSizeChange=onPageSizeChange; onLoadMore=onLoadMore | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"branch","expression":"loading","branch… |
+| 191:600 MembersPage | Button actionLabel | onClick=() =&gt; requestStatusConfirmation(member) | disabled=itemPending &#124;&#124; forbidden &#124;&#124; !onStatusChange; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation … |
+| 191:870 MembersPage | Button frontendText(locale, "ADMIN_MEMBER_RECOVERY_ISSUE") | onClick=() =&gt; void issueRecoveryCode(member) | disabled=recoveryPending === member.id &#124;&#124; forbidden; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124… |
+| 200:5 MembersPage | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=confirmAction | open=validConfirmation |
 
 ## frontend/pages/admin/menu-editor.tsx
 
@@ -2839,11 +2845,15 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 66:9 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; allSelected ? batch.clear() : batch.selectAllPage() | disabled=batch.freeze &#124;&#124; rows.length === 0 |
-| 70:22 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; batch.toggle(row.id) | disabled=batch.freeze |
-| 82:26 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_BACK") | onClick=onBack; type="button" | {"kind":"logical","expression":"onBack","operator":"&&"} |
-| 86:9 ReviewBatchPage | Button frontendText(locale, "COMMON_RETRY") | onClick=() =&gt; setRetry((value) =&gt; value + 1); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 102:9 ReviewBatchPage | ReviewBatchResults  | onRetryFailed=batch.retryFailed | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 88:9 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; allSelected ? batch.clear() : batch.selectAllPage() | disabled=batch.freeze &#124;&#124; rows.length === 0 |
+| 92:22 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; batch.toggle(row.id) | disabled=batch.freeze |
+| 104:26 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_BACK") | onClick=onBack; type="button" | {"kind":"logical","expression":"onBack","operator":"&&"} |
+| 108:9 ReviewBatchPage | Button frontendText(locale, "COMMON_RETRY") | onClick=() =&gt; setRetry((value) =&gt; value + 1); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 112:44 ReviewBatchPage | div  |  | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 116:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_ORIGINAL") | onClick=() =&gt; void batch.retryAttempts(); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 117:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_DISCARD_UNKNOWN") | onClick=batch.discardUnknown; type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 120:9 ReviewBatchPage | DataTable  | onPageChange=(next) =&gt; { if (batch.freeze) return; batch.clear(); setPage(next); }; onPageSizeChange=(size) =&gt; { if (batch.freeze) return; batch.clear(… | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 135:9 ReviewBatchPage | ReviewBatchResults  | onRetryFailed=batch.retryFailed | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
 
 ## frontend/pages/admin/review-detail-page.tsx
 
@@ -2886,24 +2896,25 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 49:152 AdminRoleDetailPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
 | 50:169 AdminRoleDetailPage | Button frontendText(locale, "ADMIN_ROLES_LIST") | onClick=onBack; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
 | 51:9 AdminRoleDetailPage | RolePermissionEditor  | onBack=onBack; onLoadRetry=onLoadRetry; onSave=props.onSave; onAssignMember=props.onAssignMember; onUnassignMember=props.onUnassignMember; onDiscardRecord=pr… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 80:5 RolePermissionEditor | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
-| 147:22 RolePermissionEditor | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftBlocked","… |
-| 147:158 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLE_DRAFT_RECORD_DISCARD") | onClick=discardDraft; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftBlocked","… |
-| 148:21 RolePermissionEditor | p draftNotice |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftNotice","o… |
-| 150:7 RolePermissionEditor | Button ← / frontendText(locale, "ADMIN_ROLES_LIST") | onClick=() =&gt; (onBack ? onBack() : writeWorkspaceHistory("push", "/admin/roles")); type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 153:545 RolePermissionEditor | Checkbox  | onCheckedChange=() =&gt; toggle(key) | disabled=(role.isSystem && !canGrantWorkbench(key)) &#124;&#124; locked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &… |
-| 154:179 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_DIRTY_MEMBERSHIP") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"dirtyPermission… |
-| 154:535 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_UNASSIGN_MEMBER") | onClick=() =&gt; requestConfirmation({ kind: "unassign", memberId: id }); type="button" | disabled=locked &#124;&#124; dirtyPermissions &#124;&#124; !onUnassignMember; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmat… |
-| 154:1000 RolePermissionEditor | Input  | onChange=(value) =&gt; setMemberId(value) | disabled=locked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression"… |
-| 154:1223 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_ASSIGN_MEMBER") | onClick=() =&gt; requestConfirmation({ kind: "assign", memberId: memberId.trim() }); type="button" | disabled=locked &#124;&#124; dirtyPermissions &#124;&#124; !onAssignMember &#124;&#124; !memberId.trim() &#124;&#124; assignedMemberIds.includes(memberId.tri… |
-| 155:21 RolePermissionEditor | p saveError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"saveError","ope… |
-| 156:7 RolePermissionEditor | Button saving ? frontendText(locale, "ADMIN_ROLES_SAVING") : frontendText(locale, "ADMIN_ROLES_SAVE") | onClick=() =&gt; requestConfirmation({ kind: "save" }); type="button" | disabled=(role.isSystem && !systemWorkbenchGrant) &#124;&#124; locked &#124;&#124; !onSave; {"kind":"container","tag":"section","attributes":{"aria-hidden":"… |
-| 158:13 RolePermissionEditor | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=() =&gt; { void confirmAction(); } | open=validConfirmation |
-| 162:99 RolePermissionEditor | div  |  | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 162:254 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_RECORD_DISCARD") | onClick=onDiscardRecord; type="button" | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 162:447 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_READ_REQUIRED") |  | {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"} |
-| 162:557 RolePermissionEditor | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=readPending; {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"} |
-| 162:706 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_RETRY_WRITE") | onClick=onRetryWrite; type="button" | disabled=readPending; {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"}; {"kind":"logical","expression":"onRetryWrite",… |
+| 81:5 RolePermissionEditor | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
+| 149:22 RolePermissionEditor | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftBlocked","… |
+| 149:158 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLE_DRAFT_RECORD_DISCARD") | onClick=discardDraft; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftBlocked","… |
+| 150:21 RolePermissionEditor | p draftNotice |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftNotice","o… |
+| 152:7 RolePermissionEditor | Button ← / frontendText(locale, "ADMIN_ROLES_LIST") | onClick=() =&gt; (onBack ? onBack() : writeWorkspaceHistory("push", "/admin/roles")); type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 156:66 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_RECORD_ONLY") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"dirtyPermission… |
+| 157:545 RolePermissionEditor | Checkbox  | onCheckedChange=() =&gt; toggle(key) | disabled=(role.isSystem && !canGrantWorkbench(key)) &#124;&#124; locked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &… |
+| 158:179 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_DIRTY_MEMBERSHIP") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"dirtyPermission… |
+| 158:535 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_UNASSIGN_MEMBER") | onClick=() =&gt; requestConfirmation({ kind: "unassign", memberId: id }); type="button" | disabled=locked &#124;&#124; dirtyPermissions &#124;&#124; !onUnassignMember; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmat… |
+| 158:1000 RolePermissionEditor | Input  | onChange=(value) =&gt; setMemberId(value) | disabled=locked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression"… |
+| 158:1223 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_ASSIGN_MEMBER") | onClick=() =&gt; requestConfirmation({ kind: "assign", memberId: memberId.trim() }); type="button" | disabled=locked &#124;&#124; dirtyPermissions &#124;&#124; !onAssignMember &#124;&#124; !memberId.trim() &#124;&#124; assignedMemberIds.includes(memberId.tri… |
+| 159:21 RolePermissionEditor | p saveError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"saveError","ope… |
+| 160:7 RolePermissionEditor | Button saving ? frontendText(locale, "ADMIN_ROLES_SAVING") : frontendText(locale, "ADMIN_ROLES_SAVE") | onClick=() =&gt; requestConfirmation({ kind: "save" }); type="button" | disabled=(role.isSystem && !systemWorkbenchGrant) &#124;&#124; locked &#124;&#124; !onSave; {"kind":"container","tag":"section","attributes":{"aria-hidden":"… |
+| 162:13 RolePermissionEditor | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=() =&gt; { void confirmAction(); } | open=validConfirmation |
+| 166:99 RolePermissionEditor | div  |  | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 166:254 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_RECORD_DISCARD") | onClick=onDiscardRecord; type="button" | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 166:447 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_READ_REQUIRED") |  | {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"} |
+| 166:557 RolePermissionEditor | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=readPending; {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"} |
+| 166:706 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_RETRY_WRITE") | onClick=onRetryWrite; type="button" | disabled=readPending; {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"}; {"kind":"logical","expression":"onRetryWrite",… |
 
 ## frontend/pages/admin/roles-page.tsx
 
@@ -3224,16 +3235,17 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 150:19 LoginPage | Button frontendText(locale, "LOGIN_GITHUB") | onClick=() =&gt; { window.location.href = "/auth/github"; } | {"kind":"branch","expression":"githubEnabled","branch":"true"} |
-| 153:15 LoginPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); void submit(); } | aria-busy=pending &#124;&#124; undefined |
-| 162:19 LoginPage | Input  | onChange=(value) =&gt; { setEmail(value); if (formError) setFormError(undefined); }; type="email" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
-| 166:19 LoginPage | Input  | onChange=(value) =&gt; { setPassword(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
-| 170:19 LoginPage | Input  | onChange=(value) =&gt; { setInvitation(uppercaseInvitation(value)); if (formError) setFormError(undefined); }; type="text" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"logical","expression":"(registering… |
-| 186:19 LoginPage | Input  | onChange=(value) =&gt; { setConfirm(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"logical","expression":"(registering… |
-| 188:17 LoginPage | StatefulButton frontendText(locale, registering ? "LOGIN_REGISTER_SUBMIT" : resetting ? "LOGIN_RESET_SUBMIT" : "LOGIN_PASSWORD_SUBMIT") | type="submit" | disabled=pending &#124;&#124; email.trim().length === 0 &#124;&#124; password.length === 0; {"kind":"container","tag":"form","attributes":{"aria-busy":"pendi… |
-| 193:21 LoginPage | Button frontendText(locale, "LOGIN_SWITCH_TO_REGISTER") | onClick=() =&gt; switchMode("register"); type="button" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"branch","expression":"mode === \"lo… |
-| 194:21 LoginPage | Button frontendText(locale, "LOGIN_FORGOT_PASSWORD") | onClick=() =&gt; switchMode("reset"); type="button" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"branch","expression":"mode === \"lo… |
-| 195:25 LoginPage | Button frontendText(locale, "LOGIN_SWITCH_TO_LOGIN") | onClick=() =&gt; switchMode("login"); type="button" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"branch","expression":"mode === \"lo… |
+| 159:19 LoginPage | Button frontendText(locale, "LOGIN_GITHUB") | onClick=() =&gt; { window.location.href = "/auth/github"; } | {"kind":"branch","expression":"githubEnabled","branch":"true"} |
+| 162:15 LoginPage | form  | onSubmit=(event) =&gt; { event.preventDefault(); void submit(); } | aria-busy=pending &#124;&#124; undefined |
+| 171:19 LoginPage | Input  | onChange=(value) =&gt; { setEmail(value); if (formError) setFormError(undefined); }; type="email" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+| 175:19 LoginPage | Input  | onChange=(value) =&gt; { setPassword(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}} |
+| 179:19 LoginPage | Input  | onChange=(value) =&gt; { setInvitation(uppercaseInvitation(value)); if (formError) setFormError(undefined); }; type="text" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"logical","expression":"registering"… |
+| 195:19 LoginPage | Input  | onChange=(value) =&gt; { setRecoveryCode(value.toUpperCase()); if (formError) setFormError(undefined); }; type="text" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"logical","expression":"resetting","… |
+| 211:19 LoginPage | Input  | onChange=(value) =&gt; { setConfirm(value); if (formError) setFormError(undefined); }; type="password" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"logical","expression":"(registering… |
+| 213:17 LoginPage | StatefulButton frontendText(locale, registering ? "LOGIN_REGISTER_SUBMIT" : resetting ? "LOGIN_RESET_SUBMIT" : "LOGIN_PASSWORD_SUBMIT") | type="submit" | disabled=pending &#124;&#124; email.trim().length === 0 &#124;&#124; password.length === 0; {"kind":"container","tag":"form","attributes":{"aria-busy":"pendi… |
+| 218:21 LoginPage | Button frontendText(locale, "LOGIN_SWITCH_TO_REGISTER") | onClick=() =&gt; switchMode("register"); type="button" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"branch","expression":"mode === \"lo… |
+| 219:21 LoginPage | Button frontendText(locale, "LOGIN_FORGOT_PASSWORD") | onClick=() =&gt; switchMode("reset"); type="button" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"branch","expression":"mode === \"lo… |
+| 220:25 LoginPage | Button frontendText(locale, "LOGIN_SWITCH_TO_LOGIN") | onClick=() =&gt; switchMode("login"); type="button" | disabled=pending; {"kind":"container","tag":"form","attributes":{"aria-busy":"pending &#124;&#124; undefined"}}; {"kind":"branch","expression":"mode === \"lo… |
 
 ## frontend/pages/messages/messages-page.tsx
 

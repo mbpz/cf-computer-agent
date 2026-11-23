@@ -15,7 +15,7 @@ import { routeAccessAllowed } from "../../lib/route-access";
 // The single forbidden surface, shared by the shell and the admin area.
 import { AdminForbiddenPage } from "../../pages/admin/admin-forbidden-page";
 import { applyTheme, readTheme, type ThemeMode } from "../../lib/theme";
-import { loadNavigation, mergeRequiredWorkspaceNavigation, type NavigationDataNode } from "../../lib/navigation-data";
+import { loadNavigation, mergeRequiredWorkspaceNavigation, NAVIGATION_REFRESH_EVENT, type NavigationDataNode } from "../../lib/navigation-data";
 import { Badge } from "../ui/badge";
 import { WORKSPACE_ROUTE_CAPABILITIES, menuAvailability as resolveMenuAvailability, routeCapability, type MenuAvailability, type WorkspaceRouteCapability } from "../../../shared/workspace-route-capabilities";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
@@ -60,6 +60,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
   const [activeMenu, setActiveMenu] = useState<ShellMenuId>(null);
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [serverNavigation, setServerNavigation] = useState<NavigationDataNode[] | null>(null);
+  const [navigationRevision, setNavigationRevision] = useState(0);
   const contentScrollRef = useRef<HTMLElement>(null);
   const previousContentScrollKeyRef = useRef(contentScrollKey);
   useEffect(() => {
@@ -68,11 +69,16 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
     applyTheme(stored, document, window.localStorage);
   }, []);
   useEffect(() => {
+    const refresh = () => setNavigationRevision((revision) => revision + 1);
+    window.addEventListener(NAVIGATION_REFRESH_EVENT, refresh);
+    return () => window.removeEventListener(NAVIGATION_REFRESH_EVENT, refresh);
+  }, []);
+  useEffect(() => {
     let active = true;
     setServerNavigation(null);
     void loadNavigation().then((tree) => { if (active) setServerNavigation(tree); }).catch(() => { if (active) setServerNavigation(null); });
     return () => { active = false; };
-  }, [session.member.id, session.member.role, session.permissionMask]);
+  }, [session.member.id, session.member.role, session.permissionMask, navigationRevision]);
   useEffect(() => {
     if (previousContentScrollKeyRef.current !== contentScrollKey) contentScrollRef.current?.scrollTo({ top: 0 });
     previousContentScrollKeyRef.current = contentScrollKey;

@@ -36,7 +36,21 @@ export class RegistrationInvitationConflictError extends Error {
 export interface PasswordRepositoryPort {
   findByCanonicalEmail(email: string): Promise<PasswordMemberRecord | null>;
   findById(id: string): Promise<PasswordMemberRecord | null>;
+  /** Successful registrations from this IP in the window; the account quota. */
   countRegistrationAttempts(ipHash: string, since: string): Promise<number>;
+  /** Rejected attempts from this IP in the window; a separate abuse limit. */
+  countRegistrationFailures(ipHash: string, since: string): Promise<number>;
+  recordRegistrationFailure(ipHash: string, at: string): Promise<void>;
+  countRecoveryAttempts(ipHash: string, since: string): Promise<number>;
+  recordRecoveryAttempt(ipHash: string, at: string): Promise<void>;
+  createRecoveryCode(input: {
+    id: string; memberId: string; codeHash: string; expiresAt: string;
+    createdByMemberId: string; createdAt: string;
+  }, audit: CreateAuditEvent): Promise<void>;
+  consumeRecoveryCode(input: {
+    memberId: string; codeHash: string; expectedPasswordHash: string | null;
+    passwordHash: string; now: string;
+  }, audit: CreateAuditEvent): Promise<boolean>;
   /**
    * Inserts the member and claims the invitation code in one D1 batch.
    * Consuming the code and creating the member are both required.
@@ -95,9 +109,35 @@ export class PasswordRepository implements PasswordRepositoryPort {
 
   async countRegistrationAttempts(ipHash: string, since: string): Promise<number> {
     const row = await this.db.prepare(
-      "SELECT COUNT(*) AS total FROM password_registration_attempts WHERE ip_hash = ? AND created_at > ?",
+      "SELECT COUNT(*) AS total FROM password_registration_attempts WHERE ip_hash = ? AND created_at > ? AND member_id IS NOT NULL",
     ).bind(ipHash, since).first<{ total: number }>();
     return row?.total ?? 0;
+  }
+
+  async countRegistrationFailures(ipHash: string, since: string): Promise<number> {
+    const row = await this.db.prepare(
+      "SELECT COUNT(*) AS total FROM password_registration_attempts WHERE ip_hash = ? AND created_at > ? AND member_id IS NULL",
+    ).bind(ipHash, since).first<{ total: number }>();
+    return row?.total ?? 0;
+  }
+
+  async recordRegistrationFailure(ipHash: string, at: string): Promise<void> {
+    await this.db.prepare(
+      "INSERT INTO password_registration_attempts (ip_hash, created_at, member_id) VALUES (?, ?, NULL)",
+    ).bind(ipHash, at).run();
+  }
+
+  async countRecoveryAttempts(ipHash: string, since: string): Promise<number> {
+    const row = await this.db.prepare(
+      "SELECT COUNT(*) AS total FROM password_recovery_attempts WHERE ip_hash = ? AND created_at > ?",
+    ).bind(ipHash, since).first<{ total: number }>();
+    return row?.total ?? 0;
+  }
+
+  async recordRecoveryAttempt(ipHash: string, at: string): Promise<void> {
+    await this.db.prepare(
+      "INSERT INTO password_recovery_attempts (ip_hash, created_at) VALUES (?, ?)",
+    ).bind(ipHash, at).run();
   }
 
   async insertMember(member: InsertPasswordMember, invitationCode: string, audit: CreateAuditEvent): Promise<PasswordMemberRecord> {
@@ -137,8 +177,9 @@ export class PasswordRepository implements PasswordRepositoryPort {
         "DELETE FROM password_registration_attempts WHERE created_at < ?",
       ).bind(new Date(Date.parse(member.createdAt) - 24 * 60 * 60 * 1_000).toISOString()),
       this.db.prepare(
-        "INSERT INTO password_registration_attempts (ip_hash, created_at) VALUES (?, ?)",
-      ).bind(member.registrationIpHash, member.createdAt),
+        `INSERT INTO password_registration_attempts (ip_hash, created_at, member_id)
+         SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM members WHERE id = ?)`,
+      ).bind(member.registrationIpHash, member.createdAt, member.id, member.id),
     ]);
     if (results[0]?.meta.changes !== 1 || results[2]?.meta.changes !== 1) {
       // No member row and no audit row were written: the guarded INSERT saw a
@@ -213,6 +254,58 @@ export class PasswordRepository implements PasswordRepositoryPort {
       ).bind(id, id, passwordHash, now),
     ]);
     return results[0]?.meta.changes === 1;
+  }
+
+  async createRecoveryCode(input: {
+    id: string; memberId: string; codeHash: string; expiresAt: string;
+    createdByMemberId: string; createdAt: string;
+  }, audit: CreateAuditEvent): Promise<void> {
+    if (audit.action !== "member.recovery_code_issued" || audit.resourceId !== input.memberId || audit.resourceType !== "member") {
+      throw new TypeError("Recovery-code audit binding is invalid");
+    }
+    await this.db.batch([
+      // Only one active credential per member; issuing a new code retires older ones.
+      this.db.prepare(
+        "UPDATE password_recovery_codes SET used_at = ? WHERE member_id = ? AND used_at IS NULL",
+      ).bind(input.createdAt, input.memberId),
+      this.db.prepare(
+        `INSERT INTO password_recovery_codes
+           (id, member_id, code_hash, expires_at, used_at, created_by_member_id, created_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?)`,
+      ).bind(input.id, input.memberId, input.codeHash, input.expiresAt, input.createdByMemberId, input.createdAt),
+      this.audit.prepareResourceWriteAudit(audit, { table: "members", id: input.memberId }),
+    ]);
+  }
+
+  async consumeRecoveryCode(input: {
+    memberId: string; codeHash: string; expectedPasswordHash: string | null;
+    passwordHash: string; now: string;
+  }, audit: CreateAuditEvent): Promise<boolean> {
+    if (audit.action !== "member.password_reset" || audit.resourceId !== input.memberId || audit.resourceType !== "member") {
+      throw new TypeError("Recovery audit binding is invalid");
+    }
+    const results = await this.db.batch([
+      this.db.prepare(
+        `UPDATE members
+         SET password_hash = ?, failed_login_count = 0, locked_until = NULL, updated_at = ?
+         WHERE id = ? AND password_hash IS ?
+           AND EXISTS (SELECT 1 FROM password_recovery_codes
+             WHERE code_hash = ? AND member_id = ? AND used_at IS NULL AND expires_at > ?)`,
+      ).bind(input.passwordHash, input.now, input.memberId, input.expectedPasswordHash, input.codeHash, input.memberId, input.now),
+      this.audit.prepareChangedRowAudit(audit),
+      this.db.prepare(
+        `UPDATE password_recovery_codes SET used_at = ?
+         WHERE code_hash = ? AND member_id = ? AND used_at IS NULL
+           AND EXISTS (SELECT 1 FROM members WHERE id = ? AND password_hash = ? AND updated_at = ?)`,
+      ).bind(input.now, input.codeHash, input.memberId, input.memberId, input.passwordHash, input.now),
+      this.db.prepare(
+        `DELETE FROM auth_sessions
+         WHERE member_id = ? AND EXISTS (
+           SELECT 1 FROM members WHERE id = ? AND password_hash = ? AND updated_at = ?
+         )`,
+      ).bind(input.memberId, input.memberId, input.passwordHash, input.now),
+    ]);
+    return results[0]?.meta.changes === 1 && results[2]?.meta.changes === 1;
   }
 }
 

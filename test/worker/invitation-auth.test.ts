@@ -257,51 +257,26 @@ describe("invitation registration, binding and administration", () => {
     expect((await api("/api/invitations/mine", { method: "POST", token: member.token })).status).toBe(403);
   });
 
-  it("resets a password only with the invitation code that bound the member", async () => {
+  it("does not treat a bound invitation as a recovery credential", async () => {
     const admin = await adminToken();
-    const [invitation, otherUnused] = await generateAdmin(admin.token, 2);
+    const [invitation] = await generateAdmin(admin.token);
     const member = await register("reset-binding@example.test", invitation!.code);
 
-    // The retired one-time-code identity has no bound invitation.
-    await env.DB.prepare(
-      `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES
-       ('legacy-code-user', 'code:legacy', 'legacy@example.test', 'contributor', 'active', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z')`,
-    ).run();
-
-    for (const input of [
-      { email: "reset-binding@example.test", password: "a brand new password", invitationCode: otherUnused!.code },
-      { email: "reset-binding@example.test", password: "a brand new password" },
-      { email: "reset-binding@example.test", password: "a brand new password", invitationCode: "ABCD" },
-      { email: "unknown@example.test", password: "a brand new password", invitationCode: invitation!.code },
-      { email: "legacy@example.test", password: "a brand new password", invitationCode: invitation!.code },
-    ]) {
-      const response = await api("/auth/password/reset", { method: "POST", body: input });
-      expect(response.status, JSON.stringify(input)).toBe(401);
-      await expect(response.json()).resolves.toMatchObject({ error: { code: "PASSWORD_RESET_INVALID" } });
-    }
-
-    const reset = await api("/auth/password/reset", {
+    const old = await api("/auth/password/reset", {
       method: "POST",
-      body: { email: "reset-binding@example.test", password: "a brand new password", invitationCode: grouped(invitation!.code) },
+      body: { email: "reset-binding@example.test", password: "a brand new password", invitationCode: invitation!.code },
     });
-    expect(reset.status).toBe(204);
-    expect((await api("/api/session", { token: member.token })).status).toBe(401);
-    expect((await api("/auth/password", {
-      method: "POST",
-      body: { email: "reset-binding@example.test", password: PASSWORD },
-    })).status).toBe(401);
-    expect((await api("/auth/password", {
-      method: "POST",
-      body: { email: "reset-binding@example.test", password: "a brand new password" },
-    })).status).toBe(200);
+    expect(old.status).toBe(410);
+    await expect(old.json()).resolves.toMatchObject({ error: { code: "PASSWORD_RESET_DEPRECATED" } });
 
-    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = ?").bind(member.memberId).run();
-    const disabled = await api("/auth/password/reset", {
+    const recovery = await api("/auth/password/recovery", {
       method: "POST",
-      body: { email: "reset-binding@example.test", password: "another password value", invitationCode: invitation!.code },
+      body: { email: "reset-binding@example.test", password: "a brand new password", recoveryCode: grouped(invitation!.code) },
     });
-    expect(disabled.status).toBe(401);
-    expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.password_reset'")).toBe(1);
+    expect(recovery.status).toBe(401);
+    expect((await api("/api/session", { token: member.token })).status).toBe(200);
+    expect((await api("/auth/password", { method: "POST", body: { email: "reset-binding@example.test", password: PASSWORD } })).status).toBe(200);
+    expect(await count("SELECT COUNT(*) AS total FROM audit_events WHERE action = 'member.password_reset'")).toBe(0);
   });
 
   it("restricts invitation administration to administrators and validates its queries", async () => {

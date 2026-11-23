@@ -378,7 +378,7 @@ export function TabsContent({ value, children, className, ...props }: { value: s
   // tech, instead of being dropped from the DOM.
   if (!active) {
     return (
-      <motion.div {...props} hidden className={className}>
+      <motion.div {...props} key={value} hidden className={className}>
         {children}
       </motion.div>
     );
