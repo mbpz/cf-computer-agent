@@ -43,6 +43,9 @@ export type BatchPlan =
   /** `submissionIds` names the rows responsible; empty when the fault is not row-local. */
   | { readonly kind: "unplannable"; readonly code: BatchPlanDiagnosticCode; readonly submissionIds: readonly string[] };
 
+/** The server accepts at most this many actions in one batch request. */
+export const MAX_BATCH_ACTIONS = 20;
+
 /** The operation-number grammar the batch endpoints accept. */
 export const BATCH_OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 

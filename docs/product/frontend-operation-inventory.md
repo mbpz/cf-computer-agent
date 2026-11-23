@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：481；操作/转发候选：1818。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：481；操作/转发候选：1820。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -442,7 +442,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/pages/admin/menus-page.tsx | 16 |
 | frontend/pages/admin/recycle-bin-page.tsx | 15 |
 | frontend/pages/admin/recycle-bin-route.tsx | 1 |
-| frontend/pages/admin/review-batch-page.tsx | 9 |
+| frontend/pages/admin/review-batch-page.tsx | 11 |
 | frontend/pages/admin/review-detail-page.tsx | 7 |
 | frontend/pages/admin/review-detail-route.tsx | 3 |
 | frontend/pages/admin/review-queue-page.tsx | 9 |
@@ -520,7 +520,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /settings | frontend/pages/settings-page.tsx#SettingsPage | 46 | frontend/components/ui/button.tsx#StatefulButton; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin | frontend/pages/admin/admin-dashboard-route.tsx#AdminDashboardRoute | 48 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle |
 | /admin/submissions | frontend/app.tsx#ReviewQueueRoute | 124 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
-| /admin/submissions/batch | frontend/pages/admin/review-batch-page.tsx#ReviewBatchPage | 93 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
+| /admin/submissions/batch | frontend/pages/admin/review-batch-page.tsx#ReviewBatchPage | 95 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/duplicates | frontend/app.tsx#AdminDuplicateRoute; frontend/lib/admin-duplicates-data.ts#* | 106 | frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/assets | frontend/app.tsx#AdminAssetsRoute; frontend/lib/admin-assets-data.ts#* | 156 | frontend/components/charts/donut-chart.tsx#DonutChartCenter; frontend/components/charts/donut-chart.tsx#DonutChartLegend; frontend/components/charts/donut-chart.tsx#DonutChartPlot; frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
 | /admin/members | frontend/app.tsx#AdminMembersRoute; frontend/lib/admin-members-data.ts#* | 148 | frontend/components/motion/combobox.tsx#Combobox; frontend/components/motion/combobox.tsx#ComboboxContent; frontend/components/motion/combobox.tsx#ComboboxItem; frontend/components/motion/combobox.tsx#ComboboxList; frontend/components/motion/combobox.tsx#ComboboxTrigger; frontend/components/ui/card.tsx#Card; frontend/components/ui/card.tsx#CardContent; frontend/components/ui/card.tsx#CardDescription; frontend/components/ui/card.tsx#CardHeader; frontend/components/ui/card.tsx#CardTitle; frontend/components/ui/select.tsx#Select; frontend/components/ui/select.tsx#SelectContent; frontend/components/ui/select.tsx#SelectItem; frontend/components/ui/select.tsx#SelectTrigger; frontend/components/ui/select.tsx#SelectValue |
@@ -1841,16 +1841,16 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 323:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT_ALL") | onClick=batch.selectAllPage; type="button" | disabled=frozen &#124;&#124; rows.length === 0 |
-| 324:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_CLEAR") | onClick=batch.clear; type="button" | disabled=frozen &#124;&#124; selectedOnPage === 0 |
-| 328:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REJECT") | onClick=() =&gt; batch.setDecision("reject"); type="button" | disabled=frozen |
-| 329:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REQUEST_REVISION") | onClick=() =&gt; batch.setDecision("request_revision"); type="button" | disabled=frozen |
-| 334:13 ReviewBatchToolbar | Select  | onValueChange=(value) =&gt; batch.setReasonCode(value) | disabled=frozen; {"kind":"branch","expression":"batch.decision === \"reject\"","branch":"true"} |
-| 344:11 ReviewBatchToolbar | Textarea  | onChange=(event) =&gt; batch.setNote(event.target.value) | disabled=frozen |
-| 348:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_ACTION_LABEL") | onClick=batch.send; type="button" | disabled=selectedOnPage === 0 |
-| 353:26 ReviewBatchToolbar | p batch.notice |  | {"kind":"logical","expression":"batch.notice","operator":"&&"} |
-| 368:5 ReviewBatchResults | Alert  |  | {"kind":"branch","expression":"state.kind === \"rejected\"","branch":"true"} |
-| 396:11 ReviewBatchResults | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_FAILED").replace("{count}", String(failed)) | onClick=onRetryFailed; type="button" | {"kind":"logical","expression":"failed &gt; 0","operator":"&&"}; earlier return: state.kind === "rejected"; earlier return: state.kind !== "done" |
+| 356:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT_ALL") | onClick=batch.selectAllPage; type="button" | disabled=frozen &#124;&#124; rows.length === 0 |
+| 357:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_CLEAR") | onClick=batch.clear; type="button" | disabled=frozen &#124;&#124; selectedOnPage === 0 |
+| 361:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REJECT") | onClick=() =&gt; batch.setDecision("reject"); type="button" | disabled=frozen |
+| 362:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REQUEST_REVISION") | onClick=() =&gt; batch.setDecision("request_revision"); type="button" | disabled=frozen |
+| 367:13 ReviewBatchToolbar | Select  | onValueChange=(value) =&gt; batch.setReasonCode(value) | disabled=frozen; {"kind":"branch","expression":"batch.decision === \"reject\"","branch":"true"} |
+| 377:11 ReviewBatchToolbar | Textarea  | onChange=(event) =&gt; batch.setNote(event.target.value) | disabled=frozen |
+| 381:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_ACTION_LABEL") | onClick=batch.send; type="button" | disabled=selectedOnPage === 0 |
+| 386:26 ReviewBatchToolbar | p batch.notice |  | {"kind":"logical","expression":"batch.notice","operator":"&&"} |
+| 401:5 ReviewBatchResults | Alert  |  | {"kind":"branch","expression":"state.kind === \"rejected\"","branch":"true"} |
+| 429:11 ReviewBatchResults | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_FAILED").replace("{count}", String(failed)) | onClick=onRetryFailed; type="button" | {"kind":"logical","expression":"failed &gt; 0","operator":"&&"}; earlier return: state.kind === "rejected"; earlier return: state.kind !== "done" |
 
 ## frontend/components/review/review-chunk-panel.tsx
 
@@ -2845,15 +2845,17 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 88:9 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; allSelected ? batch.clear() : batch.selectAllPage() | disabled=batch.freeze &#124;&#124; rows.length === 0 |
-| 92:22 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; batch.toggle(row.id) | disabled=batch.freeze |
-| 104:26 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_BACK") | onClick=onBack; type="button" | {"kind":"logical","expression":"onBack","operator":"&&"} |
-| 108:9 ReviewBatchPage | Button frontendText(locale, "COMMON_RETRY") | onClick=() =&gt; setRetry((value) =&gt; value + 1); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 112:44 ReviewBatchPage | div  |  | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 116:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_ORIGINAL") | onClick=() =&gt; void batch.retryAttempts(); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 117:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_DISCARD_UNKNOWN") | onClick=batch.discardUnknown; type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 120:9 ReviewBatchPage | DataTable  | onPageChange=(next) =&gt; { if (batch.freeze) return; batch.clear(); setPage(next); }; onPageSizeChange=(size) =&gt; { if (batch.freeze) return; batch.clear(… | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 135:9 ReviewBatchPage | ReviewBatchResults  | onRetryFailed=batch.retryFailed | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 105:9 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; allSelected ? batch.clear() : batch.selectAllPage() | disabled=batch.freeze &#124;&#124; rows.length === 0 |
+| 109:22 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; batch.toggle(row.id) | disabled=batch.freeze |
+| 121:26 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_BACK") | onClick=onBack; type="button" | {"kind":"logical","expression":"onBack","operator":"&&"} |
+| 125:9 ReviewBatchPage | Button frontendText(locale, "COMMON_RETRY") | onClick=() =&gt; setRetry((value) =&gt; value + 1); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 129:44 ReviewBatchPage | div  |  | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 133:13 ReviewBatchPage | Button checkingReceipts ? frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_CHECKING") : frontendText(locale, "ADMIN_REVIEW_BATCH_CHECK_RECEIPTS") | onClick=() =&gt; void checkReceipts(); type="button" | disabled=checkingReceipts; {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":… |
+| 134:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_ORIGINAL") | onClick=() =&gt; void batch.retryAttempts(); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 135:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_DISCARD_UNKNOWN") | onClick=batch.discardUnknown; type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 137:28 ReviewBatchPage | p receiptError |  | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 143:9 ReviewBatchPage | DataTable  | onPageChange=(next) =&gt; { if (batch.freeze) return; batch.clear(); setPage(next); }; onPageSizeChange=(size) =&gt; { if (batch.freeze) return; batch.clear(… | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 158:9 ReviewBatchPage | ReviewBatchResults  | onRetryFailed=batch.retryFailed | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
 
 ## frontend/pages/admin/review-detail-page.tsx
 
@@ -2896,25 +2898,25 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 49:152 AdminRoleDetailPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
 | 50:169 AdminRoleDetailPage | Button frontendText(locale, "ADMIN_ROLES_LIST") | onClick=onBack; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
 | 51:9 AdminRoleDetailPage | RolePermissionEditor  | onBack=onBack; onLoadRetry=onLoadRetry; onSave=props.onSave; onAssignMember=props.onAssignMember; onUnassignMember=props.onUnassignMember; onDiscardRecord=pr… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 81:5 RolePermissionEditor | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
-| 149:22 RolePermissionEditor | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftBlocked","… |
-| 149:158 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLE_DRAFT_RECORD_DISCARD") | onClick=discardDraft; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftBlocked","… |
-| 150:21 RolePermissionEditor | p draftNotice |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftNotice","o… |
-| 152:7 RolePermissionEditor | Button ← / frontendText(locale, "ADMIN_ROLES_LIST") | onClick=() =&gt; (onBack ? onBack() : writeWorkspaceHistory("push", "/admin/roles")); type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
-| 156:66 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_RECORD_ONLY") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"dirtyPermission… |
-| 157:545 RolePermissionEditor | Checkbox  | onCheckedChange=() =&gt; toggle(key) | disabled=(role.isSystem && !canGrantWorkbench(key)) &#124;&#124; locked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &… |
-| 158:179 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_DIRTY_MEMBERSHIP") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"dirtyPermission… |
-| 158:535 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_UNASSIGN_MEMBER") | onClick=() =&gt; requestConfirmation({ kind: "unassign", memberId: id }); type="button" | disabled=locked &#124;&#124; dirtyPermissions &#124;&#124; !onUnassignMember; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmat… |
-| 158:1000 RolePermissionEditor | Input  | onChange=(value) =&gt; setMemberId(value) | disabled=locked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression"… |
-| 158:1223 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_ASSIGN_MEMBER") | onClick=() =&gt; requestConfirmation({ kind: "assign", memberId: memberId.trim() }); type="button" | disabled=locked &#124;&#124; dirtyPermissions &#124;&#124; !onAssignMember &#124;&#124; !memberId.trim() &#124;&#124; assignedMemberIds.includes(memberId.tri… |
-| 159:21 RolePermissionEditor | p saveError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"saveError","ope… |
-| 160:7 RolePermissionEditor | Button saving ? frontendText(locale, "ADMIN_ROLES_SAVING") : frontendText(locale, "ADMIN_ROLES_SAVE") | onClick=() =&gt; requestConfirmation({ kind: "save" }); type="button" | disabled=(role.isSystem && !systemWorkbenchGrant) &#124;&#124; locked &#124;&#124; !onSave; {"kind":"container","tag":"section","attributes":{"aria-hidden":"… |
-| 162:13 RolePermissionEditor | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=() =&gt; { void confirmAction(); } | open=validConfirmation |
-| 166:99 RolePermissionEditor | div  |  | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 166:254 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_RECORD_DISCARD") | onClick=onDiscardRecord; type="button" | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
-| 166:447 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_READ_REQUIRED") |  | {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"} |
-| 166:557 RolePermissionEditor | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=readPending; {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"} |
-| 166:706 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_RETRY_WRITE") | onClick=onRetryWrite; type="button" | disabled=readPending; {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"}; {"kind":"logical","expression":"onRetryWrite",… |
+| 82:5 RolePermissionEditor | window.addEventListener  | WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave |  |
+| 150:22 RolePermissionEditor | div  |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftBlocked","… |
+| 150:158 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLE_DRAFT_RECORD_DISCARD") | onClick=discardDraft; type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftBlocked","… |
+| 151:21 RolePermissionEditor | p draftNotice |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"draftNotice","o… |
+| 153:7 RolePermissionEditor | Button ← / frontendText(locale, "ADMIN_ROLES_LIST") | onClick=() =&gt; (onBack ? onBack() : writeWorkspaceHistory("push", "/admin/roles")); type="button" | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}} |
+| 157:66 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_RECORD_ONLY") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"dirtyPermission… |
+| 158:545 RolePermissionEditor | Checkbox  | onCheckedChange=() =&gt; toggle(key) | disabled=(role.isSystem && !canGrantWorkbench(key)) &#124;&#124; locked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &… |
+| 159:179 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_DIRTY_MEMBERSHIP") |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"dirtyPermission… |
+| 159:535 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_UNASSIGN_MEMBER") | onClick=() =&gt; requestConfirmation({ kind: "unassign", memberId: id }); type="button" | disabled=locked &#124;&#124; dirtyPermissions &#124;&#124; !onUnassignMember; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmat… |
+| 159:1000 RolePermissionEditor | Input  | onChange=(value) =&gt; setMemberId(value) | disabled=locked; {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression"… |
+| 159:1223 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_ASSIGN_MEMBER") | onClick=() =&gt; requestConfirmation({ kind: "assign", memberId: memberId.trim() }); type="button" | disabled=locked &#124;&#124; dirtyPermissions &#124;&#124; !onAssignMember &#124;&#124; !memberId.trim() &#124;&#124; assignedMemberIds.includes(memberId.tri… |
+| 160:21 RolePermissionEditor | p saveError |  | {"kind":"container","tag":"section","attributes":{"aria-hidden":"validConfirmation &#124;&#124; undefined"}}; {"kind":"logical","expression":"saveError","ope… |
+| 161:7 RolePermissionEditor | Button saving ? frontendText(locale, "ADMIN_ROLES_SAVING") : frontendText(locale, "ADMIN_ROLES_SAVE") | onClick=() =&gt; requestConfirmation({ kind: "save" }); type="button" | disabled=(role.isSystem && !systemWorkbenchGrant) &#124;&#124; locked &#124;&#124; !onSave; {"kind":"container","tag":"section","attributes":{"aria-hidden":"… |
+| 163:13 RolePermissionEditor | ConfirmAction  | onCancel=cancelConfirmation; onConfirm=() =&gt; { void confirmAction(); } | open=validConfirmation |
+| 167:99 RolePermissionEditor | div  |  | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 167:254 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_RECORD_DISCARD") | onClick=onDiscardRecord; type="button" | {"kind":"logical","expression":"recordBlocked","operator":"&&"} |
+| 167:447 RolePermissionEditor | p frontendText(locale, "ADMIN_ROLES_READ_REQUIRED") |  | {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"} |
+| 167:557 RolePermissionEditor | Button frontendText(locale, "COMMON_RETRY") | onClick=onLoadRetry; type="button" | disabled=readPending; {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"} |
+| 167:706 RolePermissionEditor | Button frontendText(locale, "ADMIN_ROLES_RETRY_WRITE") | onClick=onRetryWrite; type="button" | disabled=readPending; {"kind":"logical","expression":"(readRequired &#124;&#124; saveError)","operator":"&&"}; {"kind":"logical","expression":"onRetryWrite",… |
 
 ## frontend/pages/admin/roles-page.tsx
 

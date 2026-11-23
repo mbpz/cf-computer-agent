@@ -47,7 +47,7 @@ D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 n
 
 禁止把这些值写入仓库、`wrangler.jsonc`、`.dev.vars`、命令参数、URL、日志、截图或聊天。已经公开过的值必须轮换。
 
-邮箱密码登录还需要 `0078_password_auth.sql`、`0079_invitations.sql` 与 `0080_backfill_password_invitations.sql`：0078 增加密码哈希与登录锁定列、建立 canonical email 唯一索引并删除旧验证码/邀请表；0079 新增邀请码表与一次性绑定；0080 为 0079 之前已存在的密码账户回填注册来源邀请码（不再用于重置）；0081 增加独立的一次性密码恢复码，管理员可在成员管理页生成。三个迁移都只向前兼容；应用前需备份 D1。密码注册必须使用邀请码：每位成员终身可分享一个码，管理员可无限生成，码使用一次即绑定新成员；忘记密码必须提供管理员为该成员生成的一次性恢复码。`ALLOWED_MEMBER_EMAILS` 只约束 GitHub/微信登录，不是密码账户的撤权通道；撤权必须禁用成员。现有邮箱（包括仅 GitHub 成员）不能被注册覆盖；GitHub/微信专属成员不能设置或重置密码。
+邮箱密码登录还需要 `0078_password_auth.sql`、`0079_invitations.sql`、`0080_backfill_password_invitations.sql` 与 `0081_password_recovery.sql`：0078 增加密码哈希与登录锁定列、建立 canonical email 唯一索引并删除旧验证码/邀请表；0079 新增邀请码表与一次性绑定；0080 为 0079 之前已存在的密码账户回填注册来源邀请码（不再用于重置）；0081 增加独立的一次性密码恢复码，管理员可在成员管理页生成。四个迁移都只向前兼容；应用前需备份 D1。0081 必须先于查询 `password_registration_attempts.member_id` 或恢复表的新版 Worker 切换；已应用过的环境应核对 `d1_migrations`，但“远程已有 0081”不等于新环境或回滚环境已满足部署前置。密码注册必须使用邀请码：每位成员终身可分享一个码，管理员可无限生成，码使用一次即绑定新成员；忘记密码必须提供管理员为该成员生成的一次性恢复码。`ALLOWED_MEMBER_EMAILS` 只约束 GitHub/微信登录，不是密码账户的撤权通道；撤权必须禁用成员。现有邮箱（包括仅 GitHub 成员）不能被注册覆盖；GitHub/微信专属成员可从已登录会话设置首个密码，或由管理员生成一次性恢复码后设置密码；两者都不证明邮箱所有权。
 
 ## 3. GitHub OAuth App
 
@@ -127,7 +127,7 @@ rtk npx wrangler d1 export memory-garden-control-plane --remote --output "$BACKU
 chmod 600 "$BACKUP_DIR/pre-release.sql"
 ```
 
-应用 append-only migration 并复核：
+应用 append-only migration 并复核（新版 Worker 切换前必须完成；至少确认 `0081_password_recovery.sql` 已在 `d1_migrations`）：
 
 ```bash
 rtk npm run db:migrate:remote

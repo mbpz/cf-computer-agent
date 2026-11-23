@@ -348,6 +348,22 @@ describe("administrator knowledge lifecycle over HTTP", () => {
     expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = ?", failed)).toBe(1);
     expect(await count("SELECT COUNT(*) AS count FROM audit_events WHERE resource_id = ? AND action = 'submission.rejected'", applied)).toBe(1);
 
+    // Exact receipt recovery: the original submission + operation number answers,
+    // while an operation that never committed is an explicit 404.
+    const receipt = await api(admin, `/api/admin/submissions/${applied}/decisions/operations/batch-applied-1`);
+    expect(receipt.status).toBe(200);
+    const receiptBody = await receipt.json<{ submissionId: string; operationId: string; receipt: { responseJson: string } }>();
+    expect(receiptBody).toMatchObject({ submissionId: applied, operationId: "batch-applied-1" });
+    expect(receiptBody.receipt.responseJson).toContain("rejected");
+    expect((await api(admin, `/api/admin/submissions/${failed}/decisions/operations/batch-missing-1`)).status).toBe(404);
+    expect((await api(contributor, `/api/admin/submissions/${applied}/decisions/operations/batch-applied-1`)).status).toBe(403);
+
+    // The API batch ceiling is 20; a larger body is rejected before any item runs.
+    const tooMany = { actions: Array.from({ length: 21 }, (_, index) => ({ submissionId: `submission-limit-${index}`, action: "reject", reasonCode: "unsafe", note: "x", operationId: `batch-limit-${index}`, expectedUpdatedAt: now })) };
+    const limited = await api(admin, "/api/admin/submissions/batch-review", { method: "POST", body: JSON.stringify(tooMany) });
+    expect(limited.status).toBe(400);
+    expect((await limited.json<ErrorBody>()).error.code).toBe("BATCH_REVIEW_REQUEST_INVALID");
+
     // A malformed item identity invalidates the request instead of silently
     // degrading that item to an unprotected write.
     const malformed = await api(admin, "/api/admin/submissions/batch-review", {

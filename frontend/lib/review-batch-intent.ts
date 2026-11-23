@@ -11,6 +11,8 @@ import type { BatchReviewItemOutcome } from "./admin-batch-review-data";
 export interface StoredBatchIntent {
   readonly version: 1;
   readonly memberId: string;
+  /** Identity of this frozen attempt; old settle/clear paths must match it. */
+  readonly batchId: string;
   readonly decision: BatchActionKind;
   readonly reasonCode: string;
   readonly note: string;
@@ -54,7 +56,7 @@ export function loadBatchIntent(memberId: string): StoredBatchIntent | null {
     const raw = sessionStorage.getItem(key(memberId));
     if (!raw) return null;
     const value: unknown = JSON.parse(raw);
-    if (!isRecord(value) || value.version !== 1 || value.memberId !== memberId) return null;
+    if (!isRecord(value) || value.version !== 1 || value.memberId !== memberId || typeof value.batchId !== "string" || !value.batchId) return null;
     const decision = value.decision;
     const status = value.status;
     if (decision !== "reject" && decision !== "request_revision") return null;
@@ -65,7 +67,7 @@ export function loadBatchIntent(memberId: string): StoredBatchIntent | null {
     const outcomes = value.outcomes === null ? null : Array.isArray(value.outcomes) ? value.outcomes.map(parseOutcome) : undefined;
     if (outcomes === undefined || outcomes?.some((outcome) => !outcome)) return null;
     return {
-      version: 1, memberId, decision, reasonCode: value.reasonCode, note: value.note,
+      version: 1, memberId, batchId: value.batchId, decision, reasonCode: value.reasonCode, note: value.note,
       attempts: attempts as BatchItemAction[], outcomes: outcomes as BatchReviewItemOutcome[] | null,
       status, savedAt: typeof value.savedAt === "string" ? value.savedAt : new Date(0).toISOString(),
     };
@@ -74,10 +76,22 @@ export function loadBatchIntent(memberId: string): StoredBatchIntent | null {
   }
 }
 
-export function saveBatchIntent(intent: StoredBatchIntent): void {
-  try { sessionStorage.setItem(key(intent.memberId), JSON.stringify(intent)); } catch { /* storage full or unavailable: the in-memory attempt still works */ }
+/** Fails closed when another unresolved batch owns the member slot. */
+export function saveBatchIntent(intent: StoredBatchIntent): boolean {
+  try {
+    const current = loadBatchIntent(intent.memberId);
+    if (current && current.batchId !== intent.batchId && current.status !== "done") return false;
+    sessionStorage.setItem(key(intent.memberId), JSON.stringify(intent));
+    return true;
+  } catch { return false; }
 }
 
-export function clearBatchIntent(memberId: string): void {
-  try { sessionStorage.removeItem(key(memberId)); } catch { /* ignore */ }
+/** Clears only the batch that owns the slot; a late old receipt cannot clear a newer one. */
+export function clearBatchIntent(memberId: string, batchId?: string): boolean {
+  try {
+    const current = loadBatchIntent(memberId);
+    if (batchId !== undefined && current && current.batchId !== batchId) return false;
+    sessionStorage.removeItem(key(memberId));
+    return true;
+  } catch { return false; }
 }

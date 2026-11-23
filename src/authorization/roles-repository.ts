@@ -12,6 +12,8 @@ export interface RoleRecord {
   name: string;
   description: string;
   allowBits: string;
+  /** Built-in fallback for this role's member type, independent of the row. */
+  baselineBits: string;
   /** Stored row mask OR the built-in fallback for this role's member type. */
   effectiveBits: string;
   memberCount: number;
@@ -102,7 +104,7 @@ export class RolesRepository {
     const claimId = crypto.randomUUID();
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({ kind: "role.create", memberId: actorId, key, name, description, allowBits })));
     const requestHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-    const recorded: RoleRecord = { id, key, name, description, allowBits, effectiveBits: serializePermissionMask(effectiveMask(parsePermissionMask(allowBits), false, key)), memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
+    const recorded: RoleRecord = { id, key, name, description, allowBits, baselineBits: serializePermissionMask(baselineMask(false, key)), effectiveBits: serializePermissionMask(effectiveMask(parsePermissionMask(allowBits), false, key)), memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
     try {
       const results = await this.db.batch([
         this.db.prepare(
@@ -249,8 +251,12 @@ function permissionMaskForRole(role: MemberRole): bigint {
   return permissionMaskFor(["knowledge:read", "knowledge:create", "submission:create", "submission:read-own", "agent:use", "search:use", "workspace.tasks"]);
 }
 
+function baselineMask(isSystem: boolean, key: string): bigint {
+  return permissionMaskForRole(isSystem && key === "admin" ? "admin" : "contributor");
+}
+
 function effectiveMask(stored: bigint, isSystem: boolean, key: string): bigint {
-  return stored | permissionMaskForRole(isSystem && key === "admin" ? "admin" : "contributor");
+  return stored | baselineMask(isSystem, key);
 }
 
 function mapRole(row: RoleRow): RoleRecord {
@@ -260,6 +266,7 @@ function mapRole(row: RoleRow): RoleRecord {
     name: row.name,
     description: row.description,
     allowBits: serializePermissionMask(parsePermissionMask(row.allow_bits)),
+    baselineBits: serializePermissionMask(baselineMask(row.is_system === 1, row.key)),
     effectiveBits: serializePermissionMask(effectiveMask(parsePermissionMask(row.allow_bits), row.is_system === 1, row.key)),
     memberCount: Number(row.member_count) || 0,
     assignedMemberIds: typeof row.member_ids === "string" && row.member_ids.length > 0

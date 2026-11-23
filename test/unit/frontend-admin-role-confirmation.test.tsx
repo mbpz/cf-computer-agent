@@ -55,7 +55,7 @@ describe("role permission and membership confirmation", () => {
   function unloadWarns() { const e = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(e); return e.defaultPrevented; }
 
   it("distinguishes the stored role mask from the effective permissions", async () => {
-    const recordOnly: AdminRole = { id: "record", key: "record", name: "Record only", description: "", allowBits: "0x0", effectiveBits: "0x1", memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
+    const recordOnly: AdminRole = { id: "record", key: "record", name: "Record only", description: "", allowBits: "0x0", baselineBits: "0x1", effectiveBits: "0x1", memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
     await mountDetail({ state: { kind: "ready", roles: [recordOnly] }, roleId: "record" });
     expect(document.querySelector('[data-role-stored-mask="0"]')).not.toBeNull();
     expect(document.querySelector('[data-role-effective-mask="1"]')).not.toBeNull();
@@ -64,6 +64,17 @@ describe("role permission and membership confirmation", () => {
     await act(async () => first.click());
     expect(document.querySelector("[data-role-record-only]")).not.toBeNull();
     expect(document.querySelector('[data-role-effective-mask="1"]')).not.toBeNull();
+  });
+
+  it("keeps a permission that is granted by both the role row and the built-in baseline", async () => {
+    const overlap: AdminRole = { id: "overlap", key: "overlap", name: "Overlap", description: "", allowBits: "0x1", baselineBits: "0x1", effectiveBits: "0x1", memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false };
+    await mountDetail({ state: { kind: "ready", roles: [overlap] }, roleId: "overlap" });
+    const first = document.querySelector('button[role="checkbox"]') as HTMLButtonElement;
+    await act(async () => first.click());
+    expect(first.getAttribute("aria-checked")).toBe("false");
+    // Removing the row bit does not remove the baseline grant.
+    expect(document.querySelector('[data-role-effective-mask="1"]')).not.toBeNull();
+    expect(document.querySelector("[data-role-record-only]")).not.toBeNull();
   });
 
   it.each(["Role key", "Role name", "Permission mask"])("protects the create input %s from navigation and unload until committed discard", async label => {

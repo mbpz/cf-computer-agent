@@ -7,6 +7,7 @@ import { Checkbox } from "../../components/ui/checkbox";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { loadReviewQueuePage, type ReviewQueueItem, type ReviewQueuePageResult } from "../../lib/admin-review-data";
+import { loadDecisionReceipt, type DecisionReceiptLookup } from "../../lib/admin-batch-review-data";
 import type { Fetcher } from "../../lib/api";
 import { ReviewBatchResults, ReviewBatchToolbar, useReviewBatch } from "../../components/review/review-batch-owner";
 import type { BatchReviewItemOutcome } from "../../lib/admin-batch-review-data";
@@ -48,6 +49,9 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const [page, setPage] = useState(initial.page);
   const [pageSize, setPageSize] = useState<SupportedPageSize>(initial.pageSize);
   const [state, setState] = useState<QueueState>({ kind: "loading" });
+  const [receipts, setReceipts] = useState<readonly DecisionReceiptLookup[] | null>(null);
+  const [checkingReceipts, setCheckingReceipts] = useState(false);
+  const [receiptError, setReceiptError] = useState<string>();
   const [retry, setRetry] = useState(0);
   const alive = useRef(true);
   const mounted = useRef(true);
@@ -68,6 +72,19 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
     return () => { alive.current = false; controller.abort(); };
   }, [load, locale, page, pageSize, requester, retry]);
 
+  const checkReceipts = async () => {
+    if (batch.state.kind !== "unknown" || checkingReceipts) return;
+    setCheckingReceipts(true);
+    setReceiptError(undefined);
+    try {
+      const results = await Promise.all(batch.state.attempts.map((attempt) => loadDecisionReceipt(attempt.submissionId, attempt.operationId)));
+      if (mounted.current) setReceipts(results);
+    } catch {
+      if (mounted.current) setReceiptError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+    } finally {
+      if (mounted.current) setCheckingReceipts(false);
+    }
+  };
   const started = useCallback(() => { pendingPage.current = page; }, [page]);
   const settled = useCallback((outcomes: readonly BatchReviewItemOutcome[]) => {
     if (!mounted.current || pendingPage.current !== page) return;
@@ -113,9 +130,15 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
           <p className="font-medium">{frontendText(locale, "ADMIN_REVIEW_BATCH_UNKNOWN_TITLE")}</p>
           <p className="text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_BATCH_UNKNOWN_DESCRIPTION")}</p>
           <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" data-batch-check-receipts disabled={checkingReceipts} onClick={() => void checkReceipts()}>{checkingReceipts ? frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_CHECKING") : frontendText(locale, "ADMIN_REVIEW_BATCH_CHECK_RECEIPTS")}</Button>
             <Button type="button" size="sm" data-batch-retry-original onClick={() => void batch.retryAttempts()}>{frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_ORIGINAL")}</Button>
             <Button type="button" size="sm" variant="outline" data-batch-discard-unknown onClick={batch.discardUnknown}>{frontendText(locale, "ADMIN_REVIEW_BATCH_DISCARD_UNKNOWN")}</Button>
           </div>
+          {receiptError && <p role="alert" className="text-destructive">{receiptError}</p>}
+          {receipts && <div data-batch-receipt-check={`${receipts.filter((receipt) => receipt.found).length}:${receipts.length}`} className="space-y-1 text-xs">
+            <p className="font-medium">{frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_RESULT").replace("{found}", String(receipts.filter((receipt) => receipt.found).length)).replace("{total}", String(receipts.length))}</p>
+            <ul className="list-disc pl-5 text-muted-foreground">{receipts.map((receipt) => <li key={receipt.submissionId}>{receipt.submissionId} · {receipt.operationId} · {frontendText(locale, receipt.found ? "ADMIN_REVIEW_BATCH_RECEIPT_FOUND" : "ADMIN_REVIEW_BATCH_RECEIPT_MISSING")}</li>)}</ul>
+          </div>}
         </div>}
         <DataTable
           locale={locale}

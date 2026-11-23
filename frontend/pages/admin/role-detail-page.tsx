@@ -59,7 +59,8 @@ function RolePermissionEditor({ state, role, locale, onBack, onLoadRetry, onSave
   const [draftBlocked, setDraftBlocked] = useState(composer.kind === "blocked" || (composer.kind === "ready" && !restored));
   const [draftNotice, setDraftNotice] = useState<string>();
   const initialMask = useMemo(() => parsePermissionMask(role.allowBits), [role.allowBits]);
-  const initialEffective = useMemo(() => parsePermissionMask(role.effectiveBits ?? role.allowBits), [role.effectiveBits, role.allowBits]);
+  const baselineMask = useMemo(() => parsePermissionMask(role.baselineBits ?? "0x0"), [role.baselineBits]);
+  const initialEffective = useMemo(() => parsePermissionMask(role.effectiveBits ?? role.allowBits) | baselineMask, [role.effectiveBits, role.allowBits, baselineMask]);
   type Action = { kind: "save" } | { kind: "assign" | "unassign"; memberId: string };
   type Confirmation = { action: Action; roles: typeof roles; role: AdminRole; mask: bigint; memberDraft: string };
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -109,7 +110,7 @@ function RolePermissionEditor({ state, role, locale, onBack, onLoadRetry, onSave
   };
   const assignedMemberIds = role.assignedMemberIds ?? [];
   const dirtyPermissions = mask !== initialMask;
-  const effectiveMask = mask | (initialEffective & ~initialMask);
+  const effectiveMask = mask | baselineMask;
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; confirmationRef.current = null; }; }, []);
   const validConfirmation = !!(confirmation && !locked && roles === confirmation.roles && role === confirmation.role

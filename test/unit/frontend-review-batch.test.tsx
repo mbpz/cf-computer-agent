@@ -235,6 +235,79 @@ describe("review batch surface", () => {
     expect(container.querySelector("[data-batch-unknown]")).toBeTruthy();
   });
 
+  it("keeps the frozen attempt on a transport failure and retries with the same operation numbers", async () => {
+    let calls = 0;
+    const bodies: SentAction[][] = [];
+    let fail = true;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const actions = requestActions(init);
+      bodies.push(actions);
+      calls += 1;
+      if (fail) { fail = false; throw new TypeError("Failed to fetch"); }
+      return json(summary(actions, new Set()));
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    expect(container.querySelector("[data-batch-unknown]")).not.toBeNull();
+    expect(sessionStorage.getItem("memory-garden:review-batch-intent:v1:member-admin")).not.toBeNull();
+    const firstIds = bodies[0]!.map((action) => action.operationId);
+    await clickOn(node("[data-batch-retry-original]"));
+    expect(calls).toBe(2);
+    expect(bodies[1]!.map((action) => action.operationId)).toEqual(firstIds);
+    expect(container.querySelector("[data-batch-results]")).not.toBeNull();
+  });
+
+  it("refuses to start a new batch while an earlier unknown attempt is unresolved", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      posts += 1;
+      return json({ requested: 1, succeeded: 1, failed: 0, items: [] });
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    expect(container.querySelector("[data-batch-unknown]")).not.toBeNull();
+    await clickOn(node("[data-batch-send]"));
+    expect(posts).toBe(1);
+    expect(node("[data-batch-notice]").textContent).toContain("before starting a new batch");
+  });
+
+  it("caps selection at the server batch ceiling on a 100-row page", async () => {
+    const items = Array.from({ length: 25 }, (_, index) => ({ id: `review-${index}`, title: `Item ${index}`, submitter: "member-1", status: "review_pending", updatedAt: "2026-10-01T00:00:00.000Z" }));
+    const large = { items, pagination: { page: 1, pageSize: 100, total: 25, totalPages: 1 } };
+    let sent: SentAction[] = [];
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sent = requestActions(init);
+      return json(summary(sent, new Set()));
+    });
+    await mountBatch(true, vi.fn(), { search: "?page=1&pageSize=100", load: (async () => large) as never });
+    await selectAll();
+    expect(node("[data-batch-limit]").textContent).toContain("at most 20");
+    expect(container.querySelectorAll('[role="checkbox"][aria-checked="true"]')).toHaveLength(20);
+    await clickOn(node("[data-batch-send]"));
+    expect(sent).toHaveLength(20);
+  });
+
+  it("checks the original operation receipts without deciding anything", async () => {
+    let receiptReads = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/decisions/operations/")) {
+        receiptReads += 1;
+        return new Response(JSON.stringify({ error: { code: "REVIEW_RECEIPT_NOT_FOUND", message: "missing", retryable: false } }), { status: 404, headers: { "content-type": "application/json" } });
+      }
+      const actions = requestActions(init);
+      return json({ requested: actions.length, succeeded: actions.length, failed: 0, items: [] });
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    await clickOn(node("[data-batch-check-receipts]"));
+    expect(receiptReads).toBe(2);
+    expect(node("[data-batch-receipt-check]").getAttribute("data-batch-receipt-check")).toBe("0:2");
+  });
+
   it("treats a malformed 200 body as an unknown result and keeps the original attempts", async () => {
     vi.stubGlobal("fetch", async () => json({ requested: 2, succeeded: 2, failed: 0, items: [{ submissionId: "review-1", action: "reject", status: "succeeded", result: {} }] }));
     await mountBatch();

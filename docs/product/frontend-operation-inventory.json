@@ -3524,16 +3524,16 @@
         "frontend/components/motion/table/table-menu.tsx:86:15",
         "frontend/components/motion/table/table-menu.tsx:90:15",
         "frontend/components/motion/table/table-menu.tsx:103:19",
-        "frontend/components/review/review-batch-owner.tsx:323:11",
-        "frontend/components/review/review-batch-owner.tsx:324:11",
-        "frontend/components/review/review-batch-owner.tsx:328:11",
-        "frontend/components/review/review-batch-owner.tsx:329:11",
-        "frontend/components/review/review-batch-owner.tsx:334:13",
-        "frontend/components/review/review-batch-owner.tsx:344:11",
-        "frontend/components/review/review-batch-owner.tsx:348:11",
-        "frontend/components/review/review-batch-owner.tsx:353:26",
-        "frontend/components/review/review-batch-owner.tsx:368:5",
-        "frontend/components/review/review-batch-owner.tsx:396:11",
+        "frontend/components/review/review-batch-owner.tsx:356:11",
+        "frontend/components/review/review-batch-owner.tsx:357:11",
+        "frontend/components/review/review-batch-owner.tsx:361:11",
+        "frontend/components/review/review-batch-owner.tsx:362:11",
+        "frontend/components/review/review-batch-owner.tsx:367:13",
+        "frontend/components/review/review-batch-owner.tsx:377:11",
+        "frontend/components/review/review-batch-owner.tsx:381:11",
+        "frontend/components/review/review-batch-owner.tsx:386:26",
+        "frontend/components/review/review-batch-owner.tsx:401:5",
+        "frontend/components/review/review-batch-owner.tsx:429:11",
         "frontend/components/ui/alert.tsx:57:5",
         "frontend/components/ui/alert.tsx:66:3",
         "frontend/components/ui/alert.tsx:73:3",
@@ -3562,15 +3562,17 @@
         "frontend/lib/workspace-browser-history.ts:122:3",
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
-        "frontend/pages/admin/review-batch-page.tsx:88:9",
-        "frontend/pages/admin/review-batch-page.tsx:92:22",
-        "frontend/pages/admin/review-batch-page.tsx:104:26",
-        "frontend/pages/admin/review-batch-page.tsx:108:9",
-        "frontend/pages/admin/review-batch-page.tsx:112:44",
-        "frontend/pages/admin/review-batch-page.tsx:116:13",
-        "frontend/pages/admin/review-batch-page.tsx:117:13",
-        "frontend/pages/admin/review-batch-page.tsx:120:9",
-        "frontend/pages/admin/review-batch-page.tsx:135:9"
+        "frontend/pages/admin/review-batch-page.tsx:105:9",
+        "frontend/pages/admin/review-batch-page.tsx:109:22",
+        "frontend/pages/admin/review-batch-page.tsx:121:26",
+        "frontend/pages/admin/review-batch-page.tsx:125:9",
+        "frontend/pages/admin/review-batch-page.tsx:129:44",
+        "frontend/pages/admin/review-batch-page.tsx:133:13",
+        "frontend/pages/admin/review-batch-page.tsx:134:13",
+        "frontend/pages/admin/review-batch-page.tsx:135:13",
+        "frontend/pages/admin/review-batch-page.tsx:137:28",
+        "frontend/pages/admin/review-batch-page.tsx:143:9",
+        "frontend/pages/admin/review-batch-page.tsx:158:9"
       ],
       "unresolvedSymbols": [
         "frontend/components/ui/card.tsx#Card",
@@ -5489,25 +5491,25 @@
         "frontend/pages/admin/role-detail-page.tsx:49:152",
         "frontend/pages/admin/role-detail-page.tsx:50:169",
         "frontend/pages/admin/role-detail-page.tsx:51:9",
-        "frontend/pages/admin/role-detail-page.tsx:81:5",
-        "frontend/pages/admin/role-detail-page.tsx:149:22",
-        "frontend/pages/admin/role-detail-page.tsx:149:158",
-        "frontend/pages/admin/role-detail-page.tsx:150:21",
-        "frontend/pages/admin/role-detail-page.tsx:152:7",
-        "frontend/pages/admin/role-detail-page.tsx:156:66",
-        "frontend/pages/admin/role-detail-page.tsx:157:545",
-        "frontend/pages/admin/role-detail-page.tsx:158:179",
-        "frontend/pages/admin/role-detail-page.tsx:158:535",
-        "frontend/pages/admin/role-detail-page.tsx:158:1000",
-        "frontend/pages/admin/role-detail-page.tsx:158:1223",
-        "frontend/pages/admin/role-detail-page.tsx:159:21",
-        "frontend/pages/admin/role-detail-page.tsx:160:7",
-        "frontend/pages/admin/role-detail-page.tsx:162:13",
-        "frontend/pages/admin/role-detail-page.tsx:166:99",
-        "frontend/pages/admin/role-detail-page.tsx:166:254",
-        "frontend/pages/admin/role-detail-page.tsx:166:447",
-        "frontend/pages/admin/role-detail-page.tsx:166:557",
-        "frontend/pages/admin/role-detail-page.tsx:166:706"
+        "frontend/pages/admin/role-detail-page.tsx:82:5",
+        "frontend/pages/admin/role-detail-page.tsx:150:22",
+        "frontend/pages/admin/role-detail-page.tsx:150:158",
+        "frontend/pages/admin/role-detail-page.tsx:151:21",
+        "frontend/pages/admin/role-detail-page.tsx:153:7",
+        "frontend/pages/admin/role-detail-page.tsx:157:66",
+        "frontend/pages/admin/role-detail-page.tsx:158:545",
+        "frontend/pages/admin/role-detail-page.tsx:159:179",
+        "frontend/pages/admin/role-detail-page.tsx:159:535",
+        "frontend/pages/admin/role-detail-page.tsx:159:1000",
+        "frontend/pages/admin/role-detail-page.tsx:159:1223",
+        "frontend/pages/admin/role-detail-page.tsx:160:21",
+        "frontend/pages/admin/role-detail-page.tsx:161:7",
+        "frontend/pages/admin/role-detail-page.tsx:163:13",
+        "frontend/pages/admin/role-detail-page.tsx:167:99",
+        "frontend/pages/admin/role-detail-page.tsx:167:254",
+        "frontend/pages/admin/role-detail-page.tsx:167:447",
+        "frontend/pages/admin/role-detail-page.tsx:167:557",
+        "frontend/pages/admin/role-detail-page.tsx:167:706"
       ],
       "unresolvedSymbols": [
         "frontend/components/ui/card.tsx#Card",
@@ -27500,10 +27502,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:323:11",
+      "id": "frontend/components/review/review-batch-owner.tsx:356:11",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchToolbar",
-      "line": 323,
+      "line": 356,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -27527,10 +27529,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:324:11",
+      "id": "frontend/components/review/review-batch-owner.tsx:357:11",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchToolbar",
-      "line": 324,
+      "line": 357,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -27553,10 +27555,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:328:11",
+      "id": "frontend/components/review/review-batch-owner.tsx:361:11",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchToolbar",
-      "line": 328,
+      "line": 361,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -27580,10 +27582,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:329:11",
+      "id": "frontend/components/review/review-batch-owner.tsx:362:11",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchToolbar",
-      "line": 329,
+      "line": 362,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -27607,10 +27609,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:334:13",
+      "id": "frontend/components/review/review-batch-owner.tsx:367:13",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchToolbar",
-      "line": 334,
+      "line": 367,
       "column": 13,
       "kind": "jsx",
       "tag": "Select",
@@ -27634,10 +27636,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:344:11",
+      "id": "frontend/components/review/review-batch-owner.tsx:377:11",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchToolbar",
-      "line": 344,
+      "line": 377,
       "column": 11,
       "kind": "jsx",
       "tag": "Textarea",
@@ -27659,10 +27661,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:348:11",
+      "id": "frontend/components/review/review-batch-owner.tsx:381:11",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchToolbar",
-      "line": 348,
+      "line": 381,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -27683,10 +27685,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:353:26",
+      "id": "frontend/components/review/review-batch-owner.tsx:386:26",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchToolbar",
-      "line": 353,
+      "line": 386,
       "column": 26,
       "kind": "jsx",
       "tag": "p",
@@ -27710,10 +27712,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:368:5",
+      "id": "frontend/components/review/review-batch-owner.tsx:401:5",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchResults",
-      "line": 368,
+      "line": 401,
       "column": 5,
       "kind": "jsx",
       "tag": "Alert",
@@ -27735,10 +27737,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-batch-owner.tsx:396:11",
+      "id": "frontend/components/review/review-batch-owner.tsx:429:11",
       "path": "frontend/components/review/review-batch-owner.tsx",
       "owner": "ReviewBatchResults",
-      "line": 396,
+      "line": 429,
       "column": 11,
       "kind": "jsx",
       "tag": "Button",
@@ -46777,10 +46779,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:88:9",
+      "id": "frontend/pages/admin/review-batch-page.tsx:105:9",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 88,
+      "line": 105,
       "column": 9,
       "kind": "jsx",
       "tag": "Checkbox",
@@ -46800,10 +46802,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:92:22",
+      "id": "frontend/pages/admin/review-batch-page.tsx:109:22",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 92,
+      "line": 109,
       "column": 22,
       "kind": "jsx",
       "tag": "Checkbox",
@@ -46823,10 +46825,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:104:26",
+      "id": "frontend/pages/admin/review-batch-page.tsx:121:26",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 104,
+      "line": 121,
       "column": 26,
       "kind": "jsx",
       "tag": "Button",
@@ -46853,10 +46855,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:108:9",
+      "id": "frontend/pages/admin/review-batch-page.tsx:125:9",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 108,
+      "line": 125,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -46892,10 +46894,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:112:44",
+      "id": "frontend/pages/admin/review-batch-page.tsx:129:44",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 112,
+      "line": 129,
       "column": 44,
       "kind": "jsx",
       "tag": "div",
@@ -46932,10 +46934,57 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:116:13",
+      "id": "frontend/pages/admin/review-batch-page.tsx:133:13",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 116,
+      "line": 133,
+      "column": 13,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "size": "\"sm\"",
+        "variant": "\"outline\"",
+        "data-batch-check-receipts": "true",
+        "disabled": "checkingReceipts",
+        "onClick": "() => void checkReceipts()"
+      },
+      "handlers": {
+        "onClick": "() => void checkReceipts()"
+      },
+      "spreads": [],
+      "labels": [
+        "checkingReceipts ? frontendText(locale, \"ADMIN_REVIEW_BATCH_RECEIPT_CHECKING\") : frontendText(locale, \"ADMIN_REVIEW_BATCH_CHECK_RECEIPTS\")"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "!canReview",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"loading\"",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "state.kind !== \"ready\"",
+          "branch": "false"
+        },
+        {
+          "kind": "logical",
+          "expression": "batch.state.kind === \"unknown\"",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/admin/review-batch-page.tsx:134:13",
+      "path": "frontend/pages/admin/review-batch-page.tsx",
+      "owner": "ReviewBatchPage",
+      "line": 134,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -46977,10 +47026,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:117:13",
+      "id": "frontend/pages/admin/review-batch-page.tsx:135:13",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 117,
+      "line": 135,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -47023,10 +47072,56 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:120:9",
+      "id": "frontend/pages/admin/review-batch-page.tsx:137:28",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 120,
+      "line": 137,
+      "column": 28,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\"",
+        "className": "\"text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "receiptError"
+      ],
+      "context": [
+        {
+          "kind": "branch",
+          "expression": "!canReview",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "state.kind === \"loading\"",
+          "branch": "false"
+        },
+        {
+          "kind": "branch",
+          "expression": "state.kind !== \"ready\"",
+          "branch": "false"
+        },
+        {
+          "kind": "logical",
+          "expression": "batch.state.kind === \"unknown\"",
+          "operator": "&&"
+        },
+        {
+          "kind": "logical",
+          "expression": "receiptError",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/pages/admin/review-batch-page.tsx:143:9",
+      "path": "frontend/pages/admin/review-batch-page.tsx",
+      "owner": "ReviewBatchPage",
+      "line": 143,
       "column": 9,
       "kind": "jsx",
       "tag": "DataTable",
@@ -47071,10 +47166,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:135:9",
+      "id": "frontend/pages/admin/review-batch-page.tsx:158:9",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 135,
+      "line": 158,
       "column": 9,
       "kind": "jsx",
       "tag": "ReviewBatchResults",
@@ -48010,10 +48105,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:81:5",
+      "id": "frontend/pages/admin/role-detail-page.tsx:82:5",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 81,
+      "line": 82,
       "column": 5,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -48030,10 +48125,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:149:22",
+      "id": "frontend/pages/admin/role-detail-page.tsx:150:22",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 149,
+      "line": 150,
       "column": 22,
       "kind": "jsx",
       "tag": "div",
@@ -48062,10 +48157,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:149:158",
+      "id": "frontend/pages/admin/role-detail-page.tsx:150:158",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 149,
+      "line": 150,
       "column": 158,
       "kind": "jsx",
       "tag": "Button",
@@ -48098,10 +48193,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:150:21",
+      "id": "frontend/pages/admin/role-detail-page.tsx:151:21",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 150,
+      "line": 151,
       "column": 21,
       "kind": "jsx",
       "tag": "p",
@@ -48131,10 +48226,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:152:7",
+      "id": "frontend/pages/admin/role-detail-page.tsx:153:7",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 152,
+      "line": 153,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -48164,10 +48259,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:156:66",
+      "id": "frontend/pages/admin/role-detail-page.tsx:157:66",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 156,
+      "line": 157,
       "column": 66,
       "kind": "jsx",
       "tag": "p",
@@ -48198,10 +48293,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:157:545",
+      "id": "frontend/pages/admin/role-detail-page.tsx:158:545",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 157,
+      "line": 158,
       "column": 545,
       "kind": "jsx",
       "tag": "Checkbox",
@@ -48240,10 +48335,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:158:179",
+      "id": "frontend/pages/admin/role-detail-page.tsx:159:179",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 158,
+      "line": 159,
       "column": 179,
       "kind": "jsx",
       "tag": "p",
@@ -48273,10 +48368,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:158:535",
+      "id": "frontend/pages/admin/role-detail-page.tsx:159:535",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 158,
+      "line": 159,
       "column": 535,
       "kind": "jsx",
       "tag": "Button",
@@ -48321,10 +48416,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:158:1000",
+      "id": "frontend/pages/admin/role-detail-page.tsx:159:1000",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 158,
+      "line": 159,
       "column": 1000,
       "kind": "jsx",
       "tag": "Input",
@@ -48357,10 +48452,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:158:1223",
+      "id": "frontend/pages/admin/role-detail-page.tsx:159:1223",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 158,
+      "line": 159,
       "column": 1223,
       "kind": "jsx",
       "tag": "Button",
@@ -48393,10 +48488,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:159:21",
+      "id": "frontend/pages/admin/role-detail-page.tsx:160:21",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 159,
+      "line": 160,
       "column": 21,
       "kind": "jsx",
       "tag": "p",
@@ -48426,10 +48521,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:160:7",
+      "id": "frontend/pages/admin/role-detail-page.tsx:161:7",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 160,
+      "line": 161,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -48457,10 +48552,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:162:13",
+      "id": "frontend/pages/admin/role-detail-page.tsx:163:13",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 162,
+      "line": 163,
       "column": 13,
       "kind": "jsx",
       "tag": "ConfirmAction",
@@ -48484,10 +48579,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:166:99",
+      "id": "frontend/pages/admin/role-detail-page.tsx:167:99",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 166,
+      "line": 167,
       "column": 99,
       "kind": "jsx",
       "tag": "div",
@@ -48509,10 +48604,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:166:254",
+      "id": "frontend/pages/admin/role-detail-page.tsx:167:254",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 166,
+      "line": 167,
       "column": 254,
       "kind": "jsx",
       "tag": "Button",
@@ -48538,10 +48633,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:166:447",
+      "id": "frontend/pages/admin/role-detail-page.tsx:167:447",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 166,
+      "line": 167,
       "column": 447,
       "kind": "jsx",
       "tag": "p",
@@ -48563,10 +48658,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:166:557",
+      "id": "frontend/pages/admin/role-detail-page.tsx:167:557",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 166,
+      "line": 167,
       "column": 557,
       "kind": "jsx",
       "tag": "Button",
@@ -48593,10 +48688,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/role-detail-page.tsx:166:706",
+      "id": "frontend/pages/admin/role-detail-page.tsx:167:706",
       "path": "frontend/pages/admin/role-detail-page.tsx",
       "owner": "RolePermissionEditor",
-      "line": 166,
+      "line": 167,
       "column": 706,
       "kind": "jsx",
       "tag": "Button",

@@ -1,4 +1,4 @@
-import { apiFetch, type Fetcher } from "./api";
+import { ApiRequestError, apiFetch, type Fetcher } from "./api";
 import { isCanonicalTimestamp, validReviewNote } from "../components/review/review-detail-data";
 import { BATCH_OPERATION_ID_PATTERN, validBatchReason, type BatchActionKind, type BatchItemAction } from "./review-batch-plan";
 
@@ -9,6 +9,11 @@ export interface BatchReviewItemOutcome {
   readonly status: "succeeded" | "failed";
   readonly result?: unknown;
   readonly error?: { readonly code: string; readonly status: number; readonly retryable: boolean };
+}
+
+/** The client rejected the request before any POST; nothing was sent. */
+export class BatchReviewRequestError extends Error {
+  constructor() { super("BATCH_REVIEW_REQUEST_INVALID"); }
 }
 
 /** The POST was sent but its 200 body could not be trusted; the outcome is unknown. */
@@ -82,14 +87,36 @@ function assertBatchAction(action: BatchItemAction): void {
   if (!BATCH_OPERATION_ID_PATTERN.test(action.operationId) || !isCanonicalTimestamp(action.expectedUpdatedAt)) throw new Error("BATCH_REVIEW_REQUEST_INVALID");
 }
 
+export interface DecisionReceiptLookup {
+  readonly submissionId: string;
+  readonly operationId: string;
+  readonly found: boolean;
+  /** The server's recorded response, only present when found. */
+  readonly responseJson?: string;
+}
+
+/** Exact read by original submission id + operation number; never uses list state. */
+export async function loadDecisionReceipt(submissionId: string, operationId: string, requester: Fetcher = fetch): Promise<DecisionReceiptLookup> {
+  try {
+    const data = await apiFetch<{ receipt?: { responseJson?: unknown } }>(`/api/admin/submissions/${encodeURIComponent(submissionId)}/decisions/operations/${encodeURIComponent(operationId)}`, { requester });
+    if (data?.receipt === undefined || typeof data.receipt.responseJson !== "string") throw new Error("BATCH_RECEIPT_RESPONSE_INVALID");
+    return { submissionId, operationId, found: true, responseJson: data.receipt.responseJson };
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404) return { submissionId, operationId, found: false };
+    throw error;
+  }
+}
+
 /**
  * One request for a whole batch. A malformed body (or an identity the server
  * rejects) is a WHOLE-request failure and surfaces as the `ApiRequestError`
  * thrown by `apiFetch`; per-item outcomes are only ever the 200 response.
  */
 export async function sendBatchReview(actions: readonly BatchItemAction[], requester: Fetcher = fetch): Promise<BatchReviewResult> {
-  if (!Array.isArray(actions) || actions.length === 0) throw new Error("BATCH_REVIEW_REQUEST_INVALID");
-  for (const action of actions) assertBatchAction(action);
+  if (!Array.isArray(actions) || actions.length === 0) throw new BatchReviewRequestError();
+  for (const action of actions) {
+    try { assertBatchAction(action); } catch { throw new BatchReviewRequestError(); }
+  }
   const payload = await apiFetch<unknown>("/api/admin/submissions/batch-review", {
     requester,
     method: "POST",

@@ -282,6 +282,16 @@ export class PublicationService {
     };
   }
 
+  /** Exact receipt lookup for one original operation; never infers from list state. */
+  async findDecisionReceipt(reviewer: PublicationReviewer, submissionId: string, operationId: string): Promise<{ submissionId: string; operationId: string; receipt: DecisionReceipt } | null> {
+    requireActiveAdmin(reviewer);
+    if (!isBoundedId(submissionId) || typeof operationId !== "string" || !STABLE_OPERATION_ID.test(operationId)) {
+      throw batchReviewInvalid();
+    }
+    const receipt = await this.repository.findDecisionReceipt(submissionId, operationId);
+    return receipt ? { submissionId, operationId, receipt } : null;
+  }
+
   async batchReview(reviewer: PublicationReviewer, actions: unknown): Promise<BatchReviewResult> {
     requireActiveAdmin(reviewer);
     const normalized = normalizeBatchReviewActions(actions);

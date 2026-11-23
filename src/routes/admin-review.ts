@@ -138,6 +138,20 @@ export async function routeAdminReviewApi(
     }, 200, context.requestId);
   }
 
+  const decisionReceipt = /^\/api\/admin\/submissions\/([^/]+)\/decisions\/operations\/([^/]+)$/.exec(url.pathname);
+  if (decisionReceipt) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    const reviewer = requireAdminMember(principal);
+    const receipt = await services.publication.findDecisionReceipt(
+      reviewerDto(reviewer),
+      decodePathId(decisionReceipt[1]!),
+      decodePathId(decisionReceipt[2]!),
+    );
+    if (!receipt) throw new AppError("REVIEW_RECEIPT_NOT_FOUND", "Review receipt not found", 404);
+    return jsonResponse(receipt, 200, context.requestId);
+  }
+
   if (url.pathname === "/api/admin/submissions/batch-review") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     const reviewer = requireAdminMember(principal);
