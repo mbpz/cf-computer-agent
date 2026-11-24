@@ -18,6 +18,8 @@ export interface StoredBatchIntent {
   readonly note: string;
   readonly attempts: readonly BatchItemAction[];
   readonly outcomes: readonly BatchReviewItemOutcome[] | null;
+  /** The subset sent by the current retry; absent means the whole batch. */
+  readonly inflight?: readonly BatchItemAction[] | null;
   readonly status: "pending" | "unknown" | "done";
   readonly savedAt: string;
 }
@@ -71,10 +73,17 @@ export function loadBatchIntent(memberId: string): StoredBatchIntent | null {
     if (attempts.some((action) => !action)) return null;
     const outcomes = value.outcomes === null ? null : Array.isArray(value.outcomes) ? value.outcomes.map(parseOutcome) : undefined;
     if (outcomes === undefined || outcomes?.some((outcome) => !outcome)) return null;
+    let inflight: BatchItemAction[] | null = null;
+    if (value.inflight !== undefined && value.inflight !== null) {
+      if (!Array.isArray(value.inflight)) return null;
+      const parsed = value.inflight.map(parseAction);
+      if (parsed.some((action) => !action)) return null;
+      inflight = parsed as BatchItemAction[];
+    }
     const intent: StoredBatchIntent = {
       version: 1, memberId, batchId, decision, reasonCode: value.reasonCode, note: value.note,
       attempts: attempts as BatchItemAction[], outcomes: outcomes as BatchReviewItemOutcome[] | null,
-      status: migratedStatus, savedAt: typeof value.savedAt === "string" ? value.savedAt : new Date(0).toISOString(),
+      inflight, status: migratedStatus, savedAt: typeof value.savedAt === "string" ? value.savedAt : new Date(0).toISOString(),
     };
     if (legacy || status !== migratedStatus) writeIntent(intent);
     return intent;

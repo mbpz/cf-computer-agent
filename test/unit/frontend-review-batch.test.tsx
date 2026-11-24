@@ -215,6 +215,45 @@ describe("review batch surface", () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
+  it("persists only the failed subset while an earlier success stays fixed", async () => {
+    const bodies: SentAction[][] = [];
+    let retryGate!: (value: unknown) => void;
+    let call = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const actions = requestActions(init);
+      bodies.push(actions);
+      call += 1;
+      if (call === 1) return json(summary(actions, new Set(["review-2"])));
+      if (call === 2) { await new Promise((_, reject) => { retryGate = reject; }); }
+      return json(summary(actions, new Set()));
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    expect(node('[data-batch-outcome="review-1"]').getAttribute("data-batch-outcome-status")).toBe("succeeded");
+    const originalB = bodies[0]!.find((action) => action.submissionId === "review-2")!;
+    await act(async () => { node<HTMLButtonElement>("[data-batch-retry-failed]").click(); });
+    await flush();
+    const stored = JSON.parse(sessionStorage.getItem("memory-garden:review-batch-intent:v1:member-admin")!);
+    expect(stored.attempts).toHaveLength(2);
+    expect(stored.outcomes).toHaveLength(2);
+    expect(stored.inflight.map((action: SentAction) => action.submissionId)).toEqual(["review-2"]);
+    expect(stored.inflight[0].operationId).toBe(originalB.operationId);
+    // A transport failure of the subset must not turn the unknown retry into a whole-batch resend.
+    await act(async () => root.unmount());
+    await act(async () => { retryGate(new TypeError("Failed to fetch")); });
+    const { createRoot } = await import("react-dom/client"); root = createRoot(container);
+    await mountBatch();
+    expect(container.querySelector("[data-batch-unknown]")).not.toBeNull();
+    const after = JSON.parse(sessionStorage.getItem("memory-garden:review-batch-intent:v1:member-admin")!);
+    expect(after.attempts).toHaveLength(2);
+    expect(after.inflight.map((action: SentAction) => action.submissionId)).toEqual(["review-2"]);
+    await clickOn(node("[data-batch-retry-original]"));
+    expect(bodies.at(-1)!.map((action) => action.submissionId)).toEqual(["review-2"]);
+    expect(bodies.at(-1)![0]!.operationId).toBe(originalB.operationId);
+    expect(node('[data-batch-outcome="review-1"]').getAttribute("data-batch-outcome-status")).toBe("succeeded");
+  });
+
   it("restores a frozen unknown attempt after a remount instead of resubmitting it", async () => {
     recordFetch((actions) => summary(actions, new Set()));
     // A malformed 200 leaves the frozen attempt in sessionStorage.

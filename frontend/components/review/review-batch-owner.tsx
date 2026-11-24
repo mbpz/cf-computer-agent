@@ -20,7 +20,7 @@ export type ReviewBatchState =
   | { kind: "idle" }
   | { kind: "pending"; count: number }
   | { kind: "done"; outcomes: readonly BatchReviewItemOutcome[]; attempts: readonly BatchItemAction[]; retried: boolean }
-  | { kind: "unknown"; attempts: readonly BatchItemAction[]; message: string }
+  | { kind: "unknown"; attempts: readonly BatchItemAction[]; allAttempts: readonly BatchItemAction[]; outcomes: readonly BatchReviewItemOutcome[]; message: string }
   | { kind: "rejected"; message: string };
 
 export interface ReviewBatchController {
@@ -143,7 +143,13 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
     if (stored.status === "done" && stored.outcomes) {
       setState({ kind: "done", outcomes: stored.outcomes, attempts: stored.attempts, retried: false });
     } else {
-      setState({ kind: "unknown", attempts: stored.attempts, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
+      setState({
+        kind: "unknown",
+        attempts: stored.inflight ?? stored.attempts,
+        allAttempts: stored.attempts,
+        outcomes: stored.outcomes ?? [],
+        message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN"),
+      });
     }
   }, [locale, memberId]);
 
@@ -196,16 +202,16 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
   const setReasonCode = useCallback((next: string) => { if (!pendingRef.current) setReasonCodeState(next); }, []);
   const setNote = useCallback((next: string) => { if (!pendingRef.current) setNoteState(boundNote(next)); }, []);
 
-  const intentFor = useCallback((batchId: string, attempts: readonly BatchItemAction[], status: StoredBatchIntent["status"], outcomes: readonly BatchReviewItemOutcome[] | null): StoredBatchIntent | null => {
+  const intentFor = useCallback((batchId: string, attempts: readonly BatchItemAction[], status: StoredBatchIntent["status"], outcomes: readonly BatchReviewItemOutcome[] | null, inflight: readonly BatchItemAction[] | null = null): StoredBatchIntent | null => {
     if (!memberId || attempts.length === 0) return null;
-    return { version: 1, memberId, batchId, decision, reasonCode, note, attempts, outcomes, status, savedAt: new Date().toISOString() };
+    return { version: 1, memberId, batchId, decision, reasonCode, note, attempts, outcomes, inflight, status, savedAt: new Date().toISOString() };
   }, [decision, memberId, note, reasonCode]);
   const createBatch = useCallback((batchId: string, attempts: readonly BatchItemAction[]): boolean => {
     const intent = intentFor(batchId, attempts, "pending", null);
     return intent !== null && beginBatchIntent(intent);
   }, [intentFor]);
-  const updateBatch = useCallback((batchId: string, attempts: readonly BatchItemAction[], status: StoredBatchIntent["status"], outcomes: readonly BatchReviewItemOutcome[] | null): boolean => {
-    const intent = intentFor(batchId, attempts, status, outcomes);
+  const updateBatch = useCallback((batchId: string, attempts: readonly BatchItemAction[], status: StoredBatchIntent["status"], outcomes: readonly BatchReviewItemOutcome[] | null, inflight: readonly BatchItemAction[] | null = null): boolean => {
+    const intent = intentFor(batchId, attempts, status, outcomes, inflight);
     return intent !== null && updateBatchIntent(intent);
   }, [intentFor]);
   const ownsStoredBatch = useCallback((batchId: string): boolean => {
@@ -251,7 +257,7 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
       if (!owned(batchId)) return;
       if (unknownFailure(error)) {
         updateBatch(batchId, plan.actions, "unknown", null);
-        setState({ kind: "unknown", attempts: plan.actions, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
+        setState({ kind: "unknown", attempts: plan.actions, allAttempts: plan.actions, outcomes: [], message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
       } else {
         clearBatch(batchId);
         setState({ kind: "rejected", message: batchFailureMessage(error, locale) });
@@ -272,7 +278,7 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
     setNotice(null);
     pendingRef.current = true;
     onStart?.(retryActions);
-    if (!updateBatch(batchId, state.attempts, "pending", state.outcomes)) { pendingRef.current = false; setNotice(frontendText(locale, "ADMIN_REVIEW_BATCH_RECOVER_FIRST")); return; }
+    if (!updateBatch(batchId, state.attempts, "pending", state.outcomes, retryActions)) { pendingRef.current = false; setNotice(frontendText(locale, "ADMIN_REVIEW_BATCH_RECOVER_FIRST")); return; }
     setState({ kind: "pending", count: retryActions.length });
     try {
       const result = await sendBatchReview(retryActions, requester);
@@ -286,9 +292,10 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
       if (!owned(batchId)) return;
       // The earlier outcomes remain true; only this attempt's transport failed.
       if (unknownFailure(error)) {
-        updateBatch(batchId, state.attempts, "unknown", null);
-        setState({ kind: "unknown", attempts: state.attempts, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
+        updateBatch(batchId, state.attempts, "unknown", state.outcomes, retryActions);
+        setState({ kind: "unknown", attempts: retryActions, allAttempts: state.attempts, outcomes: state.outcomes, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
       } else {
+        updateBatch(batchId, state.attempts, "done", state.outcomes, null);
         setNotice(batchFailureMessage(error, locale));
         setState({ kind: "done", outcomes: state.outcomes, attempts: state.attempts, retried: true });
       }
@@ -304,23 +311,26 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
     if (attempts.length === 0 || !batchId || !ownsStoredBatch(batchId)) { setNotice(frontendText(locale, "ADMIN_REVIEW_BATCH_RECOVER_FIRST")); return; }
     pendingRef.current = true;
     onStart?.(attempts);
-    if (!updateBatch(batchId, attempts, "pending", null)) { pendingRef.current = false; setNotice(frontendText(locale, "ADMIN_REVIEW_BATCH_RECOVER_FIRST")); return; }
+    if (!updateBatch(batchId, state.allAttempts, "pending", state.outcomes, attempts)) { pendingRef.current = false; setNotice(frontendText(locale, "ADMIN_REVIEW_BATCH_RECOVER_FIRST")); return; }
     setState({ kind: "pending", count: attempts.length });
     try {
       const result = await sendBatchReview(attempts, requester);
       if (!owned(batchId)) return;
-      if (result.items.every((outcome) => outcome.status === "succeeded")) clearBatch(batchId);
-      else updateBatch(batchId, attempts, "done", result.items);
-      setState({ kind: "done", outcomes: result.items, attempts, retried: true });
-      onSettled?.(result.items);
+      const outcomes = mergeOutcomes(state.outcomes, result.items);
+      const allAttempts = state.allAttempts;
+      if (outcomes.every((outcome) => outcome.status === "succeeded")) clearBatch(batchId);
+      else updateBatch(batchId, allAttempts, "done", outcomes, null);
+      setState({ kind: "done", outcomes, attempts: allAttempts, retried: true });
+      onSettled?.(outcomes);
     } catch (error) {
       if (!owned(batchId)) return;
       if (unknownFailure(error)) {
-        updateBatch(batchId, attempts, "unknown", null);
-        setState({ kind: "unknown", attempts, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
+        updateBatch(batchId, state.allAttempts, "unknown", state.outcomes, attempts);
+        setState({ kind: "unknown", attempts, allAttempts: state.allAttempts, outcomes: state.outcomes, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
       } else {
         setNotice(batchFailureMessage(error, locale));
-        setState({ kind: "unknown", attempts, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
+        updateBatch(batchId, state.allAttempts, "done", state.outcomes, null);
+        setState({ kind: "done", outcomes: state.outcomes, attempts: state.allAttempts, retried: true });
       }
     } finally {
       pendingRef.current = false;
