@@ -394,6 +394,57 @@ describe("review batch surface", () => {
     expect(node("[data-batch-receipt-check]").getAttribute("data-batch-receipt-check")).toBe("0:2");
   });
 
+  it("materializes both rows when an unanswered first batch is replayed (R2-01)", async () => {
+    let post = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const actions = requestActions(init); post += 1;
+      if (post === 1) throw new TypeError("Failed to fetch");
+      return json(summary(actions, new Set()));
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    await clickOn(node("[data-batch-retry-original]"));
+    expect(container.querySelectorAll("[data-batch-outcome]")).toHaveLength(2);
+    expect(node('[data-batch-outcome="review-1"]').getAttribute("data-batch-outcome-status")).toBe("succeeded");
+    expect(node('[data-batch-outcome="review-2"]').getAttribute("data-batch-outcome-status")).toBe("succeeded");
+  });
+
+  it("keeps a mixed replayed result readable and retryable (R2-01)", async () => {
+    let post = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const actions = requestActions(init); post += 1;
+      if (post === 1) throw new TypeError("Failed to fetch");
+      return json(summary(actions, new Set(["review-2"])));
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    await clickOn(node("[data-batch-retry-original]"));
+    expect(container.querySelectorAll("[data-batch-outcome]")).toHaveLength(2);
+    expect(node('[data-batch-outcome="review-1"]').getAttribute("data-batch-outcome-status")).toBe("succeeded");
+    expect(node('[data-batch-outcome="review-2"]').getAttribute("data-batch-outcome-status")).toBe("failed");
+    expect(container.querySelector("[data-batch-retry-failed]")).not.toBeNull();
+  });
+
+  it("keeps the unknown intent when a replay is explicitly refused (R2-02)", async () => {
+    let post = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestActions(init); post += 1;
+      if (post === 1) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify({ error: { code: "FORBIDDEN", message: "denied", retryable: false } }), { status: 403, headers: { "content-type": "application/json" } });
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    await clickOn(node("[data-batch-retry-original]"));
+    expect(container.querySelector("[data-batch-unknown]")).not.toBeNull();
+    const stored = JSON.parse(sessionStorage.getItem("memory-garden:review-batch-intent:v1:member-admin")!);
+    expect(stored.status).toBe("unknown");
+    expect(stored.attempts).toHaveLength(2);
+    expect(stored.inflight).toHaveLength(2);
+  });
+
   it("treats a malformed 200 body as an unknown result and keeps the original attempts", async () => {
     vi.stubGlobal("fetch", async () => json({ requested: 2, succeeded: 2, failed: 0, items: [{ submissionId: "review-1", action: "reject", status: "succeeded", result: {} }] }));
     await mountBatch();

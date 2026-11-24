@@ -105,7 +105,10 @@ function diagnosticMessage(code: BatchPlanDiagnosticCode, locale: LocaleRuntime)
 
 function mergeOutcomes(previous: readonly BatchReviewItemOutcome[], next: readonly BatchReviewItemOutcome[]): BatchReviewItemOutcome[] {
   const replaced = new Map(next.map((outcome) => [outcome.submissionId, outcome]));
-  return previous.map((outcome) => replaced.get(outcome.submissionId) ?? outcome);
+  const merged = previous.map((outcome) => replaced.get(outcome.submissionId) ?? outcome);
+  const seen = new Set(merged.map((outcome) => outcome.submissionId));
+  for (const outcome of next) if (!seen.has(outcome.submissionId)) merged.push(outcome);
+  return merged;
 }
 
 /**
@@ -328,9 +331,10 @@ export function useReviewBatch({ items, memberId, locale, enabled, requester = f
         updateBatch(batchId, state.allAttempts, "unknown", state.outcomes, attempts);
         setState({ kind: "unknown", attempts, allAttempts: state.allAttempts, outcomes: state.outcomes, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
       } else {
+        // A refusal of this replay does not prove the earlier request failed.
         setNotice(batchFailureMessage(error, locale));
-        updateBatch(batchId, state.allAttempts, "done", state.outcomes, null);
-        setState({ kind: "done", outcomes: state.outcomes, attempts: state.allAttempts, retried: true });
+        updateBatch(batchId, state.allAttempts, "unknown", state.outcomes, attempts);
+        setState({ kind: "unknown", attempts, allAttempts: state.allAttempts, outcomes: state.outcomes, message: frontendText(locale, "ADMIN_REVIEW_RESULT_UNKNOWN") });
       }
     } finally {
       pendingRef.current = false;

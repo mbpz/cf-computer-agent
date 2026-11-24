@@ -72,6 +72,13 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 清理：没有产品删除投稿 API，未按标题前缀删除；精确 ID/测试作者/关联范围需交给获授权 D1 操作者，或作为隔离样本保留。测试成员已停用。
 - 未关联部署 ID/候选源 SHA；`index-BTPd7MtI.js` 不足以固定 Worker/D1 状态。AC-00 仍不完整。
 
+## R2-F01 首发/子集恢复生命周期（2026-11-24 本地）
+
+- R2-01：`mergeOutcomes` 改为按原始顺序合并旧结果并追加重放响应中的新条目；首发 unknown（已知结果为空）按原号重放后得到 2/2 逐条结果，不再清空意图或只提交 `done []`。
+- R2-02：未知重放遇到明确拒绝（如 403）只提示拒绝并保持 unknown、原 attempts/inflight 与编号，不再写成 done 或清除回执入口；已知失败子集第一次被明确拒绝仍保留上次确定结果。
+- 新增 DOM 用例：首发全成功重放 2/2、首发混合结果可读且保留失败重试、重放 403 后存储仍为 unknown 且 attempts/inflight 为 2。
+- 定向五文件 **86/86**；`npm run typecheck` 退出 0；操作索引 481 文件/1820 候选且审计通过；功能清单仍 12 已关闭 / 17 未开放。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
@@ -88,6 +95,6 @@ From the repository root on the fixed working tree:
 | `npm run verify:workbench-maturity` | exit 0; 15/15 |
 | `npm run audit:workbench-domain` | exit 0 |
 | `npm run audit:frontend-operations` / inventory tests | exit 0; 481 files / 1820 candidates; 171 unassigned unchanged; 10/10 |
-| `npm run check` | exit 0; unit 415 files / 5648 tests, worker 81 files / 1327 tests, smoke 88, i18n 14, delivery 30, landing 100; build upload 1747.08 KiB / gzip 330.93 KiB |
+| `npm run check` | exit 0; unit 415 files / 5651 tests, worker 81 files / 1327 tests, smoke 88, i18n 14, delivery 30, landing 100; build upload 1747.08 KiB / gzip 330.93 KiB |
 
 The original local run did not include browser or production acceptance. The later Ego Browser observations above are partial and did not close a parent checklist item.
