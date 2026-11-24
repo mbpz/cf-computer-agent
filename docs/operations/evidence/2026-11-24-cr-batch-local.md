@@ -62,6 +62,16 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 清理：测试成员已停用；未通过产品流程清理 3 条据报已驳回的验收样本。本记录只列出其中 1 个已知投稿 ID；`Handoff ...` 标题前缀不构成清理名单。后续先逐条核对并批准保留或清理，不按前缀删除。
 - 未验证真正的“服务端已提交但浏览器完全收不到响应”（本次是提交成功后手工注入 unknown 状态）；也未验证 50/100 行第二页、20 条上限、未知旧记录 v1 恢复等浏览器路径。因此 WP01/WP13 只记部分，不勾完成。
 
+## AC-00 遗留样本登记（2026-11-24 Ego Browser）
+
+- 测试作者：临时成员 `c9395e00-8018-4e77-afb8-587bb1ebe985`（已停用），邮箱为 `apples398+accept1795531355792@gmail.com` 的验收别名。
+- 3 条遗留投稿均 `status=rejected`，各自 `submission.rejected` 审计 1 条：
+  - `19ea4e67-7a41-409f-8238-eb04ec389c5e`，`Handoff recovery ...`；回执 operation `batch.handoff.f66dfd92-e10f-452e-afe6-03fe4ab5a919` 已核对 `200`。
+  - `d03a686f-c2ba-4eef-bfdc-eed5fc41195e`，`Handoff receipt sample ...`；回执 operation 未保留。
+  - `7239f49d-2ad3-4a7c-a33b-a8d3f019f3ed`，`Handoff acceptance sample ...`；回执 operation 未保留。
+- 清理：没有产品删除投稿 API，未按标题前缀删除；精确 ID/测试作者/关联范围需交给获授权 D1 操作者，或作为隔离样本保留。测试成员已停用。
+- 未关联部署 ID/候选源 SHA；`index-BTPd7MtI.js` 不足以固定 Worker/D1 状态。AC-00 仍不完整。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
