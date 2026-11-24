@@ -41,7 +41,7 @@
 
 登录页提供邮箱 + 密码登录；密码注册必须使用邀请码，**不发送邮件，也不需要新增 Secret 或变量**。密码使用 PBKDF2-SHA256（100,000 次、随机盐）存储；连续 5 次失败锁定 15 分钟；注册按客户端 IP 每小时最多 5 个账户。
 
-1. **部署前置（顺序不可倒置）**：先备份 D1，再依次应用 `0078_password_auth.sql`、`0079_invitations.sql`、`0080_backfill_password_invitations.sql` 与 `0081_password_recovery.sql`，用 `wrangler d1 migrations list ... --remote` 确认 0081 已列出，之后才切换包含恢复接口的新版 Worker。0078 增加密码列与 canonical email 唯一索引并删除旧验证码/邀请表；0079 建立邀请码表（码一次性、使用后绑定新成员）；0080 回填历史密码账户的注册来源码；0081 建立独立恢复码表和注册尝试的 `member_id` 列。新版 Worker 在 0081 缺失时会查询不存在的列/表。
+1. **部署前置（顺序不可倒置）**：先备份 D1，再依次应用 `0078_password_auth.sql`、`0079_invitations.sql`、`0080_backfill_password_invitations.sql` 与 `0081_password_recovery.sql`，`wrangler d1 migrations list ... --remote` 列出的是**待应用**迁移：若输出仍包含 `0081_password_recovery.sql`，必须停止切流；看不到它也不能证明已应用。必须再按完整文件名查询远程台账并看到精确行后才切换包含恢复接口的新版 Worker：`rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT name FROM d1_migrations WHERE name = '0081_password_recovery.sql';"`。查无记录、查询失败或 list 仍显示待应用，三者任一均阻断切流。0078 增加密码列与 canonical email 唯一索引并删除旧验证码/邀请表；0079 建立邀请码表（码一次性、使用后绑定新成员）；0080 回填历史密码账户的注册来源码；0081 建立独立恢复码表和注册尝试的 `member_id` 列。新版 Worker 在 0081 缺失时会查询不存在的列/表。
 2. 每位 active 成员在“设置”页按需获得一个终身可分享的邀请码；该码使用后不能再生成第二个。管理员在“成员管理 → 邀请码”中可无限生成管理员码，并查看所有码的分享者/绑定成员/状态。
 3. 注册必须提供未使用的邀请码；已有成员（包括 GitHub 成员）的邮箱不能注册；注册失败不消耗码，成功与绑定在同一事务。
 4. 已登录成员可在“设置 → 密码”直接设置或修改密码：已有密码需当前密码，无密码账户（如仅 GitHub/微信）可从会话设置首个密码；成功后其它会话被退出。OAuth 成员也可由管理员生成一次性恢复码后，在登录页设置/重置密码；该流程不证明邮箱所有权。
@@ -174,6 +174,8 @@ rtk git status --short
 rtk git rev-parse HEAD
 rtk npm run check
 rtk npx wrangler d1 migrations list memory-garden-control-plane --remote
+# list 只显示待应用项；必须用下面查询确认目标环境已有精确台账行
+rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT name FROM d1_migrations WHERE name = '0081_password_recovery.sql';"
 ```
 
 在 GitHub OAuth Worker 上线前，远程 D1 必须已应用 `0001_phase1_control_plane.sql` 和 `0002_github_auth.sql`。

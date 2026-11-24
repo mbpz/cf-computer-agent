@@ -127,14 +127,15 @@ rtk npx wrangler d1 export memory-garden-control-plane --remote --output "$BACKU
 chmod 600 "$BACKUP_DIR/pre-release.sql"
 ```
 
-应用 append-only migration 并复核（新版 Worker 切换前必须完成；至少确认 `0081_password_recovery.sql` 已在 `d1_migrations`）：
+应用 append-only migration 并复核（新版 Worker 切换前必须完成）。`d1 migrations list` 列出的是**待应用**迁移：看到 `0081_password_recovery.sql` 表示尚未应用，必须停止切流；看不到也不能证明已应用。按完整文件名查询 `d1_migrations` 并看到精确行才允许切流：
 
 ```bash
 rtk npm run db:migrate:remote
 rtk npx wrangler d1 migrations list memory-garden-control-plane --remote
+rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT name FROM d1_migrations WHERE name = '0081_password_recovery.sql';"
 ```
 
-生产必须至少包含 `0001_phase1_control_plane.sql` 和 `0002_github_auth.sql`。
+`list` 仍有待应用项、`execute` 查无该行或查询失败，任何一项都必须阻断新版 Worker 切换；只看 `list` 不足以证明已应用。生产必须至少包含 `0001_phase1_control_plane.sql` 和 `0002_github_auth.sql`。
 
 ## 7. 构造完整 Secret bundle
 

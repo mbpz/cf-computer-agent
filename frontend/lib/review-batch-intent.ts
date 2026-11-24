@@ -56,41 +56,60 @@ export function loadBatchIntent(memberId: string): StoredBatchIntent | null {
     const raw = sessionStorage.getItem(key(memberId));
     if (!raw) return null;
     const value: unknown = JSON.parse(raw);
-    if (!isRecord(value) || value.version !== 1 || value.memberId !== memberId || typeof value.batchId !== "string" || !value.batchId) return null;
+    if (!isRecord(value) || value.version !== 1 || value.memberId !== memberId) return null;
+    // Legacy records written before batch identity existed: adopt one stable id
+    // once, persist the migration, and treat an abandoned pending write as unknown.
+    const legacy = typeof value.batchId !== "string" || !value.batchId;
+    const batchId = legacy ? crypto.randomUUID() : value.batchId as string;
     const decision = value.decision;
     const status = value.status;
     if (decision !== "reject" && decision !== "request_revision") return null;
     if (status !== "pending" && status !== "unknown" && status !== "done") return null;
+    const migratedStatus = status === "pending" ? "unknown" as const : status;
     if (typeof value.reasonCode !== "string" || typeof value.note !== "string" || !Array.isArray(value.attempts)) return null;
     const attempts = value.attempts.map(parseAction);
     if (attempts.some((action) => !action)) return null;
     const outcomes = value.outcomes === null ? null : Array.isArray(value.outcomes) ? value.outcomes.map(parseOutcome) : undefined;
     if (outcomes === undefined || outcomes?.some((outcome) => !outcome)) return null;
-    return {
-      version: 1, memberId, batchId: value.batchId, decision, reasonCode: value.reasonCode, note: value.note,
+    const intent: StoredBatchIntent = {
+      version: 1, memberId, batchId, decision, reasonCode: value.reasonCode, note: value.note,
       attempts: attempts as BatchItemAction[], outcomes: outcomes as BatchReviewItemOutcome[] | null,
-      status, savedAt: typeof value.savedAt === "string" ? value.savedAt : new Date(0).toISOString(),
+      status: migratedStatus, savedAt: typeof value.savedAt === "string" ? value.savedAt : new Date(0).toISOString(),
     };
+    if (legacy || status !== migratedStatus) writeIntent(intent);
+    return intent;
   } catch {
     return null;
   }
 }
 
-/** Fails closed when another unresolved batch owns the member slot. */
-export function saveBatchIntent(intent: StoredBatchIntent): boolean {
+function writeIntent(intent: StoredBatchIntent): boolean {
+  try { sessionStorage.setItem(key(intent.memberId), JSON.stringify(intent)); return true; } catch { return false; }
+}
+
+/** Creates a batch only when the slot is free or holds an already-finished batch. */
+export function beginBatchIntent(intent: StoredBatchIntent): boolean {
   try {
     const current = loadBatchIntent(intent.memberId);
     if (current && current.batchId !== intent.batchId && current.status !== "done") return false;
-    sessionStorage.setItem(key(intent.memberId), JSON.stringify(intent));
-    return true;
+    return writeIntent(intent);
   } catch { return false; }
 }
 
-/** Clears only the batch that owns the slot; a late old receipt cannot clear a newer one. */
-export function clearBatchIntent(memberId: string, batchId?: string): boolean {
+/** Updates only the batch that still owns the slot; a removed record is never rebuilt. */
+export function updateBatchIntent(intent: StoredBatchIntent): boolean {
+  try {
+    const current = loadBatchIntent(intent.memberId);
+    if (!current || current.batchId !== intent.batchId) return false;
+    return writeIntent(intent);
+  } catch { return false; }
+}
+
+/** Clears only the batch that owns the slot; a missing record is not a success for an old callback. */
+export function clearBatchIntent(memberId: string, batchId: string): boolean {
   try {
     const current = loadBatchIntent(memberId);
-    if (batchId !== undefined && current && current.batchId !== batchId) return false;
+    if (!current || current.batchId !== batchId) return false;
     sessionStorage.removeItem(key(memberId));
     return true;
   } catch { return false; }

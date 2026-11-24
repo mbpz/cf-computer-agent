@@ -50,6 +50,8 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const [pageSize, setPageSize] = useState<SupportedPageSize>(initial.pageSize);
   const [state, setState] = useState<QueueState>({ kind: "loading" });
   const [receipts, setReceipts] = useState<readonly DecisionReceiptLookup[] | null>(null);
+  const [receiptBatch, setReceiptBatch] = useState<string | null>(null);
+  const liveBatchId = useRef<string | null>(null);
   const [checkingReceipts, setCheckingReceipts] = useState(false);
   const [receiptError, setReceiptError] = useState<string>();
   const [retry, setRetry] = useState(0);
@@ -73,16 +75,17 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   }, [load, locale, page, pageSize, requester, retry]);
 
   const checkReceipts = async () => {
-    if (batch.state.kind !== "unknown" || checkingReceipts) return;
+    const scope = batch.batchId;
+    if (batch.state.kind !== "unknown" || checkingReceipts || !scope) return;
     setCheckingReceipts(true);
     setReceiptError(undefined);
     try {
       const results = await Promise.all(batch.state.attempts.map((attempt) => loadDecisionReceipt(attempt.submissionId, attempt.operationId)));
-      if (mounted.current) setReceipts(results);
+      if (mounted.current && liveBatchId.current === scope) { setReceipts(results); setReceiptBatch(scope); }
     } catch {
-      if (mounted.current) setReceiptError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+      if (mounted.current && liveBatchId.current === scope) setReceiptError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
     } finally {
-      if (mounted.current) setCheckingReceipts(false);
+      if (mounted.current && liveBatchId.current === scope) setCheckingReceipts(false);
     }
   };
   const started = useCallback(() => { pendingPage.current = page; }, [page]);
@@ -95,6 +98,8 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
 
   const rows = state.kind === "ready" ? state.data.items : [];
   const batch = useReviewBatch({ items: rows, memberId, locale, enabled: canReview && state.kind === "ready", requester, onStart: started, onSettled: settled });
+  liveBatchId.current = batch.batchId;
+  useEffect(() => { setReceipts(null); setReceiptBatch(null); setReceiptError(undefined); setCheckingReceipts(false); }, [batch.batchId]);
   const allSelected = rows.length > 0 && rows.every((row) => batch.selected.has(row.id));
 
   const columns: DataTableColumn<ReviewQueueItem>[] = [
@@ -135,7 +140,7 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
             <Button type="button" size="sm" variant="outline" data-batch-discard-unknown onClick={batch.discardUnknown}>{frontendText(locale, "ADMIN_REVIEW_BATCH_DISCARD_UNKNOWN")}</Button>
           </div>
           {receiptError && <p role="alert" className="text-destructive">{receiptError}</p>}
-          {receipts && <div data-batch-receipt-check={`${receipts.filter((receipt) => receipt.found).length}:${receipts.length}`} className="space-y-1 text-xs">
+          {receipts && <div data-batch-receipt-batch={receiptBatch ?? ""} data-batch-receipt-check={`${receipts.filter((receipt) => receipt.found).length}:${receipts.length}`} className="space-y-1 text-xs">
             <p className="font-medium">{frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_RESULT").replace("{found}", String(receipts.filter((receipt) => receipt.found).length)).replace("{total}", String(receipts.length))}</p>
             <ul className="list-disc pl-5 text-muted-foreground">{receipts.map((receipt) => <li key={receipt.submissionId}>{receipt.submissionId} · {receipt.operationId} · {frontendText(locale, receipt.found ? "ADMIN_REVIEW_BATCH_RECEIPT_FOUND" : "ADMIN_REVIEW_BATCH_RECEIPT_MISSING")}</li>)}</ul>
           </div>}

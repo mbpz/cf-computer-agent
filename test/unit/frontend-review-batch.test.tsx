@@ -258,6 +258,26 @@ describe("review batch surface", () => {
     expect(container.querySelector("[data-batch-results]")).not.toBeNull();
   });
 
+  it("allocates fresh operation numbers for a new confirmation, even with the same payload", async () => {
+    const bodies: SentAction[][] = [];
+    let first = true;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const actions = requestActions(init);
+      bodies.push(actions);
+      if (first) { first = false; throw new TypeError("Failed to fetch"); }
+      return json(summary(actions, new Set()));
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    await clickOn(node("[data-batch-discard-unknown]"));
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]![0]!.operationId).not.toBe(bodies[0]![0]!.operationId);
+    expect(bodies[1]![0]!.expectedUpdatedAt).toBe(bodies[0]![0]!.expectedUpdatedAt);
+  });
+
   it("refuses to start a new batch while an earlier unknown attempt is unresolved", async () => {
     let posts = 0;
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -287,6 +307,33 @@ describe("review batch surface", () => {
     expect(container.querySelectorAll('[role="checkbox"][aria-checked="true"]')).toHaveLength(20);
     await clickOn(node("[data-batch-send]"));
     expect(sent).toHaveLength(20);
+  });
+
+  it("recovers an unanswered first attempt by receipt lookup and same-number retry after refresh", async () => {
+    const posts: SentAction[][] = [];
+    let receiptReads = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/decisions/operations/")) {
+        receiptReads += 1;
+        return new Response(JSON.stringify({ error: { code: "REVIEW_RECEIPT_NOT_FOUND", message: "missing", retryable: false } }), { status: 404, headers: { "content-type": "application/json" } });
+      }
+      const actions = requestActions(init);
+      posts.push(actions);
+      if (posts.length === 1) throw new TypeError("Failed to fetch");
+      return json(summary(actions, new Set()));
+    });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client"); root = createRoot(container);
+    await mountBatch();
+    await clickOn(node("[data-batch-check-receipts]"));
+    expect(receiptReads).toBe(2);
+    await clickOn(node("[data-batch-retry-original]"));
+    expect(posts).toHaveLength(2);
+    expect(posts[1]!.map((action) => action.operationId)).toEqual(posts[0]!.map((action) => action.operationId));
   });
 
   it("checks the original operation receipts without deciding anything", async () => {

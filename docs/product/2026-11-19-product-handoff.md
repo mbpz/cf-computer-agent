@@ -129,7 +129,7 @@
 
 ## 2026-11-24 CR 修复批
 
-`b3f336e5` 提交了 CR01–CR05 的首轮修复，实施记录见 [CR batch](../operations/evidence/2026-11-24-cr-batch-local.md)：传输失败与发送前拒绝分流、批次标识隔离与未知状态阻塞、20 条共享批量上限、独立内置基线角色预览、生产手册 0081 部署顺序；WP01 增加按原条目 + 操作编号的只读回执查询。全量门禁通过：unit 415 文件 / 5643 用例、worker 81 文件 / 1327 用例。
+`b3f336e5` 提交了 CR01–CR05 的首轮修复，实施记录见 [CR batch](../operations/evidence/2026-11-24-cr-batch-local.md)：传输失败与发送前拒绝分流、批次标识隔离与未知状态阻塞、20 条共享批量上限、独立内置基线角色预览、生产手册 0081 部署顺序；WP01 增加按原条目 + 操作编号的只读回执查询。全量门禁通过：unit 415 文件 / 5643 用例、worker 81 文件 / 1327 用例（R1–R5 后为 unit 415 文件 / 5647 用例）。
 
 该批未执行 WP05–WP15，也未关闭任何父项。WP02、WP03 有本地测试证据，仍待浏览器验收。对该提交的复审另跑了 5 个定向测试文件（78 用例），并通过 `npm run typecheck`、`git diff --check` 和清单审计。现有用例通过不代表下方复审缺口已修。
 
@@ -140,11 +140,11 @@
 
 ### WP01 批量审核
 
-- [ ] **WP01-R1 · CR02 · 隔离迟到的结算。** 改 [`review-batch-intent.ts`](../../frontend/lib/review-batch-intent.ts) 和 [`review-batch-owner.tsx`](../../frontend/components/review/review-batch-owner.tsx)。区分新批次创建、当前批次更新和当前批次清理。更新与清理只接受当前存储的 `batchId`，记录不存在也不允许旧回调重建。未知重试和失败子集重试只有在确认仍持有当前批次后才发请求；无法确认时保留提示、不发请求。**验收：** A 离页后从未知状态被明确放弃，B 完成或已清理，再让 A 的成功、未知响应到达；B 的记录保持原样或保持空，A 也不能清理 B。未被替换的当前批次仍可结算。跑 `test/unit/review-batch-intent.test.ts`、`test/unit/frontend-review-batch.test.tsx`。
-- [ ] **WP01-R2 · CR01/CR02 · 恢复旧版会话记录。** 以 `0bf412a0` 的实际存储键和 v1 形状造夹具。读取没有 `batchId` 的有效旧记录时，补齐并持久化稳定标识；把离页前的 `pending` 恢复为 `unknown`。保留每项原 `operationId`、`expectedUpdatedAt`、审核决定、原因、备注和已知结果。**验收：** 连续刷新两次标识不变，恢复不发请求，旧 `pending`/`unknown` 能按原编号查询及重试，旧 `done` 不丢结果；损坏记录不触发补发。跑 `test/unit/review-batch-intent.test.ts`、`test/unit/frontend-review-batch.test.tsx`。
-- [ ] **WP01-R3 · CR01 · 新确认用新编号，只有重试复用。** 改 [`review-batch-owner.tsx`](../../frontend/components/review/review-batch-owner.tsx) 和 [`review-batch-plan.ts`](../../frontend/lib/review-batch-plan.ts) 的编号生成与复用路径。**验收：** 放弃 A 后重新确认同一条目，改变决定、原因、备注或前置版本任一字段时都不会沿用 A 的编号；即使负载不变，新确认也生成新编号。重试未知批次复用原编号和冻结负载；重试已知失败子集只发送失败条目，已成功条目不再写。跑 `test/unit/frontend-review-batch.test.tsx`。
-- [ ] **WP01-R4 · CR02 · 回执面板只展示当前批次。** 改 [`review-batch-page.tsx`](../../frontend/pages/admin/review-batch-page.tsx) 的查询状态。查询与界面都绑定 `batchId` 和每项原 `submissionId` + `operationId`；切换批次时不展示旧批次的加载、结果或错误。**验收：** 分别让 A 的查询在已展示和仍在途时切到 B，B 只能看到自己的结果；B 先返回、A 后返回也一样。查询只读，不触发补发。回执不存在时保留结果未知，不标成操作失败。跑 `test/unit/frontend-review-batch.test.tsx`、`test/worker/admin-knowledge-lifecycle.test.ts`。
-- [ ] **WP01-R5 · CR01/CR02 · 串行复验同编号恢复。** 在 `test/unit/frontend-review-batch.test.tsx` 用测试响应跑「首发无响应 → 刷新 → 查原回执 → 同编号重试」。在 `test/worker/admin-knowledge-lifecycle.test.ts` 用本地 D1 接收首发，丢弃响应，按原编号查询并重放。**验收：** 同一条目以同一个编号回到同一结果，只发生一次业务状态变更；只读查询不补发；换到 B 后 A 的迟到结果不能改 B。记录候选 SHA、测试环境、脱敏的条目和操作编号、请求次数与最终回读。执行以下定向门禁后标记为「本地通过」。
+- [x] **WP01-R1 · CR02 · 隔离迟到的结算。** 改 [`review-batch-intent.ts`](../../frontend/lib/review-batch-intent.ts) 和 [`review-batch-owner.tsx`](../../frontend/components/review/review-batch-owner.tsx)。区分新批次创建、当前批次更新和当前批次清理。更新与清理只接受当前存储的 `batchId`，记录不存在也不允许旧回调重建。未知重试和失败子集重试只有在确认仍持有当前批次后才发请求；无法确认时保留提示、不发请求。**验收：** A 离页后从未知状态被明确放弃，B 完成或已清理，再让 A 的成功、未知响应到达；B 的记录保持原样或保持空，A 也不能清理 B。未被替换的当前批次仍可结算。跑 `test/unit/review-batch-intent.test.ts`、`test/unit/frontend-review-batch.test.tsx`。
+- [x] **WP01-R2 · CR01/CR02 · 恢复旧版会话记录。** 以 `0bf412a0` 的实际存储键和 v1 形状造夹具。读取没有 `batchId` 的有效旧记录时，补齐并持久化稳定标识；把离页前的 `pending` 恢复为 `unknown`。保留每项原 `operationId`、`expectedUpdatedAt`、审核决定、原因、备注和已知结果。**验收：** 连续刷新两次标识不变，恢复不发请求，旧 `pending`/`unknown` 能按原编号查询及重试，旧 `done` 不丢结果；损坏记录不触发补发。跑 `test/unit/review-batch-intent.test.ts`、`test/unit/frontend-review-batch.test.tsx`。
+- [x] **WP01-R3 · CR01 · 新确认用新编号，只有重试复用。** 改 [`review-batch-owner.tsx`](../../frontend/components/review/review-batch-owner.tsx) 和 [`review-batch-plan.ts`](../../frontend/lib/review-batch-plan.ts) 的编号生成与复用路径。**验收：** 放弃 A 后重新确认同一条目，改变决定、原因、备注或前置版本任一字段时都不会沿用 A 的编号；即使负载不变，新确认也生成新编号。重试未知批次复用原编号和冻结负载；重试已知失败子集只发送失败条目，已成功条目不再写。跑 `test/unit/frontend-review-batch.test.tsx`。
+- [x] **WP01-R4 · CR02 · 回执面板只展示当前批次。** 改 [`review-batch-page.tsx`](../../frontend/pages/admin/review-batch-page.tsx) 的查询状态。查询与界面都绑定 `batchId` 和每项原 `submissionId` + `operationId`；切换批次时不展示旧批次的加载、结果或错误。**验收：** 分别让 A 的查询在已展示和仍在途时切到 B，B 只能看到自己的结果；B 先返回、A 后返回也一样。查询只读，不触发补发。回执不存在时保留结果未知，不标成操作失败。跑 `test/unit/frontend-review-batch.test.tsx`、`test/worker/admin-knowledge-lifecycle.test.ts`。
+- [x] **WP01-R5 · CR01/CR02 · 串行复验同编号恢复。** 在 `test/unit/frontend-review-batch.test.tsx` 用测试响应跑「首发无响应 → 刷新 → 查原回执 → 同编号重试」。在 `test/worker/admin-knowledge-lifecycle.test.ts` 用本地 D1 接收首发，丢弃响应，按原编号查询并重放。**验收：** 同一条目以同一个编号回到同一结果，只发生一次业务状态变更；只读查询不补发；换到 B 后 A 的迟到结果不能改 B。记录候选 SHA、测试环境、脱敏的条目和操作编号、请求次数与最终回读。执行以下定向门禁后标记为「本地通过」。
 
 ```bash
 rtk proxy ./node_modules/.bin/vitest run \
@@ -155,9 +155,11 @@ rtk npm run typecheck
 rtk git diff --check
 ```
 
+**2026-11-24 本地结果：** 3 个定向文件 30/30 通过；`npm run typecheck` 退出 0；`git diff --check` 干净；`npm run verify:m1:migrations -- --files` 为 81 个本地迁移。WP01-R1–R5 与 WP04-R1 标记为「本地通过」；WP02/WP03/WP13 的浏览器/真实身份验收仍待验，未关闭父项。证据见 [CR batch](../operations/evidence/2026-11-24-cr-batch-local.md)。
+
 ### WP04 迁移核对
 
-- [ ] **WP04-R1 · CR05 · 修正 `0081` 切流判断。** 同时更新[生产设置手册](../operations/production-settings-manual.md)和[生产环境手册](../operations/production-environment-handbook.md)。`d1 migrations list` 列出的是待应用迁移，看到 `0081` 必须停止切流；未看到也不能作为已应用凭证。两处提供按完整文件名读取 `d1_migrations` 的命令，例：`rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT name FROM d1_migrations WHERE name = '0081_password_recovery.sql';"`。**验收：** 两份手册都要求在目标环境查到精确行才允许切流；查无记录、查询失败或清单仍显示待应用均阻断。对照本地 Wrangler 帮助和安装版本，用本地 SQL 夹具验证有该行、无该行及台账缺失三种结果。运行 `rtk npm run verify:m1:migrations -- --files` 和 `rtk git diff --check`。本任务不运行 `--remote`，不执行备份、迁移或部署。实际生产操作归 D08，需另行授权。
+- [x] **WP04-R1 · CR05 · 修正 `0081` 切流判断。** 同时更新[生产设置手册](../operations/production-settings-manual.md)和[生产环境手册](../operations/production-environment-handbook.md)。`d1 migrations list` 列出的是待应用迁移，看到 `0081` 必须停止切流；未看到也不能作为已应用凭证。两处提供按完整文件名读取 `d1_migrations` 的命令，例：`rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT name FROM d1_migrations WHERE name = '0081_password_recovery.sql';"`。**验收：** 两份手册都要求在目标环境查到精确行才允许切流；查无记录、查询失败或清单仍显示待应用均阻断。对照本地 Wrangler 帮助和安装版本，用本地 SQL 夹具验证有该行、无该行及台账缺失三种结果。运行 `rtk npm run verify:m1:migrations -- --files` 和 `rtk git diff --check`。本任务不运行 `--remote`，不执行备份、迁移或部署。实际生产操作归 D08，需另行授权。
 
 ### 浏览器验收与续接
 

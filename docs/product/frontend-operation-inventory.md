@@ -1841,16 +1841,16 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 356:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT_ALL") | onClick=batch.selectAllPage; type="button" | disabled=frozen &#124;&#124; rows.length === 0 |
-| 357:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_CLEAR") | onClick=batch.clear; type="button" | disabled=frozen &#124;&#124; selectedOnPage === 0 |
-| 361:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REJECT") | onClick=() =&gt; batch.setDecision("reject"); type="button" | disabled=frozen |
-| 362:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REQUEST_REVISION") | onClick=() =&gt; batch.setDecision("request_revision"); type="button" | disabled=frozen |
-| 367:13 ReviewBatchToolbar | Select  | onValueChange=(value) =&gt; batch.setReasonCode(value) | disabled=frozen; {"kind":"branch","expression":"batch.decision === \"reject\"","branch":"true"} |
-| 377:11 ReviewBatchToolbar | Textarea  | onChange=(event) =&gt; batch.setNote(event.target.value) | disabled=frozen |
-| 381:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_ACTION_LABEL") | onClick=batch.send; type="button" | disabled=selectedOnPage === 0 |
-| 386:26 ReviewBatchToolbar | p batch.notice |  | {"kind":"logical","expression":"batch.notice","operator":"&&"} |
-| 401:5 ReviewBatchResults | Alert  |  | {"kind":"branch","expression":"state.kind === \"rejected\"","branch":"true"} |
-| 429:11 ReviewBatchResults | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_FAILED").replace("{count}", String(failed)) | onClick=onRetryFailed; type="button" | {"kind":"logical","expression":"failed &gt; 0","operator":"&&"}; earlier return: state.kind === "rejected"; earlier return: state.kind !== "done" |
+| 369:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_SELECT_ALL") | onClick=batch.selectAllPage; type="button" | disabled=frozen &#124;&#124; rows.length === 0 |
+| 370:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_CLEAR") | onClick=batch.clear; type="button" | disabled=frozen &#124;&#124; selectedOnPage === 0 |
+| 374:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REJECT") | onClick=() =&gt; batch.setDecision("reject"); type="button" | disabled=frozen |
+| 375:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_REQUEST_REVISION") | onClick=() =&gt; batch.setDecision("request_revision"); type="button" | disabled=frozen |
+| 380:13 ReviewBatchToolbar | Select  | onValueChange=(value) =&gt; batch.setReasonCode(value) | disabled=frozen; {"kind":"branch","expression":"batch.decision === \"reject\"","branch":"true"} |
+| 390:11 ReviewBatchToolbar | Textarea  | onChange=(event) =&gt; batch.setNote(event.target.value) | disabled=frozen |
+| 394:11 ReviewBatchToolbar | Button frontendText(locale, "ADMIN_REVIEW_BATCH_ACTION_LABEL") | onClick=batch.send; type="button" | disabled=selectedOnPage === 0 |
+| 399:26 ReviewBatchToolbar | p batch.notice |  | {"kind":"logical","expression":"batch.notice","operator":"&&"} |
+| 414:5 ReviewBatchResults | Alert  |  | {"kind":"branch","expression":"state.kind === \"rejected\"","branch":"true"} |
+| 442:11 ReviewBatchResults | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_FAILED").replace("{count}", String(failed)) | onClick=onRetryFailed; type="button" | {"kind":"logical","expression":"failed &gt; 0","operator":"&&"}; earlier return: state.kind === "rejected"; earlier return: state.kind !== "done" |
 
 ## frontend/components/review/review-chunk-panel.tsx
 
@@ -2845,17 +2845,17 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 105:9 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; allSelected ? batch.clear() : batch.selectAllPage() | disabled=batch.freeze &#124;&#124; rows.length === 0 |
-| 109:22 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; batch.toggle(row.id) | disabled=batch.freeze |
-| 121:26 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_BACK") | onClick=onBack; type="button" | {"kind":"logical","expression":"onBack","operator":"&&"} |
-| 125:9 ReviewBatchPage | Button frontendText(locale, "COMMON_RETRY") | onClick=() =&gt; setRetry((value) =&gt; value + 1); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 129:44 ReviewBatchPage | div  |  | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 133:13 ReviewBatchPage | Button checkingReceipts ? frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_CHECKING") : frontendText(locale, "ADMIN_REVIEW_BATCH_CHECK_RECEIPTS") | onClick=() =&gt; void checkReceipts(); type="button" | disabled=checkingReceipts; {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":… |
-| 134:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_ORIGINAL") | onClick=() =&gt; void batch.retryAttempts(); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 135:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_DISCARD_UNKNOWN") | onClick=batch.discardUnknown; type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 137:28 ReviewBatchPage | p receiptError |  | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 143:9 ReviewBatchPage | DataTable  | onPageChange=(next) =&gt; { if (batch.freeze) return; batch.clear(); setPage(next); }; onPageSizeChange=(size) =&gt; { if (batch.freeze) return; batch.clear(… | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
-| 158:9 ReviewBatchPage | ReviewBatchResults  | onRetryFailed=batch.retryFailed | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 110:9 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; allSelected ? batch.clear() : batch.selectAllPage() | disabled=batch.freeze &#124;&#124; rows.length === 0 |
+| 114:22 ReviewBatchPage | Checkbox  | onCheckedChange=() =&gt; batch.toggle(row.id) | disabled=batch.freeze |
+| 126:26 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_BACK") | onClick=onBack; type="button" | {"kind":"logical","expression":"onBack","operator":"&&"} |
+| 130:9 ReviewBatchPage | Button frontendText(locale, "COMMON_RETRY") | onClick=() =&gt; setRetry((value) =&gt; value + 1); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 134:44 ReviewBatchPage | div  |  | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 138:13 ReviewBatchPage | Button checkingReceipts ? frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_CHECKING") : frontendText(locale, "ADMIN_REVIEW_BATCH_CHECK_RECEIPTS") | onClick=() =&gt; void checkReceipts(); type="button" | disabled=checkingReceipts; {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":… |
+| 139:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_RETRY_ORIGINAL") | onClick=() =&gt; void batch.retryAttempts(); type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 140:13 ReviewBatchPage | Button frontendText(locale, "ADMIN_REVIEW_BATCH_DISCARD_UNKNOWN") | onClick=batch.discardUnknown; type="button" | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 142:28 ReviewBatchPage | p receiptError |  | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 148:9 ReviewBatchPage | DataTable  | onPageChange=(next) =&gt; { if (batch.freeze) return; batch.clear(); setPage(next); }; onPageSizeChange=(size) =&gt; { if (batch.freeze) return; batch.clear(… | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
+| 163:9 ReviewBatchPage | ReviewBatchResults  | onRetryFailed=batch.retryFailed | {"kind":"branch","expression":"!canReview","branch":"false"}; {"kind":"branch","expression":"state.kind === \"loading\"","branch":"false"}; {"kind":"branch",… |
 
 ## frontend/pages/admin/review-detail-page.tsx
 

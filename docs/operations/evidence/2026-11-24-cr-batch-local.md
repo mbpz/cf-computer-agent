@@ -34,6 +34,15 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - `docs/operations/production-settings-manual.md` now states the required order: backup D1 → apply `0078`–`0081` → verify `d1_migrations` lists `0081` → switch the Worker. It explains that the new Worker queries `password_registration_attempts.member_id` and the recovery tables, so skipping `0081` breaks even invitation registration.
 - `docs/operations/production-environment-handbook.md` names all four migrations, fixes the “three migrations” wording, repeats the pre-switch requirement, and aligns OAuth-only password set/recovery wording. “Remote already has 0081” is explicitly not the same as a new/rebuilt environment satisfying the deployment prerequisite.
 
+## 2026-11-24 复审后执行清单（R1–R5 / WP04-R1）
+
+- **WP01-R1**：存储层拆成 `beginBatchIntent`（仅空槽或已完成批可创建）、`updateBatchIntent`（仅当前 batchId 可更新，记录不存在不重建）、`clearBatchIntent`（仅当前 batchId 可清理）。未知/失败子集重试先确认仍持有存储批次，否则只提示不发请求。测试覆盖旧回调在清理后不能重建、跨批清理拒绝、未被替换批次仍可结算。
+- **WP01-R2**：`loadBatchIntent` 接受 `0bf412a0` 的无 `batchId` v1 记录，生成并持久化稳定标识一次，旧 `pending` 迁移为 `unknown`，保留原 operationId/expectedUpdatedAt/决定/原因/备注/已知结果；损坏记录不触发补发。测试覆盖刷新两次标识不变和旧记录迁移。
+- **WP01-R3**：新确认使用 `new Map()` 规划，必然生成新 operationId；未知重试继续使用冻结 attempts，已知失败子集只发失败条目。DOM 测试覆盖同负载新确认编号不同、未知重试编号一致。
+- **WP01-R4**：回执查询状态绑定 `batch.batchId`，切换批次清空展示与错误，迟到查询结果仅在仍持有该批次时落地；查询只读，无回执保持未知。
+- **WP01-R5**：DOM 集成用例覆盖“首发传输失败 → 刷新 → 查原回执（404）→ 同编号重试”，断言两次请求编号一致、只读查询不触发 POST。Worker 侧已有回执查询 + 同编号重放与 21 条上限回归。
+- **WP04-R1**：两份手册改为 `list` 显示待应用迁移，看到 0081 必须阻断切流；必须按完整文件名查询 `d1_migrations` 看到精确行。本地 SQL 夹具：有 0081 行输出 `0081_password_recovery.sql`；无行输出空；缺 `d1_migrations` 表直接报错。三种结果均按阻断/允许规则记录，未运行 `--remote`。
+
 ## Work packages not executed here
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
@@ -50,6 +59,6 @@ From the repository root on the fixed working tree:
 | `npm run verify:workbench-maturity` | exit 0; 15/15 |
 | `npm run audit:workbench-domain` | exit 0 |
 | `npm run audit:frontend-operations` / inventory tests | exit 0; 481 files / 1820 candidates; 171 unassigned unchanged; 10/10 |
-| `npm run check` | exit 0; unit 415 files / 5643 tests, worker 81 files / 1327 tests, smoke 88, i18n 14, delivery 30, landing 100; build upload 1747.08 KiB / gzip 330.93 KiB |
+| `npm run check` | exit 0; unit 415 files / 5647 tests, worker 81 files / 1327 tests, smoke 88, i18n 14, delivery 30, landing 100; build upload 1747.08 KiB / gzip 330.93 KiB |
 
 No browser/identity journey, storage/AI-backed upload, VM or production acceptance was executed. WP05–WP15 remain open with the blockers named above; no parent checklist item was closed.
