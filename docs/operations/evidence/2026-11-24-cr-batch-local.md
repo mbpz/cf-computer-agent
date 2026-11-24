@@ -43,6 +43,16 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - **WP01-R5**：DOM 集成用例覆盖“首发传输失败 → 刷新 → 查原回执（404）→ 同编号重试”，断言两次请求编号一致、只读查询不触发 POST。Worker 侧已有回执查询 + 同编号重放与 21 条上限回归。
 - **WP04-R1**：两份手册改为 `list` 显示待应用迁移，看到 0081 必须阻断切流；必须按完整文件名查询 `d1_migrations` 看到精确行。本地 SQL 夹具：有 0081 行输出 `0081_password_recovery.sql`；无行输出空；缺 `d1_migrations` 表直接报错。三种结果均按阻断/允许规则记录，未运行 `--remote`。
 
+## 2026-11-24 WP03 线上角色验收（Ego Browser）
+
+- 环境：正式站、已登录管理员会话；生产构建与本地 `404aec3b` 页面资源一致（`index-BTPd7MtI.js`）。
+- 临时夹具：测试成员 `c9395e00-8018-4e77-afb8-587bb1ebe985`；临时角色 `role-897ccc1c-dabc-435a-b941-4db3e5b05b81`，`allowBits=0x1600c7`、`baselineBits=0x1600c3`、`effectiveBits=0x1600c7`（知识库读取与编辑：读取同时由角色行和 Contributor 基线授予，编辑仅由角色授予）。
+- 取消“读取知识”和“编辑知识”后：预览显示存储 `0x1600c2`、实际 `0x1600c3`；确认框显示 `0x1600c7 → 0x1600c2` 并移除读取/编辑。保存后刷新角色详情：存储 `0x1600c2`、实际 `0x1600c3`；角色 API 回读 `allowBits=0x1600c2`、`effectiveBits=0x1600c3`。
+- 成员会话：`permissionMask=0x1600c3`，capabilities 含 `knowledge:read`、不含 `knowledge:edit`；重叠读取位保留，仅角色编辑位移除。未单独截取成员菜单；该角色不含菜单位，菜单应与 Contributor 基线一致。
+- 清理：已移除成员角色关联、删除临时角色、停用测试成员；复核角色列表无该角色、成员状态 `disabled`。未创建投稿或执行批审写入。
+
+**结论：** WP03 的预览、保存回读和成员侧授权通过；菜单对照未单独取证，因此 handoff 中 WP03 保持待验/部分，不据此关闭父项。WP02/WP13 仍待隔离待审队列与可控丢响应。
+
 ## Work packages not executed here
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
