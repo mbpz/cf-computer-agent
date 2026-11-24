@@ -53,6 +53,15 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 
 **结论：** WP03 的预览、保存回读和成员侧授权通过；菜单对照未单独取证，因此 handoff 中 WP03 保持待验/部分，不据此关闭父项。WP02/WP13 仍待隔离待审队列与可控丢响应。
 
+## 2026-11-24 WP01/WP13 线上续验（Ego Browser，部分）
+
+- 临时成员 `c9395e00-8018-4e77-afb8-587bb1ebe985` 重新启用，创建专用 `review_pending` 投稿 `19ea4e67-7a41-409f-8238-eb04ec389c5e`（标题以 `Handoff recovery` 开头）。
+- 用管理员会话提交一次驳回（operationId `batch.handoff.f66dfd92-e10f-452e-afe6-03fe4ab5a919`），服务端返回成功；随后在浏览器 sessionStorage 写入该批次的 `unknown` 冻结意图（没有真正阻断生产响应，属于受控模拟）。
+- 刷新/进入 `/admin/submissions/batch` 显示“批量结果未知”，保留原操作编号；点“核对原回执”得到 `1:1`，明确该条目已有回执；无审核权限的测试成员读取同一回执为 `403`。
+- 点“重试原批量请求”后按原编号重放，成功并自动返回审核队列；再次查询回执仍为 `200`，该条目 rejection 审计只出现 1 次；待审队列变为空。未产生第二次业务状态变更。
+- 清理：测试成员已停用；由于没有删除投稿 API，留下 3 条标题以 `Handoff ...` 开头的已驳回验收样本，需另行 D1 清理或由后续验收流程处理。
+- 未验证真正的“服务端已提交但浏览器完全收不到响应”（本次是提交成功后手工注入 unknown 状态）；也未验证 50/100 行第二页、20 条上限、未知旧记录 v1 恢复等浏览器路径。因此 WP01/WP13 只记部分，不勾完成。
+
 ## Work packages not executed here
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
