@@ -118,7 +118,11 @@ export async function loadDecisionReceipt(submissionId: string, operationId: str
     if (data?.receipt === undefined || typeof data.receipt.responseJson !== "string") throw new Error("BATCH_RECEIPT_RESPONSE_INVALID");
     return { submissionId, operationId, found: true, responseJson: data.receipt.responseJson };
   } catch (error) {
-    if (error instanceof ApiRequestError && error.status === 404) return { submissionId, operationId, found: false };
+    // Only the endpoint's explicit receipt-missing code means "no receipt";
+    // a generic 404 (proxy/router/wrong path) is an unreadable result.
+    if (error instanceof ApiRequestError && error.status === 404 && error.code === "REVIEW_RECEIPT_NOT_FOUND") {
+      return { submissionId, operationId, found: false };
+    }
     throw error;
   }
 }

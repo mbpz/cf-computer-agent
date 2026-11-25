@@ -111,6 +111,7 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
     } catch (error) {
       if (mounted.current && liveBatchId.current === scope && !(error instanceof DOMException && error.name === "AbortError")) {
         if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
+          controller.abort();
           setReceipts(null);
           setReceiptBatch(null);
           setReceiptError(frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_FORBIDDEN"));

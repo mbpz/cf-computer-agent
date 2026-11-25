@@ -104,6 +104,14 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 用 20 条回执请求、CDP Response 阶段每请求延迟 100ms，连续 5 轮；页面均显示 20 行。观测全轮耗时 3122–3992ms，高于 ≤800ms 候选预算。
 - 该数字包含 ego/CDP 逐请求 `Fetch.continueResponse` 命令的协议开销（命令串行化），不能据此断言应用实现超预算；需要在应用/浏览器 Performance 资源计时或独立网络整形上复测。P01 P95 仍标未验。
 
+## 2026-11-25 R3-F01/F03 与 CR03 快速修复（本地）
+
+- R3-F01：`/admin/submissions/batch` 路由增加成员 id、角色、权限掩码、能力集合 key；身份切 A→B 或撤权会重建页面，旧 owner 的队列/回执/导航回调不再复用。
+- R3-F03：回执客户端只把 `404 + REVIEW_RECEIPT_NOT_FOUND` 判为“暂无回执”；通用 404、5xx、无效 200 均归 `unavailable`，可走仅重查。
+- R3-CR03：回执轮次收到任意 401/403 时立即 abort 当前 controller，已启动 worker 不再领取下一项；仍清空详情并显示权限提示。
+- 未实现 R3-F02 的完整查询轮次/身份/子集绑定，也未做 R3-E01 的隔离真实丢响应工程夹具；R3-F01 仅路由 key 修复，缺少 A→B 延迟回包回归。
+- 定向 3 文件 53/53、typecheck 通过；全量门禁见下方。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
