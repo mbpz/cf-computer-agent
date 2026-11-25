@@ -93,6 +93,17 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 单测：found + unavailable → 仅重查 unavailable 后变为 found + missing，已 found 行保持。
 - **线上浏览器验收（2026-11-25，Ego Browser，正式站）**：部署构建 `index-rXvOX0mg.js`（与本地候选一致）。用 3 条已登记样本构造只读回执面板，得到 `found / unavailable / missing` 三行与 `1:3` 计数；点“仅重查读取失败的项”只产生 1 个 GET（仅 d03a 的 operation URL），已 found/missing 行不重查，全程 0 POST；复制按钮显示“已复制”，键盘 Enter 激活复制并保持焦点；390px 下 3 行可见且 `scrollWidth=390` 无横向溢出；切英文后显示 “1 of 3…” 与三行状态，桌面 1280px 无溢出。未做 P01 的固定 100ms 延迟/5 轮 P95 网络时间线。
 
+## 2026-11-25 AC-01/R2-V01 真实丢响应恢复（Ego Browser）
+
+- 使用 CDP `Fetch` 在 **Response 阶段** 拦截 `POST /api/admin/submissions/batch-review`，服务端已返回 200 后由测试端 `failRequest`，应用自然进入“批量结果未知”，未手工写 sessionStorage。请求操作编号 `batch.5453e601-f1be-4ca5-8177-278cb5409268`，投稿 `bba1f096-271f-414d-af72-d6295af0fcae`。
+- 刷新后 unknown 恢复；点“核对原回执”得到 `1:1`、状态 `found`；点“重试原批量请求”按原编号重放成功并返回队列；随后 `GET .../decisions/operations/{operationId}` 返回 200，`submission.rejected` 审计恰好 1 条，待审队列 0。
+- 测试成员已重新停用；该样本成为第 4 条遗留 rejected 投稿，需 AC-00 登记/清理授权。
+
+## 2026-11-25 P01 100ms 固定延迟测量（未通过，不作为应用结论）
+
+- 用 20 条回执请求、CDP Response 阶段每请求延迟 100ms，连续 5 轮；页面均显示 20 行。观测全轮耗时 3122–3992ms，高于 ≤800ms 候选预算。
+- 该数字包含 ego/CDP 逐请求 `Fetch.continueResponse` 命令的协议开销（命令串行化），不能据此断言应用实现超预算；需要在应用/浏览器 Performance 资源计时或独立网络整形上复测。P01 P95 仍标未验。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
