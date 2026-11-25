@@ -91,7 +91,7 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 失败读取不再让整轮只剩全局错误：网络/5xx 标记 `unavailable` 并保留已取到的 found/missing 行；401/403 清空细节并显示会话无权提示，不回填旧回执。
 - “仅重查读取失败的项”只对 unavailable 行追加一次 GET，已 found/missing 行不重查；查询仍为 0 POST。沿用 P01 的并发 4 与取消。
 - 单测：found + unavailable → 仅重查 unavailable 后变为 found + missing，已 found 行保持。
-- 未做 390px/桌面、键盘、中英双语浏览器验收；该产品交互仍需接手人审查。
+- **线上浏览器验收（2026-11-25，Ego Browser，正式站）**：部署构建 `index-rXvOX0mg.js`（与本地候选一致）。用 3 条已登记样本构造只读回执面板，得到 `found / unavailable / missing` 三行与 `1:3` 计数；点“仅重查读取失败的项”只产生 1 个 GET（仅 d03a 的 operation URL），已 found/missing 行不重查，全程 0 POST；复制按钮显示“已复制”，键盘 Enter 激活复制并保持焦点；390px 下 3 行可见且 `scrollWidth=390` 无横向溢出；切英文后显示 “1 of 3…” 与三行状态，桌面 1280px 无溢出。未做 P01 的固定 100ms 延迟/5 轮 P95 网络时间线。
 
 ## Original local run scope (before the Ego Browser follow-ups)
 
