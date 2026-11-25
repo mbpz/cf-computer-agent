@@ -8,7 +8,7 @@ import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { loadReviewQueuePage, type ReviewQueueItem, type ReviewQueuePageResult } from "../../lib/admin-review-data";
 import { loadDecisionReceipt, mapWithConcurrency, type DecisionReceiptLookup } from "../../lib/admin-batch-review-data";
-import type { Fetcher } from "../../lib/api";
+import { ApiRequestError, type Fetcher } from "../../lib/api";
 import { ReviewBatchResults, ReviewBatchToolbar, useReviewBatch } from "../../components/review/review-batch-owner";
 import type { BatchReviewItemOutcome } from "../../lib/admin-batch-review-data";
 import type { SupportedPageSize } from "../../lib/numbered-page";
@@ -24,6 +24,8 @@ function batchPage(search: string): { page: number; pageSize: SupportedPageSize 
     pageSize: pageSize === 20 || pageSize === 50 || pageSize === 100 ? pageSize : DEFAULT_PAGE_SIZE,
   };
 }
+
+type DecisionReceiptRow = DecisionReceiptLookup & { readonly status: "found" | "missing" | "unavailable" };
 
 type QueueState = { kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string };
 
@@ -49,7 +51,8 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const [page, setPage] = useState(initial.page);
   const [pageSize, setPageSize] = useState<SupportedPageSize>(initial.pageSize);
   const [state, setState] = useState<QueueState>({ kind: "loading" });
-  const [receipts, setReceipts] = useState<readonly DecisionReceiptLookup[] | null>(null);
+  const [receipts, setReceipts] = useState<readonly DecisionReceiptRow[] | null>(null);
+  const [copiedReceipt, setCopiedReceipt] = useState<string | null>(null);
   const [receiptBatch, setReceiptBatch] = useState<string | null>(null);
   const liveBatchId = useRef<string | null>(null);
   const [checkingReceipts, setCheckingReceipts] = useState(false);
@@ -75,22 +78,51 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
     return () => { alive.current = false; controller.abort(); };
   }, [load, locale, page, pageSize, requester, retry]);
 
-  const checkReceipts = async () => {
+  const checkReceipts = async (onlyUnavailable = false) => {
     const scope = batch.batchId;
     if (batch.state.kind !== "unknown" || checkingReceipts || !scope) return;
+    const targets = onlyUnavailable
+      ? (receipts ?? []).filter((row) => row.status === "unavailable").map((row) => ({ submissionId: row.submissionId, operationId: row.operationId }))
+      : [...batch.state.attempts];
+    if (targets.length === 0) return;
     receiptAbort.current?.abort();
     const controller = new AbortController();
     receiptAbort.current = controller;
     setCheckingReceipts(true);
     setReceiptError(undefined);
     try {
-      const results = await mapWithConcurrency(batch.state.attempts, 4, controller.signal, (attempt) => loadDecisionReceipt(attempt.submissionId, attempt.operationId, fetch, controller.signal));
-      if (mounted.current && liveBatchId.current === scope) { setReceipts(results); setReceiptBatch(scope); }
+      const results = await mapWithConcurrency(targets, 4, controller.signal, async (attempt): Promise<DecisionReceiptRow> => {
+        try {
+          const value = await loadDecisionReceipt(attempt.submissionId, attempt.operationId, fetch, controller.signal);
+          return { ...value, status: value.found ? "found" : "missing" };
+        } catch (error) {
+          if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) throw error;
+          if (error instanceof DOMException && error.name === "AbortError") throw error;
+          return { submissionId: attempt.submissionId, operationId: attempt.operationId, found: false, status: "unavailable" };
+        }
+      });
+      if (mounted.current && liveBatchId.current === scope) {
+        if (onlyUnavailable) {
+          const byId = new Map(results.map((row) => [row.submissionId, row]));
+          setReceipts((previous) => (previous ?? []).map((row) => byId.get(row.submissionId) ?? row));
+        } else setReceipts(results);
+        setReceiptBatch(scope);
+      }
     } catch (error) {
-      if (mounted.current && liveBatchId.current === scope && !(error instanceof DOMException && error.name === "AbortError")) setReceiptError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+      if (mounted.current && liveBatchId.current === scope && !(error instanceof DOMException && error.name === "AbortError")) {
+        if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
+          setReceipts(null);
+          setReceiptBatch(null);
+          setReceiptError(frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_FORBIDDEN"));
+        } else setReceiptError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+      }
     } finally {
       if (mounted.current && liveBatchId.current === scope) setCheckingReceipts(false);
     }
+  };
+  const copyReceiptOperation = async (operationId: string) => {
+    try { await navigator.clipboard.writeText(operationId); if (mounted.current) setCopiedReceipt(operationId); }
+    catch { if (mounted.current) setReceiptError(frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_COPY_FAILED")); }
   };
   const started = useCallback(() => { pendingPage.current = page; }, [page]);
   const settled = useCallback((outcomes: readonly BatchReviewItemOutcome[]) => {
@@ -149,9 +181,14 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
             <Button type="button" size="sm" variant="outline" data-batch-discard-unknown onClick={batch.discardUnknown}>{frontendText(locale, "ADMIN_REVIEW_BATCH_DISCARD_UNKNOWN")}</Button>
           </div>
           {receiptError && <p role="alert" className="text-destructive">{receiptError}</p>}
-          {receipts && <div data-batch-receipt-batch={receiptBatch ?? ""} data-batch-receipt-check={`${receipts.filter((receipt) => receipt.found).length}:${receipts.length}`} className="space-y-1 text-xs">
-            <p className="font-medium">{frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_RESULT").replace("{found}", String(receipts.filter((receipt) => receipt.found).length)).replace("{total}", String(receipts.length))}</p>
-            <ul className="list-disc pl-5 text-muted-foreground">{receipts.map((receipt) => <li key={receipt.submissionId}>{receipt.submissionId} · {receipt.operationId} · {frontendText(locale, receipt.found ? "ADMIN_REVIEW_BATCH_RECEIPT_FOUND" : "ADMIN_REVIEW_BATCH_RECEIPT_MISSING")}</li>)}</ul>
+          {receipts && <div data-batch-receipt-batch={receiptBatch ?? ""} data-batch-receipt-check={`${receipts.filter((receipt) => receipt.status === "found").length}:${receipts.length}`} className="space-y-2 text-xs">
+            <p className="font-medium">{frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_RESULT").replace("{found}", String(receipts.filter((receipt) => receipt.status === "found").length)).replace("{total}", String(receipts.length))}</p>
+            <p className="text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_COUNTS").replace("{missing}", String(receipts.filter((receipt) => receipt.status === "missing").length)).replace("{unavailable}", String(receipts.filter((receipt) => receipt.status === "unavailable").length))}</p>
+            <ul className="space-y-1">{receipts.map((receipt) => <li key={receipt.submissionId} data-batch-receipt-row={receipt.submissionId} data-batch-receipt-status={receipt.status} className="flex flex-wrap items-center gap-2">
+              <span>{receipt.submissionId} · {receipt.operationId} · {frontendText(locale, receipt.status === "found" ? "ADMIN_REVIEW_BATCH_RECEIPT_FOUND" : receipt.status === "missing" ? "ADMIN_REVIEW_BATCH_RECEIPT_MISSING" : "ADMIN_REVIEW_BATCH_RECEIPT_UNAVAILABLE")}</span>
+              <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" data-batch-receipt-copy={receipt.submissionId} onClick={() => void copyReceiptOperation(receipt.operationId)}>{frontendText(locale, copiedReceipt === receipt.operationId ? "ADMIN_REVIEW_BATCH_RECEIPT_COPIED" : "ADMIN_REVIEW_BATCH_RECEIPT_COPY")}</Button>
+            </li>)}</ul>
+            {receipts.some((receipt) => receipt.status === "unavailable") && <Button type="button" size="sm" variant="outline" data-batch-receipt-retry-unavailable disabled={checkingReceipts} onClick={() => void checkReceipts(true)}>{frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_RETRY_UNAVAILABLE")}</Button>}
           </div>}
         </div>}
         <DataTable

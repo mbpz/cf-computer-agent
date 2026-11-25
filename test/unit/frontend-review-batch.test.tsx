@@ -445,6 +445,33 @@ describe("review batch surface", () => {
     expect(stored.inflight).toHaveLength(2);
   });
 
+  it("shows found, missing and unavailable receipts without hiding the others (N01)", async () => {
+    let review2Calls = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/decisions/operations/")) {
+        if (path.includes("review-1")) return json({ receipt: { requestHash: "h", responseJson: "{}" } });
+        review2Calls += 1;
+        if (review2Calls === 1) throw new TypeError("network");
+        return new Response(JSON.stringify({ error: { code: "REVIEW_RECEIPT_NOT_FOUND", message: "missing", retryable: false } }), { status: 404, headers: { "content-type": "application/json" } });
+      }
+      const actions = requestActions(init);
+      return json({ requested: actions.length, succeeded: actions.length, failed: 0, items: [] });
+    });
+    Object.defineProperty(browser.navigator, "clipboard", { configurable: true, value: { writeText: vi.fn(async () => undefined) } });
+    await mountBatch();
+    await selectAll();
+    await clickOn(node("[data-batch-send]"));
+    await clickOn(node("[data-batch-check-receipts]"));
+    expect(container.querySelector('[data-batch-receipt-row="review-1"]')?.getAttribute("data-batch-receipt-status")).toBe("found");
+    expect(container.querySelector('[data-batch-receipt-row="review-2"]')?.getAttribute("data-batch-receipt-status")).toBe("unavailable");
+    const retry = container.querySelector("[data-batch-receipt-retry-unavailable]") as HTMLButtonElement | null;
+    expect(retry).not.toBeNull();
+    await clickOn(retry!);
+    expect(container.querySelector('[data-batch-receipt-row="review-2"]')?.getAttribute("data-batch-receipt-status")).toBe("missing");
+    expect(container.querySelector('[data-batch-receipt-row="review-1"]')?.getAttribute("data-batch-receipt-status")).toBe("found");
+  });
+
   it("treats a malformed 200 body as an unknown result and keeps the original attempts", async () => {
     vi.stubGlobal("fetch", async () => json({ requested: 2, succeeded: 2, failed: 0, items: [{ submissionId: "review-1", action: "reject", status: "succeeded", result: {} }] }));
     await mountBatch();
