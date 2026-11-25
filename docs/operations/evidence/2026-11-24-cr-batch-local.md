@@ -79,6 +79,12 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 新增 DOM 用例：首发全成功重放 2/2、首发混合结果可读且保留失败重试、重放 403 后存储仍为 unknown 且 attempts/inflight 为 2。
 - 定向五文件 **86/86**；`npm run typecheck` 退出 0；操作索引 481 文件/1820 候选且审计通过；功能清单仍 12 已关闭 / 17 未开放。
 
+## R2-F02 / R2-P01（2026-11-24 本地工程证据）
+
+- R2-F02：`test/worker/admin-knowledge-lifecycle.test.ts` 新增“测试接收方丢弃首发响应”场景：Worker 完成真实批审写入后返回 200，测试不消费响应；按 submissionId + operationId 只读查回执，再用同一 payload/编号重放。断言回执存在、replay 仍 1 成功、reviews 1 条、rejection 审计 1 条、decision receipt 1 条。未加可部署故障开关，未改 sessionStorage。
+- R2-P01：新增 `mapWithConcurrency`（上限 4，支持 AbortSignal）；批审回执查询改为最多 4 个待决 GET，换批/离页通过 AbortController 取消；单测覆盖峰值 ≤4、顺序保持、取消后不再排新请求。未做浏览器固定延迟 P95 测量，也未实现 N01 产品交互。
+- 定向：worker 批审 9/9；并发单测 2/2；typecheck 通过。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
@@ -95,6 +101,6 @@ From the repository root on the fixed working tree:
 | `npm run verify:workbench-maturity` | exit 0; 15/15 |
 | `npm run audit:workbench-domain` | exit 0 |
 | `npm run audit:frontend-operations` / inventory tests | exit 0; 481 files / 1820 candidates; 171 unassigned unchanged; 10/10 |
-| `npm run check` | exit 0; unit 415 files / 5651 tests, worker 81 files / 1327 tests, smoke 88, i18n 14, delivery 30, landing 100; build upload 1747.08 KiB / gzip 330.93 KiB |
+| `npm run check` | exit 0; unit 416 files / 5653 tests, worker 81 files / 1327 tests, smoke 88, i18n 14, delivery 30, landing 100; build upload 1747.08 KiB / gzip 330.93 KiB |
 
 The original local run did not include browser or production acceptance. The later Ego Browser observations above are partial and did not close a parent checklist item.

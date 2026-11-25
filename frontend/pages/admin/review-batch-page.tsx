@@ -7,7 +7,7 @@ import { Checkbox } from "../../components/ui/checkbox";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { loadReviewQueuePage, type ReviewQueueItem, type ReviewQueuePageResult } from "../../lib/admin-review-data";
-import { loadDecisionReceipt, type DecisionReceiptLookup } from "../../lib/admin-batch-review-data";
+import { loadDecisionReceipt, mapWithConcurrency, type DecisionReceiptLookup } from "../../lib/admin-batch-review-data";
 import type { Fetcher } from "../../lib/api";
 import { ReviewBatchResults, ReviewBatchToolbar, useReviewBatch } from "../../components/review/review-batch-owner";
 import type { BatchReviewItemOutcome } from "../../lib/admin-batch-review-data";
@@ -53,6 +53,7 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const [receiptBatch, setReceiptBatch] = useState<string | null>(null);
   const liveBatchId = useRef<string | null>(null);
   const [checkingReceipts, setCheckingReceipts] = useState(false);
+  const receiptAbort = useRef<AbortController | null>(null);
   const [receiptError, setReceiptError] = useState<string>();
   const [retry, setRetry] = useState(0);
   const alive = useRef(true);
@@ -77,13 +78,16 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const checkReceipts = async () => {
     const scope = batch.batchId;
     if (batch.state.kind !== "unknown" || checkingReceipts || !scope) return;
+    receiptAbort.current?.abort();
+    const controller = new AbortController();
+    receiptAbort.current = controller;
     setCheckingReceipts(true);
     setReceiptError(undefined);
     try {
-      const results = await Promise.all(batch.state.attempts.map((attempt) => loadDecisionReceipt(attempt.submissionId, attempt.operationId)));
+      const results = await mapWithConcurrency(batch.state.attempts, 4, controller.signal, (attempt) => loadDecisionReceipt(attempt.submissionId, attempt.operationId, fetch, controller.signal));
       if (mounted.current && liveBatchId.current === scope) { setReceipts(results); setReceiptBatch(scope); }
-    } catch {
-      if (mounted.current && liveBatchId.current === scope) setReceiptError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+    } catch (error) {
+      if (mounted.current && liveBatchId.current === scope && !(error instanceof DOMException && error.name === "AbortError")) setReceiptError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
     } finally {
       if (mounted.current && liveBatchId.current === scope) setCheckingReceipts(false);
     }
@@ -99,7 +103,12 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const rows = state.kind === "ready" ? state.data.items : [];
   const batch = useReviewBatch({ items: rows, memberId, locale, enabled: canReview && state.kind === "ready", requester, onStart: started, onSettled: settled });
   liveBatchId.current = batch.batchId;
-  useEffect(() => { setReceipts(null); setReceiptBatch(null); setReceiptError(undefined); setCheckingReceipts(false); }, [batch.batchId]);
+  useEffect(() => {
+    receiptAbort.current?.abort();
+    receiptAbort.current = null;
+    setReceipts(null); setReceiptBatch(null); setReceiptError(undefined); setCheckingReceipts(false);
+  }, [batch.batchId]);
+  useEffect(() => () => { receiptAbort.current?.abort(); }, []);
   const allSelected = rows.length > 0 && rows.every((row) => batch.selected.has(row.id));
 
   const columns: DataTableColumn<ReviewQueueItem>[] = [

@@ -3562,17 +3562,17 @@
         "frontend/lib/workspace-browser-history.ts:122:3",
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
-        "frontend/pages/admin/review-batch-page.tsx:110:9",
-        "frontend/pages/admin/review-batch-page.tsx:114:22",
-        "frontend/pages/admin/review-batch-page.tsx:126:26",
-        "frontend/pages/admin/review-batch-page.tsx:130:9",
-        "frontend/pages/admin/review-batch-page.tsx:134:44",
-        "frontend/pages/admin/review-batch-page.tsx:138:13",
-        "frontend/pages/admin/review-batch-page.tsx:139:13",
-        "frontend/pages/admin/review-batch-page.tsx:140:13",
-        "frontend/pages/admin/review-batch-page.tsx:142:28",
-        "frontend/pages/admin/review-batch-page.tsx:148:9",
-        "frontend/pages/admin/review-batch-page.tsx:163:9"
+        "frontend/pages/admin/review-batch-page.tsx:119:9",
+        "frontend/pages/admin/review-batch-page.tsx:123:22",
+        "frontend/pages/admin/review-batch-page.tsx:135:26",
+        "frontend/pages/admin/review-batch-page.tsx:139:9",
+        "frontend/pages/admin/review-batch-page.tsx:143:44",
+        "frontend/pages/admin/review-batch-page.tsx:147:13",
+        "frontend/pages/admin/review-batch-page.tsx:148:13",
+        "frontend/pages/admin/review-batch-page.tsx:149:13",
+        "frontend/pages/admin/review-batch-page.tsx:151:28",
+        "frontend/pages/admin/review-batch-page.tsx:157:9",
+        "frontend/pages/admin/review-batch-page.tsx:172:9"
       ],
       "unresolvedSymbols": [
         "frontend/components/ui/card.tsx#Card",
@@ -46779,10 +46779,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:110:9",
+      "id": "frontend/pages/admin/review-batch-page.tsx:119:9",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 110,
+      "line": 119,
       "column": 9,
       "kind": "jsx",
       "tag": "Checkbox",
@@ -46802,10 +46802,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:114:22",
+      "id": "frontend/pages/admin/review-batch-page.tsx:123:22",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 114,
+      "line": 123,
       "column": 22,
       "kind": "jsx",
       "tag": "Checkbox",
@@ -46825,10 +46825,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:126:26",
+      "id": "frontend/pages/admin/review-batch-page.tsx:135:26",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 126,
+      "line": 135,
       "column": 26,
       "kind": "jsx",
       "tag": "Button",
@@ -46855,10 +46855,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:130:9",
+      "id": "frontend/pages/admin/review-batch-page.tsx:139:9",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 130,
+      "line": 139,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -46894,10 +46894,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:134:44",
+      "id": "frontend/pages/admin/review-batch-page.tsx:143:44",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 134,
+      "line": 143,
       "column": 44,
       "kind": "jsx",
       "tag": "div",
@@ -46934,10 +46934,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:138:13",
+      "id": "frontend/pages/admin/review-batch-page.tsx:147:13",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 138,
+      "line": 147,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -46981,10 +46981,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:139:13",
+      "id": "frontend/pages/admin/review-batch-page.tsx:148:13",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 139,
+      "line": 148,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -47026,10 +47026,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:140:13",
+      "id": "frontend/pages/admin/review-batch-page.tsx:149:13",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 140,
+      "line": 149,
       "column": 13,
       "kind": "jsx",
       "tag": "Button",
@@ -47072,10 +47072,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:142:28",
+      "id": "frontend/pages/admin/review-batch-page.tsx:151:28",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 142,
+      "line": 151,
       "column": 28,
       "kind": "jsx",
       "tag": "p",
@@ -47118,10 +47118,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:148:9",
+      "id": "frontend/pages/admin/review-batch-page.tsx:157:9",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 148,
+      "line": 157,
       "column": 9,
       "kind": "jsx",
       "tag": "DataTable",
@@ -47166,10 +47166,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-batch-page.tsx:163:9",
+      "id": "frontend/pages/admin/review-batch-page.tsx:172:9",
       "path": "frontend/pages/admin/review-batch-page.tsx",
       "owner": "ReviewBatchPage",
-      "line": 163,
+      "line": 172,
       "column": 9,
       "kind": "jsx",
       "tag": "ReviewBatchResults",

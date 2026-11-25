@@ -87,6 +87,22 @@ function assertBatchAction(action: BatchItemAction): void {
   if (!BATCH_OPERATION_ID_PATTERN.test(action.operationId) || !isCanonicalTimestamp(action.expectedUpdatedAt)) throw new Error("BATCH_REVIEW_REQUEST_INVALID");
 }
 
+export async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, signal: AbortSignal | undefined, task: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new Error("CONCURRENCY_LIMIT_INVALID");
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (true) {
+      const index = next; next += 1;
+      if (index >= items.length) return;
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+      results[index] = await task(items[index]!, index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 export interface DecisionReceiptLookup {
   readonly submissionId: string;
   readonly operationId: string;
@@ -96,9 +112,9 @@ export interface DecisionReceiptLookup {
 }
 
 /** Exact read by original submission id + operation number; never uses list state. */
-export async function loadDecisionReceipt(submissionId: string, operationId: string, requester: Fetcher = fetch): Promise<DecisionReceiptLookup> {
+export async function loadDecisionReceipt(submissionId: string, operationId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<DecisionReceiptLookup> {
   try {
-    const data = await apiFetch<{ receipt?: { responseJson?: unknown } }>(`/api/admin/submissions/${encodeURIComponent(submissionId)}/decisions/operations/${encodeURIComponent(operationId)}`, { requester });
+    const data = await apiFetch<{ receipt?: { responseJson?: unknown } }>(`/api/admin/submissions/${encodeURIComponent(submissionId)}/decisions/operations/${encodeURIComponent(operationId)}`, { requester, signal });
     if (data?.receipt === undefined || typeof data.receipt.responseJson !== "string") throw new Error("BATCH_RECEIPT_RESPONSE_INVALID");
     return { submissionId, operationId, found: true, responseJson: data.receipt.responseJson };
   } catch (error) {

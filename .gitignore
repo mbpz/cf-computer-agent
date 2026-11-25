@@ -12,3 +12,5 @@ scripts/.vm-import-*/
 scripts/.vm-asset-*/
 scripts/.vm-files-*/
 .wrangler-home
+
+.DS_Store

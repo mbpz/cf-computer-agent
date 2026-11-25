@@ -373,6 +373,26 @@ describe("administrator knowledge lifecycle over HTTP", () => {
     expect(malformed.status).toBe(400);
     expect((await malformed.json<ErrorBody>()).error.code).toBe("BATCH_REVIEW_REQUEST_INVALID");
   });
+
+  it("recovers a committed batch after the test receiver drops the first response", async () => {
+    const submissionId = "submission-drop-response";
+    await seedReviewPending(submissionId);
+    const action = { submissionId, action: "reject", reasonCode: "duplicate", note: "Dropped response", operationId: "batch-drop-response-1", expectedUpdatedAt: now };
+    // The receiver intentionally ignores this HTTP response; the Worker write is real.
+    const first = await api(admin, "/api/admin/submissions/batch-review", { method: "POST", body: JSON.stringify({ actions: [action] }) });
+    expect(first.status).toBe(200);
+    // The exact receipt is the only recovery source; it performs no write.
+    const receipt = await api(admin, `/api/admin/submissions/${submissionId}/decisions/operations/${action.operationId}`);
+    expect(receipt.status).toBe(200);
+    expect((await receipt.json<{ receipt: { responseJson: string } }>()).receipt.responseJson).toContain("rejected");
+    // Replaying the frozen payload under the original number adds no business write.
+    const replay = await api(admin, "/api/admin/submissions/batch-review", { method: "POST", body: JSON.stringify({ actions: [action] }) });
+    expect(replay.status).toBe(200);
+    expect((await replay.json<BatchBody>())).toMatchObject({ requested: 1, succeeded: 1, failed: 0 });
+    expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = ?", submissionId)).toBe(1);
+    expect(await count("SELECT COUNT(*) AS count FROM audit_events WHERE resource_id = ? AND action = 'submission.rejected'", submissionId)).toBe(1);
+    expect(await count("SELECT COUNT(*) AS count FROM review_decision_receipts WHERE submission_id = ? AND operation_id = ?", submissionId, "batch-drop-response-1")).toBe(1);
+  });
 });
 
 interface PublishedItem { knowledgeItemId: string; revisionId: string }
