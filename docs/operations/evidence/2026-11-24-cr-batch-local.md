@@ -130,6 +130,13 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - B 直接访问 `/admin/submissions/batch` 显示 403，无管理导航；B 读取 A 已存在回执的 `GET /api/admin/submissions/:id/decisions/operations/:op` 返回 403。
 - 在同一 A 页面通过 CDP 将 Cookie 切为 B 后刷新：显示 403、无旧 unknown 面板/旧数据；恢复 A Cookie 后回到管理员批审页，身份恢复。未测试延迟在途响应和 A/B 均可审核的菜单对照。
 
+## 2026-11-26 最小修复：requester、回执身份、查询轮次（本地）
+
+- 回执 GET 改为使用页面 `requester`，不再固定全局 `fetch`。
+- 回执客户端校验响应顶层 `submissionId`/`operationId` 与请求一致；不匹配、无效 200 归 `unavailable`，只有 404 + `REVIEW_RECEIPT_NOT_FOUND` 才是 `missing`。
+- 回执查询绑定 `batchId + 有序 (submissionId, operationId) + round`；子集变化/换批/身份重挂载会 abort、清空 receipts/copied/error，旧轮次结果、错误和 finally 不再回填。
+- 单测新增 requester 注入、身份不匹配、通用 404 与权威缺失；定向 7 文件 92/92、typecheck 通过；全量 unit 417 文件 / 5656 用例、worker 81 / 1328 通过。尚未做 A/B 在途回包和浏览器复验。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.

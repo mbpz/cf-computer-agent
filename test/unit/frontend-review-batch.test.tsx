@@ -450,7 +450,7 @@ describe("review batch surface", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path.includes("/decisions/operations/")) {
-        if (path.includes("review-1")) return json({ receipt: { requestHash: "h", responseJson: "{}" } });
+        if (path.includes("review-1")) return json({ submissionId: "review-1", operationId: path.split("/").pop(), receipt: { requestHash: "h", responseJson: "{}" } });
         review2Calls += 1;
         if (review2Calls === 1) throw new TypeError("network");
         return new Response(JSON.stringify({ error: { code: "REVIEW_RECEIPT_NOT_FOUND", message: "missing", retryable: false } }), { status: 404, headers: { "content-type": "application/json" } });

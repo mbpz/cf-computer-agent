@@ -114,8 +114,9 @@ export interface DecisionReceiptLookup {
 /** Exact read by original submission id + operation number; never uses list state. */
 export async function loadDecisionReceipt(submissionId: string, operationId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<DecisionReceiptLookup> {
   try {
-    const data = await apiFetch<{ receipt?: { responseJson?: unknown } }>(`/api/admin/submissions/${encodeURIComponent(submissionId)}/decisions/operations/${encodeURIComponent(operationId)}`, { requester, signal });
-    if (data?.receipt === undefined || typeof data.receipt.responseJson !== "string") throw new Error("BATCH_RECEIPT_RESPONSE_INVALID");
+    const data = await apiFetch<{ submissionId?: unknown; operationId?: unknown; receipt?: { responseJson?: unknown } }>(`/api/admin/submissions/${encodeURIComponent(submissionId)}/decisions/operations/${encodeURIComponent(operationId)}`, { requester, signal });
+    if (data?.submissionId !== submissionId || data?.operationId !== operationId) throw new Error("BATCH_RECEIPT_RESPONSE_INVALID");
+    if (data.receipt === undefined || typeof data.receipt.responseJson !== "string") throw new Error("BATCH_RECEIPT_RESPONSE_INVALID");
     return { submissionId, operationId, found: true, responseJson: data.receipt.responseJson };
   } catch (error) {
     // Only the endpoint's explicit receipt-missing code means "no receipt";

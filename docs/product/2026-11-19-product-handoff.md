@@ -425,7 +425,7 @@ AC-03、AC-04 和下列只读检查可与开发并行。AC-01、AC-02 完成后�
 - [ ] **文件与实现。** `frontend/app.tsx`、`frontend/pages/admin/review-batch-page.tsx`、`frontend/components/review/review-batch-owner.tsx`、`test/unit/frontend-review-batch.test.tsx`（加路由层回归，避免只测孤立组件）。复用相邻审核队列的身份边界，以成员、角色和权限集合为 key。卸载取消 GET，旧 owner 的 UI 与导航回调失效；已发写入不能声称已撤销，只保留原成员名下已有的恢复意图。用 B 的会话恢复时只读 B 的记录。
 - [ ] **通过。** 切换 A→B（两者都可审核）、A→撤权、同一 A 恢复权限三例。延迟 A 的队列、回执与提交结果，再改变身份；B/撤权界面旧队列、行、编号、复制提示和导航贡献均为 **0**，切换后旧轮次新发 GET 为 **0**。切回 A 可按原号恢复且不自动 POST；用隔离候选核对 A/B 菜单和回执面板。对照修复前观测旧结果数、修复后为 0，不以 Worker 鉴权通过替代 UI 验证。
 
-#### R3-F02 查询轮次、子集和鉴权终止（P2，前端）
+#### R3-F02 查询轮次、子集和鉴权终止（P2，前端；2026-11-26 已绑定 requester + scope/round，待 A/B 在途测试）
 
 - [ ] **文件与实现。** `frontend/pages/admin/review-batch-page.tsx`、`frontend/lib/admin-batch-review-data.ts`、`test/unit/frontend-review-batch.test.tsx` 与 `test/unit/admin-batch-review-concurrency.test.ts`。让回执查询同时绑定当前身份、`batchId`、有序 `(submissionId, operationId)` 集合和查询轮次。离开 `unknown`、子集改变、离页或换身份即失效。「仅重查」只取当前子集里的不可用行；GET 使用页面 `requester`。任一 401/403 即中止同轮请求、清详情并显示权限提示；旧轮次的结果、错误、复制反馈和 `finally` 不得改当前轮次。不改 GET 端点或写入语义。
 - [ ] **通过。** 加入 A/B→仅 B 的红绿回归、迟到响应和迟到剪贴板回调，以及 9 项并发中先返回 403 的回归。隔离候选核对 B 进入未知后 A 行与 A 的新 GET 都是 **0**，重查仅 B；首个 401/403 后 **0** 新 GET、**0** 旧结果回填、权限提示 1 次，峰值待决 ≤4。换批、离页同样停发；读取始终 0 POST。

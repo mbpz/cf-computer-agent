@@ -57,6 +57,8 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const liveBatchId = useRef<string | null>(null);
   const [checkingReceipts, setCheckingReceipts] = useState(false);
   const receiptAbort = useRef<AbortController | null>(null);
+  const receiptScopeRef = useRef<string | null>(null);
+  const receiptRound = useRef(0);
   const [receiptError, setReceiptError] = useState<string>();
   const [retry, setRetry] = useState(0);
   const alive = useRef(true);
@@ -79,7 +81,7 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   }, [load, locale, page, pageSize, requester, retry]);
 
   const checkReceipts = async (onlyUnavailable = false) => {
-    const scope = batch.batchId;
+    const scope = receiptScope;
     if (batch.state.kind !== "unknown" || checkingReceipts || !scope) return;
     const targets = onlyUnavailable
       ? (receipts ?? []).filter((row) => row.status === "unavailable").map((row) => ({ submissionId: row.submissionId, operationId: row.operationId }))
@@ -88,12 +90,14 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
     receiptAbort.current?.abort();
     const controller = new AbortController();
     receiptAbort.current = controller;
+    const round = receiptRound.current + 1;
+    receiptRound.current = round;
     setCheckingReceipts(true);
     setReceiptError(undefined);
     try {
       const results = await mapWithConcurrency(targets, 4, controller.signal, async (attempt): Promise<DecisionReceiptRow> => {
         try {
-          const value = await loadDecisionReceipt(attempt.submissionId, attempt.operationId, fetch, controller.signal);
+          const value = await loadDecisionReceipt(attempt.submissionId, attempt.operationId, requester, controller.signal);
           return { ...value, status: value.found ? "found" : "missing" };
         } catch (error) {
           if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) throw error;
@@ -101,7 +105,7 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
           return { submissionId: attempt.submissionId, operationId: attempt.operationId, found: false, status: "unavailable" };
         }
       });
-      if (mounted.current && liveBatchId.current === scope) {
+      if (mounted.current && receiptScopeRef.current === scope && receiptRound.current === round) {
         if (onlyUnavailable) {
           const byId = new Map(results.map((row) => [row.submissionId, row]));
           setReceipts((previous) => (previous ?? []).map((row) => byId.get(row.submissionId) ?? row));
@@ -109,7 +113,7 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
         setReceiptBatch(scope);
       }
     } catch (error) {
-      if (mounted.current && liveBatchId.current === scope && !(error instanceof DOMException && error.name === "AbortError")) {
+      if (mounted.current && receiptScopeRef.current === scope && receiptRound.current === round && !(error instanceof DOMException && error.name === "AbortError")) {
         if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
           controller.abort();
           setReceipts(null);
@@ -118,7 +122,7 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
         } else setReceiptError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
       }
     } finally {
-      if (mounted.current && liveBatchId.current === scope) setCheckingReceipts(false);
+      if (mounted.current && receiptScopeRef.current === scope && receiptRound.current === round) setCheckingReceipts(false);
     }
   };
   const copyReceiptOperation = async (operationId: string) => {
@@ -136,11 +140,17 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const rows = state.kind === "ready" ? state.data.items : [];
   const batch = useReviewBatch({ items: rows, memberId, locale, enabled: canReview && state.kind === "ready", requester, onStart: started, onSettled: settled });
   liveBatchId.current = batch.batchId;
+  const receiptScope = batch.state.kind === "unknown"
+    ? `${batch.batchId}|${batch.state.attempts.map((a) => `${a.submissionId}:${a.operationId}`).join(",")}`
+    : null;
   useEffect(() => {
+    if (receiptScopeRef.current === receiptScope) return;
+    receiptScopeRef.current = receiptScope;
+    receiptRound.current += 1;
     receiptAbort.current?.abort();
     receiptAbort.current = null;
-    setReceipts(null); setReceiptBatch(null); setReceiptError(undefined); setCheckingReceipts(false);
-  }, [batch.batchId]);
+    setReceipts(null); setReceiptBatch(null); setReceiptError(undefined); setCheckingReceipts(false); setCopiedReceipt(null);
+  }, [receiptScope]);
   useEffect(() => () => { receiptAbort.current?.abort(); }, []);
   const allSelected = rows.length > 0 && rows.every((row) => batch.selected.has(row.id));
 
