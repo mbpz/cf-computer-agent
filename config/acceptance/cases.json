@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "closurePolicy": "proposed",
+  "cases": {
+    "R3-F03": {"parents": ["B06", "C04"], "target": "production-ego", "method": "controlled-response", "owner": "audit-qa", "requires": ["ui", "network", "deployment"]},
+    "AC-01": {"parents": ["B06", "C04"], "target": "production-ego", "method": "first-send", "owner": "audit-qa", "requires": ["ui", "network", "database", "cleanup", "deployment"]},
+    "R3-E01": {"parents": ["B06", "C04"], "target": "isolated-ego", "method": "subset-after-commit", "owner": "audit-qa", "requires": ["ui", "network", "database", "cleanup"]},
+    "R3-F01": {"parents": ["A01", "A05", "B06", "C04"], "target": "isolated-ego", "method": "live-session-switch", "owner": "identity-qa", "requires": ["ui", "network", "cleanup"]},
+    "R3-F02": {"parents": ["B06", "C04"], "target": "isolated-ego", "method": "late-subset-response", "owner": "audit-qa", "requires": ["ui", "network", "cleanup"]},
+    "R3-P01": {"parents": ["B06", "C04"], "target": "isolated-ego", "method": "fixed-delay-matrix", "owner": "performance-qa", "requires": ["ui", "network", "metrics", "cleanup"]},
+    "R3-V02c": {"parents": ["B06", "C04"], "target": "isolated-ego", "method": "paginated-real-fixtures", "owner": "audit-qa", "requires": ["ui", "network", "database", "cleanup"]},
+    "R4-06a": {"parents": ["A01", "A02", "A05", "D02"], "target": "isolated-ego", "method": "real-rbac-fixtures", "owner": "admin-qa", "requires": ["ui", "network", "database", "cleanup"]},
+    "R4-06b": {"parents": ["A06", "B01", "B02", "B04", "B05"], "target": "isolated-ego", "method": "real-submission-fixtures", "owner": "workbench-qa", "requires": ["ui", "network", "database", "cleanup"]},
+    "R4-06c": {"parents": ["B09", "C02", "C05", "C06", "D01"], "target": "isolated-ego", "method": "real-workbench-fixtures", "owner": "workbench-qa", "requires": ["ui", "network", "database", "cleanup"]},
+    "R4-06d": {"parents": ["B08"], "target": "isolated-ego", "method": "real-ai-binding", "owner": "ai-qa", "requires": ["ui", "network", "cleanup"]},
+    "R4-07": {"parents": ["D04"], "target": "isolated-ego", "method": "real-vm", "owner": "vm-qa", "requires": ["ui", "network", "database", "cleanup"]},
+    "R3-V00/V06": {"parents": ["D07"], "target": "production-ego", "method": "same-candidate-release", "owner": "release", "requires": ["ui", "deployment", "build"]},
+    "R4-LOCAL-BATCH": {"parents": [], "target": "engineering", "method": "local-worker-d1", "owner": "audit-engineering", "requires": ["network", "database", "cleanup"]}
+  }
+}

@@ -1,5 +1,7 @@
 # Native acceptance kit (LOCAL ONLY)
 
+For the separate R4 batch-review kit with its own D1 persistence and real password login fixtures, see [local batch acceptance workbench](./batch-workbench.md). The instructions below describe the older native matrix kit.
+
 Status: local developer tooling for the remaining checklist items **D05** (real-identity
 journeys), **D06** (real desktop-browser matrix), **D04/G0** (VM + release) and **D08**
 (release). It is **not** product code, it is **not** wired into the application or the

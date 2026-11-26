@@ -1,7 +1,17 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
+import { readdirSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+
+const localAcceptance = process.env.MEMORY_GARDEN_LOCAL_ACCEPTANCE === "1";
+const acceptanceConfig = "./config/acceptance/wrangler.jsonc";
+if (localAcceptance) {
+  const hasDeveloperEnv = readdirSync("./config/acceptance").some((name) => /^\.(?:dev\.vars|env)(?:\.|$)/u.test(name));
+  if (hasDeveloperEnv || process.env.WRANGLER_LOAD_DEV_VARS_FROM_DOT_ENV !== "false") {
+    throw new Error("Local acceptance regression must not load developer env secrets");
+  }
+}
 
 const migrations = await readD1Migrations("migrations");
 const shippedPublicAssets = await publicAssetPaths("public");
@@ -24,7 +34,7 @@ export default defineConfig({
   },
   plugins: [
     cloudflareTest({
-      wrangler: { configPath: "./wrangler.jsonc" },
+      wrangler: { configPath: localAcceptance ? acceptanceConfig : "./wrangler.jsonc" },
       remoteBindings: false,
       miniflare: {
         bindings: {

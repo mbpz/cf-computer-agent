@@ -1,0 +1,26 @@
+{
+  "name": "memory-garden-local-acceptance",
+  "workers_dev": false,
+  "preview_urls": false,
+  "main": "../../src/index.ts",
+  "compatibility_date": "2026-07-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "memory-garden-local-acceptance",
+    "database_id": "1c81f616-d687-4c85-b2e9-22c383d4b29a",
+    "migrations_dir": "../../migrations"
+  }],
+  "durable_objects": {"bindings": [
+    {"name": "KNOWLEDGE", "class_name": "KnowledgeBase"},
+    {"name": "AGENT_SESSIONS", "class_name": "AgentSession"},
+    {"name": "MAINTENANCE", "class_name": "MaintenanceCoordinator"}
+  ]},
+  "migrations": [
+    {"tag": "v1", "new_sqlite_classes": ["KnowledgeBase"]},
+    {"tag": "v2", "new_sqlite_classes": ["AgentSession"]},
+    {"tag": "v3", "new_sqlite_classes": ["MaintenanceCoordinator"]}
+  ],
+  "assets": {"directory": "../../frontend/dist", "binding": "ASSETS", "run_worker_first": true},
+  "vars": {"ALLOW_INSECURE_LOCAL": "false"}
+}

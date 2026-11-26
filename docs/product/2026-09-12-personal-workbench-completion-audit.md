@@ -6,6 +6,8 @@
 
 增量成果：[32 个登录后页面与 VM 历史对账](./2026-09-12-personal-workbench-route-inventory.md)；首个隐私修复批次为 [B02 成员作用域草稿计划](../superpowers/plans/2026-09-12-member-scoped-submission-drafts.md)。两组基线测试合计 14 files / 329 tests 通过，其中 gap 断言确认的是现有缺口，不是功能完成。
 
+> 2026-11-26 执行指针：[R4 验收可复跑开发与证据边界](./2026-11-26-acceptance-system-handoff.md)。隔离工程证据可推进开发，不替代已约定的生产 Ego 验收；新证据分级方案未签署，清单维持 12/29 关闭、17 项开放，D08 独立。
+
 ## 当前执行范围（2026-09-25 用户调整）
 
 用户明确：“不需要 功能任务 checklist都完成就可以了”。本轮回到本文件的功能补齐任务，不再以 R13–R25 生产运维流程作为功能工作的前置门禁；不配置 `MAINTENANCE_CONTROL_TOKEN`，不激活生产维护、不停写、不备份、不执行生产迁移或重复部署。

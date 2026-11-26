@@ -7,6 +7,8 @@
 
 本文是生产配置和部署的唯一核心入口。详细 smoke、访问统计验收与应急恢复分别见 [smoke-test.md](./smoke-test.md)、[analytics-production-checklist.md](./analytics-production-checklist.md) 和 [rollback.md](./rollback.md)。
 
+> [R4 验收工程与候选回单](../product/2026-11-26-acceptance-system-handoff.md) 仅记录隔离开发及拟议证据等级，不批准生产写入、清理、迁移或替代正式发布证据。
+
 ## 1. 核心逻辑
 
 ```text

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { PageHeader } from "../../components/ui/page-header";
@@ -59,6 +59,7 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const receiptAbort = useRef<AbortController | null>(null);
   const receiptScopeRef = useRef<string | null>(null);
   const receiptRound = useRef(0);
+  const clipboardRound = useRef(0);
   const [receiptError, setReceiptError] = useState<string>();
   const [retry, setRetry] = useState(0);
   const alive = useRef(true);
@@ -126,8 +127,18 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
     }
   };
   const copyReceiptOperation = async (operationId: string) => {
-    try { await navigator.clipboard.writeText(operationId); if (mounted.current) setCopiedReceipt(operationId); }
-    catch { if (mounted.current) setReceiptError(frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_COPY_FAILED")); }
+    const scope = receiptScope;
+    if (!scope || receiptScopeRef.current !== scope) return;
+    const queryRound = receiptRound.current;
+    const copyRound = ++clipboardRound.current;
+    const isCurrent = () => mounted.current && receiptScopeRef.current === scope
+      && receiptRound.current === queryRound && clipboardRound.current === copyRound;
+    try {
+      await navigator.clipboard.writeText(operationId);
+      if (isCurrent()) setCopiedReceipt(operationId);
+    } catch {
+      if (isCurrent()) setReceiptError(frontendText(locale, "ADMIN_REVIEW_BATCH_RECEIPT_COPY_FAILED"));
+    }
   };
   const started = useCallback(() => { pendingPage.current = page; }, [page]);
   const settled = useCallback((outcomes: readonly BatchReviewItemOutcome[]) => {
@@ -140,10 +151,10 @@ export function ReviewBatchPage({ locale, memberId, canReview = true, search = "
   const rows = state.kind === "ready" ? state.data.items : [];
   const batch = useReviewBatch({ items: rows, memberId, locale, enabled: canReview && state.kind === "ready", requester, onStart: started, onSettled: settled });
   liveBatchId.current = batch.batchId;
-  const receiptScope = batch.state.kind === "unknown"
-    ? `${batch.batchId}|${batch.state.attempts.map((a) => `${a.submissionId}:${a.operationId}`).join(",")}`
+  const receiptScope = canReview && batch.state.kind === "unknown"
+    ? JSON.stringify([memberId ?? null, batch.batchId, batch.state.attempts.map(({ submissionId, operationId }) => [submissionId, operationId])])
     : null;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (receiptScopeRef.current === receiptScope) return;
     receiptScopeRef.current = receiptScope;
     receiptRound.current += 1;
