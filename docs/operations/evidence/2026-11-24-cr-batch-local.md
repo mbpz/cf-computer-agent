@@ -123,6 +123,13 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 直接访问 `/admin/submissions`、`/admin/submissions/batch`、`/admin/roles` 均显示“403：访问被拒绝”，页面无管理导航；`/submit` 正常加载提交表单。
 - 这证明撤权后旧管理员页面不残留、直接路由由服务器能力拒绝；未完成 A→B 在途回包/旧队列回填对照，因为当前只有一个成员会话，需要独立的第二审核身份。
 
+## 2026-11-26 双会话 A/B 权限与身份切换（Ego Browser）
+
+- 两个独立 Ego 任务空间：管理员 A（member `bb4dcfa0...`，mask `0x37ffff`）与 Contributor B（member `bc8e6f3d...`，mask `0x1600c3`）；两者 `/api/session` 分别返回对应身份。
+- A 的批审页用已登记样本构造只读回执面板：3 行 `found / missing / missing`，未提交写入。
+- B 直接访问 `/admin/submissions/batch` 显示 403，无管理导航；B 读取 A 已存在回执的 `GET /api/admin/submissions/:id/decisions/operations/:op` 返回 403。
+- 在同一 A 页面通过 CDP 将 Cookie 切为 B 后刷新：显示 403、无旧 unknown 面板/旧数据；恢复 A Cookie 后回到管理员批审页，身份恢复。未测试延迟在途响应和 A/B 均可审核的菜单对照。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
