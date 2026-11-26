@@ -137,6 +137,12 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 回执查询绑定 `batchId + 有序 (submissionId, operationId) + round`；子集变化/换批/身份重挂载会 abort、清空 receipts/copied/error，旧轮次结果、错误和 finally 不再回填。
 - 单测新增 requester 注入、身份不匹配、通用 404 与权威缺失；定向 7 文件 92/92、typecheck 通过；全量 unit 417 文件 / 5656 用例、worker 81 / 1328 通过。尚未做 A/B 在途回包和浏览器复验。
 
+## 2026-11-26 最小修复线上复验（Ego Browser）
+
+- 正式站已部署 `dec03894` 对应构建 `index-CPb6Xb9H.js`。
+- 用 4 条只读回执请求在 CDP Request 阶段分别返回：权威 404、通用 404、500、身份不匹配 200；面板结果为 `missing / unavailable / unavailable / unavailable`，计数 `0:4`，各只发 1 个 GET、全程 0 POST。验证 R3-F03 的协议分类已在线上生效。
+- 临时 unknown intent 已清除；本轮未重复 A/B 在途、E01 传输层丢响应或 P01 固定延迟测量。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.

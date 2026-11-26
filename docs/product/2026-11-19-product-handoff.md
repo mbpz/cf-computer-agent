@@ -430,7 +430,7 @@ AC-03、AC-04 和下列只读检查可与开发并行。AC-01、AC-02 完成后�
 - [ ] **文件与实现。** `frontend/pages/admin/review-batch-page.tsx`、`frontend/lib/admin-batch-review-data.ts`、`test/unit/frontend-review-batch.test.tsx` 与 `test/unit/admin-batch-review-concurrency.test.ts`。让回执查询同时绑定当前身份、`batchId`、有序 `(submissionId, operationId)` 集合和查询轮次。离开 `unknown`、子集改变、离页或换身份即失效。「仅重查」只取当前子集里的不可用行；GET 使用页面 `requester`。任一 401/403 即中止同轮请求、清详情并显示权限提示；旧轮次的结果、错误、复制反馈和 `finally` 不得改当前轮次。不改 GET 端点或写入语义。
 - [ ] **通过。** 加入 A/B→仅 B 的红绿回归、迟到响应和迟到剪贴板回调，以及 9 项并发中先返回 403 的回归。隔离候选核对 B 进入未知后 A 行与 A 的新 GET 都是 **0**，重查仅 B；首个 401/403 后 **0** 新 GET、**0** 旧结果回填、权限提示 1 次，峰值待决 ≤4。换批、离页同样停发；读取始终 0 POST。
 
-#### R3-F03 回执结果按协议判定（P2，前端；2026-11-25 已仅认 REVIEW_RECEIPT_NOT_FOUND，通用 404 归 unavailable）
+#### R3-F03 回执结果按协议判定（P2，前端；2026-11-26 正式站已验权威 404→missing、通用 404/500/身份不匹配→unavailable，0 POST）
 
 - [ ] **文件与实现。** `frontend/lib/admin-batch-review-data.ts`、回执客户端/批审 DOM 测试。对照 `src/routes/admin-review.ts`，仅 `404 + REVIEW_RECEIPT_NOT_FOUND` 归 `missing`；通用 404、5xx、无效 200、回包身份不匹配归 `unavailable`；401/403 仍走整轮拒权。校验回包的 `submissionId`、`operationId` 与原请求一致，不回显原始回执数据，不新增端点。
 - [ ] **通过。** 现有真实回执契约测试继续绿；分别断言权威缺失、通用 404、5xx、无效 200、身份不匹配、401/403 的状态与可否重查，通用 404 和无效 200 各仅追加该项 1 个 GET；权威缺失不重查，不宣称未写入。隔离候选对照 3 个状态、计数和 0 POST；单项延迟由 R3-P01 一起复测。
