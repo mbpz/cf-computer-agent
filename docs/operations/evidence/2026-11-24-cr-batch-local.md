@@ -117,6 +117,12 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - CI 已部署 `f7555750` 对应构建：正式站首屏资源由 `index-rXvOX0mg.js` 更新为 `index-CrW6F138.js`，与本机该提交构建一致。
 - 尚未用同候选部署 ID/源 SHA 台账核对；R3-F01/F03 修复已在线，但 A→B 身份切换、通用 404/5xx 回执分类等浏览器场景仍需第二个审核身份或隔离夹具。
 
+## 2026-11-26 普通成员撤回/授权边界（Ego Browser）
+
+- 当前会话切换为 Contributor（member `bc8e6f3d-b56a-45f0-937f-8ddd33b14ec2`，permission mask `0x1600c3`），构建 `index-CrW6F138.js`。
+- 直接访问 `/admin/submissions`、`/admin/submissions/batch`、`/admin/roles` 均显示“403：访问被拒绝”，页面无管理导航；`/submit` 正常加载提交表单。
+- 这证明撤权后旧管理员页面不残留、直接路由由服务器能力拒绝；未完成 A→B 在途回包/旧队列回填对照，因为当前只有一个成员会话，需要独立的第二审核身份。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
