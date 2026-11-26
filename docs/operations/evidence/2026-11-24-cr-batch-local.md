@@ -112,6 +112,11 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 未实现 R3-F02 的完整查询轮次/身份/子集绑定，也未做 R3-E01 的隔离真实丢响应工程夹具；R3-F01 仅路由 key 修复，缺少 A→B 延迟回包回归。
 - 定向 3 文件 53/53、typecheck 通过；全量门禁见下方。
 
+## 2026-11-26 部署核对
+
+- CI 已部署 `f7555750` 对应构建：正式站首屏资源由 `index-rXvOX0mg.js` 更新为 `index-CrW6F138.js`，与本机该提交构建一致。
+- 尚未用同候选部署 ID/源 SHA 台账核对；R3-F01/F03 修复已在线，但 A→B 身份切换、通用 404/5xx 回执分类等浏览器场景仍需第二个审核身份或隔离夹具。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
