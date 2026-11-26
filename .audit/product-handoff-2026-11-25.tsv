@@ -1,0 +1,4 @@
+ts	phase	decision	why	evidence	result
+2026-11-25T20:53:19+08:00	review	Keep existing N01 evidence partial	Read-only constructed panel is not natural client response loss	c1655198 plus source diff	4 actionable findings
+2026-11-25T20:53:19+08:00	verification	Verify current checkout with existing regressions	No production action in scope	Vitest 6 files 90 tests; typecheck; checklist and operation audit	passed; 12 closed and 17 open
+2026-11-25T20:53:19+08:00	planning	Separate corrective work from verification and optional scope	Allow eligible read-only progress	docs/product/2026-11-19-product-handoff.md	plan only
