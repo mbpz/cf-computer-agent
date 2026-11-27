@@ -172,6 +172,8 @@ export interface AppDependencies {
     lockMs?: number;
   };
   onBackgroundFailure?: (reason: UncertaintyReason) => void;
+  /** Test-only seam: runs after entry authorization and before the write batch. */
+  beforeDecisionWrite?: () => Promise<void>;
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
@@ -316,7 +318,7 @@ function createRequestServices(
   const spaceRecords = new SpacesRepository(env.DB, audit);
   const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName, undefined, dependencies.workScope);
   const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName, dependencies.workScope);
-  const publicationRecords = new PublicationRepository(env.DB, { workScope: dependencies.workScope });
+  const publicationRecords = new PublicationRepository(env.DB, { workScope: dependencies.workScope, beforeDecisionWrite: dependencies.beforeDecisionWrite });
   const tags = new TagsService(new TagsRepository(env.DB));
   const operationReceipts = new AdminOperationReceipts(env.DB);
   const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit, dependencies.workScope);

@@ -200,6 +200,26 @@ describe("administrator review decisions over HTTP", () => {
     expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id IN ('submission-batch-a', 'submission-batch-b')")).toBe(1);
   });
 
+  it("revokes authority after entry authorization but before the write batch", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-2', 'github:member-2', 'delegate@example.test', 'contributor', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-review', 'review-delegate', 'Delegated review', 'Temporary delegate', '0x1600cb', 'active', 0, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES ('role-review', 'member-2', ?)").bind(now),
+    ]);
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
+    const delegate = (await sessions.create((await members.findById("member-2"))!)).token;
+    await seedReviewPending("submission-race");
+    const app = createApp({ beforeDecisionWrite: async () => { await env.DB.prepare("UPDATE roles SET status = 'disabled' WHERE id = 'role-review'").run(); } });
+    const response = await api(delegate, "/api/admin/submissions/submission-race/reject", {
+      method: "POST",
+      body: JSON.stringify({ reasonCode: "not_relevant", note: "race", operationId: "review.reject.race" }),
+    }, app);
+    expect(response.status).toBe(403);
+    expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = 'submission-race'")).toBe(0);
+    expect(await count("SELECT COUNT(*) AS count FROM review_decision_receipts WHERE submission_id = 'submission-race'")).toBe(0);
+  });
+
   it("rejects a review receipt at the write when the actor has no active review grant", async () => {
     await expect(env.DB.prepare(
       `INSERT INTO review_decision_receipts (submission_id, operation_id, kind, request_hash, actor_id, claim_id, response_json, created_at)
@@ -374,14 +394,14 @@ async function seedReviewPending(submissionId: string, visibility: "shared" | "a
   ]);
 }
 
-async function api(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+async function api(token: string, path: string, init: RequestInit = {}, app = createApp()): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("content-type", "application/json");
   headers.set("origin", "https://memory.crgmhrc.asia");
   headers.set("cookie", `__Host-memory-session=${token}`);
   const request = new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers });
   const context = createExecutionContext();
-  const response = await createApp().fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
+  const response = await app.fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
   await waitOnExecutionContext(context);
   return response;
 }

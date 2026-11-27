@@ -73,6 +73,8 @@ export interface PublicationRepositoryOptions {
   id?: () => string;
   now?: () => Date;
   leaseToken?: () => string;
+  /** Test-only seam to revoke authority between the preview read and the write batch. */
+  beforeDecisionWrite?: () => Promise<void>;
 }
 
 type PreviewRow = {
@@ -202,6 +204,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
   private readonly now: () => Date;
   private readonly leaseToken: () => string;
   private readonly workScope?: WorkScope;
+  private readonly beforeDecisionWrite?: () => Promise<void>;
 
   constructor(private readonly db: D1Database, options: PublicationRepositoryOptions = {}) {
     this.audit = new AuditRepository(db);
@@ -209,6 +212,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
     this.now = options.now || (() => new Date());
     this.leaseToken = options.leaseToken || (() => crypto.randomUUID());
     this.workScope = options.workScope;
+    this.beforeDecisionWrite = options.beforeDecisionWrite;
   }
 
   async getPreview(submissionId: string): Promise<ReviewSubmissionSnapshot | null> {
@@ -1478,6 +1482,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
         await this.readSubmissionAuthority(submissionId),
       );
     }
+    await this.beforeDecisionWrite?.();
     const timestamp = new Date(Math.max(
       this.now().getTime(),
       Date.parse(preview.updatedAt) + 1,
