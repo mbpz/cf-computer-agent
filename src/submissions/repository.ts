@@ -47,7 +47,7 @@ export interface SubmissionsRepositoryPort {
   findResubmittable(memberId: string, priorSubmissionId: string): Promise<Submission | null>;
   createResubmissionWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult>;
   listOwned(submitterId: string, request: SubmissionPageRepositoryRequest): Promise<SubmissionPage>;
-  listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage>;
+  listPending(request: NumberedPageRequest, sharedOnly?: boolean): Promise<SubmissionReviewPage>;
 }
 
 type SubmissionRow = {
@@ -403,11 +403,12 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     );
   }
 
-  async listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage> {
+  async listPending(request: NumberedPageRequest, sharedOnly = false): Promise<SubmissionReviewPage> {
+    const scope = sharedOnly ? " AND s.requested_visibility = 'shared'" : "";
     return queryNumberedPage(
       this.db,
-      this.db.prepare("SELECT COUNT(*) AS total FROM submissions s WHERE s.status = 'review_pending'"),
-      this.db.prepare(`${submissionSelect} WHERE s.status = 'review_pending' ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`).bind(request.pageSize, pageOffset(request)),
+      this.db.prepare(`SELECT COUNT(*) AS total FROM submissions s WHERE s.status = 'review_pending'${scope}`),
+      this.db.prepare(`${submissionSelect} WHERE s.status = 'review_pending'${scope} ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`).bind(request.pageSize, pageOffset(request)),
       request,
       (row) => mapSubmissionRow(row as SubmissionRow),
     );

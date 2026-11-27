@@ -265,8 +265,8 @@ export class SubmissionsService {
       ...createdRange,
     });
   }
-  async listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage> {
-    return this.repository.listPending(normalizeNumberedPageRequest(request));
+  async listPending(request: NumberedPageRequest, sharedOnly = false): Promise<SubmissionReviewPage> {
+    return this.repository.listPending(normalizeNumberedPageRequest(request), sharedOnly);
   }
 }
 

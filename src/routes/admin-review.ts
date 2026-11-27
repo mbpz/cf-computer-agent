@@ -142,7 +142,7 @@ export async function routeAdminReviewApi(
   if (decisionReceipt) {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     requireNoQuery(url);
-    const reviewer = requireAdminMember(principal);
+    const reviewer = requireReviewMember(principal);
     const receipt = await services.publication.findDecisionReceipt(
       reviewerDto(reviewer),
       decodePathId(decisionReceipt[1]!),
@@ -154,7 +154,7 @@ export async function routeAdminReviewApi(
 
   if (url.pathname === "/api/admin/submissions/batch-review") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
-    const reviewer = requireAdminMember(principal);
+    const reviewer = requireReviewMember(principal);
     requireNoQuery(url);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
@@ -279,7 +279,7 @@ export async function routeAdminReviewApi(
   const reject = /^\/api\/admin\/submissions\/([^/]+)\/reject$/.exec(url.pathname);
   if (reject) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
-    const reviewer = requireAdminMember(principal);
+    const reviewer = requireReviewMember(principal);
     requireNoQuery(url);
     const submissionId = decodePathId(reject[1]!);
     const input = strictRecord(
@@ -297,7 +297,7 @@ export async function routeAdminReviewApi(
   const requestRevision = /^\/api\/admin\/submissions\/([^/]+)\/request-revision$/.exec(url.pathname);
   if (requestRevision) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
-    const reviewer = requireAdminMember(principal);
+    const reviewer = requireReviewMember(principal);
     requireNoQuery(url);
     const submissionId = decodePathId(requestRevision[1]!);
     const input = strictRecord(
@@ -315,7 +315,7 @@ export async function routeAdminReviewApi(
   const detail = /^\/api\/admin\/submissions\/([^/]+)$/.exec(url.pathname);
   if (detail) {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
-    const reviewer = requireAdminMember(principal);
+    const reviewer = requireReviewMember(principal);
     requireNoQuery(url);
     const preview = await services.publication.preview(
       reviewerDto(reviewer),
@@ -365,7 +365,13 @@ function requirePurgeConfirmation(body: Record<string, unknown>, knowledgeItemId
 }
 
 function reviewerDto(principal: Extract<Principal, { kind: "member" }>) {
-  return { id: principal.memberId, role: principal.role, status: "active" as const };
+  return { id: principal.memberId, role: principal.role, status: "active" as const, canReview: principal.role !== "admin" };
+}
+
+function requireReviewMember(principal: Principal): Extract<Principal, { kind: "member" }> {
+  if (principal.kind !== "member") throw new AppError("FORBIDDEN", "Review access required", 403);
+  requireCapability(principal, "knowledge:review");
+  return principal;
 }
 
 function reviewPreviewDto(preview: ReviewPreview) {

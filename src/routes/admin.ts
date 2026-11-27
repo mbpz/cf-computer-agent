@@ -2,7 +2,7 @@ import { canonicalOrigin } from "../config";
 import type { AuditRepository } from "../audit/repository";
 import type { AssetDownloadVariant, AssetService } from "../assets/service";
 import { auditActions } from "../audit/types";
-import { requireCapability } from "../authorization/policy";
+import { capabilitiesFor, requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
 import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, requireSameOrigin, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
@@ -254,11 +254,17 @@ export async function routeAdminApi(
   }
 
   if (url.pathname === "/api/admin/submissions") {
-    requireCapability(principal, "submission:read-all");
+    const capabilities = capabilitiesFor(principal);
+    const canReadAll = capabilities.includes("submission:read-all");
+    if (!canReadAll && !capabilities.includes("knowledge:review")) {
+      throw new AppError("FORBIDDEN", "Capability is not permitted", 403);
+    }
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     const pagination = parseNumberedPageRequest(url, ["status"]);
     requireEnumFilter(url, "status", ["review_pending"]);
-    return jsonResponse(await services.submissions.listPending(pagination), 200, context.requestId);
+    // Delegated reviewers only see the shared-scope queue; the filter applies
+    // before both COUNT and page selection.
+    return jsonResponse(await services.submissions.listPending(pagination, !canReadAll), 200, context.requestId);
   }
 
   const chunkPreview = /^\/api\/admin\/knowledge\/([^/]+)\/revisions\/([^/]+)\/chunks$/.exec(url.pathname);

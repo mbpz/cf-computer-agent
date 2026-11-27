@@ -1206,8 +1206,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
     reviewerId: string,
     input: { reasonCode: RejectionReasonCode; note: string },
     operation?: ReviewDecisionOperation,
+    sharedOnly = false,
   ): Promise<ReviewDecision> {
-    return this.decide(submissionId, reviewerId, "rejected", input.reasonCode, input.note, operation);
+    return this.decide(submissionId, reviewerId, "rejected", input.reasonCode, input.note, operation, sharedOnly);
   }
 
   requestRevision(
@@ -1215,16 +1216,17 @@ export class PublicationRepository implements PublicationRepositoryPort {
     reviewerId: string,
     input: { reasonCode: "needs_revision"; note: string },
     operation?: ReviewDecisionOperation,
+    sharedOnly = false,
   ): Promise<ReviewDecision> {
-    return this.decide(submissionId, reviewerId, "revision_requested", input.reasonCode, input.note, operation);
+    return this.decide(submissionId, reviewerId, "revision_requested", input.reasonCode, input.note, operation, sharedOnly);
   }
 
   findDecisionReceipt(submissionId: string, operationId: string): Promise<DecisionReceipt | null> {
     return this.db.prepare(
-      `SELECT request_hash, response_json FROM review_decision_receipts
+      `SELECT request_hash, response_json, actor_id FROM review_decision_receipts
        WHERE submission_id = ? AND operation_id = ? LIMIT 1`,
-    ).bind(submissionId, operationId).first<{ request_hash: string; response_json: string }>()
-      .then((row) => (row ? { requestHash: row.request_hash, responseJson: row.response_json } : null));
+    ).bind(submissionId, operationId).first<{ request_hash: string; response_json: string; actor_id: string }>()
+      .then((row) => (row ? { requestHash: row.request_hash, responseJson: row.response_json, actorId: row.actor_id } : null));
   }
 
   async recordDecisionReceipt<T extends PublishedRevision | ReviewDecision>(
@@ -1257,8 +1259,8 @@ export class PublicationRepository implements PublicationRepositoryPort {
     return this.db.prepare(
       `SELECT request_hash, response_json FROM knowledge_lifecycle_operation_receipts
        WHERE knowledge_item_id = ? AND operation_id = ? LIMIT 1`,
-    ).bind(knowledgeItemId, operationId).first<{ request_hash: string; response_json: string }>()
-      .then((row) => (row ? { requestHash: row.request_hash, responseJson: row.response_json } : null));
+    ).bind(knowledgeItemId, operationId).first<{ request_hash: string; response_json: string; actor_id: string }>()
+      .then((row) => (row ? { requestHash: row.request_hash, responseJson: row.response_json, actorId: row.actor_id } : null));
   }
 
   /**
@@ -1441,6 +1443,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
     reasonCode: RejectionReasonCode | "needs_revision",
     note: string,
     operation?: ReviewDecisionOperation,
+    sharedOnly = false,
   ): Promise<ReviewDecision> {
     // A retry of a recorded operation never re-decides: it replays its receipt.
     if (operation) {
@@ -1459,6 +1462,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
       return this.settleDecision(converged, submissionId, reviewerId, decision, operation);
     }
     const preview = await this.getPreview(submissionId);
+    if (preview && sharedOnly && preview.requestedVisibility !== "shared") {
+      throw new AppError("FORBIDDEN", "Delegated review is limited to shared submissions", 403);
+    }
     if (!preview || preview.status !== "review_pending") {
       // A decision may commit between the initial lookup and the preview read.
       const concurrent = await this.findReview(submissionId);

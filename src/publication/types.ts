@@ -14,6 +14,8 @@ export interface PublicationReviewer {
   id: string;
   role: MemberRole;
   status: MemberStatus;
+  /** Server-authenticated delegated review grant; never supplied by the client. */
+  canReview?: boolean;
 }
 
 export interface ReviewMetadataPatch {
@@ -192,6 +194,7 @@ export type DecisionReceiptKind = "review.publish" | "review.reject" | "review.r
 export interface DecisionReceipt {
   requestHash: string;
   responseJson: string;
+  actorId: string;
 }
 
 export interface DecisionReceiptWrite {
@@ -288,12 +291,14 @@ export interface PublicationRepositoryPort {
     reviewerId: string,
     input: { reasonCode: RejectionReasonCode; note: string },
     operation?: ReviewDecisionOperation,
+    sharedOnly?: boolean,
   ): Promise<ReviewDecision>;
   requestRevision(
     submissionId: string,
     reviewerId: string,
     input: { reasonCode: "needs_revision"; note: string },
     operation?: ReviewDecisionOperation,
+    sharedOnly?: boolean,
   ): Promise<ReviewDecision>;
   findDecisionReceipt(submissionId: string, operationId: string): Promise<DecisionReceipt | null>;
   recordDecisionReceipt<T extends PublishedRevision | ReviewDecision>(

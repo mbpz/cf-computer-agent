@@ -436,6 +436,7 @@ describe("Worker application", () => {
         "legacy:read", "legacy:write", "submission:create", "submission:read-own",
         "submission:read-all", "member:manage", "space:manage", "audit:read",
         "knowledge:read", "knowledge:review", "tasks:use",
+        "role:manage", "menu:manage", "analytics:read", "vm:use",
       ],
       permissionMask: "0x37ffff",
       logoutUrl: "/auth/logout",

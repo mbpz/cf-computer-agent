@@ -151,6 +151,15 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 单测覆盖默认、合法 HTTPS origin 及 5 种非法值。委托审核员授权仍未实现，需单独设计 RC。
 - 全量门禁通过：unit 418 文件 / 5662 用例、worker 81 / 1328；build 1747.90 KiB / gzip 331.09 KiB。
 
+## 2026-11-27 R4-04a.1 委派审核后端（部分）
+
+- `capabilitiesFor` 从有效 permission mask 补充 `knowledge:review` 等能力，不授予 `submission:read-all`；新增单测覆盖委派角色与普通 Contributor。
+- `/api/admin/submissions` 允许仅具 `knowledge:review` 的委派员进入；仓储/服务支持 `sharedOnly`，在 COUNT 和分页查询前过滤 `requested_visibility='shared'`。
+- `PublicationReviewer.canReview` 由服务端身份设置；详情预览、驳回、退回修正在仓储预览阶段拒绝 `admin_only`；批审逐项复用相同规则。
+- 回执模型读取 `actor_id`；委派员只返回本人 actor 的回执，管理员保留全局核对。
+- 审核路由中详情、回执、驳回、退回、批审改为审核能力守卫；发布、评论、知识生命周期、恢复仍要求管理员。
+- 未完成：前端委派员菜单/详情隐藏评论与发布、委派回执重放 actor 全链校验、事务内能力校验与 Worker/D1 回归。全量门禁通过：unit 419 文件 / 5664 用例、worker 81 / 1328；build 1749.79 KiB / gzip 331.53 KiB。不能据此宣称 R4-04a.1 完成。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.

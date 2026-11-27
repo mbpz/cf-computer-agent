@@ -45,7 +45,12 @@ const automationCapabilities = Object.freeze<readonly Capability[]>(["legacy:rea
 
 export function capabilitiesFor(principal: Principal): readonly Capability[] {
   if (principal.kind === "automation") return automationCapabilities;
-  return principal.role === "admin" ? adminCapabilities : contributorCapabilities;
+  const base = principal.role === "admin" ? adminCapabilities : contributorCapabilities;
+  if (principal.permissionMask === undefined) return base;
+  const extra = (Object.entries(capabilityPermission) as [Capability, PermissionKey][])
+    .filter(([capability, key]) => !base.includes(capability) && hasPermission(principal.permissionMask!, PERMISSION_BITS[key]))
+    .map(([capability]) => capability);
+  return extra.length === 0 ? base : [...base, ...extra];
 }
 
 /** Compatibility role masks for the workspace UI. Legacy capabilities stay

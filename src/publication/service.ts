@@ -129,9 +129,10 @@ export class PublicationService {
   ) {}
 
   async preview(reviewer: PublicationReviewer, submissionId: string): Promise<ReviewPreview> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     const preview = await this.repository.getPreview(requireId(submissionId));
     if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    requireSharedReviewScope(reviewer, preview.requestedVisibility);
     const chunks = await validatedPublicationChunks(preview);
     return {
       ...preview,
@@ -141,7 +142,7 @@ export class PublicationService {
   }
 
   async rebuildChunkReport(reviewer: PublicationReviewer, revisionId: string): Promise<ChunkRebuildReport> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     const report = await this.repository.rebuildChunkReport(requireId(revisionId));
     if (!report) throw new AppError("KNOWLEDGE_NOT_FOUND", "Revision not found", 404);
     return report;
@@ -153,7 +154,7 @@ export class PublicationService {
     input: PublishSubmissionInput,
     operationInput?: ReviewDecisionOperationInput,
   ): Promise<PublishedRevision> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     const stableSubmissionId = requireId(submissionId);
     const normalized = normalizePublishInput(input);
     const operation = operationInput === undefined
@@ -204,7 +205,7 @@ export class PublicationService {
     input: { reasonCode: RejectionReasonCode; note: string },
     operationInput?: ReviewDecisionOperationInput,
   ): Promise<ReviewDecision> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     if (!isRejectionReason(input?.reasonCode)) throw invalidDecision();
     const stableSubmissionId = requireId(submissionId);
     const note = normalizeReviewNote(input.note);
@@ -219,7 +220,7 @@ export class PublicationService {
       return await this.repository.reject(stableSubmissionId, reviewer.id, {
         reasonCode: input.reasonCode,
         note,
-      }, operation);
+      }, operation, reviewer.role !== "admin");
     } catch (error) {
       throwDecisionError(error);
     }
@@ -231,7 +232,7 @@ export class PublicationService {
     input: { reasonCode: "needs_revision"; note: string },
     operationInput?: ReviewDecisionOperationInput,
   ): Promise<ReviewDecision> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     if (input?.reasonCode !== "needs_revision") throw invalidDecision();
     const stableSubmissionId = requireId(submissionId);
     const note = normalizeReviewNote(input.note);
@@ -246,7 +247,7 @@ export class PublicationService {
       return await this.repository.requestRevision(stableSubmissionId, reviewer.id, {
         reasonCode: "needs_revision",
         note,
-      }, operation);
+      }, operation, reviewer.role !== "admin");
     } catch (error) {
       throwDecisionError(error);
     }
@@ -284,16 +285,18 @@ export class PublicationService {
 
   /** Exact receipt lookup for one original operation; never infers from list state. */
   async findDecisionReceipt(reviewer: PublicationReviewer, submissionId: string, operationId: string): Promise<{ submissionId: string; operationId: string; receipt: DecisionReceipt } | null> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     if (!isBoundedId(submissionId) || typeof operationId !== "string" || !STABLE_OPERATION_ID.test(operationId)) {
       throw batchReviewInvalid();
     }
     const receipt = await this.repository.findDecisionReceipt(submissionId, operationId);
-    return receipt ? { submissionId, operationId, receipt } : null;
+    if (!receipt) return null;
+    if (reviewer.role !== "admin" && receipt.actorId !== reviewer.id) return null;
+    return { submissionId, operationId, receipt };
   }
 
   async batchReview(reviewer: PublicationReviewer, actions: unknown): Promise<BatchReviewResult> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     const normalized = normalizeBatchReviewActions(actions);
     const items: BatchReviewResult["items"] = [];
     for (const action of normalized) {
@@ -333,7 +336,7 @@ export class PublicationService {
     revisionId: string,
     operationInput?: KnowledgeOperationInput,
   ): Promise<RollbackResult> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     const itemId = requireId(knowledgeItemId);
     const targetRevisionId = requireId(revisionId);
     const identity = await this.lifecycleOperation(operationInput, [
@@ -373,7 +376,7 @@ export class PublicationService {
     knowledgeItemId: string,
     operationId: string,
   ): Promise<{ kind: KnowledgeLifecycleOperationKind; response: unknown } | null> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     const itemId = requireId(knowledgeItemId);
     if (typeof operationId !== "string" || !STABLE_OPERATION_ID.test(operationId)) throw invalidLifecycleRequest();
     const receipt = await this.repository.findLifecycleOperation(itemId, operationId);
@@ -393,7 +396,7 @@ export class PublicationService {
    * reader path and without its published content.
    */
   async adminKnowledgeItem(reviewer: PublicationReviewer, knowledgeItemId: string): Promise<AdminKnowledgeItemView> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     const itemId = requireId(knowledgeItemId);
     const item = await this.repository.findAdminKnowledgeItem(itemId);
     if (!item || item.id !== itemId) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
@@ -405,7 +408,7 @@ export class PublicationService {
     knowledgeItemId: string,
     operationInput?: KnowledgeOperationInput,
   ): Promise<GovernedKnowledgeItem> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     const itemId = requireId(knowledgeItemId);
     return this.changeLifecycle(reviewer.id, itemId, "trash", await this.lifecycleOperation(operationInput, [
       itemId, reviewer.id, "knowledge.trash",
@@ -417,7 +420,7 @@ export class PublicationService {
     knowledgeItemId: string,
     operationInput?: KnowledgeOperationInput,
   ): Promise<GovernedKnowledgeItem> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     const itemId = requireId(knowledgeItemId);
     return this.changeLifecycle(reviewer.id, itemId, "restore", await this.lifecycleOperation(operationInput, [
       itemId, reviewer.id, "knowledge.restore",
@@ -425,7 +428,7 @@ export class PublicationService {
   }
 
   async listTrashed(reviewer: PublicationReviewer, request: PageRequest = { limit: 20 }): Promise<GovernedKnowledgePage> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     return this.repository.listTrashed(parsePageRequest(request.limit, request.cursor));
   }
 
@@ -435,7 +438,7 @@ export class PublicationService {
     now: Date = new Date(),
     operationInput?: KnowledgeOperationInput,
   ): Promise<PurgeResult> {
-    requireActiveAdmin(reviewer);
+    requireActiveReviewer(reviewer);
     if (!this.contentRemover) {
       throw new AppError("KNOWLEDGE_PURGE_UNAVAILABLE", "Knowledge purge storage is unavailable", 503, true);
     }
@@ -664,10 +667,16 @@ export class PublicationService {
   }
 }
 
-function requireActiveAdmin(reviewer: PublicationReviewer): void {
+function requireActiveReviewer(reviewer: PublicationReviewer): void {
   if (!reviewer || typeof reviewer.id !== "string" || reviewer.id.length === 0
-    || reviewer.role !== "admin" || reviewer.status !== "active") {
-    throw new AppError("FORBIDDEN", "Active administrator access required", 403);
+    || reviewer.status !== "active" || (reviewer.role !== "admin" && reviewer.canReview !== true)) {
+    throw new AppError("FORBIDDEN", "Active review access required", 403);
+  }
+}
+
+function requireSharedReviewScope(reviewer: PublicationReviewer, requestedVisibility: string): void {
+  if (reviewer.role !== "admin" && requestedVisibility !== "shared") {
+    throw new AppError("FORBIDDEN", "Delegated review is limited to shared submissions", 403);
   }
 }
 
