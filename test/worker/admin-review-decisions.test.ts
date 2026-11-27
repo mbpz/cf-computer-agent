@@ -34,6 +34,13 @@ describe("administrator review decisions over HTTP", () => {
     contributor = (await sessions.create((await members.findById("member-1"))!)).token;
   });
 
+  it("rejects a review receipt at the write when the actor has no active review grant", async () => {
+    await expect(env.DB.prepare(
+      `INSERT INTO review_decision_receipts (submission_id, operation_id, kind, request_hash, actor_id, claim_id, response_json, created_at)
+       VALUES ('submission-guard', 'review.reject.guard', 'review.reject', ?, 'member-1', 'claim-guard', '{}', ?)`,
+    ).bind("a".repeat(64), now).run()).rejects.toThrow(/REVIEWER_NOT_AUTHORIZED/);
+  });
+
   it("replays one publish decision from the queue and the detail surface and reflects it in the queue", async () => {
     const submissionId = "submission-http-publish";
     await seedReviewPending(submissionId);

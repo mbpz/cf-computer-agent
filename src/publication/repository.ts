@@ -1510,6 +1510,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
         this.prepareReviewNotification(submissionId, reviewerId, decision, timestamp),
       ]);
     } catch (error) {
+      if (String(error).includes("REVIEWER_NOT_AUTHORIZED")) {
+        throw new AppError("FORBIDDEN", "Review access is no longer valid", 403);
+      }
       const replay = operation === undefined
         ? null
         : await this.findDecisionReceipt(submissionId, operation.operationId);

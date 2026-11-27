@@ -168,6 +168,14 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 全量门禁：unit 419 文件 / 5664 用例、worker 81 / 1328；build 1749.97 KiB / gzip 331.56 KiB。
 - 仍未完成 .3 事务内能力校验（撤角色/撤位/停用与事务的原子守卫），也未做委派员专属 Worker/D1 队列与操作矩阵、Ego .4。
 
+## 2026-11-27 R4-04a.3 事务内审核授权守卫（本地）
+
+- 新增 `migrations/0082_review_authorization_guard.sql`：`reviews` 与 `review_decision_receipts` 插入前触发校验 reviewer/actor 当前 `members.status='active'`，且为管理员或拥有启用角色中的 `knowledge:review`（bit 3 = 低十六进制位 8–f）。
+- 触发失败以 `REVIEWER_NOT_AUTHORIZED` ABORT 整个 D1 batch；仓储映射为 `403 FORBIDDEN`。撤角色/撤位/停用发生在入口授权后、事务前时，审核、回执和审计不会落库。
+- 新增 Worker 回归：无审核授权的 contributor 直接插入回执被触发拒绝。迁移 pin 更新为 82 文件。
+- 全量门禁：unit 419 文件 / 5664 用例、worker 81 / 1329；build 1750.12 KiB / gzip 331.63 KiB。
+- 未完成：完整撤权时序/保留另一授权/批单项间撤权/先提交后撤权矩阵仍需 Worker 用例；`0082` 尚未应用远端；Ego .4 未跑。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
