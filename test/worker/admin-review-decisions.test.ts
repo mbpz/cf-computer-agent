@@ -166,6 +166,40 @@ describe("administrator review decisions over HTTP", () => {
     expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = 'submission-admin-only-deny'")).toBe(0);
   });
 
+  it("stops a delegated batch when authority is revoked between items", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-2', 'github:member-2', 'delegate@example.test', 'contributor', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-review', 'review-delegate', 'Delegated review', 'Temporary delegate', '0x1600cb', 'active', 0, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES ('role-review', 'member-2', ?)").bind(now),
+    ]);
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
+    const delegate = (await sessions.create((await members.findById("member-2"))!)).token;
+    await seedReviewPending("submission-batch-a");
+    await seedReviewPending("submission-batch-b");
+    // A test-only trigger revokes the role after the first item commits, so the
+    // second item must be stopped by the database guard rather than the route.
+    await env.DB.prepare(
+      `CREATE TRIGGER test_revoke_after_first AFTER INSERT ON review_decision_receipts
+       WHEN NEW.submission_id = 'submission-batch-a' AND NEW.kind = 'review.reject'
+       BEGIN UPDATE roles SET status = 'disabled' WHERE id = 'role-review'; END`,
+    ).run();
+    const response = await api(delegate, "/api/admin/submissions/batch-review", {
+      method: "POST",
+      body: JSON.stringify({ actions: [
+        { submissionId: "submission-batch-a", action: "reject", reasonCode: "not_relevant", note: "first", operationId: "review.reject.batch-a", expectedUpdatedAt: now },
+        { submissionId: "submission-batch-b", action: "reject", reasonCode: "not_relevant", note: "second", operationId: "review.reject.batch-b", expectedUpdatedAt: now },
+      ] }),
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json<{ succeeded: number; failed: number; items: { submissionId: string; status: string; error?: { code: string; status: number } }[] }>();
+    expect(body).toMatchObject({ succeeded: 1, failed: 1 });
+    const failed = body.items.find((item) => item.status === "failed")!;
+    expect(failed.error).toMatchObject({ code: "FORBIDDEN", status: 403 });
+    expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = ?", failed.submissionId)).toBe(0);
+    expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id IN ('submission-batch-a', 'submission-batch-b')")).toBe(1);
+  });
+
   it("rejects a review receipt at the write when the actor has no active review grant", async () => {
     await expect(env.DB.prepare(
       `INSERT INTO review_decision_receipts (submission_id, operation_id, kind, request_hash, actor_id, claim_id, response_json, created_at)
