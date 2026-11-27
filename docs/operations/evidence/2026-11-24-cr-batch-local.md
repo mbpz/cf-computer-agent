@@ -190,6 +190,16 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 清理：解除 B 的角色分配并删除临时角色；B 刷新后 mask 回到 `0x1600c3`、审核能力消失，直接访问审核队列 → 403。两条测试投稿均为 rejected 遗留，需按 ID 登记/清理。
 - 这是正式站生产功能矩阵，不是 R4-04a.4 要求的隔离 HTTPS 候选；隔离部署、0082 远端应用与 A/B/C 独立登录回单仍未取得。
 
+## 2026-11-27 生产 Ego 委派 UI 复验（非隔离 .4）
+
+- 部署 `index-1S6kgk7J.js`（本地 `e6a6e0d3`）：修复审核队列仍给委派员显示“发布”的问题。
+- 临时 `delegated-ui` 角色 + B 委派会话：
+  - 队列仅 shared 投稿，行内只有“要求修改/驳回”，**发布按钮 0 个**；
+  - 详情页无发布、无评论输入，保留要求修改/驳回；
+  - 直接访问 admin_only 详情 → 403。
+- 清理：删除临时角色后 B mask 回到 `0x1600c3`、审核队列 403；两条 pending 样本已驳回（`10ee8995...`、`2375243b...`）。
+- 仍不是 R4-04a.4：没有隔离 HTTPS 候选与 A/B/C 独立登录回单；0082 远端应用未直接核验。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
