@@ -34,6 +34,60 @@ describe("administrator review decisions over HTTP", () => {
     contributor = (await sessions.create((await members.findById("member-1"))!)).token;
   });
 
+  it("gives a delegated reviewer a shared-only queue and no publish authority", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-2', 'github:member-2', 'delegate@example.test', 'contributor', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-review', 'review-delegate', 'Delegated review', 'Temporary delegate', '0x1600cb', 'active', 0, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES ('role-review', 'member-2', ?)").bind(now),
+    ]);
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
+    const delegate = (await sessions.create((await members.findById("member-2"))!)).token;
+    await seedReviewPending("submission-shared");
+    await seedReviewPending("submission-admin-only", "admin_only");
+
+    const queue = await queueItems(delegate);
+    expect(queue.items.map((item) => item.id)).toEqual(["submission-shared"]);
+    expect(queue.pagination.total).toBe(1);
+
+    expect((await api(delegate, "/api/admin/submissions/submission-admin-only")).status).toBe(403);
+    expect((await api(delegate, "/api/admin/submissions/submission-shared/publish", { method: "POST", body: JSON.stringify({ title: "x", visibility: "shared", spaceId: "default", collectionId: null, tagIds: [] }) })).status).toBe(403);
+
+    const rejected = await api(delegate, "/api/admin/submissions/submission-shared/reject", {
+      method: "POST",
+      body: JSON.stringify({ reasonCode: "not_relevant", note: "delegated decision", operationId: "review.reject.delegate-1" }),
+    });
+    expect(rejected.status).toBe(200);
+    expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = 'submission-shared' AND reviewer_id = 'member-2' AND decision = 'rejected'")).toBe(1);
+  });
+
+  it("does not let a delegated reviewer read or replay another reviewer's receipt", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-2', 'github:member-2', 'delegate@example.test', 'contributor', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-review', 'review-delegate', 'Delegated review', 'Temporary delegate', '0x1600cb', 'active', 0, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES ('role-review', 'member-2', ?)").bind(now),
+    ]);
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
+    const delegate = (await sessions.create((await members.findById("member-2"))!)).token;
+    await seedReviewPending("submission-owned-by-admin");
+    const operationId = "review.reject.admin-owned";
+    const owned = await api(admin, "/api/admin/submissions/submission-owned-by-admin/reject", {
+      method: "POST",
+      body: JSON.stringify({ reasonCode: "not_relevant", note: "admin decision", operationId }),
+    });
+    expect(owned.status).toBe(200);
+    expect((await api(admin, `/api/admin/submissions/submission-owned-by-admin/decisions/operations/${operationId}`)).status).toBe(200);
+    expect((await api(delegate, `/api/admin/submissions/submission-owned-by-admin/decisions/operations/${operationId}`)).status).toBe(404);
+
+    const replay = await api(delegate, "/api/admin/submissions/submission-owned-by-admin/reject", {
+      method: "POST",
+      body: JSON.stringify({ reasonCode: "not_relevant", note: "admin decision", operationId }),
+    });
+    expect(replay.status).toBe(409);
+    expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = 'submission-owned-by-admin'")).toBe(1);
+  });
+
   it("rejects a review receipt at the write when the actor has no active review grant", async () => {
     await expect(env.DB.prepare(
       `INSERT INTO review_decision_receipts (submission_id, operation_id, kind, request_hash, actor_id, claim_id, response_json, created_at)
@@ -188,7 +242,7 @@ describe("administrator review decisions over HTTP", () => {
   });
 });
 
-async function seedReviewPending(submissionId: string): Promise<void> {
+async function seedReviewPending(submissionId: string, visibility: "shared" | "admin_only" = "shared"): Promise<void> {
   const parsed = await parseSource({
     kind: "markdown",
     content: "# Trusted\n\nFirst paragraph.\n\nSecond paragraph.\n",
@@ -197,8 +251,8 @@ async function seedReviewPending(submissionId: string): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, idempotency_key, created_at, updated_at, requested_visibility)
-       VALUES (?, 'member-1', 'default', NULL, 'markdown', 'review_pending', 'Submitted title', ?, NULL, ?, ?, 'shared')`,
-    ).bind(submissionId, parsed.normalizedMarkdown, now, now),
+       VALUES (?, 'member-1', 'default', NULL, 'markdown', 'review_pending', 'Submitted title', ?, NULL, ?, ?, ?)`,
+    ).bind(submissionId, parsed.normalizedMarkdown, now, now, visibility),
     env.DB.prepare(
       "INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES (?, 'member-1', 'default', NULL, 'markdown', 'Submitted title', ?, ?)",
     ).bind(sourceId, now, now),
