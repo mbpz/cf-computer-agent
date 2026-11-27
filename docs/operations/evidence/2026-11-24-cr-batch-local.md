@@ -179,6 +179,15 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 新增先提交后撤权回归：委派员完成驳回后停用其审核角色，读取回执得 403；恢复角色后可按原号查询并重放，reviews 仍为 1。新增委派员直接驳回 `admin_only` 得 403、reviews 为 0。
 - 未完成：批单项间撤权、入口授权后真实并发竞态（当前为写时数据库守卫，非真实竞态注入）；`0082` 尚未应用远端；Ego .4 未跑。
 
+## 2026-11-27 R4-04a 生产 Ego 功能矩阵（非隔离 .4）
+
+- 部署构建 `index-BqEiX2Yt.js` 与本地 `d50a6e0f` 构建一致。
+- 临时创建 `delegated-review` 角色（`0x1600cb`，含 `knowledge:review`）并临时分配给 Contributor B；B 刷新后 session mask `0x1600cb`，capabilities 增加 `knowledge:review`。
+- B 的管理员审核队列只返回 shared 投稿；admin_only 投稿不在列表。B 直接预览 admin_only → 403，发布 shared → 403，驳回 shared → 200。
+- B 查询自己的驳回回执 → 200；管理员驳回 admin_only 后，B 读取管理员回执 → 404，按同编号重放 → 409。
+- 清理：解除 B 的角色分配并删除临时角色；B 刷新后 mask 回到 `0x1600c3`、审核能力消失，直接访问审核队列 → 403。两条测试投稿均为 rejected 遗留，需按 ID 登记/清理。
+- 这是正式站生产功能矩阵，不是 R4-04a.4 要求的隔离 HTTPS 候选；隔离部署、0082 远端应用与 A/B/C 独立登录回单仍未取得。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.
