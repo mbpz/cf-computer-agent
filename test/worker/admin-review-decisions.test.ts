@@ -126,6 +126,46 @@ describe("administrator review decisions over HTTP", () => {
     await expect(insertReceipt()).resolves.toBeDefined();
   });
 
+  it("keeps a committed receipt after revocation and lets the same reviewer replay it after regrant", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-2', 'github:member-2', 'delegate@example.test', 'contributor', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-review', 'review-delegate', 'Delegated review', 'Temporary delegate', '0x1600cb', 'active', 0, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES ('role-review', 'member-2', ?)").bind(now),
+    ]);
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
+    const delegate = (await sessions.create((await members.findById("member-2"))!)).token;
+    await seedReviewPending("submission-revoke-after");
+    const operationId = "review.reject.revoke-after";
+    const body = { reasonCode: "not_relevant", note: "delegated", operationId };
+    expect((await api(delegate, "/api/admin/submissions/submission-revoke-after/reject", { method: "POST", body: JSON.stringify(body) })).status).toBe(200);
+
+    await env.DB.prepare("UPDATE roles SET status = 'disabled' WHERE id = 'role-review'").run();
+    expect((await api(delegate, "/api/admin/submissions/submission-revoke-after/decisions/operations/" + operationId)).status).toBe(403);
+    await env.DB.prepare("UPDATE roles SET status = 'active' WHERE id = 'role-review'").run();
+    expect((await api(delegate, "/api/admin/submissions/submission-revoke-after/decisions/operations/" + operationId)).status).toBe(200);
+    expect((await api(delegate, "/api/admin/submissions/submission-revoke-after/reject", { method: "POST", body: JSON.stringify(body) })).status).toBe(200);
+    expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = 'submission-revoke-after'")).toBe(1);
+  });
+
+  it("denies a delegated decision on an admin-only submission", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-2', 'github:member-2', 'delegate@example.test', 'contributor', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-review', 'review-delegate', 'Delegated review', 'Temporary delegate', '0x1600cb', 'active', 0, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES ('role-review', 'member-2', ?)").bind(now),
+    ]);
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
+    const delegate = (await sessions.create((await members.findById("member-2"))!)).token;
+    await seedReviewPending("submission-admin-only-deny", "admin_only");
+    const denied = await api(delegate, "/api/admin/submissions/submission-admin-only-deny/reject", {
+      method: "POST",
+      body: JSON.stringify({ reasonCode: "not_relevant", note: "out of scope", operationId: "review.reject.admin-only-deny" }),
+    });
+    expect(denied.status).toBe(403);
+    expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = 'submission-admin-only-deny'")).toBe(0);
+  });
+
   it("rejects a review receipt at the write when the actor has no active review grant", async () => {
     await expect(env.DB.prepare(
       `INSERT INTO review_decision_receipts (submission_id, operation_id, kind, request_hash, actor_id, claim_id, response_json, created_at)
