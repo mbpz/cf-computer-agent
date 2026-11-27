@@ -173,9 +173,10 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 新增 `migrations/0082_review_authorization_guard.sql`：`reviews` 与 `review_decision_receipts` 插入前触发校验 reviewer/actor 当前 `members.status='active'`，且为管理员或拥有启用角色中的 `knowledge:review`（bit 3 = 低十六进制位 8–f）。
 - 触发失败以 `REVIEWER_NOT_AUTHORIZED` ABORT 整个 D1 batch；仓储映射为 `403 FORBIDDEN`。撤角色/撤位/停用发生在入口授权后、事务前时，审核、回执和审计不会落库。
 - 新增 Worker 回归：无审核授权的 contributor 直接插入回执被触发拒绝；委派 shared-only 队列、admin_only 拒绝、发布拒绝、驳回成功、A 回执读取/重放隔离。迁移 pin 更新为 82 文件。
-- 全量门禁：unit 419 文件 / 5664 用例、worker 81 / 1331；build 1750.12 KiB / gzip 331.63 KiB。
+- 全量门禁：unit 419 文件 / 5664 用例、worker 81 / 1332；build 1750.12 KiB / gzip 331.63 KiB。
 - 新增 Worker 委派矩阵：delegate 只看到 shared 队列（admin_only 不进 COUNT/列表）、不能预览 admin_only、不能发布、可驳回 shared；delegate 读取/重放管理员本人回执分别得到 404/409，管理员 reviews 仍为 1。
-- 未完成：撤角色/撤位/停用角色/停用成员与事务的完整时序矩阵、保留另一有效授权、批单项间撤权、先提交后撤权；`0082` 尚未应用远端；Ego .4 未跑。
+- 新增事务时序回归：角色停用、权限位移除、角色解绑、成员停用后回执写入均被触发器拒绝；恢复后成功；保留第二条有效授权时，撤掉第一条角色仍可写入。前端新增 canPublish=false 隐藏发布但保留驳回/退回修改的回归。
+- 未完成：批单项间撤权、先提交后撤权、入口授权后真实并发竞态（当前为写时数据库守卫，非真实竞态注入）；`0082` 尚未应用远端；Ego .4 未跑。
 
 ## Original local run scope (before the Ego Browser follow-ups)
 

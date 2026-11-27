@@ -88,6 +88,44 @@ describe("administrator review decisions over HTTP", () => {
     expect(await count("SELECT COUNT(*) AS count FROM reviews WHERE submission_id = 'submission-owned-by-admin'")).toBe(1);
   });
 
+  it("re-checks the active review grant at the write across revocation shapes", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-2', 'github:member-2', 'delegate@example.test', 'contributor', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-review', 'review-delegate', 'Delegated review', 'Temporary delegate', '0x1600cb', 'active', 0, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES ('role-review', 'member-2', ?)").bind(now),
+    ]);
+    let sequence = 0;
+    const insertReceipt = async () => {
+      sequence += 1;
+      return env.DB.prepare(
+        `INSERT INTO review_decision_receipts (submission_id, operation_id, kind, request_hash, actor_id, claim_id, response_json, created_at)
+         VALUES (?, ?, 'review.reject', ?, 'member-2', ?, '{}', ?)`,
+      ).bind(`submission-guard-${sequence}`, `review.reject.guard-${sequence}`, "b".repeat(64), `claim-guard-${sequence}`, now).run();
+    };
+    await expect(insertReceipt()).resolves.toBeDefined();
+
+    await env.DB.prepare("UPDATE roles SET status = 'disabled' WHERE id = 'role-review'").run();
+    await expect(insertReceipt()).rejects.toThrow(/REVIEWER_NOT_AUTHORIZED/);
+    await env.DB.prepare("UPDATE roles SET status = 'active' WHERE id = 'role-review'").run();
+    await env.DB.prepare("UPDATE roles SET allow_bits = '0x1600c3' WHERE id = 'role-review'").run();
+    await expect(insertReceipt()).rejects.toThrow(/REVIEWER_NOT_AUTHORIZED/);
+    await env.DB.prepare("UPDATE roles SET allow_bits = '0x1600cb' WHERE id = 'role-review'").run();
+    await env.DB.prepare("DELETE FROM role_members WHERE role_id = 'role-review' AND member_id = 'member-2'").run();
+    await expect(insertReceipt()).rejects.toThrow(/REVIEWER_NOT_AUTHORIZED/);
+    await env.DB.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES ('role-review', 'member-2', ?)").bind(now).run();
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-2'").run();
+    await expect(insertReceipt()).rejects.toThrow(/REVIEWER_NOT_AUTHORIZED/);
+    await env.DB.prepare("UPDATE members SET status = 'active' WHERE id = 'member-2'").run();
+
+    // A second valid grant keeps write authority after the first role is revoked.
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-review-2', 'review-delegate-2', 'Delegated review 2', 'Temporary delegate', '0x1600cb', 'active', 0, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES ('role-review-2', 'member-2', ?)").bind(now),
+    ]);
+    await env.DB.prepare("DELETE FROM role_members WHERE role_id = 'role-review' AND member_id = 'member-2'").run();
+    await expect(insertReceipt()).resolves.toBeDefined();
+  });
+
   it("rejects a review receipt at the write when the actor has no active review grant", async () => {
     await expect(env.DB.prepare(
       `INSERT INTO review_decision_receipts (submission_id, operation_id, kind, request_hash, actor_id, claim_id, response_json, created_at)

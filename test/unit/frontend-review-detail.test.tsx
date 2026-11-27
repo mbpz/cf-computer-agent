@@ -27,6 +27,14 @@ describe("React review detail boundary", () => {
     expect(html).not.toContain("undefined");
   });
 
+  it("hides publish authority from a delegated reviewer", () => {
+    const detail = reviewDetailModel({ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "review_pending", content: "Body" });
+    const html = renderToStaticMarkup(<ReviewDetailPage state={{ kind: "ready", detail }} onDecision={vi.fn()} canPublish={false} />);
+    expect(html).not.toContain("Publish");
+    expect(html).toContain("Request changes");
+    expect(html).toContain("Reject");
+  });
+
   it("fails closed for malformed detail payloads", () => {
     expect(reviewDetailModel({ id: "", content: "private" })).toBeNull();
     const html = renderToStaticMarkup(<ReviewDetailPage state={{ kind: "error", message: "Unavailable" }} />);
