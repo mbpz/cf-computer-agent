@@ -1,3 +1,4 @@
+import { canonicalOrigin } from "../config";
 import type { AuditRepository } from "../audit/repository";
 import type { AssetDownloadVariant, AssetService } from "../assets/service";
 import { auditActions } from "../audit/types";
@@ -65,7 +66,7 @@ export async function routeAdminApi(
   if (maintenanceAction) {
     const actor = requireAdminMember(principal);
     if (request.method !== "POST") return methodNotAllowed("POST", context);
-    requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+    requireSameOrigin(request, canonicalOrigin());
     requireNoQuery(url);
     const draining = maintenanceAction[1] === "begin-drain";
     const input = parseMaintenanceControlInput(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));

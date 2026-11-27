@@ -143,6 +143,14 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 用 4 条只读回执请求在 CDP Request 阶段分别返回：权威 404、通用 404、500、身份不匹配 200；面板结果为 `missing / unavailable / unavailable / unavailable`，计数 `0:4`，各只发 1 个 GET、全程 0 POST。验证 R3-F03 的协议分类已在线上生效。
 - 临时 unknown intent 已清除；本轮未重复 A/B 在途、E01 传输层丢响应或 P01 固定延迟测量。
 
+## 2026-11-27 可配置 Canonical Origin（本地）
+
+- `src/config.ts` 增加 `resolveCanonicalOrigin` / `configureCanonicalOrigin` / `canonicalOrigin`：未配置保持 `https://memory.crgmhrc.asia`；只接受单个精确 HTTPS origin，协议/尾斜杠/路径/query/hash 非法时抛错失败关闭。
+- `createApp` 每次请求从 `env.PUBLIC_ORIGIN` 配置；登录、邀请、管理、遥测和同源校验改为读取运行时 canonical origin，不再固定生产常量。
+- 未配置 `PUBLIC_ORIGIN` 时生产行为不变；非法配置使 Worker 请求失败关闭，不动态信任请求头。
+- 单测覆盖默认、合法 HTTPS origin 及 5 种非法值。委托审核员授权仍未实现，需单独设计 RC。
+- 全量门禁通过：unit 418 文件 / 5662 用例、worker 81 / 1328；build 1747.90 KiB / gzip 331.09 KiB。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.

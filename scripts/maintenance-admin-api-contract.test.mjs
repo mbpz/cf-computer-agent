@@ -16,7 +16,7 @@ test("maintenance control API exposes only the four admin routes", () => {
   assert.match(adminRoute, /maintenanceAction = \/\^\\\/api\\\/admin\\\/maintenance/);
   assert.match(adminRoute, /begin-drain\|resume/);
   assert.match(adminRoute, /requireAdminMember\(principal\)/);
-  assert.match(adminRoute, /requireSameOrigin\(request, APP_CONFIG\.canonicalOrigin\)/);
+  assert.match(adminRoute, /requireSameOrigin\(request, canonicalOrigin\(\)\)/);
   assert.match(adminRoute, /requireNoQuery\(url\)/);
 });
 

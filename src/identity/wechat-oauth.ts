@@ -1,3 +1,4 @@
+import { canonicalOrigin } from "../config";
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
 
@@ -40,7 +41,7 @@ export function createWeChatOAuthClient(credentials: WeChatOAuthCredentials): We
       const url = new URL(AUTHORIZE_URL);
       url.search = new URLSearchParams({
         appid: credentials.appId,
-        redirect_uri: `${APP_CONFIG.canonicalOrigin}/auth/wechat/callback`,
+        redirect_uri: `${canonicalOrigin()}/auth/wechat/callback`,
         response_type: "code",
         scope: "snsapi_login",
         state,

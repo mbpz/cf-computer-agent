@@ -28,7 +28,7 @@ import { requireCapability } from "./authorization/policy";
 import { RolesRepository } from "./authorization/roles-repository";
 import { MenusRepository } from "./authorization/menus-repository";
 import { AdminOperationReceipts } from "./operations/receipts";
-import { APP_CONFIG } from "./config";
+import { APP_CONFIG, canonicalOrigin, configureCanonicalOrigin } from "./config";
 import { AppError, createRequestContext, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, parseJsonRequest, requireSameOrigin, withStrictTransportSecurity, type RequestContext } from "./http";
 import { AutomationAuthenticator } from "./identity/automation";
 import { createGitHubOAuthClient, type GitHubOAuthDiagnostic } from "./identity/github-oauth";
@@ -177,6 +177,7 @@ export interface AppDependencies {
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
   const handler: ExportedHandler<Env> = {
     async fetch(request, env, ctx): Promise<Response> {
+      configureCanonicalOrigin((env as Env & { PUBLIC_ORIGIN?: string }).PUBLIC_ORIGIN);
       const context = createRequestContext(request);
       const url = new URL(request.url);
 
@@ -226,7 +227,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
             maxBodyBytes: APP_CONFIG.maxJsonRequestBytes,
           });
           if (resolved.principal.kind === "member" && !isSafeMethod(resolved.request.method)) {
-            requireSameOrigin(resolved.request, APP_CONFIG.canonicalOrigin);
+            requireSameOrigin(resolved.request, canonicalOrigin());
           }
           return await dispatchApiRequest(resolved.request, url, context, resolved.principal, services);
         } finally {

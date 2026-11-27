@@ -1,3 +1,4 @@
+import { canonicalOrigin } from "../config";
 import { AppError, requireNoQuery, jsonResponse, methodNotAllowed, parseJsonRequest, requireSameOrigin, type RequestContext } from "../http";
 import { APP_CONFIG } from "../config";
 import type { SessionService } from "../identity/session";
@@ -18,7 +19,7 @@ export async function routeTelemetry(
 ): Promise<Response | undefined> {
   if (url.pathname !== "/api/telemetry/pageview") return undefined;
   if (request.method !== "POST") return methodNotAllowed("POST", context);
-  requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+  requireSameOrigin(request, canonicalOrigin());
   requireNoQuery(url);
   const input = await parseJsonRequest(request, 8 * 1024);
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new AppError("TELEMETRY_INVALID", "Telemetry payload is invalid", 400);

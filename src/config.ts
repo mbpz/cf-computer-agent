@@ -8,7 +8,31 @@ const MAX_NOTE_ID_BYTES = 192;
 const MAX_NOTE_TITLE_BYTES = 480;
 const MAX_NOTE_TAG_BYTES = 1024;
 const MAX_NOTE_TAGS = 20;
-const CANONICAL_ORIGIN = "https://memory.crgmhrc.asia";
+export const DEFAULT_CANONICAL_ORIGIN = "https://memory.crgmhrc.asia";
+const CANONICAL_ORIGIN = DEFAULT_CANONICAL_ORIGIN;
+let runtimeCanonicalOrigin = DEFAULT_CANONICAL_ORIGIN;
+
+/**
+ * Resolve the one canonical HTTPS origin for this deployment. Unset keeps the
+ * production origin; a malformed value fails closed instead of widening trust.
+ */
+export function resolveCanonicalOrigin(value: string | undefined): string {
+  if (value === undefined || value.trim() === "") return DEFAULT_CANONICAL_ORIGIN;
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { throw new Error("PUBLIC_ORIGIN_INVALID"); }
+  if (parsed.protocol !== "https:" || parsed.origin !== value || parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== "") {
+    throw new Error("PUBLIC_ORIGIN_INVALID");
+  }
+  return value;
+}
+
+export function configureCanonicalOrigin(value: string | undefined): void {
+  runtimeCanonicalOrigin = resolveCanonicalOrigin(value);
+}
+
+export function canonicalOrigin(): string {
+  return runtimeCanonicalOrigin;
+}
 
 export const APP_CONFIG = {
   canonicalOrigin: CANONICAL_ORIGIN,

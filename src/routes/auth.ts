@@ -1,3 +1,4 @@
+import { canonicalOrigin } from "../config";
 import { APP_CONFIG } from "../config";
 import { AppError, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, requireNoQuery, requireSameOrigin, type RequestContext } from "../http";
 import type { GitHubOAuthClient } from "../identity/github-oauth";
@@ -97,7 +98,7 @@ export async function routeAuth(
   if (url.pathname === "/auth/register") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+    requireSameOrigin(request, canonicalOrigin());
     const input = await parseRegistrationRequest(request);
     const registered = await services.passwords.register({
       ...input,
@@ -122,7 +123,7 @@ export async function routeAuth(
   if (url.pathname === "/auth/password/recovery") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+    requireSameOrigin(request, canonicalOrigin());
     const input = await parsePasswordRecoveryRequest(request);
     await services.passwords.recoverPassword({
       ...input,
@@ -134,7 +135,7 @@ export async function routeAuth(
   if (url.pathname === "/auth/password") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+    requireSameOrigin(request, canonicalOrigin());
     const input = await parsePasswordAuthRequest(request);
     const member = await services.passwords.login(input);
     const session = await services.sessions.create(member);
@@ -147,7 +148,7 @@ export async function routeAuth(
 
   if (url.pathname === "/auth/logout") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
-    requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+    requireSameOrigin(request, canonicalOrigin());
     let response: Response;
     try {
       await services.sessions.logout(request);

@@ -1,3 +1,4 @@
+import { canonicalOrigin } from "../config";
 import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
 import { AppError, jsonResponse, methodNotAllowed, requireNoQuery, requireSameOrigin, type RequestContext } from "../http";
@@ -42,7 +43,7 @@ export async function routeAdminInvitationsApi(
   }
 
   if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
-  requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+  requireSameOrigin(request, canonicalOrigin());
   requireNoQuery(url);
   const count = await readGenerationCount(request);
   const invitations = await services.invitations.generateAdminInvitations(admin.memberId, count);

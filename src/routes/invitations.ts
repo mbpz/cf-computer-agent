@@ -1,3 +1,4 @@
+import { canonicalOrigin } from "../config";
 import { APP_CONFIG } from "../config";
 import { AppError, jsonResponse, methodNotAllowed, requireNoQuery, requireSameOrigin, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
@@ -27,7 +28,7 @@ export async function routeInvitationsApi(
     return jsonResponse(await services.invitations.findMemberInvitations(member.memberId), 200, context.requestId);
   }
   if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
-  requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+  requireSameOrigin(request, canonicalOrigin());
   requireNoQuery(url);
   const result = await services.invitations.ensureMemberInvitation(member.memberId);
   return jsonResponse(await services.invitations.findMemberInvitations(member.memberId), result.created ? 201 : 200, context.requestId);
