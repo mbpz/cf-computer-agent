@@ -160,6 +160,14 @@ Scope: updated handoff work packages WP01/WP02/WP03/WP04 and audit findings CR01
 - 审核路由中详情、回执、驳回、退回、批审改为审核能力守卫；发布、评论、知识生命周期、恢复仍要求管理员。
 - 未完成：前端委派员菜单/详情隐藏评论与发布、委派回执重放 actor 全链校验、事务内能力校验与 Worker/D1 回归。全量门禁通过：unit 419 文件 / 5664 用例、worker 81 / 1328；build 1749.79 KiB / gzip 331.53 KiB。不能据此宣称 R4-04a.1 完成。
 
+## 2026-11-27 R4-04a.1 前端与 .2 重放 actor（部分）
+
+- 审核详情路由增加 `canPublish`：委派员不渲染发布动作、发布元数据表单和管理员评论面板；评论 provider 不挂载面板就不会发起评论读取。发布载荷仅在管理员路径生成。
+- 决策控件在 `canPublish=false` 时移除发布按钮，保留驳回/退回修改。
+- 委派员重放他人 operation 编号时仓储拒绝 `operation_conflict`，不会接管或重放 A 的回执；本人回执仍可按原号重放。
+- 全量门禁：unit 419 文件 / 5664 用例、worker 81 / 1328；build 1749.97 KiB / gzip 331.56 KiB。
+- 仍未完成 .3 事务内能力校验（撤角色/撤位/停用与事务的原子守卫），也未做委派员专属 Worker/D1 队列与操作矩阵、Ego .4。
+
 ## Original local run scope (before the Ego Browser follow-ups)
 
 `WP05–WP15` cannot be completed by static source changes alone. They require browser/identity journeys, two real accounts, usable storage/AI bindings, a test VM, or production acceptance. This batch does not mark them done; it leaves those blockers explicit and does not update the 17 parent checklist items. `WP02`/`WP03` code portions are covered by CR03/CR04, but their browser acceptance remains open.

@@ -15,12 +15,12 @@ import { clearReviewDecision, discardBlockedReviewDecision, loadReviewDecision, 
 
 export type ReviewDetailRouteState = { kind: "loading" } | { kind: "ready"; data: ReviewDetailData } | { kind: "error" | "forbidden" | "not-found"; message: string };
 
-export function ReviewDetailRoute({ id, locale, memberId, requester = fetch }: { id: string; locale?: LocaleRuntime; memberId?: string; requester?: Fetcher }) {
+export function ReviewDetailRoute({ id, locale, memberId, requester = fetch, canPublish = true }: { id: string; locale?: LocaleRuntime; memberId?: string; requester?: Fetcher; canPublish?: boolean }) {
   // A newly selected object must never render the previous object's actions.
-  return <ReviewDraftProvider key={id} locale={locale} memberId={memberId} preserveUnsent><ReviewCommentsProvider key={memberId ?? "preview"} submissionId={id} locale={locale} memberId={memberId} requester={requester}><ReviewDetailSession id={id} locale={locale} memberId={memberId} requester={requester} /></ReviewCommentsProvider></ReviewDraftProvider>;
+  return <ReviewDraftProvider key={id} locale={locale} memberId={memberId} preserveUnsent><ReviewCommentsProvider key={memberId ?? "preview"} submissionId={id} locale={locale} memberId={memberId} requester={requester}><ReviewDetailSession id={id} locale={locale} memberId={memberId} requester={requester} canPublish={canPublish} /></ReviewCommentsProvider></ReviewDraftProvider>;
 }
 
-function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; locale?: LocaleRuntime; memberId?: string; requester: Fetcher }) {
+function ReviewDetailSession({ id, locale, memberId, requester, canPublish }: { id: string; locale?: LocaleRuntime; memberId?: string; requester: Fetcher; canPublish: boolean }) {
   const drafts = useReviewDrafts()!;
   const commentsOwner = useReviewCommentsOwner()!;
   const { clear: clearDraft } = drafts;
@@ -175,9 +175,9 @@ function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; 
   const metadataDisabled = Boolean(recordBlocked) || Boolean(operationRef.current) || reviewDecisionLocked(decisionState);
   const publishDraftValue = state.kind === "ready" ? publishDraft : null;
   const requestedVisibility = state.kind === "ready" ? state.data.requestedVisibility : "shared";
-  const publishPayload = publishDraftValue ? reviewPublishPayload(requestedVisibility, publishDraftValue) : undefined;
+  const publishPayload = canPublish && publishDraftValue ? reviewPublishPayload(requestedVisibility, publishDraftValue) : undefined;
   const publishBlocked = publishDraftValue !== null && reviewVisibilityExpansion(requestedVisibility, publishDraftValue.visibility) && !expansionConfirmed;
-  const metadata = state.kind === "ready" && publishDraftValue !== null
+  const metadata = canPublish && state.kind === "ready" && publishDraftValue !== null
     ? <ReviewPublishMetadataForm key={state.data.detail.id} value={publishDraftValue} requestedVisibility={requestedVisibility}
         expansionConfirmed={expansionConfirmed} onExpansionChange={setExpansionConfirmed}
         onChange={(next) => { setPublishDraft(next); if (!reviewVisibilityExpansion(requestedVisibility, next.visibility)) setExpansionConfirmed(false); }}
@@ -187,6 +187,6 @@ function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; 
     metadata={metadata} publishPayload={publishPayload} publishBlocked={publishBlocked}
     onRetry={() => { void read(); }} onRetryDecision={() => { if (decisionState.kind === "error" && decisionState.recovery === "retry" && operationRef.current) void send(operationRef.current, true); }}
     decisionRecordBlocked={recordBlocked} decisionRecordNotice={recordNotice} onDiscardDecisionRecord={discardRecord}
-    onDecision={recordBlocked ? undefined : decide} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />}
+    onDecision={recordBlocked ? undefined : decide} canPublish={canPublish} comments={canPublish ? <ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} /> : undefined}
     sourceMaintenance={<ReviewSourcePanel submissionId={id} locale={locale} requester={requester} />} />;
 }

@@ -3393,19 +3393,19 @@
         "frontend/components/motion/table/table-menu.tsx:86:15",
         "frontend/components/motion/table/table-menu.tsx:90:15",
         "frontend/components/motion/table/table-menu.tsx:103:19",
-        "frontend/components/review/review-decision-controls.tsx:44:19",
-        "frontend/components/review/review-decision-controls.tsx:45:50",
-        "frontend/components/review/review-decision-controls.tsx:65:5",
-        "frontend/components/review/review-decision-controls.tsx:140:33",
-        "frontend/components/review/review-decision-controls.tsx:143:5",
-        "frontend/components/review/review-decision-controls.tsx:157:10",
-        "frontend/components/review/review-decision-controls.tsx:160:7",
-        "frontend/components/review/review-decision-controls.tsx:171:7",
-        "frontend/components/review/review-decision-controls.tsx:178:7",
-        "frontend/components/review/review-decision-controls.tsx:181:7",
-        "frontend/components/review/review-decision-controls.tsx:193:12",
-        "frontend/components/review/review-decision-controls.tsx:204:36",
-        "frontend/components/review/review-decision-controls.tsx:205:105",
+        "frontend/components/review/review-decision-controls.tsx:45:19",
+        "frontend/components/review/review-decision-controls.tsx:46:50",
+        "frontend/components/review/review-decision-controls.tsx:66:5",
+        "frontend/components/review/review-decision-controls.tsx:141:33",
+        "frontend/components/review/review-decision-controls.tsx:144:5",
+        "frontend/components/review/review-decision-controls.tsx:158:10",
+        "frontend/components/review/review-decision-controls.tsx:161:7",
+        "frontend/components/review/review-decision-controls.tsx:172:7",
+        "frontend/components/review/review-decision-controls.tsx:179:7",
+        "frontend/components/review/review-decision-controls.tsx:182:7",
+        "frontend/components/review/review-decision-controls.tsx:194:12",
+        "frontend/components/review/review-decision-controls.tsx:205:36",
+        "frontend/components/review/review-decision-controls.tsx:206:105",
         "frontend/components/review/review-drafts.tsx:64:22",
         "frontend/components/review/review-drafts.tsx:66:7",
         "frontend/components/review/review-drafts.tsx:68:21",
@@ -5248,19 +5248,19 @@
         "frontend/components/review/review-comments-panel.tsx:29:62",
         "frontend/components/review/review-comments-panel.tsx:31:59",
         "frontend/components/review/review-comments-panel.tsx:32:61",
-        "frontend/components/review/review-decision-controls.tsx:44:19",
-        "frontend/components/review/review-decision-controls.tsx:45:50",
-        "frontend/components/review/review-decision-controls.tsx:65:5",
-        "frontend/components/review/review-decision-controls.tsx:140:33",
-        "frontend/components/review/review-decision-controls.tsx:143:5",
-        "frontend/components/review/review-decision-controls.tsx:157:10",
-        "frontend/components/review/review-decision-controls.tsx:160:7",
-        "frontend/components/review/review-decision-controls.tsx:171:7",
-        "frontend/components/review/review-decision-controls.tsx:178:7",
-        "frontend/components/review/review-decision-controls.tsx:181:7",
-        "frontend/components/review/review-decision-controls.tsx:193:12",
-        "frontend/components/review/review-decision-controls.tsx:204:36",
-        "frontend/components/review/review-decision-controls.tsx:205:105",
+        "frontend/components/review/review-decision-controls.tsx:45:19",
+        "frontend/components/review/review-decision-controls.tsx:46:50",
+        "frontend/components/review/review-decision-controls.tsx:66:5",
+        "frontend/components/review/review-decision-controls.tsx:141:33",
+        "frontend/components/review/review-decision-controls.tsx:144:5",
+        "frontend/components/review/review-decision-controls.tsx:158:10",
+        "frontend/components/review/review-decision-controls.tsx:161:7",
+        "frontend/components/review/review-decision-controls.tsx:172:7",
+        "frontend/components/review/review-decision-controls.tsx:179:7",
+        "frontend/components/review/review-decision-controls.tsx:182:7",
+        "frontend/components/review/review-decision-controls.tsx:194:12",
+        "frontend/components/review/review-decision-controls.tsx:205:36",
+        "frontend/components/review/review-decision-controls.tsx:206:105",
         "frontend/components/review/review-drafts.tsx:64:22",
         "frontend/components/review/review-drafts.tsx:66:7",
         "frontend/components/review/review-drafts.tsx:68:21",
@@ -5323,13 +5323,13 @@
         "frontend/lib/workspace-browser-history.ts:122:3",
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
-        "frontend/pages/admin/review-detail-page.tsx:42:92",
-        "frontend/pages/admin/review-detail-page.tsx:43:9",
-        "frontend/pages/admin/review-detail-page.tsx:57:31",
-        "frontend/pages/admin/review-detail-page.tsx:57:201",
-        "frontend/pages/admin/review-detail-page.tsx:58:30",
-        "frontend/pages/admin/review-detail-page.tsx:59:5",
-        "frontend/pages/admin/review-detail-page.tsx:61:7",
+        "frontend/pages/admin/review-detail-page.tsx:44:92",
+        "frontend/pages/admin/review-detail-page.tsx:45:9",
+        "frontend/pages/admin/review-detail-page.tsx:59:31",
+        "frontend/pages/admin/review-detail-page.tsx:59:201",
+        "frontend/pages/admin/review-detail-page.tsx:60:30",
+        "frontend/pages/admin/review-detail-page.tsx:61:5",
+        "frontend/pages/admin/review-detail-page.tsx:63:7",
         "frontend/pages/admin/review-detail-route.tsx:51:5",
         "frontend/pages/admin/review-detail-route.tsx:181:7",
         "frontend/pages/admin/review-detail-route.tsx:186:10"
@@ -28247,10 +28247,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:44:19",
+      "id": "frontend/components/review/review-decision-controls.tsx:45:19",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionControls",
-      "line": 44,
+      "line": 45,
       "column": 19,
       "kind": "jsx",
       "tag": "ReviewDecisionEditor",
@@ -28272,10 +28272,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:45:50",
+      "id": "frontend/components/review/review-decision-controls.tsx:46:50",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionControls",
-      "line": 45,
+      "line": 46,
       "column": 50,
       "kind": "jsx",
       "tag": "ReviewDecisionControls",
@@ -28295,10 +28295,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:65:5",
+      "id": "frontend/components/review/review-decision-controls.tsx:66:5",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionEditor",
-      "line": 65,
+      "line": 66,
       "column": 5,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -28315,10 +28315,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:140:33",
+      "id": "frontend/components/review/review-decision-controls.tsx:141:33",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionEditor",
-      "line": 140,
+      "line": 141,
       "column": 33,
       "kind": "jsx",
       "tag": "ReviewDecisionForm",
@@ -28355,10 +28355,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:143:5",
+      "id": "frontend/components/review/review-decision-controls.tsx:144:5",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionEditor",
-      "line": 143,
+      "line": 144,
       "column": 5,
       "kind": "jsx",
       "tag": "ConfirmAction",
@@ -28383,10 +28383,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:157:10",
+      "id": "frontend/components/review/review-decision-controls.tsx:158:10",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionForm",
-      "line": 157,
+      "line": 158,
       "column": 10,
       "kind": "jsx",
       "tag": "form",
@@ -28403,10 +28403,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:160:7",
+      "id": "frontend/components/review/review-decision-controls.tsx:161:7",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionForm",
-      "line": 160,
+      "line": 161,
       "column": 7,
       "kind": "jsx",
       "tag": "Select",
@@ -28435,10 +28435,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:171:7",
+      "id": "frontend/components/review/review-decision-controls.tsx:172:7",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionForm",
-      "line": 171,
+      "line": 172,
       "column": 7,
       "kind": "jsx",
       "tag": "Textarea",
@@ -28466,10 +28466,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:178:7",
+      "id": "frontend/components/review/review-decision-controls.tsx:179:7",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionForm",
-      "line": 178,
+      "line": 179,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -28493,10 +28493,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:181:7",
+      "id": "frontend/components/review/review-decision-controls.tsx:182:7",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionForm",
-      "line": 181,
+      "line": 182,
       "column": 7,
       "kind": "jsx",
       "tag": "Button",
@@ -28523,10 +28523,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:193:12",
+      "id": "frontend/components/review/review-decision-controls.tsx:194:12",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionFeedback",
-      "line": 193,
+      "line": 194,
       "column": 12,
       "kind": "jsx",
       "tag": "Alert",
@@ -28546,10 +28546,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:204:36",
+      "id": "frontend/components/review/review-decision-controls.tsx:205:36",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionFeedback",
-      "line": 204,
+      "line": 205,
       "column": 36,
       "kind": "jsx",
       "tag": "Button",
@@ -28584,10 +28584,10 @@
       ]
     },
     {
-      "id": "frontend/components/review/review-decision-controls.tsx:205:105",
+      "id": "frontend/components/review/review-decision-controls.tsx:206:105",
       "path": "frontend/components/review/review-decision-controls.tsx",
       "owner": "ReviewDecisionFeedback",
-      "line": 205,
+      "line": 206,
       "column": 105,
       "kind": "jsx",
       "tag": "Button",
@@ -47318,10 +47318,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:42:92",
+      "id": "frontend/pages/admin/review-detail-page.tsx:44:92",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 42,
+      "line": 44,
       "column": 92,
       "kind": "jsx",
       "tag": "Button",
@@ -47363,10 +47363,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:43:9",
+      "id": "frontend/pages/admin/review-detail-page.tsx:45:9",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 43,
+      "line": 45,
       "column": 9,
       "kind": "jsx",
       "tag": "ButtonLink",
@@ -47405,10 +47405,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:57:31",
+      "id": "frontend/pages/admin/review-detail-page.tsx:59:31",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 57,
+      "line": 59,
       "column": 31,
       "kind": "jsx",
       "tag": "div",
@@ -47447,10 +47447,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:57:201",
+      "id": "frontend/pages/admin/review-detail-page.tsx:59:201",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 57,
+      "line": 59,
       "column": 201,
       "kind": "jsx",
       "tag": "Button",
@@ -47493,10 +47493,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:58:30",
+      "id": "frontend/pages/admin/review-detail-page.tsx:60:30",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 58,
+      "line": 60,
       "column": 30,
       "kind": "jsx",
       "tag": "p",
@@ -47536,10 +47536,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:59:5",
+      "id": "frontend/pages/admin/review-detail-page.tsx:61:5",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 59,
+      "line": 61,
       "column": 5,
       "kind": "jsx",
       "tag": "ReviewDecisionFeedback",
@@ -47578,10 +47578,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:61:7",
+      "id": "frontend/pages/admin/review-detail-page.tsx:63:7",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 61,
+      "line": 63,
       "column": 7,
       "kind": "jsx",
       "tag": "ReviewDecisionControls",
@@ -47597,6 +47597,7 @@
         "onDecision": "onDecision",
         "publishPayload": "publishPayload",
         "publishBlocked": "publishBlocked",
+        "canPublish": "canPublish",
         "locale": "locale"
       },
       "handlers": {
@@ -47673,7 +47674,7 @@
       "context": [
         {
           "kind": "branch",
-          "expression": "state.kind === \"ready\" && publishDraftValue !== null",
+          "expression": "canPublish && state.kind === \"ready\" && publishDraftValue !== null",
           "branch": "true"
         }
       ],
@@ -47703,7 +47704,8 @@
         "decisionRecordNotice": "recordNotice",
         "onDiscardDecisionRecord": "discardRecord",
         "onDecision": "recordBlocked ? undefined : decide",
-        "comments": "<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />",
+        "canPublish": "canPublish",
+        "comments": "canPublish ? <ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} /> : undefined",
         "sourceMaintenance": "<ReviewSourcePanel submissionId={id} locale={locale} requester={requester} />"
       },
       "handlers": {

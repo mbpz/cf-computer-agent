@@ -1448,7 +1448,8 @@ export class PublicationRepository implements PublicationRepositoryPort {
     // A retry of a recorded operation never re-decides: it replays its receipt.
     if (operation) {
       const replay = await this.findDecisionReceipt(submissionId, operation.operationId);
-      if (replay) return replayDecision(replay, submissionId, operation);
+      if (replay && (!sharedOnly || replay.actorId === reviewerId)) return replayDecision(replay, submissionId, operation);
+      if (replay) throw new PublicationRepositoryConflictError("operation_conflict", await this.readSubmissionAuthority(submissionId));
     }
     const existing = await this.findReview(submissionId);
     if (existing) {

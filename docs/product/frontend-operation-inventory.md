@@ -1882,19 +1882,19 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 44:19 ReviewDecisionControls | ReviewDecisionEditor  |  | {"kind":"branch","expression":"drafts","branch":"true"}; spread: props |
-| 45:50 ReviewDecisionControls | ReviewDecisionControls  |  | {"kind":"branch","expression":"drafts","branch":"false"}; spread: props |
-| 65:5 ReviewDecisionEditor | window.addEventListener  | "beforeunload", warn |  |
-| 140:33 ReviewDecisionEditor | ReviewDecisionForm  | onChange=setDetails; onCancel=() =&gt; requestChoice(null); onSubmit=submit; action=selected | disabled=locked &#124;&#124; valid &#124;&#124; drafts.confirming; {"kind":"container","tag":"div","attributes":{"aria-hidden":"valid &#124;&#124; undefined"… |
-| 143:5 ReviewDecisionEditor | ConfirmAction  | onCancel=cancel; onConfirm=confirm | open=valid |
-| 157:10 ReviewDecisionForm | form  | onSubmit=(event) =&gt; { event.preventDefault(); if (!disabled && valid) onSubmit({ reasonCode, note }); } |  |
-| 160:7 ReviewDecisionForm | Select  | onValueChange=(value) =&gt; onChange({ ...details, reasonCode: value as ReviewNoteInput["reasonCode"] }) | disabled=disabled; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"action === \"reject\"","operator":"&&"} |
-| 171:7 ReviewDecisionForm | Textarea  | onChange=(event) =&gt; onChange({ ...details, note: event.target.value }) | disabled=disabled; {"kind":"container","tag":"form","attributes":{}} |
-| 178:7 ReviewDecisionForm | Button frontendText(locale, action === "reject" ? "ADMIN_REVIEW_CONFIRM_REJECT" : "ADMIN_REVIEW_CONFIRM_REVISION") | type="submit" | disabled=disabled &#124;&#124; !valid; {"kind":"container","tag":"form","attributes":{}} |
-| 181:7 ReviewDecisionForm | Button frontendText(locale, "ADMIN_REVIEW_CANCEL") | onClick=onCancel; type="button" | disabled=disabled; {"kind":"container","tag":"form","attributes":{}} |
-| 193:12 ReviewDecisionFeedback | Alert  |  | {"kind":"branch","expression":"state.kind === \"success\"","branch":"true"} |
-| 204:36 ReviewDecisionFeedback | Button frontendText(locale, "ADMIN_REVIEW_RETRY_SAME") | onClick=onRetry; type="button" | {"kind":"logical","expression":"state.recovery === \"retry\"","operator":"&&"}; earlier return: state.kind === "success"; earlier return: state.kind !== "error" |
-| 205:105 ReviewDecisionFeedback | Button frontendText(locale, "ADMIN_REVIEW_RELOAD") | onClick=onReload; type="button" | {"kind":"logical","expression":"(state.recovery === \"reload\" &#124;&#124; (state.recovery === \"retry\" && allowUnknownReload && onReload))","operator":"&&… |
+| 45:19 ReviewDecisionControls | ReviewDecisionEditor  |  | {"kind":"branch","expression":"drafts","branch":"true"}; spread: props |
+| 46:50 ReviewDecisionControls | ReviewDecisionControls  |  | {"kind":"branch","expression":"drafts","branch":"false"}; spread: props |
+| 66:5 ReviewDecisionEditor | window.addEventListener  | "beforeunload", warn |  |
+| 141:33 ReviewDecisionEditor | ReviewDecisionForm  | onChange=setDetails; onCancel=() =&gt; requestChoice(null); onSubmit=submit; action=selected | disabled=locked &#124;&#124; valid &#124;&#124; drafts.confirming; {"kind":"container","tag":"div","attributes":{"aria-hidden":"valid &#124;&#124; undefined"… |
+| 144:5 ReviewDecisionEditor | ConfirmAction  | onCancel=cancel; onConfirm=confirm | open=valid |
+| 158:10 ReviewDecisionForm | form  | onSubmit=(event) =&gt; { event.preventDefault(); if (!disabled && valid) onSubmit({ reasonCode, note }); } |  |
+| 161:7 ReviewDecisionForm | Select  | onValueChange=(value) =&gt; onChange({ ...details, reasonCode: value as ReviewNoteInput["reasonCode"] }) | disabled=disabled; {"kind":"container","tag":"form","attributes":{}}; {"kind":"logical","expression":"action === \"reject\"","operator":"&&"} |
+| 172:7 ReviewDecisionForm | Textarea  | onChange=(event) =&gt; onChange({ ...details, note: event.target.value }) | disabled=disabled; {"kind":"container","tag":"form","attributes":{}} |
+| 179:7 ReviewDecisionForm | Button frontendText(locale, action === "reject" ? "ADMIN_REVIEW_CONFIRM_REJECT" : "ADMIN_REVIEW_CONFIRM_REVISION") | type="submit" | disabled=disabled &#124;&#124; !valid; {"kind":"container","tag":"form","attributes":{}} |
+| 182:7 ReviewDecisionForm | Button frontendText(locale, "ADMIN_REVIEW_CANCEL") | onClick=onCancel; type="button" | disabled=disabled; {"kind":"container","tag":"form","attributes":{}} |
+| 194:12 ReviewDecisionFeedback | Alert  |  | {"kind":"branch","expression":"state.kind === \"success\"","branch":"true"} |
+| 205:36 ReviewDecisionFeedback | Button frontendText(locale, "ADMIN_REVIEW_RETRY_SAME") | onClick=onRetry; type="button" | {"kind":"logical","expression":"state.recovery === \"retry\"","operator":"&&"}; earlier return: state.kind === "success"; earlier return: state.kind !== "error" |
+| 206:105 ReviewDecisionFeedback | Button frontendText(locale, "ADMIN_REVIEW_RELOAD") | onClick=onReload; type="button" | {"kind":"logical","expression":"(state.recovery === \"reload\" &#124;&#124; (state.recovery === \"retry\" && allowUnknownReload && onReload))","operator":"&&… |
 
 ## frontend/components/review/review-drafts.tsx
 
@@ -2863,20 +2863,20 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 42:92 ReviewDetailPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 43:9 ReviewDetailPage | ButtonLink frontendText(locale, "ADMIN_REVIEW_BACK") | onClick=(event) =&gt; { if (!onBack &#124;&#124; event.defaultPrevented &#124;&#124; event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctrlKey… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 57:31 ReviewDetailPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 57:201 ReviewDetailPage | Button frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD") | onClick=onDiscardDecisionRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 58:30 ReviewDetailPage | p decisionRecordNotice |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 59:5 ReviewDetailPage | ReviewDecisionFeedback  | onRetry=onRetryDecision; onReload=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
-| 61:7 ReviewDetailPage | ReviewDecisionControls  | onDecision=onDecision | disabled=reviewDecisionLocked(decisionState); {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefine… |
+| 44:92 ReviewDetailPage | Button frontendText(locale, "COMMON_RETRY") | onClick=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 45:9 ReviewDetailPage | ButtonLink frontendText(locale, "ADMIN_REVIEW_BACK") | onClick=(event) =&gt; { if (!onBack &#124;&#124; event.defaultPrevented &#124;&#124; event.button !== 0 &#124;&#124; event.metaKey &#124;&#124; event.ctrlKey… | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 59:31 ReviewDetailPage | div  |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 59:201 ReviewDetailPage | Button frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD") | onClick=onDiscardDecisionRecord; type="button" | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 60:30 ReviewDetailPage | p decisionRecordNotice |  | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 61:5 ReviewDetailPage | ReviewDecisionFeedback  | onRetry=onRetryDecision; onReload=onRetry | {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefined"}}; {"kind":"branch","expression":"state.kin… |
+| 63:7 ReviewDetailPage | ReviewDecisionControls  | onDecision=onDecision | disabled=reviewDecisionLocked(decisionState); {"kind":"container","tag":"section","attributes":{"aria-busy":"state.kind === \"loading\" &#124;&#124; undefine… |
 
 ## frontend/pages/admin/review-detail-route.tsx
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
 | 51:5 ReviewDetailSession | window.addEventListener  | "beforeunload", warn |  |
-| 181:7 ReviewDetailSession | ReviewPublishMetadataForm  | onExpansionChange=setExpansionConfirmed; onChange=(next) =&gt; { setPublishDraft(next); if (!reviewVisibilityExpansion(requestedVisibility, next.visibility))… | disabled=metadataDisabled; {"kind":"branch","expression":"state.kind === \"ready\" && publishDraftValue !== null","branch":"true"} |
+| 181:7 ReviewDetailSession | ReviewPublishMetadataForm  | onExpansionChange=setExpansionConfirmed; onChange=(next) =&gt; { setPublishDraft(next); if (!reviewVisibilityExpansion(requestedVisibility, next.visibility))… | disabled=metadataDisabled; {"kind":"branch","expression":"canPublish && state.kind === \"ready\" && publishDraftValue !== null","branch":"true"} |
 | 186:10 ReviewDetailSession | ReviewDetailPage  | onBack=() =&gt; writeWorkspaceHistory("push", "/admin/submissions"); onRetry=() =&gt; { void read(); }; onRetryDecision=() =&gt; { if (decisionState.kind ===… |  |
 
 ## frontend/pages/admin/review-queue-page.tsx

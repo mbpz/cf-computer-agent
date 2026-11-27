@@ -34,6 +34,7 @@ type ReviewDecisionControlsProps = {
   publishPayload?: ReviewPublishInput;
   /** The route's publish gate (an unconfirmed visibility expansion blocks publish). */
   publishBlocked?: boolean;
+  canPublish?: boolean;
   onDecision?: (action: ReviewDecision, details?: ReviewNoteInput, publishOverrides?: ReviewPublishInput) => void;
   locale?: LocaleRuntime; targetLabel: string; targetId: string; snapshot: unknown; confirmationLock?: { current: object | null };
 };
@@ -44,7 +45,7 @@ export function ReviewDecisionControls(props: ReviewDecisionControlsProps) {
   return drafts ? <ReviewDecisionEditor {...props} drafts={drafts} />
     : <ReviewDraftProvider locale={props.locale}><ReviewDecisionControls {...props} /></ReviewDraftProvider>;
 }
-function ReviewDecisionEditor({ disabled, terminal, pendingAction, decisionUnresolved, publishPayload, publishBlocked = false, onDecision, locale, targetLabel, targetId, snapshot, confirmationLock, drafts }: ReviewDecisionControlsProps & { drafts: NonNullable<ReturnType<typeof useReviewDrafts>> }) {
+function ReviewDecisionEditor({ disabled, terminal, pendingAction, decisionUnresolved, publishPayload, publishBlocked = false, canPublish = true, onDecision, locale, targetLabel, targetId, snapshot, confirmationLock, drafts }: ReviewDecisionControlsProps & { drafts: NonNullable<ReturnType<typeof useReviewDrafts>> }) {
   type Confirmation = { kind: "decision"; action: ReviewDecision; details?: ReviewNoteInput; snapshot: unknown; targetId: string; targetLabel: string }
     | { kind: "discard"; next: ReviewDecision | null; snapshot: unknown; targetId: string; targetLabel: string };
   const [selected, setSelected] = useState<NoteAction | null>(() => drafts.get(targetId)?.action ?? null);
@@ -120,7 +121,7 @@ function ReviewDecisionEditor({ disabled, terminal, pendingAction, decisionUnres
           size="sm"
           openLabel={frontendText(locale, "COMMON_MORE_ACTIONS")}
           closeLabel={frontendText(locale, "COMMON_FEWER_ACTIONS")}
-          primaryActions={(["publish", "request_changes", "reject"] as const).map((action) => {
+          primaryActions={(["publish", "request_changes", "reject"] as const).filter((action) => action !== "publish" || canPublish !== false).map((action) => {
             const label = frontendText(locale, decisionLabel(action));
             return {
               id: action,
