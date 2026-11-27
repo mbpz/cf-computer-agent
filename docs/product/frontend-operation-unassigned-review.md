@@ -593,7 +593,7 @@ App 级瞬时反馈通道。`ToastProvider` 在已认证分支挂载一次，`us
 
 ### 审查文件及 caller 指纹
 
-- `frontend/app.tsx`: `22c04989fe1dfd95b0ffb72215a9413647fc8771ecb6212637cf18a66c3b45d4`
+- `frontend/app.tsx`: `0b1dcfc3a8288b7f23b62d7143faf28c607bee1601908c7e3769a6d9342e1be2`
 - `frontend/components/motion/tabs.tsx`: `cee3e467d5680308c4405d409da9052532ce5fd4abf07fb8c64c0f36f791b0d6`
 - `frontend/components/ui/tabs.tsx`: `a3ec44982431b22612da1bd8af511e98eb170d6c3f8380254e213acdc38adb9b`
 - `frontend/components/agent/answer-panel.tsx`: `d604801b674d21ef059a70f79cc367326ceccf60ba5e400c4d3480eca1e63586`

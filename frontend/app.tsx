@@ -269,7 +269,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-menus": return <AdminMenusRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} />;
     case "admin-knowledge-trash": return <RecycleBinRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
     case "admin-knowledge-item": return <AdminKnowledgeItemRoute key={JSON.stringify([session?.member.id, pathname, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} knowledgeItemId={decodeRouteId(pathname)} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
-    case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
+    case "admin-submissions": return <ReviewQueueRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} canReview={session?.capabilities.includes("knowledge:review") ?? false} canPublish={session?.member.role === "admin"} />;
     case "admin-review-batch": return <ReviewBatchRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} memberId={session?.member.id} canReview={session?.capabilities.includes("knowledge:review") ?? false} />;
     case "admin-submission-detail": return <ReviewDetailRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} id={pathname.split("/").pop() || ""} canPublish={session?.member.role === "admin"} />;
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} memberId={session?.member.id} search={search} />;
@@ -3750,10 +3750,10 @@ function ReviewBatchRoute({ locale, search, memberId, canReview }: { locale: Loc
   return <ReviewBatchPage locale={locale} search={search} memberId={memberId} canReview={canReview} onBack={back} onComplete={back} />;
 }
 
-export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string; memberId?: string; canReview: boolean }) {
+export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string; memberId?: string; canReview: boolean; canPublish?: boolean }) {
   return <ReviewDraftProvider locale={props.locale} memberId={props.memberId} preserveUnsent><ReviewQueueSession {...props} /></ReviewDraftProvider>;
 }
-function ReviewQueueSession({ locale, memberId, canReview }: { locale: LocaleRuntime; search: string; memberId?: string; canReview: boolean }) {
+function ReviewQueueSession({ locale, memberId, canReview, canPublish = true }: { locale: LocaleRuntime; search: string; memberId?: string; canReview: boolean; canPublish?: boolean }) {
   const drafts = useReviewDrafts()!;
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -3910,6 +3910,7 @@ function ReviewQueueSession({ locale, memberId, canReview }: { locale: LocaleRun
   }
   return <ReviewQueuePage onOpenDetail={(id) => writeWorkspaceHistory("push", `/admin/submissions/${encodeURIComponent(id)}`)} locale={locale} state={state}
     canBatch={canReview}
+    canPublish={canPublish}
     onOpenBatch={() => {
       const page = state.kind === "ready" ? state.data.pagination.page : 1;
       const pageSize = state.kind === "ready" ? state.data.pagination.pageSize : 20;

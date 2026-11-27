@@ -10,7 +10,7 @@ import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { ReviewDecision, ReviewNoteInput } from "../../components/review/review-detail-data";
 import { ReviewDecisionControls, ReviewDecisionFeedback, reviewDecisionLocked, type ReviewDecisionState } from "../../components/review/review-decision-controls";
 
-export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onReloadDecision, onOpenDetail, pendingId, completedId, decisionState = { kind: "idle" }, localError, pending, onPageChange, onPageSizeChange, onLoadMore, locale, decisionRecordBlocked = false, onDiscardDecisionRecord, canBatch = false, onOpenBatch }: {
+export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onReloadDecision, onOpenDetail, pendingId, completedId, decisionState = { kind: "idle" }, localError, pending, onPageChange, onPageSizeChange, onLoadMore, locale, decisionRecordBlocked = false, onDiscardDecisionRecord, canBatch = false, onOpenBatch, canPublish = true }: {
   state: { kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string };
   onRetry?: () => void; onRetryDecision?: () => void; onReloadDecision?: () => void; onOpenDetail?: (id: string) => void;
   onReview?: (id: string, action: ReviewDecision, details?: ReviewNoteInput) => void;
@@ -20,6 +20,7 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
   decisionRecordBlocked?: boolean; onDiscardDecisionRecord?: () => void;
   /** The batch page needs `knowledge:review`; the parent passes the real capability answer. An unstated capability never renders the entry. */
   canBatch?: boolean; onOpenBatch?: () => void;
+  canPublish?: boolean;
 }) {
   const confirmationLock = useRef<object | null>(null);
   const retry = <Button type="button" variant="outline" size="sm" disabled={pending} onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>;
@@ -42,7 +43,7 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
       const disabled = Boolean(pending || pendingId || localError || locked);
       return <ReviewDecisionControls decisionUnresolved={locked} confirmationLock={confirmationLock} disabled={disabled} terminal={completedId === item.id || Boolean(item.status && item.status !== "review_pending")}
         pendingAction={pendingId === item.id && decisionState.kind === "pending" ? decisionState.action : undefined}
-        targetId={item.id} snapshot={readyData} targetLabel={target} locale={locale} onDecision={onReview ? (action, details) => onReview(item.id, action, details) : undefined} />;
+        targetId={item.id} snapshot={readyData} targetLabel={target} canPublish={canPublish} locale={locale} onDecision={onReview ? (action, details) => onReview(item.id, action, details) : undefined} />;
     } },
   ];
   // The page shell is constant (research §4.3): the header renders for every state and
